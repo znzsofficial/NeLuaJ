@@ -26,7 +26,7 @@ LuaFragment 新增更多方法，且迁移到AndroidX
 
 由于welcome**不再自动申请**全部权限，为符合Android设计运行时权限的初衷，请开发者自行实现权限申请和申请回调逻辑。
 
-welcome 使用多线程解压并使用 SplashScreen 实现
+welcome 使用多线程解压
 
 删除了内置的 android.widget 包，并移除了 PageView 相关适配器
 
