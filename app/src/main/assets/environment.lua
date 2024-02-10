@@ -1,6 +1,11 @@
 bindClass = luajava.bindClass;
 
-ColorUtil = luajava.newInstance("github.daisukiKaffuChino.utils.LuaThemeUtil",activity)
+for k,v in (java.io.File(this.getLuaDir("libs/")).listFiles())
+  v.setReadOnly()
+end
+
+
+this.globalData.ColorUtil = luajava.newInstance("github.daisukiKaffuChino.utils.LuaThemeUtil",activity)
 MDC_R = bindClass "com.google.android.material.R"
 Compat_R = bindClass "androidx.appcompat.R"
 

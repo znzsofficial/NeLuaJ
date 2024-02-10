@@ -8,10 +8,10 @@ import java.io.ByteArrayOutputStream
 import java.io.FileOutputStream
 import java.io.IOException
 
-object ComplieUtil {
+object CompileUtil {
     private val mGlobals = JsePlatform.standardGlobals()
 
-    fun getByteArray(path: String?): ByteArray {
+    private fun getByteArray(path: String?): ByteArray {
         val checkfunction = mGlobals.loadfile(path).checkfunction(1) as LuaClosure
         val baos = ByteArrayOutputStream()
         return try {

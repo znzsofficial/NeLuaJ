@@ -2,6 +2,7 @@ import "java.io.File"
 import "java.lang.Runtime"
 import "androidx.core.view.GravityCompat"
 
+local ColorUtil = this.globalData.ColorUtil
 -- Anime
 local AnimatorSet = bindClass "android.animation.AnimatorSet"
 local ObjectAnimator = bindClass "android.animation.ObjectAnimator"
@@ -25,10 +26,10 @@ import "mods.utils.ActivityUtil"
 
 
 local Executors = bindClass"java.util.concurrent.Executors"
-local HandlerCompat = bindClass"androidx.core.os.HandlerCompat"
+local Handler = bindClass"android.os.Handler"
 local Looper = bindClass"android.os.Looper"
 local mainLooper = Looper.getMainLooper()
-local handler = HandlerCompat.createAsync(mainLooper)
+local handler = Handler(mainLooper)
 local executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors())
 
 local Bean_Path
@@ -203,7 +204,6 @@ _M.init=function()
 end
 
 local getList = function()
-  local jpairs = require "jpairs"
   local path = Bean_Path.this_dir
   local table_sort = table.sort
 
@@ -211,7 +211,7 @@ local getList = function()
   local _FileList = {}
   local fileArray = File(path).list()
 
-  for _, v in jpairs(fileArray) do
+  for _, v : (fileArray) do
     local full_path = path.."/"..v
     if File(full_path).isDirectory()
       local k = #DirList + 1

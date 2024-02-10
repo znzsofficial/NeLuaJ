@@ -23,6 +23,8 @@ function _M.new(para, path)
     activity.newActivity(_M.lua_path.."/activities/znzsofficial/photo/PhotoActivity.lua", {path})
    case "java"
     activity.newActivity(_M.lua_path.."/activities/znzsofficial/java/JavaEditorActivity.lua", {path})
+   case "layouthelper"
+    activity.newActivity(_M.lua_path.."/activities/znzsofficial/layouthelper/LayoutHelperActivity.lua", {path})
   end
 end
 

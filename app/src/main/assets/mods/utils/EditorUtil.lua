@@ -1,5 +1,6 @@
 local:res
 local:table
+local ColorUtil = this.globalData.ColorUtil
 import "mods.utils.LuaFileUtil"
 import "mods.utils.TabUtil"
 import "mods.utils.MagnifierManager"
@@ -185,12 +186,11 @@ function _M.init()
 
   thread(function(mLuaEditor, bindClass)
     --activity补全
-    local jpairs = require "jpairs"
     local LuaActivity = bindClass "com.androlua.LuaActivity"
     local act={}
     local tmp={}
-    for k,v in jpairs(LuaActivity.getMethods()) do
-      v=v.getName()
+    for k,v : (LuaActivity.getMethods()) do
+      v=tostring(v.getName())
       if not tmp[v] then
         tmp[v]=true
         act[#act+1] = v.."()"

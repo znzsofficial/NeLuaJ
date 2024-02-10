@@ -7,6 +7,7 @@ import "android.graphics.drawable.ColorDrawable"
 import "com.youbenzi.mdtool.tool.MDTool"
 import "mods.utils.LuaFileUtil"
 import "mods.utils.UiUtil"
+local ColorUtil = this.globalData.ColorUtil
 local:res
 activity.setTitle("NeLuaJ+"..res.string.help)
 .setContentView(res.layout.help_layout)

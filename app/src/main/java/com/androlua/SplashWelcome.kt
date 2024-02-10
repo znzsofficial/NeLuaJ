@@ -3,11 +3,9 @@ package com.androlua
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
-import android.os.Looper
+import android.os.Handler
+import android.util.Log
 import androidx.activity.ComponentActivity
-import androidx.core.os.HandlerCompat
-import androidx.core.splashscreen.SplashScreen
-import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -28,13 +26,11 @@ class SplashWelcome : ComponentActivity() {
     private var isVersionChanged = false
     private var mVersionName: String? = null
     private var mOldVersionName: String? = null
-    private val permissions: ArrayList<String>? = null
+
     @CallLuaFunction
     public override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // LinearLayout layout = new LinearLayout(this);
-        SplashScreen.installSplashScreen(this)
-        // setContentView(layout);
+        //SplashScreen.installSplashScreen(this)
         app = application as LuaApplication
         localDir = app!!.luaDir
         /*try {
@@ -42,17 +38,21 @@ class SplashWelcome : ComponentActivity() {
             getWindow().setBackgroundDrawable(new LuaBitmapDrawable(app, app.getLuaPath("setup.png"), getResources().getDrawable(R.drawable.icon)));
     } catch (Exception e) {
         e.printStackTrace();
-    }*/if (checkInfo()) {
+    }*/
+        if (checkInfo()) {
             LuaApplication.getInstance().setSharedData("UnZiped", false)
             val executor = Executors.newSingleThreadExecutor()
-            val handler = HandlerCompat.createAsync(Looper.getMainLooper())
+            val handler = Handler(this.mainLooper)
+            Log.i("start execute", "welcome");
             executor.execute {
                 try {
+                    Log.i("start unpack", "welcome");
                     unApk("assets/", localDir)
                 } catch (e: IOException) {
                     e.printStackTrace()
                 }
                 handler.post {
+                    Log.i("start", "welcome");
                     startActivity()
                     LuaApplication.getInstance().setSharedData("UnZiped", true)
                 }
@@ -63,28 +63,20 @@ class SplashWelcome : ComponentActivity() {
         }
     }
 
-    fun startActivity() {
-        try {
-            val f = assets.open("main.lua")
-            if (f != null) {
-                val intent = Intent(this@SplashWelcome, LuaActivity::class.java)
-                if (isVersionChanged) {
-                    intent.putExtra("isVersionChanged", isVersionChanged)
-                    intent.putExtra("newVersionName", mVersionName)
-                    intent.putExtra("oldVersionName", mOldVersionName)
-                }
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                startActivity(intent)
-                finish()
-                return
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
+    private fun startActivity() {
+        val intent = Intent(this@SplashWelcome, LuaActivity::class.java)
+        if (isVersionChanged) {
+            intent.putExtra("isVersionChanged", isVersionChanged)
+            intent.putExtra("newVersionName", mVersionName)
+            intent.putExtra("oldVersionName", mOldVersionName)
         }
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        startActivity(intent)
+        finish()
+        return
         // overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out
         //
         // );
-        finish()
     }
 
     fun checkInfo(): Boolean {
@@ -151,10 +143,12 @@ class SplashWelcome : ComponentActivity() {
   */
     private var zipFile: ZipFile? = null
     private var destPath: String? = null
+
     @Throws(IOException::class)
     fun unApk(dir: String, extDir: String?) {
         val dirtest = ArrayList<String>()
-        val threadPool = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors())
+        val threadPool =
+            Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors())
         val i = dir.length
         destPath = extDir
         zipFile = ZipFile(applicationInfo.publicSourceDir)
@@ -244,8 +238,4 @@ class SplashWelcome : ComponentActivity() {
             }
         }
     }
-}
-
-private fun SplashScreen.Companion.installSplashScreen(splashWelcome: SplashWelcome) {
-
 }

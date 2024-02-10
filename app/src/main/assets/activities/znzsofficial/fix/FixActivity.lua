@@ -10,6 +10,7 @@ import "java.io.File"
 import "java.lang.String"
 import "res"
 
+local ColorUtil = this.globalData.ColorUtil
 local rs
 local table = table
 local insert = table.insert

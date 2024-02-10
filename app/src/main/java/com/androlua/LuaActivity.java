@@ -46,18 +46,6 @@ import androidx.preference.PreferenceManager;
 
 import com.androlua.adapter.ArrayListAdapter;
 
-import dalvik.system.DexClassLoader;
-
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
-
 import org.luaj.Globals;
 import org.luaj.LuaError;
 import org.luaj.LuaMetaTable;
@@ -77,6 +65,18 @@ import org.luaj.android.timer;
 import org.luaj.lib.ResourceFinder;
 import org.luaj.lib.jse.JavaPackage;
 import org.luaj.lib.jse.JsePlatform;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+
+import dalvik.system.DexClassLoader;
 
 public class LuaActivity extends AppCompatActivity
         implements ResourceFinder, LuaContext, LuaBroadcastReceiver.OnReceiveListener, LuaMetaTable {
@@ -160,6 +160,7 @@ public class LuaActivity extends AppCompatActivity
             return valueOf("\n\tno class '" + classname + "'");
         }
     });*/
+
         globals.s.e = mLuaDexLoader.getClassLoaders();
         sActivity = this;
         try {
@@ -1100,11 +1101,11 @@ public class LuaActivity extends AppCompatActivity
     }
 
     public Uri getUriForPath(String path) {
-        return FileProvider.getUriForFile(this, getPackageName(), new File(path));
+        return FileProvider.getUriForFile(this, getPackageName()+".fileprovider", new File(path));
     }
 
     public Uri getUriForFile(File path) {
-        return FileProvider.getUriForFile(this, getPackageName(), path);
+        return FileProvider.getUriForFile(this, getPackageName()+"fileprovider", path);
     }
 
     public String getPathFromUri(Uri uri) {

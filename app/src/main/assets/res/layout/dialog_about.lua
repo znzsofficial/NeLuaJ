@@ -1,6 +1,6 @@
 import "com.google.android.material.textview.MaterialTextView";
 import "android.widget.LinearLayout";
-
+local ColorUtil = this.globalData.ColorUtil
 return {
   LinearLayout,
   layout_width='match_parent';

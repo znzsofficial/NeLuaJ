@@ -6,6 +6,7 @@ local LuaFragmentAdapter = luajava.bindClass "github.znzsofficial.adapter.LuaFra
 local LuaFragment = luajava.bindClass "com.androlua.LuaFragment"
 require "environment"
 local:loadlayout
+local ColorUtil = this.globalData.ColorUtil
 
 local view = loadlayout {
   LinearLayout,
