@@ -13,6 +13,7 @@ dependencyResolutionManagement {
         maven("https://jitpack.io")
         maven("https://repo.eclipse.org/content/groups/releases/")
         maven("https://maven.aliyun.com/nexus/content/groups/public/")
+        maven("https://mirrors.tuna.tsinghua.edu.cn")
     }
 }
 

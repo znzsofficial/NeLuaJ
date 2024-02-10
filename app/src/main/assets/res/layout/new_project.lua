@@ -4,6 +4,7 @@ import "vinx.material.textfield.MaterialTextField"
 import "com.google.android.material.textfield.TextInputLayout"
 import "com.google.android.material.chip.Chip"
 import "com.google.android.material.chip.ChipGroup"
+local ColorUtil = this.globalData.ColorUtil
 
 return {
   LinearLayout,

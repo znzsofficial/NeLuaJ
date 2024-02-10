@@ -6,6 +6,7 @@ local MaterialDivider = bindClass "com.google.android.material.divider.MaterialD
 local GradientDrawable = bindClass "android.graphics.drawable.GradientDrawable"
 local LinearLayout = bindClass "android.widget.LinearLayout"
 
+local ColorUtil = this.globalData.ColorUtil
 local ColorBackground = ColorUtil.getColorSurfaceVariant();
 local ColorPrimary = ColorUtil.getColorPrimary();
 local ColorText = ColorUtil.getColorOnSurfaceVariant();

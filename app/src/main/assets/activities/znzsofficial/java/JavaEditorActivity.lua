@@ -1,4 +1,5 @@
 require "environment"
+local ColorUtil = this.globalData.ColorUtil
 import "mods.utils.LuaFileUtil"
 import "java.lang.Runnable"
 import "res"

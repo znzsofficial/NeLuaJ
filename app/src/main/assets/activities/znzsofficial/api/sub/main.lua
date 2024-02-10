@@ -26,7 +26,7 @@ import "mods.utils.UiUtil"
 
 local thisField
 
-local:ColorUtil
+local ColorUtil = this.globalData.ColorUtil
 local accentColor=ColorUtil.ColorAccent
 local errorColor=ColorUtil.ColorError
 local outlineColor=ColorUtil.ColorOutline
@@ -595,3 +595,9 @@ function 初始显示()
 end
 
 初始显示()
+
+function onOptionsItemSelected(m)
+if m.getItemId() == android.R.id.home
+activity.finish()
+end
+end
