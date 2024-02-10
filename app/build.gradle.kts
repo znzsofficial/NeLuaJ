@@ -51,7 +51,7 @@ dependencies {
     implementation("androidx.activity:activity:1.8.2")
     implementation("androidx.annotation:annotation:1.7.1")
     implementation("androidx.asynclayoutinflater:asynclayoutinflater:1.1.0-alpha01")
-    implementation("androidx.collection:collection:1.4.0-beta02")
+    implementation("androidx.collection:collection:1.4.0")
     implementation("androidx.constraintlayout:constraintlayout:2.2.0-alpha13")
     implementation("androidx.coordinatorlayout:coordinatorlayout:1.3.0-alpha02")
     //implementation("androidx.core:core-splashscreen:1.1.0-alpha02")
@@ -65,8 +65,8 @@ dependencies {
     implementation("androidx.gridlayout:gridlayout:1.1.0-beta01")
     implementation("androidx.legacy:legacy-support-core-ui:1.0.0")
     implementation("androidx.legacy:legacy-support-core-utils:1.0.0")
-    implementation("androidx.lifecycle:lifecycle-common:2.7.0-rc02")
-    implementation("androidx.lifecycle:lifecycle-process:2.7.0-rc02")
+    implementation("androidx.lifecycle:lifecycle-common:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-process:2.7.0")
     implementation("androidx.lifecycle:lifecycle-runtime:2.7.0")
     implementation("androidx.localbroadcastmanager:localbroadcastmanager:1.1.0")
     implementation("androidx.navigation:navigation-common:2.7.6")
@@ -99,10 +99,10 @@ dependencies {
     
     //Okhttp
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("com.github.bumptech.glide:okhttp3-integration:4.11.0")
+    implementation("com.github.bumptech.glide:okhttp3-integration:4.16.0")
     
     //lottie
-    implementation("com.airbnb.android:lottie:6.2.0")
+    implementation("com.airbnb.android:lottie:6.3.0")
 
     //recycler anime
     implementation("jp.wasabeef:recyclerview-animators:4.0.2")
