@@ -14,7 +14,9 @@ import "com.google.android.material.divider.MaterialDivider";
 import "com.google.android.material.tabs.TabLayout"
 import "github.znzsofficial.widget.container.MyFullDraggableContainer"
 import "vinx.material.textfield.MaterialTextField"
+import "com.google.android.material.navigation.NavigationView"
 
+local ColorUtil = this.globalData.ColorUtil
 local LuaFileTabView = bindClass "github.daisukiKaffuChino.LuaFileTabView"
 local MyFileTabView = LuaFileTabView.override{
   function onInterceptTouchEvent(super, event)
@@ -23,7 +25,8 @@ local MyFileTabView = LuaFileTabView.override{
 }
 
 local rippleRes = activity.obtainStyledAttributes({android.R.attr.selectableItemBackgroundBorderless}).getResourceId(0,0)
-local ColorBackground = ColorUtil.getColorBackground();
+
+local ColorBackground = ColorUtil.getColorBackground()
 
 return {
   CoordinatorLayout;
@@ -158,37 +161,41 @@ return {
         orientation="vertical";
         layout_width="match_parent";
         layout_height="match_parent";
-        backgroundColor=ColorBackground;
         id="head";
         {
           MyFileTabView,
           id="filetab",
           layout_width="match",
           layout_height="48dp",
-          tabMode=MyFileTabView.MODE_SCROLLABLE,
+          tabMode=LuaFileTabView.MODE_SCROLLABLE,
           selectedTabIndicatorHeight=0,
           inlineLabel=true,
           clipToPadding=false,
         },
 
         {
-          SwipeRefreshLayout;
-          layout_gravity="start";
-          layout_width="fill";
-          layout_height="fill";
-          id="swipeRefresh";
-          ProgressBackgroundColorSchemeColor=ColorBackground,
-          ColorSchemeColors={ColorUtil.getColorPrimary()},
+          NavigationView,
+          layout_width="match_parent";
+          layout_height="match_parent";
           {
-            RecyclerView,
-            layout_width="match_parent",
-            layout_height="match_parent",
-            dividerHeight="0",
-            id="mRecycler",
-          },
+            SwipeRefreshLayout;
+            layout_gravity="start";
+            layout_width="match_parent";
+            layout_height="match_parent";
+            id="swipeRefresh";
+            ProgressBackgroundColorSchemeColor=ColorBackground,
+            ColorSchemeColors={ColorUtil.getColorPrimary()},
+            {
+              RecyclerView,
+              layout_width="match_parent",
+              layout_height="match_parent",
+              dividerHeight="0",
+              id="mRecycler",
+            },
 
-        };
-      },
+          };
+        },
+      }
     };
   };
 }

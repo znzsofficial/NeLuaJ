@@ -27,7 +27,8 @@ local _M={}
 -- public method
 function _M.snack(arg)
   if coordinatorLayout then
-    Snackbar.make(coordinatorLayout, tostring(arg), Snackbar.LENGTH_SHORT)
+    return Snackbar.make(coordinatorLayout, tostring(arg), Snackbar.LENGTH_SHORT)
+    .setAnimationMode(Snackbar.ANIMATION_MODE_SIDE)
     .setAnchorView(ps_bar)
     .show();
   end

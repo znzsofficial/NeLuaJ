@@ -1,229 +1,206 @@
-package com.androlua;
+package com.androlua
+
+import android.R
+import android.content.Context
+import android.content.DialogInterface
+import android.graphics.drawable.Drawable
+import android.view.View
+import android.widget.AdapterView
+import android.widget.AdapterView.OnItemLongClickListener
+import android.widget.Button
+import android.widget.ListAdapter
+import android.widget.ListView
+import androidx.appcompat.app.AlertDialog
+import com.androlua.adapter.ArrayListAdapter
+import java.util.Arrays
 
 // import android.app.AlertDialog;
-import android.content.Context;
-import android.content.DialogInterface;
-import android.graphics.drawable.Drawable;
-import android.view.View;
-import android.widget.AdapterView;
-import android.widget.Button;
-import android.widget.ListAdapter;
-import android.widget.ListView;
-import androidx.appcompat.app.AlertDialog;
-import com.androlua.adapter.ArrayListAdapter;
-import java.util.ArrayList;
-import java.util.Arrays;
+/** Created by Administrator on 2017/02/04 0004.  */
+class LuaDialog : AlertDialog, DialogInterface.OnClickListener {
+    private var mContext: Context
+    private var mListView: ListView
+    var message: String? = null
+        private set
+    private var mTitle: String? = null
+    var view: View? = null
+        private set
+    private var mOnClickListener: OnClickListener? = null
 
-/** Created by Administrator on 2017/02/04 0004. */
-public class LuaDialog extends AlertDialog implements DialogInterface.OnClickListener {
-  private Context mContext;
+    constructor(context: Context) : super(context) {
+        mContext = context
+        mListView = ListView(mContext)
+    }
 
-  private ListView mListView;
+    constructor(context: Context, theme: Int) : super(context, theme) {
+        mContext = context
+        mListView = ListView(mContext)
+    }
 
-  private String mMessage;
+    fun setButton(text: CharSequence?) {
+        setOkButton(text)
+    }
 
-  private String mTitle;
+    fun setButton1(text: CharSequence?) {
+        setButton(BUTTON_POSITIVE, text, this)
+    }
 
-  private View mView;
-  private OnClickListener mOnClickListener;
+    fun setButton2(text: CharSequence?) {
+        setButton(BUTTON_NEGATIVE, text, this)
+    }
 
-  public LuaDialog(Context context) {
-    super(context);
-    mContext = context;
-    mListView = new ListView(mContext);
-  }
+    fun setButton3(text: CharSequence?) {
+        setButton(BUTTON_NEUTRAL, text, this)
+    }
 
-  public LuaDialog(Context context, int theme) {
-    super(context, theme);
-    mContext = context;
-    mListView = new ListView(mContext);
-  }
+    fun setPosButton(text: CharSequence?) {
+        setButton(BUTTON_POSITIVE, text, this)
+    }
 
-  public void setButton(CharSequence text) {
-    setOkButton(text);
-  }
+    fun setNegButton(text: CharSequence?) {
+        setButton(BUTTON_NEGATIVE, text, this)
+    }
 
-  public void setButton1(CharSequence text) {
-    setButton(DialogInterface.BUTTON_POSITIVE, text, this);
-  }
+    fun setNeuButton(text: CharSequence?) {
+        setButton(BUTTON_NEUTRAL, text, this)
+    }
 
-  public void setButton2(CharSequence text) {
-    setButton(DialogInterface.BUTTON_NEGATIVE, text, this);
-  }
+    fun setOkButton(text: CharSequence?) {
+        setButton(BUTTON_POSITIVE, text, this)
+    }
 
-  public void setButton3(CharSequence text) {
-    setButton(DialogInterface.BUTTON_NEUTRAL, text, this);
-  }
+    fun setCancelButton(text: CharSequence?) {
+        setButton(BUTTON_NEGATIVE, text, this)
+    }
 
-  public void setPosButton(CharSequence text) {
-    setButton(DialogInterface.BUTTON_POSITIVE, text, this);
-  }
+    fun setOnClickListener(listener: OnClickListener?) {
+        mOnClickListener = listener
+    }
 
-  public void setNegButton(CharSequence text) {
-    setButton(DialogInterface.BUTTON_NEGATIVE, text, this);
-  }
+    fun setPositiveButton(text: CharSequence?, listener: DialogInterface.OnClickListener?) {
+        setButton(BUTTON_POSITIVE, text, listener)
+    }
 
-  public void setNeuButton(CharSequence text) {
-    setButton(DialogInterface.BUTTON_NEUTRAL, text, this);
-  }
+    fun setNegativeButton(text: CharSequence?, listener: DialogInterface.OnClickListener?) {
+        setButton(BUTTON_NEGATIVE, text, listener)
+    }
 
-  public void setOkButton(CharSequence text) {
-    setButton(DialogInterface.BUTTON_POSITIVE, text, this);
-  }
+    fun setNeutralButton(text: CharSequence?, listener: DialogInterface.OnClickListener?) {
+        setButton(BUTTON_NEUTRAL, text, listener)
+    }
 
-  public void setCancelButton(CharSequence text) {
-    setButton(DialogInterface.BUTTON_NEGATIVE, text, this);
-  }
+    fun getTitle(): String? {
+        return mTitle
+    }
 
-  public void setOnClickListener(LuaDialog.OnClickListener listener) {
-    mOnClickListener = listener;
-  }
+    override fun setTitle(title: CharSequence?) {
+        // TODO: Implement this method
+        mTitle = title.toString()
+        super.setTitle(title)
+    }
 
-  public void setPositiveButton(CharSequence text, DialogInterface.OnClickListener listener) {
-    setButton(DialogInterface.BUTTON_POSITIVE, text, listener);
-  }
+    override fun setMessage(message: CharSequence) {
+        // TODO: Implement this method
+        this.message = message.toString()
+        super.setMessage(message)
+    }
 
-  public void setNegativeButton(CharSequence text, DialogInterface.OnClickListener listener) {
-    setButton(DialogInterface.BUTTON_NEGATIVE, text, listener);
-  }
+    override fun setIcon(icon: Drawable) {
+        // TODO: Implement this method
+        super.setIcon(icon)
+    }
 
-  public void setNeutralButton(CharSequence text, DialogInterface.OnClickListener listener) {
-    setButton(DialogInterface.BUTTON_NEUTRAL, text, listener);
-  }
+    override fun setView(view: View) {
+        // TODO: Implement this method
+        this.view = view
+        super.setView(view)
+    }
 
-  public String getTitle() {
-    return mTitle;
-  }
+    fun setItems(items: Array<String?>) {
+        val alist = ArrayList(Arrays.asList(*items))
+        val adp: ArrayListAdapter<*> =
+            ArrayListAdapter(mContext, R.layout.simple_list_item_1, alist)
+        setAdapter(adp)
+        mListView.choiceMode = ListView.CHOICE_MODE_NONE
+    }
 
-  @Override
-  public void setTitle(CharSequence title) {
-    // TODO: Implement this method
-    mTitle = title.toString();
-    super.setTitle(title);
-  }
+    fun setAdapter(adp: ListAdapter?) {
+        if (mListView != view) setView(mListView)
+        mListView.adapter = adp
+    }
 
-  public String getMessage() {
-    return mMessage;
-  }
+    fun setSingleChoiceItems(items: Array<CharSequence?>) {
+        setSingleChoiceItems(items, 0)
+    }
 
-  @Override
-  public void setMessage(CharSequence message) {
-    // TODO: Implement this method
-    mMessage = message.toString();
-    super.setMessage(message);
-  }
+    fun setSingleChoiceItems(items: Array<CharSequence?>, checkedItem: Int) {
+        val alist = ArrayList(listOf(*items))
+        val adp: ArrayListAdapter<*> = ArrayListAdapter(
+            mContext, R.layout.simple_list_item_single_choice, alist
+        )
+        setAdapter(adp)
+        mListView.choiceMode = ListView.CHOICE_MODE_SINGLE
+        mListView.setItemChecked(checkedItem, true)
+    }
 
-  @Override
-  public void setIcon(Drawable icon) {
-    // TODO: Implement this method
-    super.setIcon(icon);
-  }
+    fun setMultiChoiceItems(items: Array<CharSequence?>) {
+        setMultiChoiceItems(items, IntArray(0))
+    }
 
-  public View getView() {
-    return mView;
-  }
+    fun setMultiChoiceItems(items: Array<CharSequence?>, checkedItems: IntArray) {
+        val alist = ArrayList(listOf(*items))
+        val adp: ArrayListAdapter<*> = ArrayListAdapter(
+            mContext, R.layout.simple_list_item_multiple_choice, alist
+        )
+        setAdapter(adp)
+        mListView.choiceMode = ListView.CHOICE_MODE_MULTIPLE
+        for (i in checkedItems) mListView.setItemChecked(i, true)
+    }
 
-  @Override
-  public void setView(View view) {
-    // TODO: Implement this method
-    mView = view;
-    super.setView(view);
-  }
+    override fun getListView(): ListView {
+        return mListView
+    }
 
-  public void setItems(String[] items) {
-    ArrayList<String> alist = new ArrayList<String>(Arrays.asList(items));
-    ArrayListAdapter adp =
-        new ArrayListAdapter<String>(mContext, android.R.layout.simple_list_item_1, alist);
-    setAdapter(adp);
-    mListView.setChoiceMode(ListView.CHOICE_MODE_NONE);
-  }
+    fun setOnItemClickListener(listener: AdapterView.OnItemClickListener?) {
+        mListView.onItemClickListener = listener
+    }
 
-  public void setAdapter(ListAdapter adp) {
-    if (!mListView.equals(mView)) setView(mListView);
-    mListView.setAdapter(adp);
-  }
+    fun setOnItemLongClickListener(listener: OnItemLongClickListener?) {
+        mListView.onItemLongClickListener = listener
+    }
 
-  public void setSingleChoiceItems(CharSequence[] items) {
-    setSingleChoiceItems(items, 0);
-  }
+    fun setOnItemSelectedListener(listener: AdapterView.OnItemSelectedListener?) {
+        mListView.onItemSelectedListener = listener
+    }
 
-  public void setSingleChoiceItems(CharSequence[] items, int checkedItem) {
-    ArrayList<CharSequence> alist = new ArrayList<CharSequence>(Arrays.asList(items));
-    ArrayListAdapter adp =
-        new ArrayListAdapter<CharSequence>(
-            mContext, android.R.layout.simple_list_item_single_choice, alist);
-    setAdapter(adp);
-    mListView.setChoiceMode(ListView.CHOICE_MODE_SINGLE);
-    mListView.setItemChecked(checkedItem, true);
-  }
+    override fun setOnCancelListener(listener: DialogInterface.OnCancelListener?) {
+        // TODO: Implement this method
+        super.setOnCancelListener(listener)
+    }
 
-  public void setMultiChoiceItems(CharSequence[] items) {
-    setMultiChoiceItems(items, new int[0]);
-  }
+    override fun setOnDismissListener(listener: DialogInterface.OnDismissListener?) {
+        // TODO: Implement this method
+        super.setOnDismissListener(listener)
+    }
 
-  public void setMultiChoiceItems(CharSequence[] items, int[] checkedItems) {
-    ArrayList<CharSequence> alist = new ArrayList<CharSequence>(Arrays.asList(items));
-    ArrayListAdapter adp =
-        new ArrayListAdapter<CharSequence>(
-            mContext, android.R.layout.simple_list_item_multiple_choice, alist);
-    setAdapter(adp);
-    mListView.setChoiceMode(ListView.CHOICE_MODE_MULTIPLE);
-    for (int i : checkedItems) mListView.setItemChecked(i, true);
-  }
+    override fun show() {
+        super.show()
+    }
 
-  public ListView getListView() {
-    return mListView;
-  }
+    override fun hide() {
+        super.hide()
+    }
 
-  public void setOnItemClickListener(final AdapterView.OnItemClickListener listener) {
-    mListView.setOnItemClickListener(listener);
-  }
+    override fun isShowing(): Boolean {
+        return super.isShowing()
+    }
 
-  public void setOnItemLongClickListener(final AdapterView.OnItemLongClickListener listener) {
-    mListView.setOnItemLongClickListener(listener);
-  }
+    override fun onClick(dialog: DialogInterface, which: Int) {
+        if (mOnClickListener != null) mOnClickListener!!.onClick(this, getButton(which))
+    }
 
-  public void setOnItemSelectedListener(final AdapterView.OnItemSelectedListener listener) {
-    mListView.setOnItemSelectedListener(listener);
-  }
-
-  @Override
-  public void setOnCancelListener(DialogInterface.OnCancelListener listener) {
-    // TODO: Implement this method
-    super.setOnCancelListener(listener);
-  }
-
-  @Override
-  public void setOnDismissListener(DialogInterface.OnDismissListener listener) {
-    // TODO: Implement this method
-    super.setOnDismissListener(listener);
-  }
-
-  @Override
-  public void show() {
-    super.show();
-  }
-
-  @Override
-  public void hide() {
-    super.hide();
-  }
-
-  @Override
-  public boolean isShowing() {
-    return super.isShowing();
-  }
-
-  @Override
-  public void onClick(DialogInterface dialog, int which) {
-    if (mOnClickListener != null) mOnClickListener.onClick(this, getButton(which));
-  }
-
-  public interface OnClickListener {
-    public void onClick(LuaDialog dlg, Button btn);
-  }
-
-  /*
+    interface OnClickListener {
+        fun onClick(dlg: LuaDialog?, btn: Button?)
+    } /*
   public void close()
   {
       super.dismiss();
@@ -235,5 +212,4 @@ public class LuaDialog extends AlertDialog implements DialogInterface.OnClickLis
       // TODO: Implement this method
       super.hide();
   }*/
-
 }

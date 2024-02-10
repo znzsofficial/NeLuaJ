@@ -1,7 +1,7 @@
 import "android.widget.LinearLayout"
 import "android.widget.ListView"
 import "vinx.material.textfield.MaterialTextField"
-
+local ColorUtil = this.globalData.ColorUtil
 return {
   LinearLayout;
   layout_heigh="-1";

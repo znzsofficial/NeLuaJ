@@ -3,8 +3,6 @@ import "androidx.appcompat.widget.AppCompatImageView";
 import "com.google.android.material.card.MaterialCardView";
 import "com.google.android.material.textview.MaterialTextView";
 
-local ColorBackground=ColorUtil.getColorBackground()
-
 return {
   LinearLayout,
   layout_width='match_parent';
@@ -20,7 +18,6 @@ return {
     layout_height='wrap';
     strokeWidth="0dp",
     layout_margin="4dp",
-    backgroundColor=ColorBackground,
     id="contents",
     {
       LinearLayout,

@@ -1,184 +1,171 @@
-package github.znzsofficial.widget.magnifier;
+package github.znzsofficial.widget.magnifier
 
-import android.app.Activity;
-import android.graphics.Bitmap;
-import android.graphics.Matrix;
-import android.util.DisplayMetrics;
-import android.util.TypedValue;
-import android.view.TextureView;
-import android.graphics.SurfaceTexture;
-import android.graphics.Canvas;
-import android.view.View;
-import android.view.ViewGroup;
-import android.widget.FrameLayout;
-import androidx.appcompat.widget.AppCompatImageView;
-import androidx.cardview.widget.CardView;
+import android.app.Activity
+import android.graphics.Bitmap
+import android.graphics.Matrix
+import android.util.DisplayMetrics
+import android.util.TypedValue
+import android.view.View
+import android.widget.FrameLayout
+import androidx.appcompat.widget.AppCompatImageView
+import androidx.cardview.widget.CardView
 
-public class CustomMagnifier {
-  private float imageHeight;
-  private float imageWidth;
-  private float lastSourceCenterX;
-  private float lastSourceCenterY;
-  private CardView mCardView;
-  private Activity mContext;
-  private FrameLayout mDecorView;
-  private DisplayMetrics displayMetrics;
-  private AppCompatImageView mImageView;
-  private Bitmap mLastBitmap;
-  private View mView;
-  private Matrix matrix = new Matrix();
-  private float mZoom = 1.25F;
-  private float verticalOffset;
-  private int cornerRadius = 16;
-  private float mElevation = 4.0F;
+class CustomMagnifier(private val mView: View) {
+    private var imageHeight: Float
+    private var imageWidth: Float
+    private var lastSourceCenterX = 0f
+    private var lastSourceCenterY = 0f
+    private val mCardView: CardView
+    private val mContext: Activity = mView.context as Activity
+    private val mDecorView: FrameLayout
+    private val displayMetrics: DisplayMetrics
+    private val mImageView: AppCompatImageView
+    private var mLastBitmap: Bitmap? = null
+    private val matrix = Matrix()
+    private var zoom = 1.25f
+    private val verticalOffset: Float
+    private var cornerRadius = 16
+    private var mElevation = 4.0f
 
-  public CustomMagnifier(View view) {
-    mView = view;
-    mContext = (Activity) view.getContext();
-    displayMetrics = mContext.getResources().getDisplayMetrics();
-    mCardView = new CardView(this.mContext);
-    mImageView = new AppCompatImageView(this.mContext);
-    mCardView.addView(mImageView);
-    mCardView.setVisibility(View.GONE);
-    // 设置卡片圆角
-    mCardView.setRadius(cornerRadius);
-    mCardView.setCardElevation(
-        TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, mElevation, displayMetrics));
-    FrameLayout decorView = (FrameLayout) this.mContext.getWindow().getDecorView();
-    this.mDecorView = decorView;
-    decorView.addView(this.mCardView);
-    this.imageWidth =
-        TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 100.0F, displayMetrics);
-    this.imageHeight =
-        TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 48.0F, displayMetrics);
-    this.verticalOffset =
-        TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, -42.0F, displayMetrics);
-    ViewGroup.LayoutParams layoutParams = this.mCardView.getLayoutParams();
-    layoutParams.width = (int) this.imageWidth;
-    layoutParams.height = (int) this.imageHeight;
-    this.mCardView.setLayoutParams(layoutParams);
-  }
-
-  private Bitmap cropBitmap(Bitmap bitmap, int x, int y, int width, int height) {
-    float scale = this.mZoom;
-    matrix.setScale(scale, scale);
-    if (x < 0) {
-      x = 0;
-    } else if (x > bitmap.getWidth() - width) {
-      x = bitmap.getWidth() - width;
+    init {
+        displayMetrics = mContext.resources.displayMetrics
+        mCardView = CardView(mContext)
+        mImageView = AppCompatImageView(mContext)
+        mCardView.addView(mImageView)
+        mCardView.visibility = View.GONE
+        // 设置卡片圆角
+        mCardView.radius = cornerRadius.toFloat()
+        mCardView.cardElevation = TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP,
+            mElevation,
+            displayMetrics
+        )
+        val decorView = mContext.window.decorView as FrameLayout
+        mDecorView = decorView
+        decorView.addView(mCardView)
+        imageWidth = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 100.0f, displayMetrics)
+        imageHeight = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 48.0f, displayMetrics)
+        verticalOffset =
+            TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, -42.0f, displayMetrics)
+        val layoutParams = mCardView.layoutParams
+        layoutParams.width = imageWidth.toInt()
+        layoutParams.height = imageHeight.toInt()
+        mCardView.layoutParams = layoutParams
     }
-    if (y < 0) {
-      y = 0;
-    } else if (y > bitmap.getHeight() - height) {
-      y = bitmap.getHeight() - height;
+
+    private fun cropBitmap(bitmap: Bitmap, x: Int, y: Int, width: Int, height: Int): Bitmap {
+        var x = x
+        var y = y
+        val scale = zoom
+        matrix.setScale(scale, scale)
+        if (x < 0) {
+            x = 0
+        } else if (x > bitmap.width - width) {
+            x = bitmap.width - width
+        }
+        if (y < 0) {
+            y = 0
+        } else if (y > bitmap.height - height) {
+            y = bitmap.height - height
+        }
+        val croppedBitmap = Bitmap.createBitmap(bitmap, x, y, width, height, matrix, true)
+        bitmap.recycle()
+        return croppedBitmap
     }
-    Bitmap croppedBitmap = Bitmap.createBitmap(bitmap, x, y, width, height, matrix, true);
-    bitmap.recycle();
-    return croppedBitmap;
-  }
 
-  public void dismiss() {
-    this.mCardView.setVisibility(View.GONE);
-    Bitmap bitmap = this.mLastBitmap;
-    if (bitmap != null) {
-      bitmap.recycle();
+    fun dismiss() {
+        mCardView.visibility = View.GONE
+        val bitmap = mLastBitmap
+        bitmap?.recycle()
     }
-  }
 
-  public float getZoom() {
-    return this.mZoom;
-  }
-
-  public void setZoom(float zoom) {
-    this.mZoom = zoom;
-  }
-
-  public void setDimensions(float width, float height) {
-    this.imageWidth = width;
-    this.imageHeight = height;
-    ViewGroup.LayoutParams layoutParams = this.mCardView.getLayoutParams();
-    layoutParams.width = (int) this.imageWidth;
-    layoutParams.height = (int) this.imageHeight;
-    this.mCardView.setLayoutParams(layoutParams);
-  }
-
-  public void setCornerRadius(int radius) {
-    this.cornerRadius = radius;
-    this.mCardView.setRadius(cornerRadius);
-  }
-
-  public void show(float sourceX, float sourceY) {
-    this.show(sourceX, sourceY, sourceX, this.verticalOffset + sourceY);
-  }
-
-  public void show(float sourceX, float sourceY, float destinationX, float destinationY) {
-    this.lastSourceCenterX = sourceX;
-    this.lastSourceCenterY = sourceY;
-    int[] location = new int[2];
-    this.mView.getLocationInWindow(location);
-    int viewX = location[0];
-    int viewY = location[1];
-    int decorViewWidth = this.mDecorView.getMeasuredWidth();
-    int decorViewHeight = this.mDecorView.getMeasuredHeight();
-    float x = (float) viewX;
-    float cardWidth = this.imageWidth;
-    float cardX = x + destinationX - cardWidth / 2.0F;
-    float y = (float) viewY + destinationY - this.imageHeight / 2.0F;
-    if (cardX < 0.0F) {
-      this.mCardView.setX(0.0F);
-    } else {
-      float rightBoundary = (float) decorViewWidth;
-      if (cardX > rightBoundary - cardWidth) {
-        this.mCardView.setX(rightBoundary - cardWidth);
-      } else {
-        this.mCardView.setX(cardX);
-      }
+    fun setDimensions(width: Float, height: Float) {
+        imageWidth = width
+        imageHeight = height
+        val layoutParams = mCardView.layoutParams
+        layoutParams.width = imageWidth.toInt()
+        layoutParams.height = imageHeight.toInt()
+        mCardView.layoutParams = layoutParams
     }
-    if (y < 0.0F) {
-      this.mCardView.setY(0.0F);
-    } else {
-      float bottomBoundary = (float) decorViewHeight;
-      float cardHeight = this.imageHeight;
-      if (y > bottomBoundary - cardHeight) {
-        this.mCardView.setY(bottomBoundary - cardHeight);
-      } else {
-        this.mCardView.setY(y);
-      }
-    }
-    this.mCardView.setVisibility(View.VISIBLE);
-    this.update();
-  }
 
-  public void update() {
-    this.mView.setDrawingCacheEnabled(true);
-    Bitmap viewBitmap = this.mView.getDrawingCache().copy(Bitmap.Config.ARGB_8888, true);
-    this.mView.setDrawingCacheEnabled(false);
-    float width = this.imageWidth;
-    float zoom = this.mZoom;
-    width /= zoom;
-    zoom = this.imageHeight / zoom;
-    Bitmap lastBitmap = this.mLastBitmap;
-    if (lastBitmap != null) {
-      lastBitmap.recycle();
+    fun setCornerRadius(radius: Int) {
+        cornerRadius = radius
+        mCardView.radius = cornerRadius.toFloat()
     }
-    Bitmap croppedBitmap =
-        this.cropBitmap(
+
+    @JvmOverloads
+    fun show(
+        sourceX: Float,
+        sourceY: Float,
+        destinationX: Float = sourceX,
+        destinationY: Float = verticalOffset + sourceY
+    ) {
+        lastSourceCenterX = sourceX
+        lastSourceCenterY = sourceY
+        val location = IntArray(2)
+        mView.getLocationInWindow(location)
+        val viewX = location[0]
+        val viewY = location[1]
+        val decorViewWidth = mDecorView.measuredWidth
+        val decorViewHeight = mDecorView.measuredHeight
+        val x = viewX.toFloat()
+        val cardWidth = imageWidth
+        val cardX = x + destinationX - cardWidth / 2.0f
+        val y = viewY.toFloat() + destinationY - imageHeight / 2.0f
+        if (cardX < 0.0f) {
+            mCardView.x = 0.0f
+        } else {
+            val rightBoundary = decorViewWidth.toFloat()
+            if (cardX > rightBoundary - cardWidth) {
+                mCardView.x = rightBoundary - cardWidth
+            } else {
+                mCardView.x = cardX
+            }
+        }
+        if (y < 0.0f) {
+            mCardView.y = 0.0f
+        } else {
+            val bottomBoundary = decorViewHeight.toFloat()
+            val cardHeight = imageHeight
+            if (y > bottomBoundary - cardHeight) {
+                mCardView.y = bottomBoundary - cardHeight
+            } else {
+                mCardView.y = y
+            }
+        }
+        mCardView.visibility = View.VISIBLE
+        update()
+    }
+
+    fun update() {
+        mView.isDrawingCacheEnabled = true
+        val viewBitmap = mView.drawingCache.copy(Bitmap.Config.ARGB_8888, true)
+        mView.isDrawingCacheEnabled = false
+        var width = imageWidth
+        var zoom = zoom
+        width /= zoom
+        zoom = imageHeight / zoom
+        val lastBitmap = mLastBitmap
+        lastBitmap?.recycle()
+        val croppedBitmap = cropBitmap(
             viewBitmap,
-            (int) (this.lastSourceCenterX - width / 2.0F),
-            (int) (this.lastSourceCenterY - zoom / 2.0F),
-            (int) width,
-            (int) zoom);
-    this.mLastBitmap = croppedBitmap;
-    this.mImageView.setImageBitmap(croppedBitmap);
-  }
+            (lastSourceCenterX - width / 2.0f).toInt(),
+            (lastSourceCenterY - zoom / 2.0f).toInt(),
+            width.toInt(),
+            zoom.toInt()
+        )
+        mLastBitmap = croppedBitmap
+        mImageView.setImageBitmap(croppedBitmap)
+    }
 
-  public float getElevation() {
-    return this.mElevation;
-  }
-
-  public void setElevation(float elevation) {
-    this.mElevation = elevation;
-    this.mCardView.setCardElevation(
-        TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, elevation, displayMetrics));
-  }
+    var elevation: Float
+        get() = mElevation
+        set(elevation) {
+            mElevation = elevation
+            mCardView.cardElevation = TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP,
+                elevation,
+                displayMetrics
+            )
+        }
 }

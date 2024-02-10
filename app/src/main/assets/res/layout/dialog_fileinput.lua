@@ -1,6 +1,6 @@
 import "android.widget.LinearLayout"
 import "vinx.material.textfield.MaterialTextField"
-
+local ColorUtil = this.globalData.ColorUtil
 return {
   LinearLayout,
   orientation="vertical",

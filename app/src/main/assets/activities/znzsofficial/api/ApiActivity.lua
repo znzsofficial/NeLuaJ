@@ -9,7 +9,7 @@ import "android.view.View"
 import "android.view.WindowManager"
 import "mods.utils.UiUtil"
 local:res
-local:ColorUtil
+local ColorUtil = this.globalData.ColorUtil
 local:table
 
 local simpleList = ... or false

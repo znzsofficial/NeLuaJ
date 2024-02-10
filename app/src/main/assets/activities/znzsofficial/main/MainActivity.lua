@@ -20,6 +20,7 @@ import "mods.utils.UiUtil"
 -- local number
 local _exit = 0;
 
+local ColorUtil = this.globalData.ColorUtil
 local DecelerateInterpolator = luajava.newInstance"android.view.animation.DecelerateInterpolator"
 local:res
 
@@ -143,13 +144,13 @@ function onCreateOptionsMenu(menu)
       MainActivity.Public.snack(res.string.save_fail)
     end
   end
-  menu0.add(res.string.complie).onMenuItemClick=function(a)
+  menu0.add(res.string.compile).onMenuItemClick=function(a)
     local path = Bean.Path.this_file
     if mLuaEditor.getVisibility() == 4 then
       MainActivity.Public.snack(res.string.nofile)
      else
-      import "github.znzsofficial.utils.ComplieUtil"
-      ComplieUtil.INSTANCE.dump(path,path.."c")
+      import "github.znzsofficial.utils.CompileUtil"
+      CompileUtil.INSTANCE.dump(path,path.."c")
       MainActivity.RecyclerView.update();
     end
   end
@@ -202,6 +203,20 @@ function onCreateOptionsMenu(menu)
   end
   menu3.add(res.string.api_title).onMenuItemClick=function(a)
     ActivityUtil.new("api")
+  end
+  menu3.add(res.string.layout_helper)
+  .setShowAsAction(menu_show)
+  .onMenuItemClick=function(a)
+    -- 如果Editor未显示
+    if mLuaEditor.getVisibility() == 4 then
+      MainActivity.Public.snack(res.string.nofile)
+      return
+    end
+    EditorUtil.save()
+    activity.newActivity(ActivityUtil.lua_path.."/activities/znzsofficial/layouthelper/LayoutHelperActivity.lua",{
+      Bean.Path.this_file,
+      Bean.Path.app_root_pro_dir.."/"..mToolBar.getTitle()
+    })
   end
   local menu4 = menu.addSubMenu(res.string.more .. "…")
   menu4.add("NeLuaJ+ " .. res.string.help).onMenuItemClick=function(a)
