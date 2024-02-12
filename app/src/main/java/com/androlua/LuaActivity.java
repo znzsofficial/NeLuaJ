@@ -1101,11 +1101,11 @@ public class LuaActivity extends AppCompatActivity
     }
 
     public Uri getUriForPath(String path) {
-        return FileProvider.getUriForFile(this, getPackageName()+".fileprovider", new File(path));
+        return FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", new File(path));
     }
 
     public Uri getUriForFile(File path) {
-        return FileProvider.getUriForFile(this, getPackageName()+"fileprovider", path);
+        return FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", path);
     }
 
     public String getPathFromUri(Uri uri) {

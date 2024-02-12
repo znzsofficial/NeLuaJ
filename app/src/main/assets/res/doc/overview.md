@@ -37,13 +37,13 @@ welcome 使用多线程解压
 loadlayout 支持更多属性，例如textStyle, layout_anchor, pages (for ViewPager) 等
 
 ##依赖
-AppCompat 1.7.0-alpha02
+AppCompat 1.7.0-alpha03
 
-Material 1.9.0
+Material 1.11.0
 
-Lottie 6.0.0
+Lottie 6.3.0
 
-Glide 4.15.1
+Glide 4.16.0
 
 Okhttp 4.11.0
 
