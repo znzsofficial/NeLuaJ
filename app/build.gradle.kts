@@ -19,8 +19,12 @@ android {
     }
 
     buildTypes {
+        debug {
+            multiDexEnabled = true
+        }
         release {
             isMinifyEnabled = false
+            multiDexEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -37,7 +41,7 @@ android {
 }
 
 dependencies {
-    implementation(kotlin("reflect"))
+    implementation(kotlin("reflect", "1.9.21"))
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar"))))
     implementation(libs.core.ktx)
     implementation(libs.appcompat)
@@ -46,7 +50,7 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.espresso.core)
-    
+
     //AndroidX
     implementation("androidx.activity:activity:1.8.2")
     implementation("androidx.annotation:annotation:1.7.1")
@@ -61,7 +65,7 @@ dependencies {
     implementation("androidx.draganddrop:draganddrop:1.0.0")
     implementation("androidx.dynamicanimation:dynamicanimation:1.1.0-alpha03")
     implementation("androidx.emoji2:emoji2:1.4.0")
-    implementation("androidx.fragment:fragment:1.7.0-alpha09")
+    implementation("androidx.fragment:fragment:1.7.0-alpha10")
     implementation("androidx.gridlayout:gridlayout:1.1.0-beta01")
     implementation("androidx.legacy:legacy-support-core-ui:1.0.0")
     implementation("androidx.legacy:legacy-support-core-utils:1.0.0")
@@ -70,9 +74,9 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime:2.7.0")
     implementation("androidx.localbroadcastmanager:localbroadcastmanager:1.1.0")
     implementation("androidx.navigation:navigation-common:2.7.6")
-    implementation("androidx.navigation:navigation-fragment:2.7.6")
-    implementation("androidx.navigation:navigation-runtime:2.7.6")
-    implementation("androidx.navigation:navigation-ui:2.7.6")
+    implementation("androidx.navigation:navigation-fragment:2.7.7")
+    implementation("androidx.navigation:navigation-runtime:2.7.7")
+    implementation("androidx.navigation:navigation-ui:2.7.7")
     implementation("androidx.palette:palette:1.0.0")
     implementation("androidx.preference:preference:1.2.1")
     implementation("androidx.startup:startup-runtime:1.2.0-alpha02")
@@ -83,24 +87,24 @@ dependencies {
     implementation("androidx.viewpager:viewpager:1.1.0-alpha01")
     implementation("androidx.viewpager2:viewpager2:1.1.0-beta02")
     implementation("androidx.window:window:1.2.0")
-    
+
     //Material
     implementation("com.hendraanggrian.material:collapsingtoolbarlayout-subtitle:1.5.0")
 
     //Glide
     implementation("com.github.bumptech.glide:glide:4.16.0")
     annotationProcessor("com.github.bumptech.glide:compiler:5.0.0-rc01")
-    
+
     //Zip4J
     implementation("net.lingala.zip4j:zip4j:2.11.5")
-    
+
     //drawer
     implementation("com.drakeet.drawer:drawer:1.0.3")
-    
+
     //Okhttp
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.github.bumptech.glide:okhttp3-integration:4.16.0")
-    
+
     //lottie
     implementation("com.airbnb.android:lottie:6.3.0")
 

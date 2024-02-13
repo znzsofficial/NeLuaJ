@@ -20,7 +20,7 @@ class PopupRecyclerListAdapter : RecyclerListAdapter, PopupTextProvider {
         mContext = context
     }
 
-    override fun getPopupText(view: View,position: Int): CharSequence {
+    override fun getPopupText(view: View, position: Int): CharSequence {
         return this.adapterCreator.getPopupText(view, position).toString()
     }
 

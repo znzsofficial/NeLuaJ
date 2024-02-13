@@ -18,7 +18,7 @@ class CustomMagnifier(private val mView: View) {
     private val mCardView: CardView
     private val mContext: Activity = mView.context as Activity
     private val mDecorView: FrameLayout
-    private val displayMetrics: DisplayMetrics
+    private val displayMetrics: DisplayMetrics = mContext.resources.displayMetrics
     private val mImageView: AppCompatImageView
     private var mLastBitmap: Bitmap? = null
     private val matrix = Matrix()
@@ -28,7 +28,6 @@ class CustomMagnifier(private val mView: View) {
     private var mElevation = 4.0f
 
     init {
-        displayMetrics = mContext.resources.displayMetrics
         mCardView = CardView(mContext)
         mImageView = AppCompatImageView(mContext)
         mCardView.addView(mImageView)
@@ -137,7 +136,7 @@ class CustomMagnifier(private val mView: View) {
         update()
     }
 
-    fun update() {
+    private fun update() {
         mView.isDrawingCacheEnabled = true
         val viewBitmap = mView.drawingCache.copy(Bitmap.Config.ARGB_8888, true)
         mView.isDrawingCacheEnabled = false

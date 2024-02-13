@@ -7,16 +7,16 @@
 ```lua
 function onError(error, message)
   print(error, message)
-  return false
+  return ture
 end
 报错时调用
-返回(任意)布尔值可以拦截原报错输出
+返回(任意非空值)可以拦截原报错输出
 
 function onNightModeChanged(mode)
   print(mode)
 end
 切换UiMode时调用
 
-activity.getRootView(activity)
+activity.getRootView()
 返回ViewGroup
 ```

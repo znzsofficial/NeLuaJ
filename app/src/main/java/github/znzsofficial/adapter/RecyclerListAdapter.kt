@@ -6,9 +6,10 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.androlua.LuaContext
+import org.luaj.LuaValue
 
-open class RecyclerListAdapter : ListAdapter<Any?, LuaCustRecyclerHolder?> {
-    open val adapterCreator: Creator
+open class RecyclerListAdapter : ListAdapter<LuaValue?, LuaCustRecyclerHolder?> {
+    open lateinit var adapterCreator: Creator
     var mContext: LuaContext?
 
     constructor(creator: Creator) : super(DiffCallback(creator)) {
@@ -70,12 +71,12 @@ open class RecyclerListAdapter : ListAdapter<Any?, LuaCustRecyclerHolder?> {
     }
 
     internal class DiffCallback(private val adapterCreator: Creator) :
-        DiffUtil.ItemCallback<Any?>() {
-        override fun areItemsTheSame(oldItem: Any, newItem: Any): Boolean {
+        DiffUtil.ItemCallback<LuaValue?>() {
+        override fun areItemsTheSame(oldItem: LuaValue, newItem: LuaValue): Boolean {
             return adapterCreator.areItemsTheSame(oldItem, newItem)
         }
 
-        override fun areContentsTheSame(oldItem: Any, newItem: Any): Boolean {
+        override fun areContentsTheSame(oldItem: LuaValue, newItem: LuaValue): Boolean {
             return adapterCreator.areContentsTheSame(oldItem, newItem)
         }
     }

@@ -23,16 +23,15 @@ public class res extends TwoArgFunction {
   private String mLanguage;
   private Globals glabals;
   private LuaTable stringTable;
-  private LuaContext activity;
+  private final LuaContext activity;
   private LuaTable dimenTable;
   private Integer orientation;
 
   public res(LuaContext activity) {
     this.activity = activity;
     mLanguage = Locale.getDefault().getLanguage();
-    if (activity instanceof LuaActivity) {
-      LuaActivity context = (LuaActivity) activity;
-      orientation = context.getResources().getConfiguration().orientation;
+    if (activity instanceof LuaActivity context) {
+        orientation = context.getResources().getConfiguration().orientation;
     }
   }
 

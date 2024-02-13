@@ -19,6 +19,7 @@ import androidx.appcompat.view.ContextThemeWrapper;
 import com.androlua.adapter.ArrayListAdapter;
 import com.androlua.adapter.LuaAdapter;
 import com.bumptech.glide.Glide;
+import com.bumptech.glide.RequestManager;
 import com.bumptech.glide.request.target.CustomTarget;
 import com.bumptech.glide.request.transition.Transition;
 
@@ -40,7 +41,7 @@ import github.daisukiKaffuChino.LuaPagerAdapter;
  */
 public class LuaLayout {
 
-    private static HashMap<String, Integer> toint = new HashMap<>();
+    private static final HashMap<String, Integer> toint = new HashMap<>();
 
     static {
         // android:drawingCacheQuality
@@ -196,7 +197,7 @@ public class LuaLayout {
         toint.put("parallax", 2);
     }
 
-    private static HashMap<String, Integer> scaleType = new HashMap<>();
+    private static final HashMap<String, Integer> scaleType = new HashMap<>();
 
     static {
         // android:scaleType
@@ -210,7 +211,7 @@ public class LuaLayout {
         scaleType.put("centerInside", 7);
     }
 
-    private static HashMap<String, Integer> rules = new HashMap<>();
+    private static final HashMap<String, Integer> rules = new HashMap<>();
 
     static {
         toint.put("layout_above", 2);
@@ -238,7 +239,7 @@ public class LuaLayout {
         rules.put("layout_toStartOf", 16);
     }
 
-    private static HashMap<String, Integer> types = new HashMap<>();
+    private static final HashMap<String, Integer> types = new HashMap<>();
 
     static {
         types.put("px", 0);
@@ -249,7 +250,7 @@ public class LuaLayout {
         types.put("mm", 5);
     }
 
-    private static HashMap<String, Integer> ids = new HashMap<>();
+    private static final HashMap<String, Integer> ids = new HashMap<>();
     private final DisplayMetrics dm;
     private HashMap<String, LuaValue> views = new HashMap<>();
     private static int idx = 0x7f000000;
@@ -260,13 +261,16 @@ public class LuaLayout {
             new String[]{
                     "layout_marginLeft", "layout_marginTop", "layout_marginRight", "layout_marginBottom"
             };
-    private static LuaValue W = CoerceJavaToLua.coerce(ViewGroup.LayoutParams.WRAP_CONTENT);
+    private static final LuaValue W = CoerceJavaToLua.coerce(ViewGroup.LayoutParams.WRAP_CONTENT);
 
     private final LuaValue mContext;
+
+    private final RequestManager requestManager;
 
     public LuaLayout(Context context) {
         mContext = CoerceJavaToLua.coerce(context);
         dm = context.getResources().getDisplayMetrics();
+        requestManager = Glide.with(context);
     }
 
     public HashMap getId() {
@@ -448,14 +452,15 @@ public class LuaLayout {
                                 continue;
                             case "textStyle":
                                 String textStyle = val.tojstring();
-                                if (textStyle.equals("bold")) {
-                                    view.get("setTypeface").jcall(Typeface.defaultFromStyle(Typeface.BOLD));
-                                } else if (textStyle.equals("normal")) {
-                                    view.get("setTypeface").jcall(Typeface.defaultFromStyle(Typeface.NORMAL));
-                                } else if (textStyle.equals("italic")) {
-                                    view.get("setTypeface").jcall(Typeface.defaultFromStyle(Typeface.ITALIC));
-                                } else if (textStyle.equals("italic|bold") || style.equals("bold|italic")) {
-                                    view.get("setTypeface").jcall(Typeface.defaultFromStyle(Typeface.BOLD_ITALIC));
+                                switch (textStyle) {
+                                    case "bold" ->
+                                            view.get("setTypeface").jcall(Typeface.defaultFromStyle(Typeface.BOLD));
+                                    case "normal" ->
+                                            view.get("setTypeface").jcall(Typeface.defaultFromStyle(Typeface.NORMAL));
+                                    case "italic" ->
+                                            view.get("setTypeface").jcall(Typeface.defaultFromStyle(Typeface.ITALIC));
+                                    case "italic|bold", "bold|italic" ->
+                                            view.get("setTypeface").jcall(Typeface.defaultFromStyle(Typeface.BOLD_ITALIC));
                                 }
                                 continue;
                             case "scaleType":
@@ -578,15 +583,15 @@ public class LuaLayout {
                                         // bitmap);
                                         //                        }
                                         //                      }.execute();
-                                        Glide.with(mContext.touserdata(Context.class))
-                                                .asBitmap()
+                                        requestManager
+                                                .asDrawable()
                                                 .load(val.tojstring())
                                                 .into(
-                                                        new CustomTarget<Bitmap>() {
+                                                        new CustomTarget<Drawable>() {
                                                             @Override
                                                             public void onResourceReady(
-                                                                    @NonNull Bitmap resource, Transition<? super Bitmap> transition) {
-                                                                view.jset("ImageBitmap", resource);
+                                                                    @NonNull Drawable resource, Transition<? super Drawable> transition) {
+                                                                view.jset("ImageDrawable", resource);
                                                             }
 
                                                             @Override
@@ -739,7 +744,7 @@ public class LuaLayout {
             }
 
         } catch (Exception e) {
-            mContext.touserdata(LuaContext.class).sendError("LuaLayout " + layout.checktable().dump(), e);
+            mContext.touserdata(LuaContext.class).sendError("loadlayout " + layout.checktable().dump(), e);
 
             e.printStackTrace();
         }
