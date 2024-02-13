@@ -20,6 +20,8 @@ android {
 
     buildTypes {
         debug {
+            isShrinkResources = false
+            isMinifyEnabled = false
             multiDexEnabled = true
         }
         release {
