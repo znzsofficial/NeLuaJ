@@ -2,12 +2,11 @@ import "java.io.File"
 import "android.content.Intent"
 import "android.webkit.MimeTypeMap"
 import "android.net.Uri"
-import "androidx.core.content.FileProvider"
-import "com.androlua.LuaUtil"
 import "com.google.android.material.snackbar.Snackbar"
 import "com.google.android.material.dialog.MaterialAlertDialogBuilder"
 local BottomSheetDialog = bindClass "com.google.android.material.bottomsheet.BottomSheetDialog"
 local WindowManager = bindClass "android.view.WindowManager"
+local LuaUtil=bindClass"com.androlua.LuaUtil"
 local TabUtil = require "mods.utils.TabUtil"
 local:res
 
@@ -90,14 +89,14 @@ function _M.createProject(name)
     if binding.module_class.isChecked() then
       LuaFileUtil.create(base_path .. "/mods/class.lua", res.string.code_class)
     end
-    if binding.module_jpairs.isChecked() then
-      LuaFileUtil.create(base_path .. "/mods/jpairs.lua", res.string.code_jpairs)
-    end
     if binding.module_fragment.isChecked() then
       LuaFileUtil.create(base_path .. "/mods/LuaFragment.lua", res.string.code_fragment)
     end
     if binding.module_strings.isChecked() then
       LuaFileUtil.create(base_path .. "/mods/Strings.lua", res.string.code_strings)
+    end
+    if binding.module_rxlua.isChecked() then
+      LuaUtil.copyFile(this.getLuaDir("rx.lua"), base_path .. "/mods/rx.lua")
     end
     if binding.module_anim.isChecked() then
       LuaFileUtil.create(base_path .. "/mods/ObjectAnimator.lua", res.string.code_anim)

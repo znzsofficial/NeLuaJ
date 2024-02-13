@@ -212,6 +212,7 @@ local getList = function()
   local fileArray = File(path).list()
 
   for _, v : (fileArray) do
+    local v = tostring(v)
     local full_path = path.."/"..v
     if File(full_path).isDirectory()
       local k = #DirList + 1

@@ -6,7 +6,6 @@ local LuaUtil=bindClass"com.androlua.LuaUtil"
 local ZipFile=bindClass"net.lingala.zip4j.ZipFile"
 local Executors = bindClass"java.util.concurrent.Executors"
 local Handler = bindClass"android.os.Handler"
-local Looper = bindClass"android.os.Looper"
 
 local ByteBuffer, FileChannel, Paths, Files, Okio
 
@@ -112,8 +111,7 @@ end
 
 function _M.extract(zipPath)
   local zipFile = ZipFile(zipPath)
-  local mainLooper = Looper.getMainLooper()
-  local handler = Handler(mainLooper)
+  local handler = Handler(this.getMainLooper())
   local executor = Executors.newSingleThreadExecutor()
   executor.execute(Runnable{
     run = function()
