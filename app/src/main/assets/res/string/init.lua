@@ -214,18 +214,6 @@ function class(def)
 end
 
 return class]]
-code_jpairs=[[local function iter(a, i)
-  if i ~= #a then
-    return i + 1, a[i]
-  end
-end
- 
-local function jpairs(a)
-  return iter, a, 0
-end
-
-return jpairs
-]]
 code_fragment=[[-- create on 2022/8/14 / ikimasho
 -- please fix if there's something wrong
 
@@ -743,9 +731,8 @@ user_permission={
   "INTERNET",
   "WRITE_EXTERNAL_STORAGE"
 }]]
-build_problem=[[目前的问题是axml里
-androidx.startup.InitializationProvider
-的android:authorities没有被正确替换，在修了在修了
+build_problem=[[问题不明
+建议打包后使用MT管理器制作共存后安装
 
 下方填写的目录格式为 ..Projects/demo1
 ]]
