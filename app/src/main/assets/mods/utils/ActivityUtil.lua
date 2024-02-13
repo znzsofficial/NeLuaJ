@@ -33,15 +33,17 @@ local function adapter(t)
 end
 
 function _M.showLog(context)
-  MaterialAlertDialogBuilder(context)
+  local logAdapter = adapter(context.getLogs())
+  local dialog = MaterialAlertDialogBuilder(context)
   .setTitle(res.string.logs)
-  .setAdapter(adapter(context.getLogs()), nil)
+  .setAdapter(logAdapter, nil)
   .setPositiveButton(android.R.string.ok, nil)
   .setNegativeButton(res.string.clear, function()
     context.getLogs().clear()
     MainActivity.Public.snack("日志已清空")
   end)
-  .show();
+  .show()
+  dialog.listView.setSelection(logAdapter.getCount() - 1)
 end
 
 return _M

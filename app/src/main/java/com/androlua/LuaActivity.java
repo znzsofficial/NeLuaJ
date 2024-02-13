@@ -2,7 +2,6 @@ package com.androlua;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
-import android.app.Activity;
 import android.app.ActivityManager;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
@@ -62,6 +61,7 @@ import org.luaj.android.res;
 import org.luaj.android.task;
 import org.luaj.android.thread;
 import org.luaj.android.timer;
+import org.luaj.android.xTask;
 import org.luaj.lib.ResourceFinder;
 import org.luaj.lib.jse.JavaPackage;
 import org.luaj.lib.jse.JsePlatform;
@@ -74,6 +74,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import dalvik.system.DexClassLoader;
@@ -173,6 +174,7 @@ public class LuaActivity extends AppCompatActivity
             globals.set("thread", new thread(this));
             globals.set("timer", new timer(this));
             globals.set("call", new call(this));
+            globals.set("xTask", new xTask(this));
             globals.load(new res(this));
             globals.load(new json());
             globals.load(new file());
@@ -207,7 +209,6 @@ public class LuaActivity extends AppCompatActivity
             }
         } catch (final Exception e) {
             sendError("Error", e);
-
             e.printStackTrace();
             setContentView(mLogView);
             Intent res = new Intent();
@@ -237,13 +238,13 @@ public class LuaActivity extends AppCompatActivity
     ;
 
     public void setAllowThread(boolean bool) {
-        if (bool == true) {
-            StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
-            StrictMode.setThreadPolicy(policy);
+        StrictMode.ThreadPolicy policy;
+        if (bool) {
+            policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
         } else {
-            StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().detectAll().build();
-            StrictMode.setThreadPolicy(policy);
+            policy = new StrictMode.ThreadPolicy.Builder().detectAll().build();
         }
+        StrictMode.setThreadPolicy(policy);
     }
 
     public Object runMainFunc(String name, Object[] arg) {
@@ -369,19 +370,9 @@ public class LuaActivity extends AppCompatActivity
     @Override
     public void setTitle(CharSequence title) {
         super.setTitle(title);
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
-            ActivityManager.TaskDescription tDesc = null;
-            // try {
-            // tDesc =
-            //     new ActivityManager.TaskDescription(
-            //         title.toString(), LuaBitmap.getLocalBitmap(getLuaPath("icon.png")));
-            // } catch (IOException e) {
-
-            //   e.printStackTrace();
-            tDesc = new ActivityManager.TaskDescription(title.toString());
-            //     }
-            setTaskDescription(tDesc);
-        }
+        ActivityManager.TaskDescription
+                tDesc = new ActivityManager.TaskDescription(title.toString());
+        setTaskDescription(tDesc);
     }
 
     public void setContentView(LuaTable view) {
@@ -528,7 +519,7 @@ public class LuaActivity extends AppCompatActivity
     public boolean checkResource(String name) {
         try {
             if (new File(name).exists()) return true;
-        } catch (Exception e) {
+        } catch (Exception ignored) {
 
         }
         try {
@@ -541,7 +532,7 @@ public class LuaActivity extends AppCompatActivity
             InputStream in = getAssets().open(name);
             in.close();
             return true;
-        } catch (Exception ioe) {
+        } catch (Exception ignored) {
 
         }
         return false;
@@ -667,8 +658,8 @@ public class LuaActivity extends AppCompatActivity
         return globals;
     }
 
-    public static ViewGroup getRootView(@NonNull Activity activity) {
-        return (ViewGroup) activity.getWindow().getDecorView().getRootView();
+    public ViewGroup getRootView() {
+        return (ViewGroup) getWindow().getDecorView().getRootView();
     }
 
     @Override
@@ -691,9 +682,9 @@ public class LuaActivity extends AppCompatActivity
     @Override
     public void sendError(String title, Exception msg) {
         Object run = runFunc("onError", title, msg);
-        if (run == null || !(run instanceof Boolean)) {
+        if (run == null) {
             sendMsg(title + ": " + msg.getMessage());
-            logs.add(title + ": " + msg.toString());
+            logs.add(title + ": " + msg);
         }
     }
 
@@ -770,7 +761,7 @@ public class LuaActivity extends AppCompatActivity
 
     @CallLuaFunction
     @Override
-    public boolean onContextItemSelected(MenuItem menuItem) {
+    public boolean onContextItemSelected(@NonNull MenuItem menuItem) {
         runFunc("onContextItemSelected", menuItem);
         return super.onContextItemSelected(menuItem);
     }
@@ -778,7 +769,6 @@ public class LuaActivity extends AppCompatActivity
     @CallLuaFunction
     @Override
     public void onContentChanged() {
-        // TODO: Implement this method
         super.onContentChanged();
         runFunc("onContentChanged");
         isSetViewed = true;
@@ -795,8 +785,7 @@ public class LuaActivity extends AppCompatActivity
         for (LuaGcable g : mGc) {
             try {
                 g.gc();
-            } catch (Exception e) {
-
+            } catch (Exception ignored) {
             }
         }
         mGc.clear();
@@ -839,7 +828,7 @@ public class LuaActivity extends AppCompatActivity
 
     @CallLuaFunction
     @Override
-    public void onConfigurationChanged(Configuration newConfig) {
+    public void onConfigurationChanged(@NonNull Configuration newConfig) {
         // TODO: Implement this method
         super.onConfigurationChanged(newConfig);
         runFunc("onConfigurationChanged", newConfig);
@@ -924,7 +913,7 @@ public class LuaActivity extends AppCompatActivity
         Intent service = new Intent(this, LuaService.class);
         String path = "service.lua";
         service.putExtra(NAME, path);
-        if (path.charAt(0) != '/' && luaDir != null) path = luaDir + "/" + path;
+        if (luaDir != null) path = luaDir + "/" + path;
         File f = new File(path);
         if (f.isDirectory() && new File(path + "/service.lua").exists()) path += "/service.lua";
         else if ((f.isDirectory() || !f.exists()) && !path.endsWith(".lua")) path += ".lua";
@@ -1013,10 +1002,8 @@ public class LuaActivity extends AppCompatActivity
         if (!new File(path).exists()) throw new FileNotFoundException(path);
 
         if (newDocument) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT);
-                intent.addFlags(Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
-            }
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT);
+            intent.addFlags(Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
         }
 
         intent.setData(Uri.parse("file://" + path));
@@ -1073,10 +1060,8 @@ public class LuaActivity extends AppCompatActivity
         intent.setData(Uri.parse("file://" + path));
 
         if (newDocument) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT);
-                intent.addFlags(Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
-            }
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT);
+            intent.addFlags(Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
         }
 
         if (arg != null) intent.putExtra(ARG, arg);
@@ -1090,14 +1075,10 @@ public class LuaActivity extends AppCompatActivity
             super.finish();
             return;
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            Intent intent = getIntent();
-            if (intent != null && (intent.getFlags() & Intent.FLAG_ACTIVITY_NEW_DOCUMENT) != 0)
-                finishAndRemoveTask();
-            else super.finish();
-        } else {
-            super.finish();
-        }
+        Intent intent = getIntent();
+        if (intent != null && (intent.getFlags() & Intent.FLAG_ACTIVITY_NEW_DOCUMENT) != 0)
+            finishAndRemoveTask();
+        else super.finish();
     }
 
     public Uri getUriForPath(String path) {
@@ -1112,7 +1093,7 @@ public class LuaActivity extends AppCompatActivity
         String path = null;
         if (uri != null) {
             String[] p = {MediaStore.Images.Media.DATA};
-            switch (uri.getScheme()) {
+            switch (Objects.requireNonNull(uri.getScheme())) {
                 case "content":
           /*try {
               InputStream in = getContentResolver().openInputStream(uri);

@@ -10,8 +10,9 @@ QQ群组：603327362
 
 如果你认为本编辑器不自带中文、模板，或从其它编辑器复制来的代码无法运行让你困惑，那么你不适合使用它。如果你仅从QQ群或小论坛里接触编程相关的内容，那你同样不适合使用它。
 
+
 ### LuaJ++的特点
-全局环境中默认导入了 http,json,print,printf,res,call,file,thread,timer,dump等模块，可以直接使用
+全局环境中默认导入了 http,json,print,printf,res,call,file,thread,timer,dump,xTask等模块，可以直接使用
 
 
 ### 值得注意的地方
@@ -37,6 +38,8 @@ welcome 使用多线程解压
 将AndroLua+的部分Adapter移动到了**com.androlua.adapter**下，实际开发时请**留意Java方法浏览器**。
 
 loadlayout 支持更多属性，例如textStyle, layout_anchor, pages (for ViewPager) 等
+
+新增 xTask 函数，使用 Kotlin 协程实现
 
 ##依赖
 AppCompat 1.7.0-alpha03
