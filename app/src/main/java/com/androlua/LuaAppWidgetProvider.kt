@@ -14,6 +14,7 @@ class LuaAppWidgetProvider : AppWidgetProvider() {
         appWidgetIds: IntArray
     ) {
         val views = RemoteViews(context.packageName, R.layout.appwidget)
+        appWidgetManager.updateAppWidget(appWidgetIds, views)
         super.onUpdate(context, appWidgetManager, appWidgetIds)
     }
 
