@@ -1,13 +1,9 @@
 package github.znzsofficial.utils;
 
 import android.app.ProgressDialog;
-import android.content.pm.PackageManager;
-import android.net.Uri;
 import android.util.Log;
-import android.webkit.MimeTypeMap;
 
 import androidx.annotation.NonNull;
-import androidx.core.content.FileProvider;
 
 import com.androlua.LuaActivity;
 import com.androlua.LuaUtil;
@@ -32,9 +28,9 @@ import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
 public class LuaBuildUtil {
-    private LuaActivity mContext;
+    private final LuaActivity mContext;
     private ProgressDialog mDlg;
-    private Globals mGlobals = JsePlatform.standardGlobals();
+    private final Globals mGlobals = JsePlatform.standardGlobals();
 
     public LuaBuildUtil(@NonNull LuaActivity luaActivity) {
         this.mContext = luaActivity;
@@ -49,7 +45,6 @@ public class LuaBuildUtil {
                     .setTitle("Error")
                     .setMessage(e.toString())
                     .setPositiveButton(android.R.string.ok, null)
-                    .create()
                     .show();
         }
     }
@@ -128,22 +123,6 @@ public class LuaBuildUtil {
                 .start();
     }
 
-    private String getType(File file) {
-        int lastDot = file.getName().lastIndexOf(46);
-        if (lastDot >= 0) {
-            String extension = file.getName().substring(lastDot + 1);
-            String mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension);
-            if (mime != null) {
-                return mime;
-            }
-        }
-        return "application/octet-stream";
-    }
-
-    public Uri getUriForFile(File path) {
-        return FileProvider.getUriForFile(mContext, mContext.getPackageName() + ".fileprovider", path);
-    }
-
     public void bin(
             String appName,
             String pkg,
@@ -156,14 +135,14 @@ public class LuaBuildUtil {
         bf.mkdirs();
         File op = new File(bf, mProjDir.getName());
         Log.i("luaj", "bin: " + op);
-        CharSequence lb = mContext.getApplicationInfo().nonLocalizedLabel;
-        String apkg = mContext.getPackageName();
-        String vr = "1.0";
-        try {
-            vr = mContext.getPackageManager().getPackageInfo(mContext.getPackageName(), 0).versionName;
-        } catch (PackageManager.NameNotFoundException e) {
-            e.printStackTrace();
-        }
+//        CharSequence lb = mContext.getApplicationInfo().nonLocalizedLabel;
+//        String apkg = mContext.getPackageName();
+//        String vr = "1.0";
+//        try {
+//            vr = mContext.getPackageManager().getPackageInfo(mContext.getPackageName(), 0).versionName;
+//        } catch (PackageManager.NameNotFoundException e) {
+//            e.printStackTrace();
+//        }
         try {
             ZipOutputStream zip = new ZipOutputStream(new FileOutputStream(op));
             File[] fs = mProjDir.listFiles();
@@ -181,9 +160,7 @@ public class LuaBuildUtil {
 
                     if (mDlg != null) {
                         mContext.runOnUiThread(
-                                () -> {
-                                    mDlg.setMessage("AndroidManifest");
-                                });
+                                () -> mDlg.setMessage("AndroidManifest"));
                     }
                     try {
                         com.nwdxlgzs.AxmlEditor axml = new com.nwdxlgzs.AxmlEditor(apkZipFile.getInputStream(z));
@@ -240,7 +217,6 @@ public class LuaBuildUtil {
                                 .setTitle("Error")
                                 .setMessage(e.getMessage())
                                 .setPositiveButton(android.R.string.ok, null)
-                                .create()
                                 .show();
                     });
             e.printStackTrace();
@@ -258,8 +234,10 @@ public class LuaBuildUtil {
         if (name.endsWith(".apk")) return;
         if (dir.isDirectory()) {
             File[] fs = dir.listFiles();
-            for (File f : fs) {
-                addZip(zip, f, name);
+            if (fs != null) {
+                for (File f : fs) {
+                    addZip(zip, f, name);
+                }
             }
         } else {
             try {
