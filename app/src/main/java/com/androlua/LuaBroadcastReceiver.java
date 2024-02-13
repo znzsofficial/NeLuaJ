@@ -14,7 +14,6 @@ public class LuaBroadcastReceiver extends BroadcastReceiver {
 
   @Override
   public void onReceive(Context context, Intent intent) {
-    // TODO: Implement this method
     mRlt.onReceive(context, intent);
   }
 

@@ -23,6 +23,7 @@ android {
             multiDexEnabled = true
         }
         release {
+            isShrinkResources = false
             isMinifyEnabled = false
             multiDexEnabled = true
             proguardFiles(
@@ -58,7 +59,6 @@ dependencies {
     implementation("androidx.collection:collection:1.4.0")
     implementation("androidx.constraintlayout:constraintlayout:2.2.0-alpha13")
     implementation("androidx.coordinatorlayout:coordinatorlayout:1.3.0-alpha02")
-    //implementation("androidx.core:core-splashscreen:1.1.0-alpha02")
     implementation("androidx.customview:customview:1.2.0-alpha02")
     implementation("androidx.documentfile:documentfile:1.1.0-alpha01")
     implementation("androidx.drawerlayout:drawerlayout:1.2.0")
