@@ -22,7 +22,7 @@ local binding = {}
 activity.setContentView(loadlayout(res.layout.photo_layout,binding))
 
 Glide.with(activity)
-.load(DrawableUtil.getDrawable("sync", ColorUtil.getColorOnPrimaryContainer()))
+.load(DrawableUtil.getDrawable("sync", this.globalData.ColorUtil.getColorOnPrimaryContainer()))
 .into(binding.switchBg)
 Glide.with(activity)
 .load(path)
