@@ -2,7 +2,8 @@ require "environment"
 import "android.view.View"
 import "android.view.WindowManager"
 import "android.graphics.Color"
-import "com.bumptech.glide.Glide"
+import "coil.Coil"
+import "coil.request.ImageRequest"
 
 activity.getSupportActionBar().hide()
 
@@ -21,12 +22,19 @@ end
 local binding = {}
 activity.setContentView(loadlayout(res.layout.photo_layout,binding))
 
-Glide.with(activity)
-.load(DrawableUtil.getDrawable("sync", this.globalData.ColorUtil.getColorOnPrimaryContainer()))
-.into(binding.switchBg)
-Glide.with(activity)
-.load(path)
-.into(binding.mPhotoView)
+local imageLoader = Coil.imageLoader(activity)
+
+imageLoader.enqueue(
+ImageRequest.Builder(this)
+.data(DrawableUtil.getDrawable("sync", this.globalData.ColorUtil.getColorOnPrimaryContainer()))
+.target(binding.switchBg).build()
+)
+
+imageLoader.enqueue(
+ImageRequest.Builder(this)
+.data(path)
+.target(binding.mPhotoView).build()
+)
 
 local i = 1
 local colors = {
