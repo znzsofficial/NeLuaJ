@@ -93,10 +93,6 @@ dependencies {
     //Material
     implementation("com.hendraanggrian.material:collapsingtoolbarlayout-subtitle:1.5.0")
 
-    //Glide
-    implementation("com.github.bumptech.glide:glide:4.16.0")
-    annotationProcessor("com.github.bumptech.glide:compiler:5.0.0-rc01")
-
     //Zip4J
     implementation("net.lingala.zip4j:zip4j:2.11.5")
 
@@ -105,7 +101,6 @@ dependencies {
 
     //Okhttp
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("com.github.bumptech.glide:okhttp3-integration:4.16.0")
 
     //lottie
     implementation("com.airbnb.android:lottie:6.3.0")
@@ -114,7 +109,7 @@ dependencies {
     implementation("jp.wasabeef:recyclerview-animators:4.0.2")
 
     //zhanghai
-    implementation("me.zhanghai.android.appiconloader:appiconloader-glide:1.5.0")
     implementation("me.zhanghai.android.fastscroll:library:1.3.0")
 
+    implementation("io.coil-kt:coil:2.5.0")
 }

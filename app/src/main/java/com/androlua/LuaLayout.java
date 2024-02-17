@@ -13,15 +13,10 @@ import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ImageView;
 
-import androidx.annotation.NonNull;
 import androidx.appcompat.view.ContextThemeWrapper;
 
 import com.androlua.adapter.ArrayListAdapter;
 import com.androlua.adapter.LuaAdapter;
-import com.bumptech.glide.Glide;
-import com.bumptech.glide.RequestManager;
-import com.bumptech.glide.request.target.CustomTarget;
-import com.bumptech.glide.request.transition.Transition;
 
 import org.luaj.LuaError;
 import org.luaj.LuaTable;
@@ -34,6 +29,9 @@ import org.luaj.lib.jse.CoerceLuaToJava;
 import java.util.ArrayList;
 import java.util.HashMap;
 
+import coil.Coil;
+import coil.ImageLoader;
+import coil.request.ImageRequest;
 import github.daisukiKaffuChino.LuaPagerAdapter;
 
 /**
@@ -265,12 +263,15 @@ public class LuaLayout {
 
     private final LuaValue mContext;
 
-    private final RequestManager requestManager;
+    private final Context realContext;
+
+    private final ImageLoader imageLoader;
 
     public LuaLayout(Context context) {
+        realContext = context;
         mContext = CoerceJavaToLua.coerce(context);
         dm = context.getResources().getDisplayMetrics();
-        requestManager = Glide.with(context);
+        imageLoader = Coil.imageLoader(context);
     }
 
     public HashMap getId() {
@@ -401,7 +402,7 @@ public class LuaLayout {
             view =
                     cls.call(
                             CoerceJavaToLua.coerce(
-                                    new ContextThemeWrapper(mContext.touserdata(Context.class), style.toint())),
+                                    new ContextThemeWrapper(realContext, style.toint())),
                             LuaValue.NIL,
                             style);
         } else {
@@ -482,7 +483,7 @@ public class LuaLayout {
                                     view.get("setAdapter")
                                             .jcall(
                                                     new ArrayListAdapter<>(
-                                                            mContext.touserdata(Context.class),
+                                                            realContext,
                                                             android.R.layout.simple_list_item_1,
                                                             (String[]) CoerceLuaToJava.arrayCoerce(val, String.class)));
                                 }
@@ -583,22 +584,11 @@ public class LuaLayout {
                                         // bitmap);
                                         //                        }
                                         //                      }.execute();
-                                        requestManager
-                                                .asDrawable()
-                                                .load(val.tojstring())
-                                                .into(
-                                                        new CustomTarget<Drawable>() {
-                                                            @Override
-                                                            public void onResourceReady(
-                                                                    @NonNull Drawable resource, Transition<? super Drawable> transition) {
-                                                                view.jset("ImageDrawable", resource);
-                                                            }
-
-                                                            @Override
-                                                            public void onLoadCleared(Drawable placeholder) {
-                                                                // 在图片加载被取消时调用，可以清除一些资源或状态
-                                                            }
-                                                        });
+                                        imageLoader.enqueue(
+                                                new ImageRequest.Builder(realContext).data(val.tojstring()).target(
+                                                        new LuaTarget(view)
+                                                ).build()
+                                        );
                                         // } else {
                                         //                      view.jset(
                                         //                          "ImageBitmap",

@@ -26,7 +26,9 @@ local NineBitmapDrawable = bindClass "com.androlua.NineBitmapDrawable"
 local OnClickListener = bindClass("android.view.View$OnClickListener")
 local TruncateAt = bindClass("android.text.TextUtils$TruncateAt")
 local ScaleType = bindClass("android.widget.ImageView$ScaleType")
-local Glide = bindClass "com.bumptech.glide.Glide"
+local Coil = bindClass "coil.Coil"
+local ImageRequest = bindClass "coil.request.ImageRequest"
+local imageLoader = Coil.imageLoader(context)
 local Typeface = bindClass "android.graphics.Typeface"
 
 local scaleTypes = ScaleType.values()
@@ -447,7 +449,7 @@ local function setattribute(root, view, params, k, v, ids)
    elseif k == "url" then
     view.loadUrl(url)
    elseif k == "src" then
-    Glide.with(context).load(v).into(view)
+    imageLoader.enqueue(ImageRequest.Builder(context).data(v).target(view).build())
    elseif k == "scaleType" then
     view.setScaleType(scaleTypes[scaleType[v]])
    elseif k == "background" then

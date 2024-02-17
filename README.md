@@ -48,18 +48,15 @@ Material 1.11.0
 
 Lottie 6.3.0
 
-Glide 4.16.0
+Coil 2.5.0
 
-Okhttp 4.11.0
+Okhttp 4.12.0
 
 Zip4J 2.11.5
-
-appiconloader-glide 1.5.0
 
 android-fastscroll 1.2.0
 
 com.drakeet.drawer 1.0.3
-
 
 ###感觉不如原神
 
