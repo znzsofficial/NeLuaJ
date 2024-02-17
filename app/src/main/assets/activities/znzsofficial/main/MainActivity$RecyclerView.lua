@@ -18,8 +18,9 @@ import "github.znzsofficial.adapter.LuaCustRecyclerHolder"
 import "android.util.TypedValue"
 local getDp = lambda i : TypedValue.applyDimension(1,i,activity.getResources().getDisplayMetrics())
 
---Glide
-import "com.bumptech.glide.Glide"
+import "coil.Coil"
+import "coil.target.Target"
+import "coil.request.ImageRequest"
 
 import "mods.utils.EditorUtil"
 import "mods.utils.ActivityUtil"
@@ -94,8 +95,8 @@ _M.init=function()
 
   local item_layout = res.layout.item_rv;
   local res_drawable= res.drawable
-  local requestManager = Glide.with(activity)
-  local requestBuilder = requestManager.asDrawable()
+
+  local imageLoader = Coil.imageLoader(context)
   local error_project = DrawableUtil.getDrawable("android_studio", ColorUtil.getColorSecondary())
   -- 清空文件列表
   FileList = {}
@@ -121,9 +122,9 @@ _M.init=function()
     getPopupText=function(view, position)
       return utf8.sub(FileList[position+1].file_name,1,1)
     end,
-    onViewRecycled=function(holder)
+    --[[onViewRecycled=function(holder)
       requestManager.clear(holder.Tag.icon)
-    end,
+    end,]]
     onCreateViewHolder=function(parent,viewType)
       local views = {}
       local holder=LuaCustRecyclerHolder(loadlayout(item_layout,views))
@@ -138,14 +139,22 @@ _M.init=function()
       view.name.setText(v.file_name)
 
       if v.img == "Project"
-        requestBuilder.load(v_path.."/icon.png")
-        .error(error_project).into(view.icon)
+        imageLoader.enqueue(
+            ImageRequest.Builder(this)
+              .data(v_path.."/icon.png")
+              .target(Target{
+                   onError = function()
+                      view.icon.setImageDrawable(error_project)
+                   end,
+                   onSuccess = function(drawable)
+                      view.icon.setImageDrawable(drawable)
+                   end
+              }).build()
+        )
        elseif (v.isDirectory and (v.file_name == "mods" or v.file_name == "libs"))
-        requestBuilder.load(res_drawable["folder_mod"])
-        .into(view.icon)
+        view.icon.setImageDrawable(res_drawable["folder_mod"])
        else
-        requestBuilder.load(res_drawable[v.img])
-        .into(view.icon)
+        view.icon.setImageDrawable(res_drawable[v.img])
       end
 
       view.contents.onLongClick=function()
