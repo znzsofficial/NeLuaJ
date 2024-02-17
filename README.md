@@ -59,7 +59,7 @@ android-fastscroll 1.2.0
 
 com.drakeet.drawer 1.0.3
 
-###感觉不如原神
+### 感觉不如原神
 
 你说的对，但是《​NeLuaJ+》是由NekoLaska
 自主研发的一款全新的在安卓使用Lua语言开发应用的工具。
