@@ -23,7 +23,7 @@ activity.setTitle('需要导入的类')
 
 local function fiximport(path)
   try
-    local allClasses = require "activities.znzsofficial.api.PublicClasses"
+    local allClasses = require "activities.api.PublicClasses"
     local cache={}
     local function checkclass(path,ret)
       if cache[path] then

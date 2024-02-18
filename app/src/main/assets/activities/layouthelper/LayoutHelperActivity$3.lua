@@ -12,7 +12,7 @@ local type = type
 local ipairs = ipairs
 local tostring = tostring
 local tonumber = tonumber
-local loadlayout2 = require "activities.znzsofficial.layouthelper.LayoutHelperActivity$loadlayout"
+local loadlayout2 = require "activities.layouthelper.LayoutHelperActivity$loadlayout"
 -- require 会从已经载入的里面取，所以不用担心卡顿
 local MaterialAlertDialogBuilder = bindClass "com.google.android.material.dialog.MaterialAlertDialogBuilder"
 local String = bindClass "java.lang.String"

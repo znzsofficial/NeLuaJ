@@ -77,8 +77,8 @@ lv.onItemClick=function(l,v,p,i)
   webView.loadDataWithBaseURL("",MDTool.markdown2Html(md),"text/html","utf-8",nil)
 end
 
-local OnBackPressedCallback = luajava.bindClass "androidx.activity.OnBackPressedCallback"
-activity.onBackPressedDispatcher.addCallback(this,OnBackPressedCallback.override{
+if bindClass "android.os.Build".VERSION.SDK_INT >= 33 then
+activity.onBackPressedDispatcher.addCallback(this,luajava.bindClass "androidx.activity.OnBackPressedCallback".override{
 handleOnBackPressed=function()
     if vpg.getCurrentItem()~=0 then
         vpg.setCurrentItem(0)
@@ -88,4 +88,14 @@ handleOnBackPressed=function()
     end
 end
 }(true))
-
+else
+function onKeyDown(code,event)
+    if code==KeyEvent.KEYCODE_BACK then
+        if vpg.getCurrentItem()~=0 then
+           vpg.setCurrentItem(0)
+           activity.setTitle("NeLuaJ+"..res.string.help)
+           return true
+        end
+    end
+end
+end

@@ -15,7 +15,7 @@ old_res = res
 local TypedValue = bindClass("android.util.TypedValue")
 local ProgressBarDialog = require "mods.functions.ProgressBarDialog"
 LayoutHelperActivity = {
-  data = require "activities.znzsofficial.layouthelper.LayoutHelperActivity$data",
+  data = require "activities.layouthelper.LayoutHelperActivity$data",
 }
 
 activity.setTitle(old_res.string.layout_helper)
@@ -32,11 +32,11 @@ task(1,function()
 
   try
 
-    LayoutHelperActivity.mods = require "activities.znzsofficial.layouthelper.LayoutHelperActivity$1"
-    LayoutHelperActivity.method = require "activities.znzsofficial.layouthelper.LayoutHelperActivity$2"
-    LayoutHelperActivity.event = require "activities.znzsofficial.layouthelper.LayoutHelperActivity$3"
-    res = require "activities.znzsofficial.layouthelper.LayoutHelperActivity$res"
-    loadlayout2 = require "activities.znzsofficial.layouthelper.LayoutHelperActivity$loadlayout"
+    LayoutHelperActivity.mods = require "activities.layouthelper.LayoutHelperActivity$1"
+    LayoutHelperActivity.method = require "activities.layouthelper.LayoutHelperActivity$2"
+    LayoutHelperActivity.event = require "activities.layouthelper.LayoutHelperActivity$3"
+    res = require "activities.layouthelper.LayoutHelperActivity$res"
+    loadlayout2 = require "activities.layouthelper.LayoutHelperActivity$loadlayout"
 
     local file_content = loadfile(LayoutHelperActivity.data.this_file)()
     activity.setContentView(loadlayout2(file_content,{}))
@@ -209,12 +209,20 @@ local save_dialog = MaterialAlertDialogBuilder(activity)
 end)
 .setNegativeButton(android.R.string.cancel,finish)
 
-local OnBackPressedCallback = luajava.bindClass "androidx.activity.OnBackPressedCallback"
-activity.onBackPressedDispatcher.addCallback(this,OnBackPressedCallback.override{
+if bindClass "android.os.Build".VERSION.SDK_INT >= 33 then
+activity.onBackPressedDispatcher.addCallback(this,luajava.bindClass "androidx.activity.OnBackPressedCallback".override{
 handleOnBackPressed=function()
   save_dialog.show()
 end
 }(true))
+else
+function onKeyDown(code,event)
+    if string.find(tostring(event),"KEYCODE_BACK") ~= nil then
+        save_dialog.show()
+        return true
+    end
+end
+end
 
 function onOptionsItemSelected(m)
   switch m.getItemId() do

@@ -200,7 +200,7 @@ function _M.init()
 
     local classes
     try
-      classes = require "activities.znzsofficial.api.PublicClasses"
+      classes = require "activities.api.PublicClasses"
       catch(e)
       classes = {"LuaActivity","LuaServer","LuaService","List","ArrayList","HashSet","HashMap","Object","Map"}
     end

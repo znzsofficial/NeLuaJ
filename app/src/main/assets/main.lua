@@ -1,1 +1,1 @@
-import "activities.znzsofficial.main.MainActivity"
+import "activities.main.MainActivity"

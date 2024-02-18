@@ -12,7 +12,7 @@ import "com.google.android.material.dialog.MaterialAlertDialogBuilder"
 import "com.google.android.material.color.DynamicColors"
 
 -- private class
-local Init = require "activities.znzsofficial.main.Init"
+local Init = require "activities.main.Init"
 -- public class
 import "mods.utils.ActivityUtil"
 import "mods.utils.EditorUtil"
@@ -22,7 +22,7 @@ local _exit = 0;
 
 local ColorUtil = this.globalData.ColorUtil
 local DecelerateInterpolator = luajava.newInstance"android.view.animation.DecelerateInterpolator"
-local:res
+local res = res
 
 --[[
  ToDo：
@@ -51,7 +51,7 @@ function onCreate()
   .setStatusBarColor(ColorUtil.getColorBackground())
   .addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
   .clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
-  if UiUtil.isNightMode()
+  if UiUtil.isNightMode() then
     window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE)
    else
     window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR)
@@ -99,7 +99,7 @@ function onCreateOptionsMenu(menu)
     end
     EditorUtil.save()
     -- 如果在工程目录内，显示PopupMenu
-    if Bean.Project.this_project ~= ""
+    if Bean.Project.this_project ~= "" then
       local pop = PopupMenu(activity,mToolBar.getChildAt(3))
       local _menu=pop.Menu
       _menu.add(res.string.run_code .. " " ..File(Bean.Path.this_file).getName())
@@ -213,7 +213,7 @@ function onCreateOptionsMenu(menu)
       return
     end
     EditorUtil.save()
-    activity.newActivity(ActivityUtil.lua_path.."/activities/znzsofficial/layouthelper/LayoutHelperActivity.lua",{
+    activity.newActivity(ActivityUtil.lua_path.."/activities/layouthelper/LayoutHelperActivity.lua",{
       Bean.Path.this_file,
       Bean.Path.app_root_pro_dir.."/"..mToolBar.getTitle()
     })
@@ -253,37 +253,72 @@ function onPause()
   EditorUtil.save()
 end
 
-
-local OnBackPressedCallback = luajava.bindClass "androidx.activity.OnBackPressedCallback"
-activity.onBackPressedDispatcher.addCallback(this,OnBackPressedCallback.override{
-handleOnBackPressed=function()
-  -- 点击退出要处理的事件
-  if _exit+2 > os.time() then
-    activity.finish(true)
-  else
-    --返回先关闭侧滑栏
-    if drawer.isDrawerOpen(GravityCompat.START) then
-      drawer.closeDrawer(GravityCompat.START)
-    elseif mSearch.getVisibility()==0 then
-      local Anim = AnimatorSet()
-      local Y=ObjectAnimator.ofFloat(mSearch, "translationY", {0, -50})
-      local A=ObjectAnimator.ofFloat(mSearch, "alpha", {1, 0})
-      Anim.play(A).with(Y)
-      Anim.setDuration(500)
-      .setInterpolator(DecelerateInterpolator)
-      .start()
-    task(500,function()
-      mSearch.setVisibility(8)
-    end)
-    else
-    EditorUtil.save()
-    Snackbar.make(coordinatorLayout, res.string.confirm_exit, Snackbar.LENGTH_SHORT)
-    .setAnchorView(ps_bar)
-    .setAction(res.string.exit, function(v)
-      activity.finish(true)
-    end).show();
-     _exit=os.time()
-   end
-  end
+if bindClass "android.os.Build".VERSION.SDK_INT >= 33 then
+activity.getOnBackPressedDispatcher().addCallback(this, luajava.bindClass "androidx.activity.OnBackPressedCallback".override {
+handleOnBackPressed = function()
+-- 点击退出要处理的事件
+if _exit + 2 > os.time() then
+activity.finish(true)
+else
+--返回先关闭侧滑栏
+if drawer.isDrawerOpen(GravityCompat.START) then
+drawer.closeDrawer(GravityCompat.START)
+elseif mSearch.getVisibility() == 0 then
+local Anim = AnimatorSet()
+local Y = ObjectAnimator.ofFloat(mSearch, "translationY", { 0, -50 })
+local A = ObjectAnimator.ofFloat(mSearch, "alpha", { 1, 0 })
+Anim.play(A).with(Y)
+Anim.setDuration(500)
+.setInterpolator(DecelerateInterpolator)
+.start()
+task(500, function()
+mSearch.setVisibility(8)
+end)
+else
+EditorUtil.save()
+Snackbar.make(coordinatorLayout, res.string.confirm_exit, Snackbar.LENGTH_SHORT)
+.setAnchorView(ps_bar)
+.setAction(res.string.exit, function(v)
+activity.finish(true)
+end).show();
+_exit = os.time()
+end
+end
 end
 }(true))
+else
+
+function onKeyDown(code, event)
+if string.find(tostring(event), "KEYCODE_BACK") ~= nil then
+if _exit + 2 > os.time() then
+activity.finish(true)
+else
+--返回先关闭侧滑栏
+if drawer.isDrawerOpen(GravityCompat.START) then
+drawer.closeDrawer(GravityCompat.START)
+elseif mSearch.getVisibility() == 0 then
+local Anim = AnimatorSet()
+local Y = ObjectAnimator.ofFloat(mSearch, "translationY", { 0, -50 })
+local A = ObjectAnimator.ofFloat(mSearch, "alpha", { 1, 0 })
+Anim.play(A).with(Y)
+Anim.setDuration(500)
+.setInterpolator(DecelerateInterpolator)
+.start()
+task(500, function()
+mSearch.setVisibility(8)
+end)
+else
+EditorUtil.save()
+Snackbar.make(coordinatorLayout, res.string.confirm_exit, Snackbar.LENGTH_SHORT)
+.setAnchorView(ps_bar)
+.setAction(res.string.exit, function(v)
+activity.finish(true)
+end).show();
+_exit = os.time()
+end
+end
+return true
+end
+end
+
+end

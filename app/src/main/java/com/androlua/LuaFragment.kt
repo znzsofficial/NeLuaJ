@@ -21,6 +21,11 @@ class LuaFragment(var creator: Creator?) : Fragment() {
         }
     }
 
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        creator?.onCreate(savedInstanceState)
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -112,5 +117,6 @@ class LuaFragment(var creator: Creator?) : Fragment() {
         fun onViewStateRestored(savedInstanceState: Bundle?)
         fun onContextItemSelected(item: MenuItem): Boolean
         fun onCreateContextMenu(menu: ContextMenu, v: View, menuInfo: ContextMenu.ContextMenuInfo?)
+        fun onCreate(savedInstanceState: Bundle?)
     }
 }

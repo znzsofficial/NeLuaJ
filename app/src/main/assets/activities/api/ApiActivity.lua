@@ -58,7 +58,7 @@ function onOptionsItemSelected(m)
   if m.getItemId() == android.R.id.home
     activity.finish()
    elseif m.title==res.string._switch then
-    activity.newActivity(luadir.."/activities/znzsofficial/api/ApiActivity.lua",{not simpleList})
+    activity.newActivity(luadir.."/activities/api/ApiActivity.lua",{not simpleList})
     activity.overridePendingTransition(android.R.anim.fade_in,android.R.anim.fade_out)
     activity.finish()
    elseif m.title==res.string.open then
@@ -67,7 +67,7 @@ function onOptionsItemSelected(m)
     .setTitle(res.string.input_class)
     .setView(loadlayout(res.layout.dialog_fileinput, sublayout))
     .setPositiveButton(android.R.string.ok, function()
-      activity.newActivity(activity.getLuaDir().."/activities/znzsofficial/api/sub/main",{tostring(sublayout.file_name.getText())})
+      activity.newActivity(activity.getLuaDir().."/activities/api/sub/main",{tostring(sublayout.file_name.getText())})
     end)
     .setNegativeButton(android.R.string.cancel, nil)
     .show();
@@ -80,14 +80,14 @@ local ClassesLen
 local ta
 
 if simpleList then
-  local cls = require"activities.znzsofficial.api.PublicClasses"
-  vl=activity.getLuaDir().."/activities/znzsofficial/api/PublicClasses.lua"
+  local cls = require"activities.api.PublicClasses"
+  vl=activity.getLuaDir().."/activities/api/PublicClasses.lua"
   activity.setContentView(res.layout.api_main)
   ClassesLen = #cls
   ta=cls
  else
-  local cls = require "activities.znzsofficial.api.allClasses"
-  vl=activity.getLuaDir().."/activities/znzsofficial/api/allClasses.lua"
+  local cls = require "activities.api.allClasses"
+  vl=activity.getLuaDir().."/activities/api/allClasses.lua"
   activity.setContentView(res.layout.api_main)
   ClassesLen = #cls
   ta=cls
@@ -105,7 +105,7 @@ clist.onItemLongClick=function(l,v)
 end
 
 clist.onItemClick=function(l,v)
-  activity.newActivity(activity.getLuaDir().."/activities/znzsofficial/api/sub/main",{v.Text})
+  activity.newActivity(activity.getLuaDir().."/activities/api/sub/main",{v.Text})
   return true
 end
 
