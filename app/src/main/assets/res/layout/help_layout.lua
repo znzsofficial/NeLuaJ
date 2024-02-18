@@ -44,7 +44,15 @@ local pages={
   -----
 }
 
-local list = {LuaFragment(pages[1]),LuaFragment(pages[2])}
+local list = {LuaFragment(LuaFragment.Creator{
+onCreateView = function()
+  return pages[1]
+end
+}),LuaFragment(LuaFragment.Creator{
+onCreateView = function()
+  return pages[2]
+end
+})}
 local adapter = LuaFragmentAdapter(activity, LuaFragmentAdapter.Creator{
   createFragment = function(i)
     return list[i+1]

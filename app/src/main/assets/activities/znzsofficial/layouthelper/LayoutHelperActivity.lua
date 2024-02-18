@@ -209,12 +209,12 @@ local save_dialog = MaterialAlertDialogBuilder(activity)
 end)
 .setNegativeButton(android.R.string.cancel,finish)
 
-function onKeyDown(code,event)
-  if string.find(tostring(event),"KEYCODE_BACK") ~= nil then
-    save_dialog.show()
-    return true
-  end
+local OnBackPressedCallback = luajava.bindClass "androidx.activity.OnBackPressedCallback"
+activity.onBackPressedDispatcher.addCallback(this,OnBackPressedCallback.override{
+handleOnBackPressed=function()
+  save_dialog.show()
 end
+}(true))
 
 function onOptionsItemSelected(m)
   switch m.getItemId() do

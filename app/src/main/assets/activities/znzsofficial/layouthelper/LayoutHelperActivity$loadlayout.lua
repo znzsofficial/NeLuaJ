@@ -6,7 +6,7 @@ local bindClass = luajava.bindClass
 local ids = {}
 local ltrs = {}
 local id = 0x7f000000
-local context = service or activity
+local context = activity or service
 local luadir = LayoutHelperActivity.data.this_project_lua_dir
 
 local MotionEvent = bindClass "android.view.MotionEvent"
@@ -26,9 +26,22 @@ local NineBitmapDrawable = bindClass "com.androlua.NineBitmapDrawable"
 local OnClickListener = bindClass("android.view.View$OnClickListener")
 local TruncateAt = bindClass("android.text.TextUtils$TruncateAt")
 local ScaleType = bindClass("android.widget.ImageView$ScaleType")
-local Coil = bindClass "coil.Coil"
-local ImageRequest = bindClass "coil.request.ImageRequest"
-local imageLoader = Coil.imageLoader(context)
+local ImageRequestBuilder = bindClass "coil.request.ImageRequest$Builder"
+local ComponentRegistry = bindClass "coil.ComponentRegistry"
+local ImageLoader = bindClass "coil.ImageLoader"
+local GifDecoder = bindClass "coil.decode.GifDecoder"
+local ImageDecoderDecoder = bindClass "coil.decode.ImageDecoderDecoder"
+local SvgDecoder = bindClass "coil.decode.SvgDecoder"
+local builder = ComponentRegistry.Builder()
+
+if bindClass"android.os.Build".VERSION.SDK_INT >= 28 then
+ builder.add(ImageDecoderDecoder.Factory())
+else
+ builder.add(GifDecoder.Factory())
+end
+builder.add(SvgDecoder.Factory())
+local imageLoader = ImageLoader.Builder(context).components(builder.build()).build()
+
 local Typeface = bindClass "android.graphics.Typeface"
 
 local scaleTypes = ScaleType.values()
@@ -449,7 +462,7 @@ local function setattribute(root, view, params, k, v, ids)
    elseif k == "url" then
     view.loadUrl(url)
    elseif k == "src" then
-    imageLoader.enqueue(ImageRequest.Builder(context).data(v).target(view).build())
+    imageLoader.enqueue(ImageRequestBuilder(context).data(v).target(view).build())
    elseif k == "scaleType" then
     view.setScaleType(scaleTypes[scaleType[v]])
    elseif k == "background" then

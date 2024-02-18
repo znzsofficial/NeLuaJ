@@ -5,6 +5,7 @@ import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
+import android.os.Build;
 import android.text.TextUtils;
 import android.util.DisplayMetrics;
 import android.util.TypedValue;
@@ -29,8 +30,11 @@ import org.luaj.lib.jse.CoerceLuaToJava;
 import java.util.ArrayList;
 import java.util.HashMap;
 
-import coil.Coil;
+import coil.ComponentRegistry;
 import coil.ImageLoader;
+import coil.decode.GifDecoder;
+import coil.decode.ImageDecoderDecoder;
+import coil.decode.SvgDecoder;
 import coil.request.ImageRequest;
 import github.daisukiKaffuChino.LuaPagerAdapter;
 
@@ -271,7 +275,14 @@ public class LuaLayout {
         realContext = context;
         mContext = CoerceJavaToLua.coerce(context);
         dm = context.getResources().getDisplayMetrics();
-        imageLoader = Coil.imageLoader(context);
+        ComponentRegistry.Builder builder = new ComponentRegistry.Builder();
+        if (Build.VERSION.SDK_INT >= 28) {
+            builder.add(new ImageDecoderDecoder.Factory());
+        } else {
+            builder.add(new GifDecoder.Factory());
+        }
+        builder.add(new SvgDecoder.Factory());
+        imageLoader = new ImageLoader.Builder(context).components(builder.build()).build();
     }
 
     public HashMap getId() {
@@ -661,7 +672,6 @@ public class LuaLayout {
                                 }
                             } else if (k.equals("layout_anchor")) {
                                 params.get("setAnchorId").jcall(ids.get(val.tojstring()));
-                                // params.get("setAnchorId").jcall(mContext.getGlobals().get(val.tojstring()));
                             } else if (k.equals("layout_collapseParallaxMultiplier")) {
                                 params.get("setParallaxMultiplier").jcall(val);
                             } else if (k.equals("layout_marginEnd")) {
@@ -684,7 +694,6 @@ public class LuaLayout {
                     mContext
                             .touserdata(LuaContext.class)
                             .sendError("loadlayout " + view + ": " + next.arg1() + "=" + next.arg(2), e);
-
                     e.printStackTrace();
                 }
             }
@@ -735,7 +744,6 @@ public class LuaLayout {
 
         } catch (Exception e) {
             mContext.touserdata(LuaContext.class).sendError("loadlayout " + layout.checktable().dump(), e);
-
             e.printStackTrace();
         }
         return view;

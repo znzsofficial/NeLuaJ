@@ -253,36 +253,37 @@ function onPause()
   EditorUtil.save()
 end
 
-function onKeyDown(code,event)
-  if string.find(tostring(event), "KEYCODE_BACK") ~= nil then
-    if _exit+2 > os.time() then
+
+local OnBackPressedCallback = luajava.bindClass "androidx.activity.OnBackPressedCallback"
+activity.onBackPressedDispatcher.addCallback(this,OnBackPressedCallback.override{
+handleOnBackPressed=function()
+  -- 点击退出要处理的事件
+  if _exit+2 > os.time() then
+    activity.finish(true)
+  else
+    --返回先关闭侧滑栏
+    if drawer.isDrawerOpen(GravityCompat.START) then
+      drawer.closeDrawer(GravityCompat.START)
+    elseif mSearch.getVisibility()==0 then
+      local Anim = AnimatorSet()
+      local Y=ObjectAnimator.ofFloat(mSearch, "translationY", {0, -50})
+      local A=ObjectAnimator.ofFloat(mSearch, "alpha", {1, 0})
+      Anim.play(A).with(Y)
+      Anim.setDuration(500)
+      .setInterpolator(DecelerateInterpolator)
+      .start()
+    task(500,function()
+      mSearch.setVisibility(8)
+    end)
+    else
+    EditorUtil.save()
+    Snackbar.make(coordinatorLayout, res.string.confirm_exit, Snackbar.LENGTH_SHORT)
+    .setAnchorView(ps_bar)
+    .setAction(res.string.exit, function(v)
       activity.finish(true)
-     else
-      --返回先关闭侧滑栏
-      if drawer.isDrawerOpen(GravityCompat.START) then
-        drawer.closeDrawer(GravityCompat.START)
-       elseif mSearch.getVisibility()==0 then
-        local Anim = AnimatorSet()
-        local Y=ObjectAnimator.ofFloat(mSearch, "translationY", {0, -50})
-        local A=ObjectAnimator.ofFloat(mSearch, "alpha", {1, 0})
-        Anim.play(A).with(Y)
-        Anim.setDuration(500)
-        .setInterpolator(DecelerateInterpolator)
-        .start()
-        task(500,function()
-          mSearch.setVisibility(8)
-        end)
-       else
-        EditorUtil.save()
-        Snackbar.make(coordinatorLayout, res.string.confirm_exit, Snackbar.LENGTH_SHORT)
-        .setAnchorView(ps_bar)
-        .setAction(res.string.exit,
-        function(v)
-          activity.finish(true)
-        end).show();
-        _exit=os.time()
-      end
-    end
-    return true
+    end).show();
+     _exit=os.time()
+   end
   end
 end
+}(true))

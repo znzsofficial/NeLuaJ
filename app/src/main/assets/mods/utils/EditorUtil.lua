@@ -202,7 +202,7 @@ function _M.init()
     try
       classes = require "activities.znzsofficial.api.PublicClasses"
       catch(e)
-      classes = {"LuaActivity","LuaServer","LuaService","List","ArrayList","HashMap","Object","Map"}
+      classes = {"LuaActivity","LuaServer","LuaService","List","ArrayList","HashSet","HashMap","Object","Map"}
     end
     local ms = {
       "onCreate","onStart","onResume",
@@ -211,7 +211,8 @@ function _M.init()
       "onContentChanged","onConfigurationChanged",
       "onContextItemSelected","onCreateContextMenu",
       "onCreateOptionsMenu","onOptionsItemSelected","onRequestPermissionsResult",
-      "onClick","onTouch","onLongClick",
+      "onClick","onTouch","onLongClick","onPanelClosed",
+      "onSupportActionModeStarted","onSupportActionModeFinished",
       "onItemClick","onItemLongClick","onVersionChanged","this","android"
     }
     local l = #ms

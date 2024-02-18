@@ -1,10 +1,8 @@
 package github.znzsofficial.adapter
 
-import android.view.View
 import androidx.fragment.app.Fragment
 import androidx.viewpager2.adapter.FragmentStateAdapter
 import com.androlua.LuaActivity
-import com.androlua.LuaFragment
 
 class LuaFragmentAdapter(context: LuaActivity, inter: Creator) :
     FragmentStateAdapter(context.supportFragmentManager, context.lifecycle) {
@@ -23,7 +21,7 @@ class LuaFragmentAdapter(context: LuaActivity, inter: Creator) :
         } catch (e: Exception) {
             e.printStackTrace()
             mContext?.sendError("FragmentAdapter", e)
-            LuaFragment(View(mContext))
+            Fragment()
         }
     }
 

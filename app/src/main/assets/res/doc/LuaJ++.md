@@ -55,6 +55,19 @@ for k,v pairs(t)
 end
 ```
 
+- 省略function
+```lua
+local function a()
+    
+end
+
+-->
+
+local a()
+
+end
+```
+
 - 支持switch
 ```lua
 switch a
