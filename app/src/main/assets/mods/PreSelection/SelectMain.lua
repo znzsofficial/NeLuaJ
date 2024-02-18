@@ -79,7 +79,7 @@ function _M.init()
     try
       local init_table = map["PreSelection_init"]
       if not (init_table) then
-        local Classes = require "activities.znzsofficial.api.PublicClasses"
+        local Classes = require "activities.api.PublicClasses"
         init_table = {}
         for index,content in ipairs({Classes}) do -- 这里的循环设计原本想的是可能会有多个表
           init_table[index] = _M.init_Calendar(content)
@@ -208,7 +208,7 @@ function _M.addView(text,view,list,id)
               --mLuaEditor.paste(v)
               print("已复制导入代码")
              case "查看Api"
-              activity.newActivity(activity.getLuaDir().."/activities/znzsofficial/api/sub/main",{text})
+              activity.newActivity(activity.getLuaDir().."/activities/api/sub/main",{text})
             end
           end
           popupMenu.show()
