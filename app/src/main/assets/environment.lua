@@ -18,8 +18,8 @@ try
 end
 
 MainActivity={}
-MainActivity.Public=require"activities.znzsofficial.main.MainActivity$1"
-MainActivity.RecyclerView=require"activities.znzsofficial.main.MainActivity$RecyclerView"
+MainActivity.Public=require"activities.main.MainActivity$1"
+MainActivity.RecyclerView=require"activities.main.MainActivity$RecyclerView"
 Bean={}
 Bean.Path = require "mods.bean.PathBean"
 Bean.Project = require "mods.bean.ProjectBean"

@@ -45,7 +45,7 @@ local:utf8
 local:string
 
 local clazz=...
-import "activities.znzsofficial.api.sub.util"
+import "activities.api.sub.util"
 activity.setContentView(loadlayout(res.layout.api_sub))
 .setTitle(clazz)
 .getSupportActionBar()
@@ -511,7 +511,7 @@ li.onItemClick=function(l,v,a,b)
           print("未选择内容")
          else
           if pcall(function()luajava.bindClass(c)end) then
-            activity.newActivity(activity.getLuaDir().."/activities/znzsofficial/api/sub/main",{c})
+            activity.newActivity(activity.getLuaDir().."/activities/api/sub/main",{c})
             return
           end
 

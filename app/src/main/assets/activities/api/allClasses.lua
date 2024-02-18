@@ -16261,6 +16261,7 @@ return {
 "com.androlua.LuaEnhancer",
 "com.androlua.LuaEnhancer$1",
 "com.androlua.LuaFragment",
+"com.androlua.LuaFragment$Creator",
 "com.androlua.LuaGcable",
 "com.androlua.LuaLayout",
 "com.androlua.LuaLayout$1",
