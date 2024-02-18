@@ -96,7 +96,7 @@ _M.init=function()
   local item_layout = res.layout.item_rv;
   local res_drawable= res.drawable
 
-  local imageLoader = Coil.imageLoader(context)
+  local imageLoader = Coil.imageLoader(this)
   local error_project = DrawableUtil.getDrawable("android_studio", ColorUtil.getColorSecondary())
   -- 清空文件列表
   FileList = {}
@@ -140,7 +140,7 @@ _M.init=function()
 
       if v.img == "Project"
         imageLoader.enqueue(
-            ImageRequest.Builder(this)
+            ImageRequest.Builder(activity)
               .data(v_path.."/icon.png")
               .target(Target{
                    onError = function()

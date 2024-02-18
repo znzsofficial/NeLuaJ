@@ -38,6 +38,7 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.view.ActionMode;
 import androidx.appcompat.widget.AppCompatTextView;
 import androidx.core.content.FileProvider;
 import androidx.fragment.app.Fragment;
@@ -479,8 +480,29 @@ public class LuaActivity extends AppCompatActivity
     @CallLuaFunction
     @Override
     public void onNightModeChanged(int i) {
-        runFunc("onNightModeChanged", Integer.valueOf(i));
+        runFunc("onNightModeChanged", i);
         super.onNightModeChanged(i);
+    }
+
+    @Override
+    @CallLuaFunction
+    public void onPanelClosed(int featureId, @NonNull Menu menu) {
+        runFunc("onPanelClosed", featureId, menu);
+        super.onPanelClosed(featureId, menu);
+    }
+
+    @Override
+    @CallLuaFunction
+    public void onSupportActionModeStarted(@NonNull ActionMode mode) {
+        runFunc("onSupportActionModeStarted", mode);
+        super.onSupportActionModeStarted(mode);
+    }
+
+    @Override
+    @CallLuaFunction
+    public void onSupportActionModeFinished(@NonNull ActionMode mode) {
+        super.onSupportActionModeFinished(mode);
+        runFunc("onSupportActionModeFinished", mode);
     }
 
     public Object runFunc(String name, Object... arg) {
