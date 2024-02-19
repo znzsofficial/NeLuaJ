@@ -10,6 +10,9 @@ import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 
 class LuaFragment(var creator: Creator?) : Fragment() {
+    @JvmField
+    var savedState: Bundle? = null
+
     constructor() : this(null)
 
     companion object {
@@ -19,6 +22,11 @@ class LuaFragment(var creator: Creator?) : Fragment() {
             fragment.creator = creator
             return fragment
         }
+    }
+
+    override fun onAttach(context: Context) {
+        super.onAttach(context)
+        creator?.onAttach(context)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -39,9 +47,51 @@ class LuaFragment(var creator: Creator?) : Fragment() {
         creator?.onViewCreated(view, savedInstanceState)
     }
 
+    @Deprecated(
+        "Deprecated", ReplaceWith(
+            "super.onActivityCreated(savedInstanceState)",
+            "androidx.fragment.app.Fragment"
+        )
+    )
+    override fun onActivityCreated(savedInstanceState: Bundle?) {
+        super.onActivityCreated(savedInstanceState)
+        creator?.onActivityCreated(savedInstanceState)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        creator?.onStart()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        creator?.onResume()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        creator?.onPause()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        creator?.onStop()
+    }
+
+
     override fun onDestroyView() {
         super.onDestroyView()
         creator?.onDestroyView()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        creator?.onDestroy()
+    }
+
+    override fun onDetach() {
+        super.onDetach()
+        creator?.onDetach()
     }
 
     override fun onCreateContextMenu(
@@ -68,55 +118,28 @@ class LuaFragment(var creator: Creator?) : Fragment() {
         creator?.onViewStateRestored(savedInstanceState)
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        creator?.onDestroy()
-    }
-
-    override fun onResume() {
-        super.onResume()
-        creator?.onResume()
-    }
-
-    override fun onStop() {
-        super.onStop()
-        creator?.onStop()
-    }
-
-    override fun onStart() {
-        super.onStart()
-        creator?.onStart()
-    }
-
-    override fun onAttach(context: Context) {
-        super.onAttach(context)
-        creator?.onAttach(context)
-    }
-
-    override fun onPause() {
-        super.onPause()
-        creator?.onPause()
-    }
 
     interface Creator {
+        fun onAttach(context: Context)
+        fun onCreate(savedInstanceState: Bundle?)
         fun onCreateView(
             inflater: LayoutInflater,
             container: ViewGroup?,
             savedInstanceState: Bundle?
         ): View?
 
-        fun onDestroyView()
         fun onViewCreated(view: View, savedInstanceState: Bundle?)
+        fun onActivityCreated(savedInstanceState: Bundle?)
+        fun onStart()
         fun onResume()
         fun onPause()
-        fun onAttach(context: Context)
         fun onStop()
-        fun onStart()
+        fun onDestroyView()
         fun onDestroy()
+        fun onDetach()
         fun onSaveInstanceState(outState: Bundle)
         fun onViewStateRestored(savedInstanceState: Bundle?)
         fun onContextItemSelected(item: MenuItem): Boolean
         fun onCreateContextMenu(menu: ContextMenu, v: View, menuInfo: ContextMenu.ContextMenuInfo?)
-        fun onCreate(savedInstanceState: Bundle?)
     }
 }
