@@ -41,7 +41,7 @@ public class LuaApplication extends Application implements LuaContext {
         super.onCreate();
         instance = this;
         rmDir(Objects.requireNonNull(getExternalFilesDir("dexfiles")));
-        CrashHandler.INSTANCE.init(this);
+        CrashHandler.getInstance(this).init();
         DynamicColors.applyToActivitiesIfAvailable(this);
     }
 
@@ -220,8 +220,7 @@ public class LuaApplication extends Application implements LuaContext {
     public boolean checkResource(String name) {
         try {
             if (new File(name).exists()) return true;
-        } catch (Exception e) {
-
+        } catch (Exception ignored) {
         }
         try {
             return new File(getLuaPath(name)).exists();

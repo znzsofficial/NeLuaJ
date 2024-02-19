@@ -350,7 +350,6 @@ public class LuaActivity extends AppCompatActivity
             if (title.isstring()) setTitle(title.tojstring());
             title = env.get("app_name");
             if (title.isstring()) setTitle(title.tojstring());
-
             LuaValue debug = env.get("debugmode");
             if (debug.isboolean()) setDebug(debug.toboolean());
             debug = env.get("debug_mode");
@@ -828,7 +827,7 @@ public class LuaActivity extends AppCompatActivity
                 } else {
                     Object[] arg = new Object[res.length + 1];
                     arg[0] = name;
-                    for (int i = 0; i < res.length; i++) arg[i + 1] = res[i];
+                    System.arraycopy(res, 0, arg, 1, res.length);
                     Object ret = runFunc("onResult", arg);
                     if (ret != null && ret.getClass() == Boolean.class && (Boolean) ret) return;
                 }
@@ -1253,4 +1252,5 @@ public class LuaActivity extends AppCompatActivity
         startActivity(
                 Intent.createChooser(share, file.getName()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
     }
+
 }
