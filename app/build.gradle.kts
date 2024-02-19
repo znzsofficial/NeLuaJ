@@ -55,7 +55,7 @@ dependencies {
     androidTestImplementation(libs.espresso.core)
 
     //AndroidX
-    implementation("androidx.activity:activity:1.8.2")
+    implementation("androidx.activity:activity:1.9.0-alpha03")
     implementation("androidx.annotation:annotation:1.7.1")
     implementation("androidx.asynclayoutinflater:asynclayoutinflater:1.1.0-alpha01")
     implementation("androidx.collection:collection:1.4.0")

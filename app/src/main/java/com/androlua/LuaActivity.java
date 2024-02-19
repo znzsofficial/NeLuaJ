@@ -36,7 +36,6 @@ import android.widget.ListView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
-import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.view.ActionMode;
 import androidx.appcompat.widget.AppCompatTextView;
@@ -45,6 +44,7 @@ import androidx.fragment.app.Fragment;
 import androidx.preference.PreferenceManager;
 
 import com.androlua.adapter.ArrayListAdapter;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import org.luaj.Globals;
 import org.luaj.LuaError;
@@ -263,7 +263,7 @@ public class LuaActivity extends AppCompatActivity
     @CallLuaFunction
     @Override
     public void onRequestPermissionsResult(
-            int requestCode, String[] permissions, int[] grantResults) {
+            int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         runFunc("onRequestPermissionsResult", requestCode, permissions, grantResults);
     }
@@ -359,10 +359,10 @@ public class LuaActivity extends AppCompatActivity
             if (theme.isint()) setTheme((int) theme.toint());
             else if (theme.isstring())
                 setTheme(android.R.style.class.getField(theme.tojstring()).getInt(null));
-            LuaValue jtheme = env.get("NeLuaJ_Theme");
-            if (jtheme.isstring())
+            LuaValue myTheme = env.get("NeLuaJ_Theme");
+            if (myTheme.isstring())
                 setTheme(
-                        github.znzsofficial.neluaj.R.style.class.getField(jtheme.tojstring()).getInt(null));
+                        github.znzsofficial.neluaj.R.style.class.getField(myTheme.tojstring()).getInt(null));
         } catch (Exception e) {
             sendMsg(e.getMessage());
         }
@@ -387,11 +387,10 @@ public class LuaActivity extends AppCompatActivity
     }
 
     public void showLogs() {
-        new AlertDialog.Builder(this)
+        new MaterialAlertDialogBuilder(this)
                 .setTitle("Logs")
                 .setAdapter(adapter, null)
                 .setPositiveButton(android.R.string.ok, null)
-                .create()
                 .show();
     }
 
@@ -820,7 +819,6 @@ public class LuaActivity extends AppCompatActivity
     @CallLuaFunction
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        // TODO: Implement this method
         if (data != null) {
             String name = data.getStringExtra(NAME);
             if (name != null) {
@@ -851,7 +849,6 @@ public class LuaActivity extends AppCompatActivity
     @CallLuaFunction
     @Override
     public void onConfigurationChanged(@NonNull Configuration newConfig) {
-        // TODO: Implement this method
         super.onConfigurationChanged(newConfig);
         runFunc("onConfigurationChanged", newConfig);
         initSize();
@@ -916,14 +913,13 @@ public class LuaActivity extends AppCompatActivity
                     @CallLuaFunction
                     @Override
                     public void onServiceConnected(ComponentName comp, IBinder binder) {
-                        // TODO: Implement this method
                         runFunc("onServiceConnected", comp, ((LuaService.LuaBinder) binder).getService());
                     }
 
                     @CallLuaFunction
                     @Override
                     public void onServiceDisconnected(ComponentName comp) {
-                        // TODO: Implement this method
+
                         runFunc("onServiceDisconnected", comp);
                     }
                 };
@@ -981,35 +977,95 @@ public class LuaActivity extends AppCompatActivity
         return super.startService(intent);
     }
 
+    /**
+     * 新建活动
+     *
+     * @param path        文件路径
+     * @param newDocument 是否为新文档
+     * @throws FileNotFoundException 文件未找到异常
+     */
     public void newActivity(String path, boolean newDocument) throws FileNotFoundException {
         newActivity(1, path, null, newDocument);
     }
 
+    /**
+     * 新建活动
+     *
+     * @param path        文件路径
+     * @param arg         参数数组
+     * @param newDocument 是否为新文档
+     * @throws FileNotFoundException 文件未找到异常
+     */
     public void newActivity(String path, Object[] arg, boolean newDocument)
             throws FileNotFoundException {
         newActivity(1, path, arg, newDocument);
     }
 
+    /**
+     * 新建活动
+     *
+     * @param req         请求码
+     * @param path        文件路径
+     * @param newDocument 是否为新文档
+     * @throws FileNotFoundException 文件未找到异常
+     */
     public void newActivity(int req, String path, boolean newDocument) throws FileNotFoundException {
         newActivity(req, path, null, newDocument);
     }
 
+    /**
+     * 新建活动
+     *
+     * @param path 文件路径
+     * @throws FileNotFoundException 文件未找到异常
+     */
     public void newActivity(String path) throws FileNotFoundException {
         newActivity(1, path, new Object[0]);
     }
 
+    /**
+     * 新建活动
+     *
+     * @param path 文件路径
+     * @param arg  参数数组
+     * @throws FileNotFoundException 文件未找到异常
+     */
     public void newActivity(String path, Object[] arg) throws FileNotFoundException {
         newActivity(1, path, arg);
     }
 
+    /**
+     * 新建活动
+     *
+     * @param req  请求码
+     * @param path 文件路径
+     * @throws FileNotFoundException 文件未找到异常
+     */
     public void newActivity(int req, String path) throws FileNotFoundException {
         newActivity(req, path, new Object[0]);
     }
 
+    /**
+     * 新建活动
+     *
+     * @param req  请求码
+     * @param path 文件路径
+     * @param arg  参数数组
+     * @throws FileNotFoundException 文件未找到异常
+     */
     public void newActivity(int req, String path, Object[] arg) throws FileNotFoundException {
         newActivity(req, path, arg, false);
     }
 
+    /**
+     * 新建活动
+     *
+     * @param req         请求码
+     * @param path        文件路径
+     * @param arg         参数数组
+     * @param newDocument 是否为新文档
+     * @throws FileNotFoundException 文件未找到异常
+     */
     public void newActivity(int req, String path, Object[] arg, boolean newDocument)
             throws FileNotFoundException {
         // Log.i("luaj", "newActivity: "+path+ Arrays.toString(arg));
@@ -1068,6 +1124,18 @@ public class LuaActivity extends AppCompatActivity
         newActivity(req, path, in, out, arg, false);
     }
 
+
+    /**
+     * 创建一个新的活动
+     *
+     * @param req         请求码
+     * @param path        活动的路径
+     * @param in          进入动画资源
+     * @param out         出去动画资源
+     * @param arg         活动的参数
+     * @param newDocument 是否创建新的文档
+     * @throws FileNotFoundException 如果文件不存在
+     */
     public void newActivity(int req, String path, int in, int out, Object[] arg, boolean newDocument)
             throws FileNotFoundException {
         Intent intent = new Intent(this, LuaActivity.class);
@@ -1092,6 +1160,11 @@ public class LuaActivity extends AppCompatActivity
         overridePendingTransition(in, out);
     }
 
+    /**
+     * 结束活动
+     *
+     * @param finishTask 是否结束任务
+     */
     public void finish(boolean finishTask) {
         if (!finishTask) {
             super.finish();
