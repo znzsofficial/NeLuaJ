@@ -6,15 +6,15 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.androlua.LuaContext
-import org.luaj.LuaValue
+import org.luaj.lib.jse.CoerceJavaToLua
 
-open class RecyclerListAdapter : ListAdapter<LuaValue?, LuaCustRecyclerHolder?> {
+open class RecyclerListAdapter : ListAdapter<Any, LuaCustRecyclerHolder?> {
     open lateinit var adapterCreator: Creator
     var mContext: LuaContext?
 
     constructor(creator: Creator) : super(DiffCallback(creator)) {
-        adapterCreator = creator
         mContext = null
+        adapterCreator = creator
     }
 
     constructor(context: LuaContext?, creator: Creator) : super(DiffCallback(creator)) {
@@ -52,7 +52,7 @@ open class RecyclerListAdapter : ListAdapter<LuaValue?, LuaCustRecyclerHolder?> 
 
     override fun getItemCount(): Int {
         return try {
-            adapterCreator.itemCount.toInt()
+            return adapterCreator.itemCount.toInt()
         } catch (e: Exception) {
             e.printStackTrace()
             mContext?.sendError("RecyclerListAdapter: getItemCount", e)
@@ -71,13 +71,19 @@ open class RecyclerListAdapter : ListAdapter<LuaValue?, LuaCustRecyclerHolder?> 
     }
 
     internal class DiffCallback(private val adapterCreator: Creator) :
-        DiffUtil.ItemCallback<LuaValue?>() {
-        override fun areItemsTheSame(oldItem: LuaValue, newItem: LuaValue): Boolean {
-            return adapterCreator.areItemsTheSame(oldItem, newItem)
+        DiffUtil.ItemCallback<Any>() {
+        override fun areItemsTheSame(oldItem: Any, newItem: Any): Boolean {
+            return adapterCreator.areItemsTheSame(
+                CoerceJavaToLua.coerce(oldItem),
+                CoerceJavaToLua.coerce(newItem)
+            )
         }
 
-        override fun areContentsTheSame(oldItem: LuaValue, newItem: LuaValue): Boolean {
-            return adapterCreator.areContentsTheSame(oldItem, newItem)
+        override fun areContentsTheSame(oldItem: Any, newItem: Any): Boolean {
+            return adapterCreator.areContentsTheSame(
+                CoerceJavaToLua.coerce(oldItem),
+                CoerceJavaToLua.coerce(newItem)
+            )
         }
     }
 
