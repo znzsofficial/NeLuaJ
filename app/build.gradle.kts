@@ -1,3 +1,6 @@
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+
 @Suppress("DSL_SCOPE_VIOLATION") // TODO: Remove once KTIJ-19369 is fixed
 plugins {
     alias(libs.plugins.androidApplication)
@@ -40,6 +43,20 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
+    }
+    applicationVariants.all {
+        outputs.all {
+            val currentDateTime = LocalDateTime.now()
+            // 定义时间格式
+            val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH_mm_ss")
+            // 格式化时间并打印输出
+            val formattedDateTime = currentDateTime.format(formatter)
+            val ver = defaultConfig.versionName
+            //val minSdk = project.extensions.getByType(BaseAppModuleExtension::class.java).defaultConfig.minSdk
+            //val abi = filters.find { it.filterType == "ABI" }?.identifier ?: "all"
+            (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName =
+                "${project.name}-$formattedDateTime-$ver.APK";
+        }
     }
 }
 

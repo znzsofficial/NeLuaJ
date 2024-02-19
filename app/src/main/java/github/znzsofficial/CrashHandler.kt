@@ -20,27 +20,26 @@ import java.util.Date
  *
  * @author user
  */
-@SuppressLint("StaticFieldLeak")
-object CrashHandler : Thread.UncaughtExceptionHandler {
+class CrashHandler(context: Context) : Thread.UncaughtExceptionHandler {
     //系统默认的UncaughtException处理类 
     private var mDefaultHandler: Thread.UncaughtExceptionHandler? = null
 
     //程序的Context对象
-    private var mContext: Context? = null
+    private var mContext: Context? = context
 
     //用来存储设备信息和异常信息
     private val infos: MutableMap<String, String> = LinkedHashMap()
 
+
     //用于格式化日期,作为日志文件名的一部分
+    @SuppressLint("SimpleDateFormat")
     private val formatter: DateFormat = SimpleDateFormat("yyyy-MM-dd-HH-mm-ss")
+
 
     /**
      * 初始化
-     *
-     * @param context
      */
-    fun init(context: Context?) {
-        mContext = context
+    fun init() {
         //获取系统默认的UncaughtException处理器
         mDefaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         //设置该CrashHandler为程序的默认处理器
@@ -72,27 +71,23 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
     /**
      * 自定义错误处理,收集错误信息 发送错误报告等操作均在此完成.
      *
-     * @param ex
+     * @param exception
      * @return true:如果处理了该异常信息;否则返回false.
      */
-    private fun handleException(ex: Throwable?): Boolean {
-        if (ex == null) {
+    private fun handleException(exception: Throwable?): Boolean {
+        if (exception == null) {
             return false
         }
         //使用Toast来显示异常信息
-        /*new Thread() {
-			@Override
-			public void run()
-			{
-				Looper.prepare();
-				Toast.makeText(mContext, "很抱歉,程序出现异常,即将退出.", Toast.LENGTH_LONG).show();
-				Looper.loop();
-			}
-		}.start();*/
+//        Thread {
+//            Looper.prepare();
+//            Toast.makeText(mContext, "很抱歉,程序出现异常,即将退出.", Toast.LENGTH_LONG).show();
+//            Looper.loop();
+//        }.start();
         //收集设备参数信息 
         collectDeviceInfo(mContext)
         //保存日志文件 
-        saveCrashInfo2File(ex)
+        saveCrashInfo2File(exception)
         return true
     }
 
@@ -100,7 +95,7 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
      * 收集设备参数信息
      * @param ctx
      */
-    fun collectDeviceInfo(ctx: Context?) {
+    private fun collectDeviceInfo(ctx: Context?) {
         try {
             val pm = ctx!!.packageManager
             val pi = pm.getPackageInfo(ctx.packageName, PackageManager.GET_ACTIVITIES)
@@ -129,7 +124,7 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
                 }
                 Log.d(TAG, field.getName() + " : " + field[null])
             } catch (e: Exception) {
-                Log.e(TAG, "an error occured when collect crash info", e)
+                Log.e(TAG, "an error occurred when collect crash info", e)
             }
         }
         fields = Build.VERSION::class.java.declaredFields
@@ -144,7 +139,7 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
                 }
                 Log.d(TAG, field.getName() + " : " + field[null])
             } catch (e: Exception) {
-                Log.e(TAG, "an error occured when collect crash info", e)
+                Log.e(TAG, "an error occurred when collect crash info", e)
             }
         }
     }
@@ -188,10 +183,25 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
             }
             return fileName
         } catch (e: Exception) {
-            Log.e(TAG, "an error occured while writing file...", e)
+            Log.e(TAG, "an error occurred while writing file...", e)
         }
         return null
     }
 
-    const val TAG = "CrashHandler"
+    @SuppressLint("StaticFieldLeak")
+    companion object {
+        const val TAG = "CrashHandler"
+
+        // 唯一单例
+        private var crashHandler: CrashHandler? = null
+
+        @Synchronized
+        @JvmStatic
+        fun getInstance(context: Context): CrashHandler {
+            if (crashHandler == null) {
+                crashHandler = CrashHandler(context)
+            }
+            return crashHandler as CrashHandler
+        }
+    }
 }
