@@ -72,6 +72,7 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -700,11 +701,18 @@ public class LuaActivity extends AppCompatActivity
 
     @CallLuaFunction
     @Override
-    public void sendError(String title, Exception msg) {
-        Object run = runFunc("onError", title, msg);
-        if (run == null) {
-            sendMsg(title + ": " + msg.getMessage());
-            logs.add(title + ": " + msg);
+    public void sendError(String title, Exception exception) {
+        Object ret = runFunc("onError", title, exception);
+        if (ret == null) {
+            sendMsg(title + ": " + exception.getMessage());
+            return;
+        }
+        switch (ret.toString()) {
+            case "trace" ->
+                    sendMsg(title + ": " + exception.getMessage() + "\n" + Arrays.toString(exception.getStackTrace()));
+            case "log" -> sendMsg(title + ": " + exception.getMessage());
+            case "message" -> sendMsg(exception.getMessage());
+            case "title" -> sendMsg(title);
         }
     }
 

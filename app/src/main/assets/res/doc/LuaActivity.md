@@ -10,7 +10,8 @@ function onError(error, message)
   return ture
 end
 报错时调用
-返回(任意非空值)可以拦截原报错输出
+返回值可选字符串 "trace","log","message","title"
+返回其他非空值可以拦截原报错输出
 
 function onNightModeChanged(mode)
   print(mode)
