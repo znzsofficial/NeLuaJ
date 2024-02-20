@@ -10,7 +10,6 @@ local MotionEvent = bindClass "android.view.MotionEvent"
 local MaterialAlertDialogBuilder = bindClass "com.google.android.material.dialog.MaterialAlertDialogBuilder"
 local ProgressBar = bindClass "android.widget.ProgressBar"
 local Paint = bindClass "android.graphics.Paint"
-local Context = bindClass "android.content.Context"
 old_res = res
 local TypedValue = bindClass("android.util.TypedValue")
 local ProgressBarDialog = require "mods.functions.ProgressBarDialog"
@@ -166,7 +165,7 @@ end
 --[[ AbsoluteLayout ]]
 
 local copy = function(str)
-  activity.getSystemService(Context.CLIPBOARD_SERVICE).setText(str)
+  activity.getSystemService(this.CLIPBOARD_SERVICE).setText(str)
 end
 
 local finish = function()
