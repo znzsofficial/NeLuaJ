@@ -184,9 +184,9 @@ public class LuaActivity extends AppCompatActivity
             globals.jset("http", http.class);
             globals.jset("R", github.znzsofficial.neluaj.R.class);
             globals.set("android", new JavaPackage("android"));
-            globals.set("java", new JavaPackage("java"));
-            globals.set("com", new JavaPackage("com"));
-            globals.set("org", new JavaPackage("org"));
+//            globals.set("java", new JavaPackage("java"));
+//            globals.set("com", new JavaPackage("com"));
+//            globals.set("org", new JavaPackage("org"));
             Object[] arg = (Object[]) getIntent().getSerializableExtra(ARG);
             if (arg == null) arg = new Object[0];
             doFile(getLuaPath(), arg);

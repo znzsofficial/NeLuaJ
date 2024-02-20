@@ -1,6 +1,6 @@
 bindClass = luajava.bindClass;
 
-for k,v in (java.io.File(this.getLuaDir("libs/")).listFiles())
+for _,v in (luajava.newInstance("java.io.File",this.getLuaDir("libs/")).listFiles()) do
   v.setReadOnly()
 end
 
