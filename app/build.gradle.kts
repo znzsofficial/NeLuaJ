@@ -61,7 +61,7 @@ android {
 }
 
 dependencies {
-    implementation(kotlin("reflect", "1.9.21"))
+    implementation("org.jetbrains.kotlin:kotlin-reflect:1.9.22")
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar"))))
     implementation(libs.core.ktx)
     implementation(libs.appcompat)
@@ -92,7 +92,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-process:2.7.0")
     implementation("androidx.lifecycle:lifecycle-runtime:2.7.0")
     implementation("androidx.localbroadcastmanager:localbroadcastmanager:1.1.0")
-    implementation("androidx.navigation:navigation-common:2.7.6")
+    implementation("androidx.navigation:navigation-common:2.7.7")
     implementation("androidx.navigation:navigation-fragment:2.7.7")
     implementation("androidx.navigation:navigation-runtime:2.7.7")
     implementation("androidx.navigation:navigation-ui:2.7.7")
