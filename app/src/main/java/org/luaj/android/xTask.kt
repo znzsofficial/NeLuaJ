@@ -27,24 +27,22 @@ class xTask(private val mContext: LuaActivity) : VarArgFunction(), LuaGcable {
         var result: Varargs? = null
         coroutine = CoerceJavaToLua.coerce(mContext.lifecycleScope.launch(context) {
             try {
-                if (p0.isnumber()) {
-                    delay(p0.tolong())
-                } else {
-                    result = p0.invoke()
-                }
+                if (p0.isnumber()) delay(p0.tolong())
+                else result = p0.invoke()
             } catch (e: Exception) {
                 e.printStackTrace()
                 result = LuaString.valueOf(e.message)
                 mContext.sendError("xTask: Background", e)
             }
-            try {
-                withContext(Dispatchers.Main) {
-                    p1.invoke(result)
+            if (!p1.isnil())
+                try {
+                    withContext(Dispatchers.Main) {
+                        p1.invoke(result)
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    mContext.sendError("xTask: Main", e)
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                mContext.sendError("xTask: Main", e)
-            }
         })
         return coroutine
     }
