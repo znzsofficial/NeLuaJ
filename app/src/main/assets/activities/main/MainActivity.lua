@@ -9,7 +9,6 @@ import "androidx.appcompat.widget.PopupMenu"
 -- Material
 import "com.google.android.material.snackbar.Snackbar"
 import "com.google.android.material.dialog.MaterialAlertDialogBuilder"
-import "com.google.android.material.color.DynamicColors"
 
 -- private class
 local Init = require "activities.main.Init"
@@ -39,7 +38,7 @@ function onCreate()
   require"permissions"()
   --设置主题
   activity.setTheme(R.style.Theme_NeLuaJ_Material3_NoActionBar)
-  DynamicColors.applyToActivityIfAvailable(this)
+  bindClass"com.google.android.material.color.DynamicColors".applyToActivityIfAvailable(this)
   activity.setContentView(res.layout.main_layout)
   .setSupportActionBar(mToolBar)
   .getSupportActionBar()
