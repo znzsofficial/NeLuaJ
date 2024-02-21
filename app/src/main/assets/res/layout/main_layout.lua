@@ -14,7 +14,6 @@ import "com.google.android.material.divider.MaterialDivider";
 import "com.google.android.material.tabs.TabLayout"
 import "github.znzsofficial.widget.container.MyFullDraggableContainer"
 import "vinx.material.textfield.MaterialTextField"
-import "com.google.android.material.navigation.NavigationView"
 
 local ColorUtil = this.globalData.ColorUtil
 local LuaFileTabView = bindClass "github.daisukiKaffuChino.LuaFileTabView"
@@ -174,7 +173,8 @@ return {
         },
 
         {
-          NavigationView,
+          LinearLayout,
+          backgroundColor = ColorBackground;
           layout_width="match_parent";
           layout_height="match_parent";
           {
