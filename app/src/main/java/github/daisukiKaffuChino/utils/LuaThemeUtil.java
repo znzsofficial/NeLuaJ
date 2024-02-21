@@ -3,6 +3,8 @@ package github.daisukiKaffuChino.utils;
 import android.content.Context;
 import android.util.TypedValue;
 
+import com.google.android.material.color.MaterialColors;
+
 public class LuaThemeUtil {
     Context context;
     TypedValue typedValue;
@@ -267,8 +269,7 @@ public class LuaThemeUtil {
     }
 
     public int getColorBackground() {
-        context.getTheme().resolveAttribute(android.R.attr.colorBackground, typedValue, true);
-        return typedValue.data;
+        return MaterialColors.getColor(context, android.R.attr.colorBackground, null);
     }
 
     public int getColorOnBackground() {
