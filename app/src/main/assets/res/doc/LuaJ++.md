@@ -121,6 +121,11 @@ end
 #### ** 支持defer **
 defer后语句将在函数结束时运行，多个defer将按照后入先出原则运行。
 
+#### ** 支持?操作符 **
+```lua
+?a print(1)`print(2)
+a=?a print(1)`print(2)
+```
 
 #### ** 支持try-catch-finally **
 
@@ -225,6 +230,14 @@ list=ArrayList.override{
     super(arg)
   end
 }()
+```
+
+- 支持元方法
+```lua
+Button:print()
+  print(self)
+end
+Button(this):print()
 ```
 
 - 直接创建数组

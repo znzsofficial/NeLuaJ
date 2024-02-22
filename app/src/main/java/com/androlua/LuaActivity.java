@@ -224,7 +224,7 @@ public class LuaActivity extends AppCompatActivity
         list.setFastScrollEnabled(true);
         list.setFastScrollAlwaysVisible(true);
         adapter =
-                new ArrayListAdapter<String>(this, android.R.layout.simple_list_item_1) {
+                new ArrayListAdapter<>(this, android.R.layout.simple_list_item_1) {
                     @Override
                     public View getView(int position, View convertView, ViewGroup parent) {
                         AppCompatTextView view =
@@ -237,7 +237,6 @@ public class LuaActivity extends AppCompatActivity
         return list;
     }
 
-    ;
 
     public void setAllowThread(boolean bool) {
         StrictMode.ThreadPolicy policy;
@@ -356,7 +355,7 @@ public class LuaActivity extends AppCompatActivity
             debug = env.get("debug_mode");
             if (debug.isboolean()) setDebug(debug.toboolean());
             LuaValue theme = env.get("theme");
-            if (theme.isint()) setTheme((int) theme.toint());
+            if (theme.isint()) setTheme(theme.toint());
             else if (theme.isstring())
                 setTheme(android.R.style.class.getField(theme.tojstring()).getInt(null));
             LuaValue myTheme = env.get("NeLuaJ_Theme");
@@ -398,7 +397,7 @@ public class LuaActivity extends AppCompatActivity
         debug = bool;
     }
 
-    public ArrayList getLogs() {
+    public ArrayList<String> getLogs() {
         return logs;
     }
 
@@ -419,7 +418,7 @@ public class LuaActivity extends AppCompatActivity
             if (checkCallingOrSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
                     != PackageManager.PERMISSION_GRANTED) {
                 try {
-                    permissions = new ArrayList<String>();
+                    permissions = new ArrayList<>();
                     PackageManager pm = getPackageManager();
                     String[] ps2 =
                             pm.getPackageInfo(getPackageName(), PackageManager.GET_PERMISSIONS)
@@ -471,7 +470,7 @@ public class LuaActivity extends AppCompatActivity
 
     @CallLuaFunction
     @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
         runFunc("onOptionsItemSelected", item);
         return super.onOptionsItemSelected(item);
     }
