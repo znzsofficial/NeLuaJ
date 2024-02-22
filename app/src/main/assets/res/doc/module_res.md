@@ -22,3 +22,7 @@ NeLuaJ+ 对 LuaJ++ 的 res模块 进行了一些修改并增强了多语言支�
 ## res.dimen
 1. 读取 init.lua 中的信息
 2. 读取 land.lua(横屏时) 或 port.lua(竖屏时)
+
+## res.color
+1. 读取 init.lua 中的信息
+2. 读取 day.lua 或 night.lua
