@@ -234,7 +234,7 @@ list=ArrayList.override{
 
 - 支持元方法
 ```lua
-Button:print()
+function Button:print()
   print(self)
 end
 Button(this):print()
