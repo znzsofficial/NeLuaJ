@@ -213,13 +213,17 @@ a/=1
 ```
 
 #### ** 调用java优化 **
-- 直接()构建实例或实现接口
+- 直接()构建实例或实现接口,抽象类
 ```lua
 b=ArrayList()
 m=HashMap()
-i=interface{
-  methodname=function(arg)
-  end
+i=interface{ 
+    methodname=function(arg)
+    end
+}
+c=abstract{ 
+    methodname=function(super, arg)
+    end
 }
 ```
 
