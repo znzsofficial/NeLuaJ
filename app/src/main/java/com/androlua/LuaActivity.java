@@ -522,7 +522,7 @@ public class LuaActivity extends AppCompatActivity
       e.printStackTrace();*/
         }
         try {
-            return new FileInputStream(new File(getLuaPath(name)));
+            return new FileInputStream(getLuaPath(name));
         } catch (Exception e) {
       /*
       e.printStackTrace();*/
