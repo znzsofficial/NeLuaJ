@@ -188,20 +188,20 @@ class CrashHandler(context: Context) : Thread.UncaughtExceptionHandler {
         return null
     }
 
-    @SuppressLint("StaticFieldLeak")
     companion object {
         const val TAG = "CrashHandler"
 
         // 唯一单例
-        private var crashHandler: CrashHandler? = null
+        @SuppressLint("StaticFieldLeak")
+        private var instance: CrashHandler? = null
 
         @Synchronized
         @JvmStatic
         fun getInstance(context: Context): CrashHandler {
-            if (crashHandler == null) {
-                crashHandler = CrashHandler(context)
+            if (instance == null) {
+                instance = CrashHandler(context)
             }
-            return crashHandler as CrashHandler
+            return instance as CrashHandler
         }
     }
 }

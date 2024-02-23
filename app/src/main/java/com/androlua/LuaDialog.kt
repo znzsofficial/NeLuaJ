@@ -1,6 +1,5 @@
 package com.androlua
 
-import android.R
 import android.content.Context
 import android.content.DialogInterface
 import android.graphics.drawable.Drawable
@@ -116,9 +115,9 @@ class LuaDialog : AlertDialog, DialogInterface.OnClickListener {
     }
 
     fun setItems(items: Array<String?>) {
-        val alist = ArrayList(Arrays.asList(*items))
+        val alist = ArrayList(listOf(*items))
         val adp: ArrayListAdapter<*> =
-            ArrayListAdapter(mContext, R.layout.simple_list_item_1, alist)
+            ArrayListAdapter(mContext, android.R.layout.simple_list_item_1, alist)
         setAdapter(adp)
         mListView.choiceMode = ListView.CHOICE_MODE_NONE
     }
@@ -135,7 +134,7 @@ class LuaDialog : AlertDialog, DialogInterface.OnClickListener {
     fun setSingleChoiceItems(items: Array<CharSequence?>, checkedItem: Int) {
         val alist = ArrayList(listOf(*items))
         val adp: ArrayListAdapter<*> = ArrayListAdapter(
-            mContext, R.layout.simple_list_item_single_choice, alist
+            mContext, android.R.layout.simple_list_item_single_choice, alist
         )
         setAdapter(adp)
         mListView.choiceMode = ListView.CHOICE_MODE_SINGLE
@@ -149,7 +148,7 @@ class LuaDialog : AlertDialog, DialogInterface.OnClickListener {
     fun setMultiChoiceItems(items: Array<CharSequence?>, checkedItems: IntArray) {
         val alist = ArrayList(listOf(*items))
         val adp: ArrayListAdapter<*> = ArrayListAdapter(
-            mContext, R.layout.simple_list_item_multiple_choice, alist
+            mContext, android.R.layout.simple_list_item_multiple_choice, alist
         )
         setAdapter(adp)
         mListView.choiceMode = ListView.CHOICE_MODE_MULTIPLE
