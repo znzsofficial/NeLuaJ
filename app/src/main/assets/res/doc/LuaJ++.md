@@ -230,10 +230,14 @@ c=abstract{
 - 支持覆盖方法
 ```lua
 list=ArrayList.override{
-  function add(super, arg)
-    super(arg)
+  function add(superCall, arg)
+  superCall(arg)
   end
 }()
+list=ArrayList{
+  add = function(s, a)
+  end
+}
 ```
 
 - 支持元方法
@@ -244,9 +248,20 @@ end
 Button(this):print()
 ```
 
+- 支持批量设置属性
+```lua
+Button(this){
+  text="test",
+  enabled=false
+}
+```
+
+
 - 直接创建数组
 ```lua
 i=int[10]
+i=int{1,2,3}
+i=Integer[10]
 ```
 
 - java 方法使用.调用
@@ -301,6 +316,14 @@ view.Activated
 使用#获取Java常见数据类型的长度
 使用 ["索引"] 或 .索引 直接访问数组
 ```
+
+- 索引优化
+```lua
+t={}
+t."end"=123
+t.end=123
+```
+
 
 - 非必要的接口类型可省略
 ```lua
