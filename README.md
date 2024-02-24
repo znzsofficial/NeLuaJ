@@ -35,6 +35,8 @@ welcome 使用多线程解压
 
 实现了类似 FusionApp2 的导入分析，此部分作者QQ:3070320289
 
+布局助手作者QQ：2241056127
+
 将AndroLua+的部分Adapter移动到了**com.androlua.adapter**下，实际开发时请**留意Java方法浏览器**。
 
 loadlayout 支持更多属性，例如textStyle, layout_anchor, pages (for ViewPager) 等
@@ -49,7 +51,7 @@ Material 1.11.0
 
 Lottie 6.3.0
 
-Coil 2.5.0
+Coil 2.6.0
 
 Okhttp 4.12.0
 

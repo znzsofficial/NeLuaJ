@@ -13,7 +13,7 @@
       "attributes": [],
       "versionCode": 1,
       "versionName": "1.0",
-      "outputFile": "app-2024-02-23_20_12_06-1.0.APK"
+      "outputFile": "app-2024-02-24_21_58_16-1.0.APK"
     }
   ],
   "elementType": "File",
@@ -22,14 +22,14 @@
       "minApi": 28,
       "maxApi": 30,
       "baselineProfiles": [
-        "baselineProfiles/1/app-2024-02-23_20_12_06-1.0.dm"
+        "baselineProfiles/1/app-2024-02-24_21_58_16-1.0.dm"
       ]
     },
     {
       "minApi": 31,
       "maxApi": 2147483647,
       "baselineProfiles": [
-        "baselineProfiles/0/app-2024-02-23_20_12_06-1.0.dm"
+        "baselineProfiles/0/app-2024-02-24_21_58_16-1.0.dm"
       ]
     }
   ],
