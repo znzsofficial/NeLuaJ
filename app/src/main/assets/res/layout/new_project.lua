@@ -60,9 +60,9 @@ return {
         },
         {
             Chip,
-            text = "LuaFragment",
-            id = "module_fragment",
-            TooltipText = "ikimasho",
+            text = "Array",
+            id = "module_array",
+            TooltipText = "vinx",
             Checkable = true,
             CheckedIconEnabled = true,
             style = MDC_R.style.Widget_Material3_Chip,

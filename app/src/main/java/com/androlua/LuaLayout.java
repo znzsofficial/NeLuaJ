@@ -271,6 +271,8 @@ public class LuaLayout {
 
     private final ImageLoader imageLoader;
 
+    private final ImageView.ScaleType[] scaleTypeValues = ImageView.ScaleType.values();
+
     public LuaLayout(Context context) {
         realContext = context;
         mContext = CoerceJavaToLua.coerce(context);
@@ -366,7 +368,6 @@ public class LuaLayout {
         try {
             return Long.parseLong(s);
         } catch (Exception e) {
-
             e.printStackTrace();
         }
         try {
@@ -415,7 +416,8 @@ public class LuaLayout {
                             CoerceJavaToLua.coerce(
                                     new ContextThemeWrapper(realContext, style.toint())),
                             LuaValue.NIL,
-                            style);
+                            style
+                    );
         } else {
             view = cls.call(mContext);
         }
@@ -477,7 +479,7 @@ public class LuaLayout {
                                 continue;
                             case "scaleType":
                                 view.get("setScaleType")
-                                        .jcall(ImageView.ScaleType.values()[scaleType.get(val.tojstring())]);
+                                        .jcall(scaleTypeValues[scaleType.get(val.tojstring())]);
                                 continue;
                             case "ellipsize":
                                 view.get("setEllipsize")

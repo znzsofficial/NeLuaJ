@@ -10,7 +10,7 @@ function onError(error, message)
   return ture
 end
 报错时调用
-返回值可选字符串 "trace","log","message","title"
+可通过修改返回值修改报错方式 （可选 "trace","log","message","title"）
 返回其他非空值可以拦截原报错输出
 
 function onNightModeChanged(mode)
@@ -20,4 +20,7 @@ end
 
 activity.getRootView()
 返回ViewGroup
+
+activity.setAllowThread(bool)
+不建议使用（
 ```
