@@ -128,7 +128,7 @@ dependencies {
     //zhanghai
     implementation("me.zhanghai.android.fastscroll:library:1.3.0")
 
-    implementation("io.coil-kt:coil:2.5.0")
-    implementation("io.coil-kt:coil-svg:2.5.0")
-    implementation("io.coil-kt:coil-gif:2.5.0")
+    implementation("io.coil-kt:coil:2.6.0")
+    implementation("io.coil-kt:coil-svg:2.6.0")
+    implementation("io.coil-kt:coil-gif:2.6.0")
 }

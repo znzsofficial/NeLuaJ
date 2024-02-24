@@ -93,8 +93,8 @@ function _M.createProject(name)
     if binding.module_class.isChecked() then
       LuaFileUtil.create(base_path .. "/mods/class.lua", res.string.code_class)
     end
-    if binding.module_fragment.isChecked() then
-      LuaFileUtil.create(base_path .. "/mods/LuaFragment.lua", res.string.code_fragment)
+    if binding.module_array.isChecked() then
+      LuaFileUtil.create(base_path .. "/mods/Array.lua", res.string.code_array)
     end
     if binding.module_strings.isChecked() then
       LuaFileUtil.create(base_path .. "/mods/Strings.lua", res.string.code_strings)

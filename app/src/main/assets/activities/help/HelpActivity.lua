@@ -64,6 +64,7 @@ local data={
   {text="LuaCustRecyclerAdapter",file="LuaCustRecyclerAdapter.md"},
   {text="LuaFragmentAdapter",file="LuaFragmentAdapter.md"},
   {text="xTask",file="xTask.md"},
+  {text="Coil",file="Coil.md"},
   {text="res",file="module_res.md"},
 }
 
