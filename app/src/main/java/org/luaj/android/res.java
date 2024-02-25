@@ -33,7 +33,7 @@ public class res extends TwoArgFunction {
         return configuration.orientation;
     }
 
-    private boolean getIsDarkMode() {
+    private boolean isDarkMode() {
         return (configuration.uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
     }
 
@@ -56,8 +56,6 @@ public class res extends TwoArgFunction {
         res.set("font", new font());
         if (configuration != null) {
             res.set("dimen", new dimen());
-        }
-        if (configuration != null) {
             res.set("color", new color());
         }
         env.set("res", res);
@@ -143,7 +141,7 @@ public class res extends TwoArgFunction {
             colorTable = new LuaTable();
             String path = activity.getLuaPath("res/color", "init.lua");
             if (new File(path).exists()) globals.loadfile(path, colorTable).call();
-            if (getIsDarkMode()) {
+            if (isDarkMode()) {
                 path = activity.getLuaPath("res/color", "night.lua");
             } else {
                 path = activity.getLuaPath("res/color", "day.lua");
@@ -158,13 +156,12 @@ public class res extends TwoArgFunction {
             colorTable = new LuaTable();
             String path = activity.getLuaPath("res/color", "init.lua");
             if (new File(path).exists()) globals.loadfile(path, colorTable).call();
-            if (getIsDarkMode()) {
+            if (isDarkMode()) {
                 path = activity.getLuaPath("res/color", "night.lua");
             } else {
                 path = activity.getLuaPath("res/color", "day.lua");
             }
             if (new File(path).exists()) globals.loadfile(path, colorTable).call();
-
             return colorTable.get(key);
         }
     }

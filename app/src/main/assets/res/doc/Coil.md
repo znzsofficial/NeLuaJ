@@ -42,7 +42,7 @@ imageLoader = ImageLoader.Builder(activity)
 .crossfade(true) 
 .build()
 ```
-当您创建单个并在整个应用中共享它时，Coil 的性能最佳。这是因为每个都有自己的内存缓存、磁盘缓存和 `.ImageLoader` `ImageLoader` `OkHttpClient`
+当您创建单个并在整个应用中使用它时，Coil 的性能最佳。这是因为每个都有自己的内存缓存、磁盘缓存和 `.ImageLoader` `ImageLoader` `OkHttpClient`
 
 ---
 
@@ -122,7 +122,7 @@ Coil 通过在文件的前 1 KB 中查找标记来检测 SVG，这应该涵盖�
 **请查看官方文档自行设置**[¶](https://coil-kt.github.io/coil/svgs/#svgs "Permanent link") 
 
 ---
-### Non-View Targets（可获得BitmapDrawable）[¶](https://coil-kt.github.io/coil/migrating/#non-view-targets "Permanent link")
+### Non-View Targets[¶](https://coil-kt.github.io/coil/migrating/#non-view-targets "Permanent link")
 ```lua
 import "coil.target.Target"
 local target = Target{
@@ -211,7 +211,7 @@ local request = ImageRequest.Builder(activity)
 
 imageLoader.enqueue(request)
 ```
-转换仅修改静态图像的像素数据。向生成动画图像的转换添加转换会将其转换为静态图像，以便可以应用转换。若要转换动画图像中每一帧的像素数据，请参阅  [AnimatedTransformation](https://coil-kt.github.io/coil/api/coil-gif/coil3.transform/-animated-transformation/)。`ImageRequest`
+转换仅修改静态图像的像素数据。向动图图像添加转换会将其转换为静态图像，以便可以正常转换。若要转换动画图像中每一帧的像素数据，请参阅  [AnimatedTransformation](https://coil-kt.github.io/coil/api/coil-gif/coil3.transform/-animated-transformation/)。`ImageRequest`
 
 自定义转换应实现并确保具有相同属性和使用相同转换的两个 s 相等。`equals``hashCode``ImageRequest`
 
@@ -219,7 +219,42 @@ imageLoader.enqueue(request)
 
 >注意
 >
->如果图像流水线返回的不是 ，它将被转换为 1。这将导致动画可绘制对象仅绘制其动画的第一帧。可以通过设置 来禁用此行为`ImageRequest.Builder.allowConversionToBitmap(false)`
+>如果 Image Pipeline 返回的不是`Drawable`，它将被转换为一个`BitmapDrawable`。这将导致动画可绘制对象仅绘制其动画的第一帧。可以通过设置 来禁用此行为`ImageRequest.Builder.allowConversionToBitmap(false)`
 
 ---
+### Transitions[¶](https://coil-kt.github.io/coil/transitions/#transitions "Permanent link")
 
+过渡允许您对设置图像请求的结果进行动画处理，即在 `Target` 上。
+
+
+`ImageLoader` 和 `ImageRequest` 构建器都接受一个过渡。过渡允许您控制成功/错误可绘制对象在 `Target` 上的设置方式。这使您可以对目标视图进行动画处理或包装输入可绘制对象。
+
+默认情况下，Coil 包含两种过渡效果：
+
+-   [CrossfadeTransition.Factory](https://coil-kt.github.io/coil/api/coil-core/coil3.transition/-crossfade-transition/)：从当前可绘制对象淡入到成功/错误可绘制对象。
+-   [Transition.Factory.NONE](https://coil-kt.github.io/coil/api/coil-core/coil3.transition/-transition/-factory/-companion/-n-o-n-e)：立即将可绘制对象设置到  `Target`  上，无需动画效果。
+```lua
+import "coil.transition.Transition"
+import "coil.transition.CrossfadeTransition"
+import "coil.request.ImageRequest"
+local request = ImageRequest.Builder(activity)
+.data("https://example.com/image.jpg")
+
+.transitionFactory(Transition.Factory.NONE) -- 不使用过渡效果
+.transitionFactory(CrossfadeTransition.Factory(100,false,2,nil)) -- 交叉淡入淡出
+
+-- 但是一般情况下可以直接使用 crossfade 函数
+-- 该函数内部设置的上面这两个参数，接收两种值，布尔值和int数值
+-- 当传入布尔值时是否启用动画，默认动画时间为100毫秒
+-- 传入int数值时，动画时间为传入的数值
+
+.target(imageView)
+
+imageLoader.enqueue(request)
+```
+查看[CrossfadeTransition 的源代码](https://github.com/coil-kt/coil/blob/main/coil-core/src/main/java/coil/transition/CrossfadeTransition.kt) 以了解如何编写自定义过渡的示例。
+
+有关详细信息，请参阅  [API 文档](https://coil-kt.github.io/coil/api/coil-core/coil3.transition/-transition/)  
+
+--- 
+**作者: QQ3070320289 有问题请尝试自行解决，内容有问题请反馈**
