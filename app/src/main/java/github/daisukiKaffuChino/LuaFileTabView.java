@@ -16,7 +16,7 @@ import github.znzsofficial.neluaj.R;
 public class LuaFileTabView extends TabLayout {
   private String nowPath = "";
   private FileTabInterface fileTabInterface;
-  private Looper looper = Looper.getMainLooper();
+  private final Looper looper = Looper.getMainLooper();
 
   public LuaFileTabView(Context context, AttributeSet attrs) {
     super(context, attrs);
