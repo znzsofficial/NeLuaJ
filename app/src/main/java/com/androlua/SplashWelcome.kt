@@ -21,8 +21,8 @@ import java.util.zip.ZipFile
 // import net.lingala.zip4j.exception.ZipException;
 class SplashWelcome : ComponentActivity() {
     private var isUpdate = false
-    private var app: LuaApplication? = null
-    private var localDir: String? = null
+    private lateinit var app: LuaApplication
+    private lateinit var localDir: String
     private var mLastTime: Long = 0
     private var mOldLastTime: Long = 0
     private var isVersionChanged = false
@@ -34,7 +34,7 @@ class SplashWelcome : ComponentActivity() {
         super.onCreate(savedInstanceState)
         //SplashScreen.installSplashScreen(this)
         app = application as LuaApplication
-        localDir = app!!.luaDir
+        localDir = app.luaDir
 //        try {
 //            if (File(app!!.getLuaPath("setup.png")).exists())
 //                window.setBackgroundDrawable(
