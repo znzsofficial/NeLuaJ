@@ -41,13 +41,15 @@ function onCreate()
   bindClass"com.google.android.material.color.DynamicColors".applyToActivityIfAvailable(this)
   activity.setContentView(res.layout.main_layout)
   .setSupportActionBar(mToolBar)
-  .getSupportActionBar()
-  .setDisplayHomeAsUpEnabled(true)
-  .setElevation(0)
-  .setSubtitle(res.string.nofile)
-  local window = activity.getWindow()
-  .setSoftInputMode(0x10)
-  .setStatusBarColor(ColorUtil.getColorBackground())
+  .getSupportActionBar() {
+          DisplayHomeAsUpEnabled = true,
+          Elevation = 0,
+          Subtitle = res.string.nofile
+  }
+  local window = activity.getWindow() {
+          SoftInputMode = 0x10,
+          StatusBarColor = ColorUtil.getColorBackground()
+  }
   .addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
   .clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
   if UiUtil.isNightMode() then

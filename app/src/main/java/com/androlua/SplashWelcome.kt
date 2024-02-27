@@ -3,9 +3,11 @@ package com.androlua
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
-import android.os.Handler
-import android.util.Log
 import androidx.activity.ComponentActivity
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -18,7 +20,7 @@ import java.util.zip.ZipFile
 // import net.lingala.zip4j.ZipFile;
 // import net.lingala.zip4j.exception.ZipException;
 class SplashWelcome : ComponentActivity() {
-    private var isUpdata = false
+    private var isUpdate = false
     private var app: LuaApplication? = null
     private var localDir: String? = null
     private var mLastTime: Long = 0
@@ -33,31 +35,33 @@ class SplashWelcome : ComponentActivity() {
         //SplashScreen.installSplashScreen(this)
         app = application as LuaApplication
         localDir = app!!.luaDir
-        /*try {
-        if (new File(app.getLuaPath("setup.png")).exists())
-            getWindow().setBackgroundDrawable(new LuaBitmapDrawable(app, app.getLuaPath("setup.png"), getResources().getDrawable(R.drawable.icon)));
-    } catch (Exception e) {
-        e.printStackTrace();
-    }*/
+//        try {
+//            if (File(app!!.getLuaPath("setup.png")).exists())
+//                window.setBackgroundDrawable(
+//                    BitmapDrawable(
+//                        resources,
+//                        app!!.getLuaPath("setup.png")
+//                    )
+//                )
+//        } catch (e: Exception) {
+//            e.printStackTrace();
+//        }
         if (checkInfo()) {
             LuaApplication.getInstance().setSharedData("UnZiped", false)
-            val executor = Executors.newSingleThreadExecutor()
-            val handler = Handler(this.mainLooper)
-            Log.i("start execute", "welcome");
-            executor.execute {
+            //Log.i("start execute", "welcome");
+            lifecycleScope.launch(Dispatchers.IO) {
                 try {
-                    Log.i("start unpack", "welcome");
+                    //Log.i("start unpack", "welcome");
                     unApk("assets/", localDir)
                 } catch (e: IOException) {
                     e.printStackTrace()
                 }
-                handler.post {
-                    Log.i("start", "welcome");
+                withContext(Dispatchers.Main) {
+                    //Log.i("start", "welcome");
                     startActivity()
                     LuaApplication.getInstance().setSharedData("UnZiped", true)
                 }
             }
-            executor.shutdown()
         } else {
             startActivity()
         }
@@ -79,7 +83,7 @@ class SplashWelcome : ComponentActivity() {
         // );
     }
 
-    fun checkInfo(): Boolean {
+    private fun checkInfo(): Boolean {
         try {
             val packageInfo = packageManager.getPackageInfo(this.packageName, 0)
             val lastTime = packageInfo.lastUpdateTime
@@ -99,7 +103,7 @@ class SplashWelcome : ComponentActivity() {
                 val edit = info.edit()
                 edit.putLong("lastUpdateTime", lastTime)
                 edit.apply()
-                isUpdata = true
+                isUpdate = true
                 mLastTime = lastTime
                 mOldLastTime = oldLastTime
                 return true
