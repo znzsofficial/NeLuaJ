@@ -44,21 +44,17 @@ class LuaLayout(private val realContext: Context) {
     private val dm: DisplayMetrics = realContext.resources.displayMetrics
     private val views = HashMap<String, LuaValue>()
     private val luaContext: LuaValue = CoerceJavaToLua.coerce(realContext)
-
-    private val imageLoader: ImageLoader
-
+    private val imageLoader: ImageLoader = ImageLoader.Builder(realContext).components(
+        ComponentRegistry.Builder().apply {
+            if (Build.VERSION.SDK_INT >= 28) {
+                add(ImageDecoderDecoder.Factory())
+            } else {
+                add(GifDecoder.Factory())
+            }
+            add(SvgDecoder.Factory())
+        }.build()
+    ).build()
     private val scaleTypeValues: Array<ScaleType> = ScaleType.entries.toTypedArray()
-
-    init {
-        val builder = ComponentRegistry.Builder()
-        if (Build.VERSION.SDK_INT >= 28) {
-            builder.add(ImageDecoderDecoder.Factory())
-        } else {
-            builder.add(GifDecoder.Factory())
-        }
-        builder.add(SvgDecoder.Factory())
-        imageLoader = ImageLoader.Builder(realContext).components(builder.build()).build()
-    }
 
     val id: HashMap<*, *>
         get() = ids
@@ -235,21 +231,15 @@ class LuaLayout(private val realContext: Context) {
                             "textStyle" -> {
                                 when (`val`.tojstring()) {
                                     "bold" -> view["setTypeface"].jcall(
-                                        Typeface.defaultFromStyle(
-                                            Typeface.BOLD
-                                        )
+                                        Typeface.defaultFromStyle(Typeface.BOLD)
                                     )
 
                                     "normal" -> view["setTypeface"].jcall(
-                                        Typeface.defaultFromStyle(
-                                            Typeface.NORMAL
-                                        )
+                                        Typeface.defaultFromStyle(Typeface.NORMAL)
                                     )
 
                                     "italic" -> view["setTypeface"].jcall(
-                                        Typeface.defaultFromStyle(
-                                            Typeface.ITALIC
-                                        )
+                                        Typeface.defaultFromStyle(Typeface.ITALIC)
                                     )
 
                                     "italic|bold", "bold|italic" -> view["setTypeface"].jcall(
@@ -348,8 +338,8 @@ class LuaLayout(private val realContext: Context) {
                                 val views = tab[1].checktable()
                                 val titles = tab[2].checktable()
                                 val viewLen = views.length()
-                                val viewList = ArrayList<View>()
                                 val titleLen = titles.length()
+                                val viewList = ArrayList<View>()
                                 val titleList = ArrayList<String>()
                                 run {
                                     var i = 0
@@ -421,9 +411,9 @@ class LuaLayout(private val realContext: Context) {
                                         //                      }.execute();
                                         imageLoader.enqueue(
                                             ImageRequest.Builder(realContext)
-                                                .data(`val`.tojstring()).target(
-                                                    LuaTarget(view)
-                                                ).build()
+                                                .data(`val`.tojstring()).target {
+                                                    view.jset("ImageDrawable", it)
+                                                }.build()
                                         )
                                         // } else {
                                         //                      view.jset(
@@ -468,12 +458,11 @@ class LuaLayout(private val realContext: Context) {
                             else -> if (k.startsWith("on")) {
                                 if (`val`.isstring()) {
                                     val finalVal = `val`
-                                    `val` =
-                                        object : VarArgFunction() {
-                                            override fun invoke(args: Varargs): Varargs {
-                                                return env[finalVal].invoke(args)
-                                            }
+                                    `val` = object : VarArgFunction() {
+                                        override fun invoke(args: Varargs): Varargs {
+                                            return env[finalVal].invoke(args)
                                         }
+                                    }
                                 }
                                 view[key] = `val`
                             }
@@ -496,15 +485,19 @@ class LuaLayout(private val realContext: Context) {
                                     "@string/appbar_scrolling_view_behavior" -> {
                                         params["setBehavior"].jcall(AppBarLayout.ScrollingViewBehavior())
                                     }
+
                                     "@string/bottom_sheet_behavior" -> {
                                         params["setBehavior"].jcall(BottomSheetBehavior<View>())
                                     }
+
                                     "@string/side_sheet_behavior" -> {
                                         params["setBehavior"].jcall(SideSheetBehavior<View>())
                                     }
+
                                     "@string/hide_bottom_view_on_scroll_behavior" -> {
                                         params["setBehavior"].jcall(HideBottomViewOnScrollBehavior<View>())
                                     }
+
                                     else -> {
                                         params["setBehavior"].jcall(`val`)
                                     }
@@ -590,7 +583,7 @@ class LuaLayout(private val realContext: Context) {
 
     companion object {
 
-        private val toint = HashMap<String, Int>()
+        private val toint = LinkedHashMap<String, Int>()
 
         init {
             // android:drawingCacheQuality
@@ -757,32 +750,31 @@ class LuaLayout(private val realContext: Context) {
             "centerInside" to 7
         )
 
-        private val rules = HashMap<String, Int>()
-        init {
-            rules["layout_above"] = 2
-            rules["layout_alignBaseline"] = 4
-            rules["layout_alignBottom"] = 8
-            rules["layout_alignEnd"] = 19
-            rules["layout_alignLeft"] = 5
-            rules["layout_alignParentBottom"] = 12
-            rules["layout_alignParentEnd"] = 21
-            rules["layout_alignParentLeft"] = 9
-            rules["layout_alignParentRight"] = 11
-            rules["layout_alignParentStart"] = 20
-            rules["layout_alignParentTop"] = 10
-            rules["layout_alignRight"] = 7
-            rules["layout_alignStart"] = 18
-            rules["layout_alignTop"] = 6
-            rules["layout_alignWithParentIfMissing"] = 0
-            rules["layout_below"] = 3
-            rules["layout_centerHorizontal"] = 14
-            rules["layout_centerInParent"] = 13
-            rules["layout_centerVertical"] = 15
-            rules["layout_toEndOf"] = 17
-            rules["layout_toLeftOf"] = 0
-            rules["layout_toRightOf"] = 1
-            rules["layout_toStartOf"] = 16
-        }
+        private val rules = mapOf(
+            "layout_above" to 2,
+            "layout_alignBaseline" to 4,
+            "layout_alignBottom" to 8,
+            "layout_alignEnd" to 19,
+            "layout_alignLeft" to 5,
+            "layout_alignParentBottom" to 12,
+            "layout_alignParentEnd" to 21,
+            "layout_alignParentLeft" to 9,
+            "layout_alignParentRight" to 11,
+            "layout_alignParentStart" to 20,
+            "layout_alignParentTop" to 10,
+            "layout_alignRight" to 7,
+            "layout_alignStart" to 18,
+            "layout_alignTop" to 6,
+            "layout_alignWithParentIfMissing" to 0,
+            "layout_below" to 3,
+            "layout_centerHorizontal" to 14,
+            "layout_centerInParent" to 13,
+            "layout_centerVertical" to 15,
+            "layout_toEndOf" to 17,
+            "layout_toLeftOf" to 0,
+            "layout_toRightOf" to 1,
+            "layout_toStartOf" to 16,
+        )
 
         private val types = mapOf(
             "px" to 0,
