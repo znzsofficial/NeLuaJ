@@ -4653,7 +4653,6 @@ return {
 "com.androlua.LuaResources",
 "com.androlua.LuaServer",
 "com.androlua.LuaService",
-"com.androlua.LuaTarget",
 "com.androlua.LuaTimer",
 "com.androlua.LuaTimerTask",
 "com.androlua.LuaTokenTypes",

@@ -16280,7 +16280,6 @@ return {
     "com.androlua.LuaServer$ServerThread",
     "com.androlua.LuaServer$SocketThread",
     "com.androlua.LuaService",
-    "com.androlua.LuaTarget",
     "com.androlua.LuaTimer",
     "com.androlua.LuaTimer",
     "com.androlua.LuaTimerTask",
