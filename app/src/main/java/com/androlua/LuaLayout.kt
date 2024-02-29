@@ -229,23 +229,24 @@ class LuaLayout(private val realContext: Context) {
                             }
 
                             "textStyle" -> {
-                                when (`val`.tojstring()) {
-                                    "bold" -> view["setTypeface"].jcall(
-                                        Typeface.defaultFromStyle(Typeface.BOLD)
-                                    )
+                                view["setTypeface"].jcall(
+                                    when (`val`.tojstring()) {
+                                        "bold" ->
+                                            Typeface.defaultFromStyle(Typeface.BOLD)
 
-                                    "normal" -> view["setTypeface"].jcall(
-                                        Typeface.defaultFromStyle(Typeface.NORMAL)
-                                    )
+                                        "normal" ->
+                                            Typeface.defaultFromStyle(Typeface.NORMAL)
 
-                                    "italic" -> view["setTypeface"].jcall(
-                                        Typeface.defaultFromStyle(Typeface.ITALIC)
-                                    )
+                                        "italic" ->
+                                            Typeface.defaultFromStyle(Typeface.ITALIC)
 
-                                    "italic|bold", "bold|italic" -> view["setTypeface"].jcall(
-                                        Typeface.defaultFromStyle(Typeface.BOLD_ITALIC)
-                                    )
-                                }
+                                        "italic|bold", "bold|italic" ->
+                                            Typeface.defaultFromStyle(Typeface.BOLD_ITALIC)
+
+                                        else -> {}
+                                    }
+                                )
+
                                 continue
                             }
 
@@ -583,7 +584,7 @@ class LuaLayout(private val realContext: Context) {
 
     companion object {
 
-        private val toint = LinkedHashMap<String, Int>()
+        private val toint = HashMap<String, Int>()
 
         init {
             // android:drawingCacheQuality
@@ -739,51 +740,57 @@ class LuaLayout(private val realContext: Context) {
             toint["parallax"] = 2
         }
 
-        private val scaleType = mapOf(
-            "matrix" to 0,
-            "fitXY" to 1,
-            "fitStart" to 2,
-            "fitCenter" to 3,
-            "fitEnd" to 4,
-            "center" to 5,
-            "centerCrop" to 6,
-            "centerInside" to 7
-        )
+        private val scaleType = HashMap<String, Int>()
 
-        private val rules = mapOf(
-            "layout_above" to 2,
-            "layout_alignBaseline" to 4,
-            "layout_alignBottom" to 8,
-            "layout_alignEnd" to 19,
-            "layout_alignLeft" to 5,
-            "layout_alignParentBottom" to 12,
-            "layout_alignParentEnd" to 21,
-            "layout_alignParentLeft" to 9,
-            "layout_alignParentRight" to 11,
-            "layout_alignParentStart" to 20,
-            "layout_alignParentTop" to 10,
-            "layout_alignRight" to 7,
-            "layout_alignStart" to 18,
-            "layout_alignTop" to 6,
-            "layout_alignWithParentIfMissing" to 0,
-            "layout_below" to 3,
-            "layout_centerHorizontal" to 14,
-            "layout_centerInParent" to 13,
-            "layout_centerVertical" to 15,
-            "layout_toEndOf" to 17,
-            "layout_toLeftOf" to 0,
-            "layout_toRightOf" to 1,
-            "layout_toStartOf" to 16,
-        )
+        init {
+            scaleType["matrix"] = 0
+            scaleType["fitCenter"] = 1
+            scaleType["fitEnd"] = 2
+            scaleType["fitStart"] = 3
+            scaleType["fitXY"] = 4
+            scaleType["center"] = 5
+            scaleType["centerCrop"] = 6
+            scaleType["centerInside"] = 7
+        }
 
-        private val types = mapOf(
-            "px" to 0,
-            "dp" to 1,
-            "sp" to 2,
-            "pt" to 3,
-            "in" to 4,
-            "mm" to 5
-        )
+        private val rules = HashMap<String, Int>()
+
+        init {
+            rules["layout_above"] = 2
+            rules["layout_alignBaseline"] = 4
+            rules["layout_alignBottom"] = 8
+            rules["layout_alignEnd"] = 19
+            rules["layout_alignLeft"] = 5
+            rules["layout_alignParentBottom"] = 12
+            rules["layout_alignParentEnd"] = 21
+            rules["layout_alignParentLeft"] = 9
+            rules["layout_alignParentRight"] = 11
+            rules["layout_alignParentStart"] = 20
+            rules["layout_alignParentTop"] = 10
+            rules["layout_alignRight"] = 7
+            rules["layout_alignStart"] = 18
+            rules["layout_alignTop"] = 6
+            rules["layout_alignWithParentIfMissing"] = 0
+            rules["layout_below"] = 3
+            rules["layout_centerHorizontal"] = 14
+            rules["layout_centerInParent"] = 13
+            rules["layout_centerVertical"] = 15
+            rules["layout_toEndOf"] = 17
+            rules["layout_toLeftOf"] = 0
+            rules["layout_toRightOf"] = 1
+            rules["layout_toStartOf"] = 16
+        }
+
+        private val types = HashMap<String, Int>()
+
+        init {
+            types["px"] = 0
+            types["dp"] = 1
+            types["sp"] = 2
+            types["pt"] = 3
+            types["in"] = 4
+            types["mm"] = 5
+        }
 
         private val ids = HashMap<String, Int>()
         private var idx = 0x7f000000
