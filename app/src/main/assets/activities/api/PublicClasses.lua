@@ -6580,6 +6580,7 @@ return {
 "org.luaj.android.http",
 "org.luaj.android.json",
 "org.luaj.android.loadlayout",
+"org.luaj.android.okhttp",
 "org.luaj.android.print",
 "org.luaj.android.printf",
 "org.luaj.android.res",

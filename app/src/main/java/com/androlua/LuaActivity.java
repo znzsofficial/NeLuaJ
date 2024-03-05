@@ -56,6 +56,7 @@ import org.luaj.android.file;
 import org.luaj.android.http;
 import org.luaj.android.json;
 import org.luaj.android.loadlayout;
+import org.luaj.android.okhttp;
 import org.luaj.android.print;
 import org.luaj.android.printf;
 import org.luaj.android.res;
@@ -180,6 +181,7 @@ public class LuaActivity extends AppCompatActivity
             globals.load(new res(this));
             globals.load(new json());
             globals.load(new file());
+            globals.load(new okhttp());
             globals.jset("Http", Http.class);
             globals.jset("http", http.class);
             globals.jset("R", github.znzsofficial.neluaj.R.class);
