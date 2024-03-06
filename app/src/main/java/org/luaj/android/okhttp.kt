@@ -40,7 +40,7 @@ class okhttp : TwoArgFunction() {
             return CoerceJavaToLua.coerce(
                 client.newCall(
                     requestBuilder.url(
-                        args.arg(1).checkjstring()
+                        args.arg1().checkjstring()
                     ).build()
                 ).execute()
             )
@@ -50,7 +50,7 @@ class okhttp : TwoArgFunction() {
     inner class post : VarArgFunction() {
         override fun invoke(args: Varargs): Varargs {
             val bodyTable = args.arg(2).checktable()
-            var headersTable = args.arg(3).checktable()
+            var headersTable = args.arg(3)
             val builder = FormBody.Builder()
             val requestBuilder = Request.Builder()
             for (key in bodyTable.keys()) {
@@ -65,7 +65,7 @@ class okhttp : TwoArgFunction() {
             return CoerceJavaToLua.coerce(
                 client.newCall(
                     requestBuilder.url(
-                        args.arg(1).checkjstring()
+                        args.arg1().checkjstring()
                     ).post(
                         builder.build()
                     ).build()
@@ -77,7 +77,7 @@ class okhttp : TwoArgFunction() {
     inner class delete : VarArgFunction() {
         override fun invoke(args: Varargs): Varargs {
             val bodyTable = args.arg(2).checktable()
-            var headersTable = args.arg(3).checktable()
+            var headersTable = args.arg(3)
             val builder = FormBody.Builder()
             val requestBuilder = Request.Builder()
             for (key in bodyTable.keys()) {
@@ -92,7 +92,7 @@ class okhttp : TwoArgFunction() {
             return CoerceJavaToLua.coerce(
                 client.newCall(
                     requestBuilder.url(
-                        args.arg(1).checkjstring()
+                        args.arg1().checkjstring()
                     ).delete(
                         builder.build()
                     ).build()
@@ -104,7 +104,7 @@ class okhttp : TwoArgFunction() {
     inner class put : VarArgFunction() {
         override fun invoke(args: Varargs): Varargs {
             val bodyTable = args.arg(2).checktable()
-            var headersTable = args.arg(3).checktable()
+            var headersTable = args.arg(3)
             val builder = FormBody.Builder()
             val requestBuilder = Request.Builder()
             for (key in bodyTable.keys()) {
@@ -119,7 +119,7 @@ class okhttp : TwoArgFunction() {
             return CoerceJavaToLua.coerce(
                 client.newCall(
                     requestBuilder.url(
-                        args.arg(1).checkjstring()
+                        args.arg1().checkjstring()
                     ).put(
                         builder.build()
                     ).build()
