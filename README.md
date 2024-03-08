@@ -49,7 +49,7 @@ AppCompat 1.7.0-alpha03
 
 Material 1.11.0
 
-Lottie 6.3.0
+Lottie 6.4.0
 
 Coil 2.6.0
 
