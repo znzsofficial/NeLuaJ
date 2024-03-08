@@ -633,12 +633,12 @@ return _M]]
 mcode = [[import "java.lang.*","java.util.*"
 import "android.os.*","android.app.*"
 
-activity
-.setTitle(res.string.app_title)
-.setContentView(res.layout.main);
+activity {
+  Title = res.string.app_title,
+  ContentView = res.layout.main
+}
 ]]
-lcode = [[import "android.widget.*";
-import "androidx.appcompat.widget.*";
+lcode = [[import "android.widget.*", "androidx.appcompat.widget.*";
 
 return {
   LinearLayout,

@@ -61,7 +61,7 @@ android {
 }
 
 dependencies {
-    implementation("org.jetbrains.kotlin:kotlin-reflect:1.9.22")
+    implementation("org.jetbrains.kotlin:kotlin-reflect:1.9.23")
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar"))))
     implementation(libs.core.ktx)
     implementation(libs.appcompat)
@@ -120,7 +120,7 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     //lottie
-    implementation("com.airbnb.android:lottie:6.3.0")
+    implementation("com.airbnb.android:lottie:6.4.0")
 
     //recycler anime
     implementation("jp.wasabeef:recyclerview-animators:4.0.2")
