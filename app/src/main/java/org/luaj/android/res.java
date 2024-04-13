@@ -8,6 +8,7 @@ import com.androlua.LuaBitmap;
 import com.androlua.LuaBitmapDrawable;
 import com.androlua.LuaContext;
 import com.androlua.LuaLayout;
+import com.google.android.material.color.DynamicColors;
 
 import org.luaj.Globals;
 import org.luaj.LuaError;

@@ -20,7 +20,11 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
-
+    configurations {
+        all {
+            exclude(group = "androidx.asynclayoutinflater", module = "asynclayoutinflater")
+        }
+    }
     buildTypes {
         debug {
             isShrinkResources = false
@@ -72,9 +76,8 @@ dependencies {
     androidTestImplementation(libs.espresso.core)
 
     //AndroidX
-    implementation("androidx.activity:activity:1.9.0-alpha03")
+    implementation("androidx.activity:activity:1.9.0-rc01")
     implementation("androidx.annotation:annotation:1.7.1")
-    implementation("androidx.asynclayoutinflater:asynclayoutinflater:1.1.0-alpha01")
     implementation("androidx.collection:collection:1.4.0")
     implementation("androidx.constraintlayout:constraintlayout:2.2.0-alpha13")
     implementation("androidx.coordinatorlayout:coordinatorlayout:1.3.0-alpha02")
@@ -84,7 +87,7 @@ dependencies {
     implementation("androidx.draganddrop:draganddrop:1.0.0")
     implementation("androidx.dynamicanimation:dynamicanimation:1.1.0-alpha03")
     implementation("androidx.emoji2:emoji2:1.4.0")
-    implementation("androidx.fragment:fragment:1.7.0-alpha10")
+    implementation("androidx.fragment:fragment:1.7.0-rc01")
     implementation("androidx.gridlayout:gridlayout:1.1.0-beta01")
     implementation("androidx.legacy:legacy-support-core-ui:1.0.0")
     implementation("androidx.legacy:legacy-support-core-utils:1.0.0")

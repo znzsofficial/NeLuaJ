@@ -3049,8 +3049,6 @@ return {
 "androidx.arch.core.internal.FastSafeIterableMap",
 "androidx.arch.core.internal.SafeIterableMap",
 "androidx.arch.core.util.Function",
-"androidx.asynclayoutinflater.view.AsyncLayoutFactory",
-"androidx.asynclayoutinflater.view.AsyncLayoutInflater",
 "androidx.cardview.widget.CardView",
 "androidx.cardview.widget.CardViewApi17Impl",
 "androidx.cardview.widget.CardViewApi21Impl",

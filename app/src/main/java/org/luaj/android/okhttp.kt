@@ -17,11 +17,12 @@ class okhttp : TwoArgFunction() {
     private val client = OkHttpClient.Builder().build()
     override fun call(modname: LuaValue, env: LuaValue): LuaValue {
         globals = env.checkglobals()
-        val okhttp = LuaTable()
-        okhttp.set("get", get())
-        okhttp.set("post", post())
-        okhttp.set("put", put())
-        okhttp.set("delete", delete())
+        val okhttp = LuaTable().apply {
+            set("get", get())
+            set("post", post())
+            set("put", put())
+            set("delete", delete())
+        }
         env["okhttp"] = okhttp
         if (!env["package"].isnil()) env["package"]["loaded"]["okhttp"] = okhttp
         return NIL
