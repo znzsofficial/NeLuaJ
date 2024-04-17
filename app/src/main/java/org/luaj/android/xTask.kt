@@ -6,47 +6,45 @@ import com.androlua.LuaGcable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.luaj.LuaError
 import org.luaj.LuaString
 import org.luaj.LuaValue
 import org.luaj.Varargs
 import org.luaj.lib.VarArgFunction
 import org.luaj.lib.jse.CoerceJavaToLua
 
+
 class xTask(private val mContext: LuaActivity) : VarArgFunction(), LuaGcable {
+
     private var coroutine: LuaValue? = null
-    override fun invoke(args: Varargs): Varargs? {
-        val table = args.arg1().checktable()
-        val task = table["task"]
-        val callback = table["callback"]
-        var result: Varargs? = null
-        coroutine = CoerceJavaToLua.coerce(
+
+    override fun invoke(args: Varargs): Varargs? =
+        args.arg1().checktable().let { table ->
             mContext.lifecycleScope.launch(
-                table["dispatcher"].tojstring().let {
-                    when (it) {
-                        "io" -> Dispatchers.IO
-                        "unconfined" -> Dispatchers.Unconfined
-                        else -> Dispatchers.Default
-                    }
+                when (table["dispatcher"].tojstring()) {
+                    "io" -> Dispatchers.IO
+                    "unconfined" -> Dispatchers.Unconfined
+                    else -> Dispatchers.Default
                 }
             ) {
                 try {
-                    if (task.isfunction()) result = task.invoke()
-                } catch (e: Exception) {
-                    result = LuaString.valueOf(e.message)
+                    table["task"].takeIf { it.isfunction() }?.invoke()
+                } catch (e: LuaError) {
                     mContext.sendError("xTask: Background", e)
-                }
-                if (callback.isfunction())
-                    try {
-                        withContext(Dispatchers.Main) {
-                            callback.invoke(result)
+                    LuaString.valueOf(e.message)
+                }.let { result ->
+                    table["callback"].takeIf { it.isfunction() }?.apply {
+                        runCatching {
+                            withContext(Dispatchers.Main) { invoke(result) }
+                        }.onFailure {
+                            mContext.sendError("xTask: Main", it as LuaError)
                         }
-                    } catch (e: Exception) {
-                        mContext.sendError("xTask: Main", e)
                     }
-            }
-        )
-        return coroutine
-    }
+                }
+                // 先把 coroutine 存起来，再用 let 返回
+            }.also { coroutine = CoerceJavaToLua.coerce(it) }.let { coroutine }
+        }
+
 
     override fun gc() {
         coroutine = null

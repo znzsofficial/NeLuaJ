@@ -30,12 +30,11 @@ class okhttp : TwoArgFunction() {
 
     inner class get : VarArgFunction() {
         override fun invoke(args: Varargs): Varargs {
-            var headersTable = args.arg(2)
             val requestBuilder = Request.Builder()
-            if (!headersTable.isnil()) {
-                headersTable = headersTable.checktable()
-                for (key in headersTable.keys()) {
-                    requestBuilder.addHeader(key.tojstring(), headersTable.get(key).tojstring())
+            args.arg(2).takeIf { !it.isnil() }?.let {
+                val table = it.checktable()
+                for (key in table.keys()) {
+                    requestBuilder.addHeader(key.tojstring(), table.get(key).tojstring())
                 }
             }
             return CoerceJavaToLua.coerce(
@@ -50,17 +49,17 @@ class okhttp : TwoArgFunction() {
 
     inner class post : VarArgFunction() {
         override fun invoke(args: Varargs): Varargs {
-            val bodyTable = args.arg(2).checktable()
-            var headersTable = args.arg(3)
             val builder = FormBody.Builder()
             val requestBuilder = Request.Builder()
-            for (key in bodyTable.keys()) {
-                builder.add(key.tojstring(), bodyTable.get(key).tojstring())
+            args.arg(2).checktable().apply {
+                for (key in keys()) {
+                    builder.add(key.tojstring(), get(key).tojstring())
+                }
             }
-            if (!headersTable.isnil()) {
-                headersTable = headersTable.checktable()
-                for (key in headersTable.keys()) {
-                    requestBuilder.addHeader(key.tojstring(), headersTable.get(key).tojstring())
+            args.arg(3).takeIf { !it.isnil() }?.let {
+                val table = it.checktable()
+                for (key in table.keys()) {
+                    requestBuilder.addHeader(key.tojstring(), table.get(key).tojstring())
                 }
             }
             return CoerceJavaToLua.coerce(
@@ -77,17 +76,17 @@ class okhttp : TwoArgFunction() {
 
     inner class delete : VarArgFunction() {
         override fun invoke(args: Varargs): Varargs {
-            val bodyTable = args.arg(2).checktable()
-            var headersTable = args.arg(3)
             val builder = FormBody.Builder()
             val requestBuilder = Request.Builder()
-            for (key in bodyTable.keys()) {
-                builder.add(key.tojstring(), bodyTable.get(key).tojstring())
+            args.arg(2).checktable().apply {
+                for (key in keys()) {
+                    builder.add(key.tojstring(), get(key).tojstring())
+                }
             }
-            if (!headersTable.isnil()) {
-                headersTable = headersTable.checktable()
-                for (key in headersTable.keys()) {
-                    requestBuilder.addHeader(key.tojstring(), headersTable.get(key).tojstring())
+            args.arg(3).takeIf { !it.isnil() }?.let {
+                val table = it.checktable()
+                for (key in table.keys()) {
+                    requestBuilder.addHeader(key.tojstring(), table.get(key).tojstring())
                 }
             }
             return CoerceJavaToLua.coerce(
@@ -104,17 +103,17 @@ class okhttp : TwoArgFunction() {
 
     inner class put : VarArgFunction() {
         override fun invoke(args: Varargs): Varargs {
-            val bodyTable = args.arg(2).checktable()
-            var headersTable = args.arg(3)
             val builder = FormBody.Builder()
             val requestBuilder = Request.Builder()
-            for (key in bodyTable.keys()) {
-                builder.add(key.tojstring(), bodyTable.get(key).tojstring())
+            args.arg(2).checktable().apply {
+                for (key in keys()) {
+                    builder.add(key.tojstring(), get(key).tojstring())
+                }
             }
-            if (!headersTable.isnil()) {
-                headersTable = headersTable.checktable()
-                for (key in headersTable.keys()) {
-                    requestBuilder.addHeader(key.tojstring(), headersTable.get(key).tojstring())
+            args.arg(3).takeIf { !it.isnil() }?.let {
+                val table = it.checktable()
+                for (key in table.keys()) {
+                    requestBuilder.addHeader(key.tojstring(), table.get(key).tojstring())
                 }
             }
             return CoerceJavaToLua.coerce(
