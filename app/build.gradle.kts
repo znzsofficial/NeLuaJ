@@ -75,7 +75,7 @@ dependencies {
     androidTestImplementation(libs.espresso.core)
 
     //AndroidX
-    implementation("androidx.activity:activity:1.9.0-rc01")
+    implementation("androidx.activity:activity:1.9.0")
     implementation("androidx.annotation:annotation:1.7.1")
     implementation("androidx.collection:collection:1.4.0")
     implementation("androidx.constraintlayout:constraintlayout:2.2.0-alpha13")
