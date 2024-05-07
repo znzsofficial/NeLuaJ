@@ -37,10 +37,9 @@ class okhttp : TwoArgFunction() {
     inner class get : VarArgFunction() {
         override fun invoke(args: Varargs): Varargs {
             val requestBuilder = Request.Builder()
-            args.secondArg().ifNotNil()?.let {
-                val table = it.checktable()
-                for (key in table.keys()) {
-                    requestBuilder.addHeader(key.asString(), table.get(key).asString())
+            args.secondArg().ifNotNil()?.checktable()?.apply {
+                for (key in keys()) {
+                    requestBuilder.addHeader(key.asString(), get(key).asString())
                 }
             }
             return client.newCall(
@@ -60,10 +59,9 @@ class okhttp : TwoArgFunction() {
                     builder.add(key.asString(), get(key).asString())
                 }
             }
-            args.argAt(3).ifNotNil()?.let {
-                val table = it.checktable()
-                for (key in table.keys()) {
-                    requestBuilder.addHeader(key.asString(), table.get(key).asString())
+            args.argAt(3).ifNotNil()?.checktable()?.apply {
+                for (key in keys()) {
+                    requestBuilder.addHeader(key.asString(), get(key).asString())
                 }
             }
             return client.newCall(
@@ -85,10 +83,9 @@ class okhttp : TwoArgFunction() {
                     builder.add(key.asString(), get(key).asString())
                 }
             }
-            args.argAt(3).ifNotNil()?.let {
-                val table = it.checktable()
-                for (key in table.keys()) {
-                    requestBuilder.addHeader(key.asString(), table.get(key).asString())
+            args.argAt(3).ifNotNil()?.checktable()?.apply {
+                for (key in keys()) {
+                    requestBuilder.addHeader(key.asString(), get(key).asString())
                 }
             }
             return client.newCall(
@@ -110,10 +107,9 @@ class okhttp : TwoArgFunction() {
                     builder.add(key.asString(), get(key).asString())
                 }
             }
-            args.argAt(3).ifNotNil()?.let {
-                val table = it.checktable()
-                for (key in table.keys()) {
-                    requestBuilder.addHeader(key.asString(), table.get(key).asString())
+            args.argAt(3).ifNotNil()?.checktable()?.apply {
+                for (key in keys()) {
+                    requestBuilder.addHeader(key.asString(), get(key).asString())
                 }
             }
             return client.newCall(
