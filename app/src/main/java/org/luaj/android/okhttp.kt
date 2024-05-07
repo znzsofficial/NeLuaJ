@@ -1,7 +1,9 @@
 package org.luaj.android
 
 import github.znzsofficial.argAt
+import github.znzsofficial.asString
 import github.znzsofficial.firstArg
+import github.znzsofficial.ifNotNil
 import github.znzsofficial.isNotNil
 import github.znzsofficial.secondArg
 import github.znzsofficial.toLuaValue
@@ -35,10 +37,10 @@ class okhttp : TwoArgFunction() {
     inner class get : VarArgFunction() {
         override fun invoke(args: Varargs): Varargs {
             val requestBuilder = Request.Builder()
-            args.secondArg().takeIf { it.isNotNil() }?.let {
+            args.secondArg().ifNotNil()?.let {
                 val table = it.checktable()
                 for (key in table.keys()) {
-                    requestBuilder.addHeader(key.tojstring(), table.get(key).tojstring())
+                    requestBuilder.addHeader(key.asString(), table.get(key).asString())
                 }
             }
             return client.newCall(
@@ -55,13 +57,13 @@ class okhttp : TwoArgFunction() {
             val requestBuilder = Request.Builder()
             args.secondArg().checktable().apply {
                 for (key in keys()) {
-                    builder.add(key.tojstring(), get(key).tojstring())
+                    builder.add(key.asString(), get(key).asString())
                 }
             }
-            args.argAt(3).takeIf { it.isNotNil() }?.let {
+            args.argAt(3).ifNotNil()?.let {
                 val table = it.checktable()
                 for (key in table.keys()) {
-                    requestBuilder.addHeader(key.tojstring(), table.get(key).tojstring())
+                    requestBuilder.addHeader(key.asString(), table.get(key).asString())
                 }
             }
             return client.newCall(
@@ -80,13 +82,13 @@ class okhttp : TwoArgFunction() {
             val requestBuilder = Request.Builder()
             args.secondArg().checktable().apply {
                 for (key in keys()) {
-                    builder.add(key.tojstring(), get(key).tojstring())
+                    builder.add(key.asString(), get(key).asString())
                 }
             }
-            args.argAt(3).takeIf { it.isNotNil() }?.let {
+            args.argAt(3).ifNotNil()?.let {
                 val table = it.checktable()
                 for (key in table.keys()) {
-                    requestBuilder.addHeader(key.tojstring(), table.get(key).tojstring())
+                    requestBuilder.addHeader(key.asString(), table.get(key).asString())
                 }
             }
             return client.newCall(
@@ -105,13 +107,13 @@ class okhttp : TwoArgFunction() {
             val requestBuilder = Request.Builder()
             args.secondArg().checktable().apply {
                 for (key in keys()) {
-                    builder.add(key.tojstring(), get(key).tojstring())
+                    builder.add(key.asString(), get(key).asString())
                 }
             }
-            args.argAt(3).takeIf { it.isNotNil() }?.let {
+            args.argAt(3).ifNotNil()?.let {
                 val table = it.checktable()
                 for (key in table.keys()) {
-                    requestBuilder.addHeader(key.tojstring(), table.get(key).tojstring())
+                    requestBuilder.addHeader(key.asString(), table.get(key).asString())
                 }
             }
             return client.newCall(
