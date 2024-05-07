@@ -92,7 +92,7 @@ class LuaLayout(private val realContext: Context) {
         return views[id]
     }
 
-    fun toint(s: String): Any? {
+    private fun toValue(s: String): Any? {
         if (s == "nil") return 0
         val len = s.length
 
@@ -140,17 +140,17 @@ class LuaLayout(private val realContext: Context) {
             return TypedValue.applyDimension(types.get(t), Integer.parseInt(n), dm);
         }
     }*/
-        return runCatching {
-            s.toLong()
-        }.getOrElse {
-            it.printStackTrace()
-            runCatching {
-                s.toDouble()
-            }.getOrElse {
-                it.printStackTrace()
-                s
-            }
+        try {
+            return s.toLong()
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
+        try {
+            return s.toDouble()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return s
     }
 
     @JvmOverloads
@@ -230,7 +230,7 @@ class LuaLayout(private val realContext: Context) {
                             }
 
                             "textSize" -> {
-                                view["setTextSize"].jcall(0, toint(`val`.asString()))
+                                view["setTextSize"].jcall(0, toValue(`val`.asString()))
                                 continue
                             }
 
@@ -478,7 +478,7 @@ class LuaLayout(private val realContext: Context) {
                             }
                         }
                         if (`val`.type() == LuaValue.TSTRING) {
-                            `val` = toint(`val`.asString()).toLuaValue()
+                            `val` = toValue(`val`.asString()).toLuaValue()
                         }
                         if (k.startsWith("layout")) {
                             if (rules.containsKey(k)) {
@@ -555,7 +555,7 @@ class LuaLayout(private val realContext: Context) {
                     } else {
                         sp = true
                     }
-                    mss[i] = toint(pt.asString()).toLuaValue()
+                    mss[i] = toValue(pt.asString()).toLuaValue()
                 }
                 if (sp) params["setMargins"]?.ifNotNil()?.invoke(mss.toVarargs())
             }.onFailure { it.printStackTrace() }
@@ -572,7 +572,7 @@ class LuaLayout(private val realContext: Context) {
                     } else {
                         sp = true
                     }
-                    pds[i] = toint(pt.asString()).toLuaValue()
+                    pds[i] = toValue(pt.asString()).toLuaValue()
                 }
                 if (sp) view["setPadding"].invoke(pds.toVarargs())
             }.onFailure {
