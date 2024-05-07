@@ -64,7 +64,6 @@ import org.luaj.android.task;
 import org.luaj.android.thread;
 import org.luaj.android.timer;
 import org.luaj.android.xTask;
-import org.luaj.lib.OneArgFunction;
 import org.luaj.lib.ResourceFinder;
 import org.luaj.lib.jse.JavaPackage;
 import org.luaj.lib.jse.JsePlatform;
@@ -105,7 +104,7 @@ public class LuaActivity extends AppCompatActivity
     private ArrayList<String> permissions;
     private boolean isSetViewed;
     private LuaDexLoader mLuaDexLoader;
-    private ArrayList<LuaGcable> mGc = new ArrayList<>();
+    private final ArrayList<LuaGcable> mGc = new ArrayList<>();
     private LuaBroadcastReceiver mReceiver;
     private String pageName = "main";
     private static final HashMap<String, LuaActivity> sLuaActivityMap = new HashMap<>();

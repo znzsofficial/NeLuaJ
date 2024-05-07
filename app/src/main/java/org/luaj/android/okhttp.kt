@@ -1,5 +1,10 @@
 package org.luaj.android
 
+import github.znzsofficial.argAt
+import github.znzsofficial.firstArg
+import github.znzsofficial.isNotNil
+import github.znzsofficial.secondArg
+import github.znzsofficial.toLuaValue
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -9,7 +14,6 @@ import org.luaj.LuaValue
 import org.luaj.Varargs
 import org.luaj.lib.TwoArgFunction
 import org.luaj.lib.VarArgFunction
-import org.luaj.lib.jse.CoerceJavaToLua
 
 
 class okhttp : TwoArgFunction() {
@@ -24,26 +28,24 @@ class okhttp : TwoArgFunction() {
             set("delete", delete())
         }
         env["okhttp"] = okhttp
-        if (!env["package"].isnil()) env["package"]["loaded"]["okhttp"] = okhttp
+        if (env["package"].isNotNil()) env["package"]["loaded"]["okhttp"] = okhttp
         return NIL
     }
 
     inner class get : VarArgFunction() {
         override fun invoke(args: Varargs): Varargs {
             val requestBuilder = Request.Builder()
-            args.arg(2).takeIf { !it.isnil() }?.let {
+            args.secondArg().takeIf { it.isNotNil() }?.let {
                 val table = it.checktable()
                 for (key in table.keys()) {
                     requestBuilder.addHeader(key.tojstring(), table.get(key).tojstring())
                 }
             }
-            return CoerceJavaToLua.coerce(
-                client.newCall(
-                    requestBuilder.url(
-                        args.arg1().checkjstring()
-                    ).build()
-                ).execute()
-            )
+            return client.newCall(
+                requestBuilder.url(
+                    args.firstArg().checkjstring()
+                ).build()
+            ).execute().toLuaValue()
         }
     }
 
@@ -51,26 +53,24 @@ class okhttp : TwoArgFunction() {
         override fun invoke(args: Varargs): Varargs {
             val builder = FormBody.Builder()
             val requestBuilder = Request.Builder()
-            args.arg(2).checktable().apply {
+            args.secondArg().checktable().apply {
                 for (key in keys()) {
                     builder.add(key.tojstring(), get(key).tojstring())
                 }
             }
-            args.arg(3).takeIf { !it.isnil() }?.let {
+            args.argAt(3).takeIf { it.isNotNil() }?.let {
                 val table = it.checktable()
                 for (key in table.keys()) {
                     requestBuilder.addHeader(key.tojstring(), table.get(key).tojstring())
                 }
             }
-            return CoerceJavaToLua.coerce(
-                client.newCall(
-                    requestBuilder.url(
-                        args.arg1().checkjstring()
-                    ).post(
-                        builder.build()
-                    ).build()
-                ).execute()
-            )
+            return client.newCall(
+                requestBuilder.url(
+                    args.firstArg().checkjstring()
+                ).post(
+                    builder.build()
+                ).build()
+            ).execute().toLuaValue()
         }
     }
 
@@ -78,26 +78,24 @@ class okhttp : TwoArgFunction() {
         override fun invoke(args: Varargs): Varargs {
             val builder = FormBody.Builder()
             val requestBuilder = Request.Builder()
-            args.arg(2).checktable().apply {
+            args.secondArg().checktable().apply {
                 for (key in keys()) {
                     builder.add(key.tojstring(), get(key).tojstring())
                 }
             }
-            args.arg(3).takeIf { !it.isnil() }?.let {
+            args.argAt(3).takeIf { it.isNotNil() }?.let {
                 val table = it.checktable()
                 for (key in table.keys()) {
                     requestBuilder.addHeader(key.tojstring(), table.get(key).tojstring())
                 }
             }
-            return CoerceJavaToLua.coerce(
-                client.newCall(
-                    requestBuilder.url(
-                        args.arg1().checkjstring()
-                    ).delete(
-                        builder.build()
-                    ).build()
-                ).execute()
-            )
+            return client.newCall(
+                requestBuilder.url(
+                    args.firstArg().checkjstring()
+                ).delete(
+                    builder.build()
+                ).build()
+            ).execute().toLuaValue()
         }
     }
 
@@ -105,26 +103,24 @@ class okhttp : TwoArgFunction() {
         override fun invoke(args: Varargs): Varargs {
             val builder = FormBody.Builder()
             val requestBuilder = Request.Builder()
-            args.arg(2).checktable().apply {
+            args.secondArg().checktable().apply {
                 for (key in keys()) {
                     builder.add(key.tojstring(), get(key).tojstring())
                 }
             }
-            args.arg(3).takeIf { !it.isnil() }?.let {
+            args.argAt(3).takeIf { it.isNotNil() }?.let {
                 val table = it.checktable()
                 for (key in table.keys()) {
                     requestBuilder.addHeader(key.tojstring(), table.get(key).tojstring())
                 }
             }
-            return CoerceJavaToLua.coerce(
-                client.newCall(
-                    requestBuilder.url(
-                        args.arg1().checkjstring()
-                    ).put(
-                        builder.build()
-                    ).build()
-                ).execute()
-            )
+            return client.newCall(
+                requestBuilder.url(
+                    args.firstArg().checkjstring()
+                ).put(
+                    builder.build()
+                ).build()
+            ).execute().toLuaValue()
         }
     }
 }

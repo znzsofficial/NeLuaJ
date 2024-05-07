@@ -27,15 +27,23 @@ import com.google.android.material.behavior.HideBottomViewOnScrollBehavior
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.sidesheet.SideSheetBehavior
 import github.daisukiKaffuChino.LuaPagerAdapter
+import github.znzsofficial.asString
+import github.znzsofficial.firstArg
+import github.znzsofficial.isNotNil
+import github.znzsofficial.secondArg
+import github.znzsofficial.toLuaValue
 import org.luaj.LuaError
 import org.luaj.LuaTable
 import org.luaj.LuaValue
 import org.luaj.LuaValue.NIL
 import org.luaj.Varargs
 import org.luaj.lib.VarArgFunction
-import org.luaj.lib.jse.CoerceJavaToLua
 import org.luaj.lib.jse.CoerceLuaToJava
 import java.util.Locale
+
+//inline fun <T : View> T.onClick(crossinline onClick: (v: T) -> Unit) {
+//    setOnClickListener { onClick(it as T) }
+//}
 
 /**
  * Created by nirenr on 2019/11/18.
@@ -43,7 +51,7 @@ import java.util.Locale
 class LuaLayout(private val realContext: Context) {
     private val dm: DisplayMetrics = realContext.resources.displayMetrics
     private val views = HashMap<String, LuaValue>()
-    private val luaContext: LuaValue = CoerceJavaToLua.coerce(realContext)
+    private val luaContext: LuaValue = realContext.toLuaValue()
     private val imageLoader: ImageLoader = ImageLoader.Builder(realContext).components(
         ComponentRegistry.Builder().apply {
             if (Build.VERSION.SDK_INT >= 28) {
@@ -71,7 +79,7 @@ class LuaLayout(private val realContext: Context) {
     }
 
     fun get(key: LuaValue): LuaValue? {
-        return get(key.tojstring())
+        return get(key.asString())
     }
 
     fun get(key: String): LuaValue? {
@@ -130,24 +138,23 @@ class LuaLayout(private val realContext: Context) {
             return TypedValue.applyDimension(types.get(t), Integer.parseInt(n), dm);
         }
     }*/
-        try {
-            return s.toLong()
-        } catch (e: Exception) {
-            e.printStackTrace()
+        return runCatching {
+            s.toLong()
+        }.getOrElse {
+            it.printStackTrace()
+            runCatching {
+                s.toDouble()
+            }.getOrElse {
+                it.printStackTrace()
+                s
+            }
         }
-        try {
-            return s.toDouble()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-        return s
     }
 
     @JvmOverloads
     fun load(
-        layout: LuaValue, env: LuaTable = LuaTable(), params: LuaValue = CoerceJavaToLua.coerce(
-            ViewGroup.LayoutParams::class.java
-        )
+        layout: LuaValue, env: LuaTable = LuaTable(), params: LuaValue =
+            ViewGroup.LayoutParams::class.java.toLuaValue()
     ): LuaValue {
         var params = params
         val cls = layout[1]
@@ -164,17 +171,12 @@ class LuaLayout(private val realContext: Context) {
                     Class::class.java
                 )
             )
-        val style = layout["style"]
-        val view = if (style !== NIL) {
-            cls.call(
-                CoerceJavaToLua.coerce(
-                    ContextThemeWrapper(realContext, style.toint())
-                ),
+        val view = layout["style"].run {
+            if (isNotNil()) cls.call(
+                ContextThemeWrapper(realContext, toint()).toLuaValue(),
                 NIL,
-                style
-            )
-        } else {
-            cls.call(luaContext)
+                this
+            ) else cls.call(luaContext)
         }
         params = params.call(W, W)
         try {
@@ -182,12 +184,14 @@ class LuaLayout(private val realContext: Context) {
             var next: Varargs
             while (!layout.next(key).also { next = it }.isnil(1)) {
                 try {
-                    key = next.arg1()
+                    key = next.firstArg()
                     if (key.isint()) {
                         if (key.toint() > 1) {
-                            var v = next.arg(2)
+                            var v = next.secondArg()
                             if (v.isstring()) v =
-                                luaContext.touserdata(LuaContext::class.java).luaState.p.y.call(v)
+                                luaContext.touserdata(LuaContext::class.java).luaState.p.y.call(
+                                    v
+                                )
                             // v =
                             // mContext.touserdata(LuaContext.class).getLuaState().package_.require.call(v);
                             if (isAdapterView) {
@@ -204,15 +208,15 @@ class LuaLayout(private val realContext: Context) {
                             }
                         }
                     } else if (key.isstring()) {
-                        var k = key.tojstring()
-                        var `val` = next.arg(2)
+                        var k = key.asString()
+                        var `val` = next.secondArg()
 
                         when (k) {
                             "padding" -> continue
                             "id" -> {
                                 view["id"] = idx
-                                views[`val`.tojstring()] = view
-                                ids[`val`.tojstring()] = idx
+                                views[`val`.asString()] = view
+                                ids[`val`.asString()] = idx
                                 env[`val`] = view
                                 idx++
                                 continue
@@ -224,35 +228,41 @@ class LuaLayout(private val realContext: Context) {
                             }
 
                             "textSize" -> {
-                                view["setTextSize"].jcall(0, toint(`val`.tojstring()))
+                                view["setTextSize"].jcall(0, toint(`val`.asString()))
                                 continue
                             }
 
                             "textStyle" -> {
-                                view["setTypeface"].jcall(
-                                    when (`val`.tojstring()) {
-                                        "bold" ->
-                                            Typeface.defaultFromStyle(Typeface.BOLD)
+                                when (`val`.asString()) {
+                                    "bold" ->
+                                        view["setTypeface"].jcall(
+                                            Typeface.defaultFromStyle(
+                                                Typeface.BOLD
+                                            )
+                                        )
 
-                                        "normal" ->
-                                            Typeface.defaultFromStyle(Typeface.NORMAL)
+                                    "normal" ->
+                                        view["setTypeface"]
+                                            .jcall(Typeface.defaultFromStyle(Typeface.NORMAL))
 
-                                        "italic" ->
+                                    "italic" ->
+                                        view["setTypeface"].jcall(
                                             Typeface.defaultFromStyle(Typeface.ITALIC)
+                                        )
 
-                                        "italic|bold", "bold|italic" ->
+                                    "italic|bold", "bold|italic" ->
+                                        view["setTypeface"].jcall(
                                             Typeface.defaultFromStyle(Typeface.BOLD_ITALIC)
+                                        )
 
-                                        else -> {}
-                                    }
-                                )
-
+                                    else -> {}
+                                }
                                 continue
                             }
 
                             "scaleType" -> {
                                 view["setScaleType"]
-                                    .jcall(scaleTypeValues[scaleType[`val`.tojstring()]!!])
+                                    .jcall(scaleTypeValues[scaleType[`val`.asString()]!!])
                                 continue
                             }
 
@@ -260,7 +270,7 @@ class LuaLayout(private val realContext: Context) {
                                 view["setEllipsize"]
                                     .jcall(
                                         TextUtils.TruncateAt.valueOf(
-                                            `val`.tojstring().uppercase(
+                                            `val`.asString().uppercase(
                                                 Locale.getDefault()
                                             )
                                         )
@@ -275,7 +285,7 @@ class LuaLayout(private val realContext: Context) {
 
                             "items" -> {
                                 val adapter = view["adapter"]
-                                if (!adapter.isnil()) {
+                                if (adapter.isNotNil()) {
                                     adapter["addAll"].call(`val`)
                                 } else {
                                     view["setAdapter"]
@@ -305,10 +315,9 @@ class LuaLayout(private val realContext: Context) {
 
                             "pages" -> {
                                 val ts = `val`.checktable()
-                                val len = ts.length()
                                 val list = ArrayList<View>()
                                 var i = 0
-                                while (i < len) {
+                                while (i < ts.length()) {
                                     val v = ts[i + 1]
                                     if (v.isuserdata()) {
                                         list.add(v.touserdata(View::class.java))
@@ -338,13 +347,11 @@ class LuaLayout(private val realContext: Context) {
                                 val tab = `val`.checktable()
                                 val views = tab[1].checktable()
                                 val titles = tab[2].checktable()
-                                val viewLen = views.length()
-                                val titleLen = titles.length()
                                 val viewList = ArrayList<View>()
                                 val titleList = ArrayList<String>()
                                 run {
                                     var i = 0
-                                    while (i < viewLen) {
+                                    while (i < views.length()) {
                                         val v = views[i + 1]
                                         if (v.isuserdata()) {
                                             viewList.add(v.touserdata(View::class.java))
@@ -368,7 +375,7 @@ class LuaLayout(private val realContext: Context) {
                                     }
                                 }
                                 var i = 0
-                                while (i < titleLen) {
+                                while (i < titles.length()) {
                                     val v = titles[i + 1]
                                     titleList.add(v.touserdata(String::class.java))
                                     i++
@@ -412,7 +419,7 @@ class LuaLayout(private val realContext: Context) {
                                         //                      }.execute();
                                         imageLoader.enqueue(
                                             ImageRequest.Builder(realContext)
-                                                .data(`val`.tojstring()).target {
+                                                .data(`val`.asString()).target {
                                                     view.jset("ImageDrawable", it)
                                                 }.build()
                                         )
@@ -439,7 +446,7 @@ class LuaLayout(private val realContext: Context) {
                                 } else if (`val`.isnumber()) {
                                     view.jset("backgroundColor", `val`.toint())
                                 } else if (`val`.isstring()) {
-                                    val str = `val`.tojstring()
+                                    val str = `val`.asString()
                                     if (str.startsWith("#")) {
                                         val clr = parseColor(str)
                                         view.jset("backgroundColor", clr)
@@ -469,20 +476,19 @@ class LuaLayout(private val realContext: Context) {
                             }
                         }
                         if (`val`.type() == LuaValue.TSTRING) {
-                            val s = `val`.tojstring()
-                            `val` = CoerceJavaToLua.coerce(toint(s))
+                            `val` = toint(`val`.asString()).toLuaValue()
                         }
                         if (k.startsWith("layout")) {
                             if (rules.containsKey(k)) {
                                 if (`val`.isboolean() && `val`.toboolean()) params["addRule"].jcall(
                                     rules[k]
                                 )
-                                else if (`val`.tojstring() == "true") params["addRule"].jcall(
+                                else if (`val`.asString() == "true") params["addRule"].jcall(
                                     rules[k]
                                 )
-                                else params["addRule"].jcall(rules[k], ids[`val`.tojstring()])
+                                else params["addRule"].jcall(rules[k], ids[`val`.asString()])
                             } else if (k == "layout_behavior") {
-                                when (`val`.tojstring()) {
+                                when (`val`.asString()) {
                                     "@string/appbar_scrolling_view_behavior" -> {
                                         params["setBehavior"].jcall(AppBarLayout.ScrollingViewBehavior())
                                     }
@@ -496,7 +502,9 @@ class LuaLayout(private val realContext: Context) {
                                     }
 
                                     "@string/hide_bottom_view_on_scroll_behavior" -> {
-                                        params["setBehavior"].jcall(HideBottomViewOnScrollBehavior<View>())
+                                        params["setBehavior"].jcall(
+                                            HideBottomViewOnScrollBehavior<View>()
+                                        )
                                     }
 
                                     else -> {
@@ -504,7 +512,7 @@ class LuaLayout(private val realContext: Context) {
                                     }
                                 }
                             } else if (k == "layout_anchor") {
-                                params["setAnchorId"].jcall(ids[`val`.tojstring()])
+                                params["setAnchorId"].jcall(ids[`val`.asString()])
                             } else if (k == "layout_collapseParallaxMultiplier") {
                                 params["setParallaxMultiplier"].jcall(`val`)
                             } else if (k == "layout_marginEnd") {
@@ -526,12 +534,15 @@ class LuaLayout(private val realContext: Context) {
                 } catch (e: Exception) {
                     luaContext
                         .touserdata(LuaContext::class.java)
-                        .sendError("loadlayout " + view + ": " + next.arg1() + "=" + next.arg(2), e)
+                        .sendError(
+                            "loadlayout " + view + ": " + next.firstArg() + "=" + next.secondArg(),
+                            e
+                        )
                     e.printStackTrace()
                 }
             }
 
-            try {
+            runCatching {
                 val mss = arrayOfNulls<LuaValue>(4)
                 var sp = false
                 for (i in ms.indices) {
@@ -542,18 +553,14 @@ class LuaLayout(private val realContext: Context) {
                     } else {
                         sp = true
                     }
-                    mss[i] = CoerceJavaToLua.coerce(toint(pt.tojstring()))
+                    mss[i] = toint(pt.asString()).toLuaValue()
                 }
-                if (sp) {
-                    val setMargins = params["setMargins"]
-                    if (!setMargins.isnil()) setMargins.invoke(LuaValue.varargsOf(mss))
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+                if (sp) params["setMargins"]?.takeIf { !it.isnil() }
+                    ?.invoke(LuaValue.varargsOf(mss))
+            }.onFailure { it.printStackTrace() }
 
             view["LayoutParams"] = params
-            try {
+            runCatching {
                 val pds = arrayOfNulls<LuaValue>(4)
                 var sp = false
                 for (i in ps.indices) {
@@ -564,15 +571,14 @@ class LuaLayout(private val realContext: Context) {
                     } else {
                         sp = true
                     }
-                    pds[i] = CoerceJavaToLua.coerce(toint(pt.tojstring()))
+                    pds[i] = toint(pt.asString()).toLuaValue()
                 }
                 if (sp) view["setPadding"].invoke(LuaValue.varargsOf(pds))
-            } catch (e: Exception) {
+            }.onFailure {
                 luaContext
                     .touserdata(LuaContext::class.java)
-                    .sendError("loadlayout " + layout.checktable().dump(), e)
-
-                e.printStackTrace()
+                    .sendError("loadlayout " + layout.checktable().dump(), it as Exception)
+                it.printStackTrace()
             }
         } catch (e: Exception) {
             luaContext.touserdata(LuaContext::class.java)
@@ -799,7 +805,7 @@ class LuaLayout(private val realContext: Context) {
         private val ms = arrayOf(
             "layout_marginLeft", "layout_marginTop", "layout_marginRight", "layout_marginBottom"
         )
-        private val W: LuaValue = CoerceJavaToLua.coerce(ViewGroup.LayoutParams.WRAP_CONTENT)
+        private val W: LuaValue = ViewGroup.LayoutParams.WRAP_CONTENT.toLuaValue()
 
         fun parseColor(colorString: String): Int {
             if (colorString[0] == '#') {

@@ -12,10 +12,10 @@ object CompileUtil {
     private val mGlobals = JsePlatform.standardGlobals()
 
     private fun getByteArray(path: String?): ByteArray {
-        val checkfunction = mGlobals.loadfile(path).checkfunction(1) as LuaClosure
+        val closure = mGlobals.loadfile(path).checkfunction(1) as LuaClosure
         val baos = ByteArrayOutputStream()
         return try {
-            DumpState.dump(checkfunction.c, baos, true)
+            DumpState.dump(closure.c, baos, true)
             baos.toByteArray()
         } catch (e: Exception) {
             throw LuaError(e)

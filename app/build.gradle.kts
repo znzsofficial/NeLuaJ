@@ -1,7 +1,6 @@
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
-@Suppress("DSL_SCOPE_VIOLATION") // TODO: Remove once KTIJ-19369 is fixed
 plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.kotlinAndroid)
@@ -65,7 +64,7 @@ android {
 }
 
 dependencies {
-    implementation("org.jetbrains.kotlin:kotlin-reflect:1.9.23")
+    implementation(libs.kotlin.reflect)
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar"))))
     implementation(libs.core.ktx)
     implementation(libs.appcompat)
@@ -75,62 +74,62 @@ dependencies {
     androidTestImplementation(libs.espresso.core)
 
     //AndroidX
-    implementation("androidx.activity:activity:1.9.0")
-    implementation("androidx.annotation:annotation:1.7.1")
-    implementation("androidx.collection:collection:1.4.0")
-    implementation("androidx.constraintlayout:constraintlayout:2.2.0-alpha13")
-    implementation("androidx.coordinatorlayout:coordinatorlayout:1.3.0-alpha02")
-    implementation("androidx.customview:customview:1.2.0-alpha02")
-    implementation("androidx.documentfile:documentfile:1.1.0-alpha01")
-    implementation("androidx.drawerlayout:drawerlayout:1.2.0")
-    implementation("androidx.draganddrop:draganddrop:1.0.0")
-    implementation("androidx.dynamicanimation:dynamicanimation:1.1.0-alpha03")
-    implementation("androidx.emoji2:emoji2:1.4.0")
-    implementation("androidx.fragment:fragment:1.7.0-rc01")
-    implementation("androidx.gridlayout:gridlayout:1.1.0-beta01")
-    implementation("androidx.legacy:legacy-support-core-ui:1.0.0")
-    implementation("androidx.legacy:legacy-support-core-utils:1.0.0")
-    implementation("androidx.lifecycle:lifecycle-common:2.7.0")
-    implementation("androidx.lifecycle:lifecycle-process:2.7.0")
-    implementation("androidx.lifecycle:lifecycle-runtime:2.7.0")
-    implementation("androidx.localbroadcastmanager:localbroadcastmanager:1.1.0")
-    implementation("androidx.navigation:navigation-common:2.7.7")
-    implementation("androidx.navigation:navigation-fragment:2.7.7")
-    implementation("androidx.navigation:navigation-runtime:2.7.7")
-    implementation("androidx.navigation:navigation-ui:2.7.7")
-    implementation("androidx.palette:palette:1.0.0")
-    implementation("androidx.preference:preference:1.2.1")
-    implementation("androidx.startup:startup-runtime:1.2.0-alpha02")
-    implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.2.0-alpha01")
-    implementation("androidx.slidingpanelayout:slidingpanelayout:1.2.0")
-    implementation("androidx.recyclerview:recyclerview:1.3.2")
-    implementation("androidx.transition:transition:1.4.1")
-    implementation("androidx.viewpager:viewpager:1.1.0-alpha01")
-    implementation("androidx.viewpager2:viewpager2:1.1.0-beta02")
-    implementation("androidx.window:window:1.2.0")
+    implementation(libs.androidx.activity)
+    implementation(libs.androidx.annotation)
+    implementation(libs.androidx.collection)
+    implementation(libs.androidx.constraintlayout)
+    implementation(libs.androidx.coordinatorlayout)
+    implementation(libs.androidx.customview)
+    implementation(libs.androidx.documentfile)
+    implementation(libs.androidx.drawerlayout)
+    implementation(libs.androidx.draganddrop)
+    implementation(libs.androidx.dynamicanimation)
+    implementation(libs.androidx.emoji2)
+    implementation(libs.androidx.fragment)
+    implementation(libs.androidx.gridlayout)
+    implementation(libs.androidx.legacy.support.core.ui)
+    implementation(libs.androidx.legacy.support.core.utils)
+    implementation(libs.androidx.lifecycle.common)
+    implementation(libs.androidx.lifecycle.process)
+    implementation(libs.androidx.lifecycle.runtime)
+    implementation(libs.androidx.localbroadcastmanager)
+    implementation(libs.androidx.navigation.common)
+    implementation(libs.androidx.navigation.fragment)
+    implementation(libs.androidx.navigation.runtime)
+    implementation(libs.androidx.navigation.ui)
+    implementation(libs.androidx.palette)
+    implementation(libs.androidx.preference)
+    implementation(libs.androidx.startup.runtime)
+    implementation(libs.androidx.swiperefreshlayout)
+    implementation(libs.androidx.slidingpanelayout)
+    implementation(libs.androidx.recyclerview)
+    implementation(libs.androidx.transition)
+    implementation(libs.androidx.viewpager)
+    implementation(libs.androidx.viewpager2)
+    implementation(libs.androidx.window)
 
     //Material
-    implementation("com.hendraanggrian.material:collapsingtoolbarlayout-subtitle:1.5.0")
+    implementation(libs.collapsingtoolbarlayout.subtitle)
 
     //Zip4J
-    implementation("net.lingala.zip4j:zip4j:2.11.5")
+    implementation(libs.zip4j)
 
     //drawer
-    implementation("com.drakeet.drawer:drawer:1.0.3")
+    implementation(libs.drawer)
 
     //Okhttp
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation(libs.okhttp)
 
     //lottie
-    implementation("com.airbnb.android:lottie:6.4.0")
+    implementation(libs.lottie)
 
     //recycler anime
-    implementation("jp.wasabeef:recyclerview-animators:4.0.2")
+    implementation(libs.recyclerview.animators)
 
     //zhanghai
-    implementation("me.zhanghai.android.fastscroll:library:1.3.0")
+    implementation(libs.library)
 
-    implementation("io.coil-kt:coil:2.6.0")
-    implementation("io.coil-kt:coil-svg:2.6.0")
-    implementation("io.coil-kt:coil-gif:2.6.0")
+    implementation(libs.coil)
+    implementation(libs.coil.svg)
+    implementation(libs.coil.gif)
 }
