@@ -3,7 +3,9 @@ package org.luaj.android
 import androidx.lifecycle.lifecycleScope
 import com.androlua.LuaActivity
 import com.androlua.LuaGcable
+import github.znzsofficial.asString
 import github.znzsofficial.firstArg
+import github.znzsofficial.ifIsFunction
 import github.znzsofficial.toLuaValue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -22,19 +24,19 @@ class xTask(private val mContext: LuaActivity) : VarArgFunction(), LuaGcable {
     override fun invoke(args: Varargs): Varargs? =
         args.firstArg().checktable().let { table ->
             mContext.lifecycleScope.launch(
-                when (table["dispatcher"].tojstring()) {
+                when (table["dispatcher"].asString()) {
                     "io" -> Dispatchers.IO
                     "unconfined" -> Dispatchers.Unconfined
                     else -> Dispatchers.Default
                 }
             ) {
                 try {
-                    table["task"].takeIf { it.isfunction() }?.invoke()
+                    table["task"].ifIsFunction()?.invoke()
                 } catch (e: LuaError) {
                     mContext.sendError("xTask: Background", e)
                     LuaString.valueOf(e.message)
                 }.let { result ->
-                    table["callback"].takeIf { it.isfunction() }?.apply {
+                    table["callback"].ifIsFunction()?.apply {
                         runCatching {
                             withContext(Dispatchers.Main) { invoke(result) }
                         }.onFailure {

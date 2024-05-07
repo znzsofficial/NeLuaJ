@@ -10,4 +10,7 @@ inline fun Varargs.argAt(index: Int): LuaValue = this.arg(index)
 inline fun Varargs.asString(): String = this.tojstring()
 inline fun LuaValue.isNotNil(): Boolean = !this.isnil()
 
+inline fun LuaValue.ifNotNil(): LuaValue? = takeIf { it.isNotNil() }
+inline fun LuaValue.ifIsFunction(): LuaValue? = takeIf { it.isfunction() }
+
 inline fun <T> T.toLuaValue(): LuaValue = CoerceJavaToLua.coerce(this)

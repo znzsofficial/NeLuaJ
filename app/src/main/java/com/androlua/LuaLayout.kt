@@ -29,6 +29,7 @@ import com.google.android.material.sidesheet.SideSheetBehavior
 import github.daisukiKaffuChino.LuaPagerAdapter
 import github.znzsofficial.asString
 import github.znzsofficial.firstArg
+import github.znzsofficial.ifNotNil
 import github.znzsofficial.isNotNil
 import github.znzsofficial.secondArg
 import github.znzsofficial.toLuaValue
@@ -555,8 +556,7 @@ class LuaLayout(private val realContext: Context) {
                     }
                     mss[i] = toint(pt.asString()).toLuaValue()
                 }
-                if (sp) params["setMargins"]?.takeIf { !it.isnil() }
-                    ?.invoke(LuaValue.varargsOf(mss))
+                if (sp) params["setMargins"]?.ifNotNil()?.invoke(LuaValue.varargsOf(mss))
             }.onFailure { it.printStackTrace() }
 
             view["LayoutParams"] = params
