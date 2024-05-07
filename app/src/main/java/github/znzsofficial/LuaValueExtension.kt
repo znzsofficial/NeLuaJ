@@ -15,3 +15,4 @@ inline fun LuaValue.ifIsFunction(): LuaValue? = takeIf { it.isfunction() }
 
 inline fun <T> T.toLuaValue(): LuaValue = CoerceJavaToLua.coerce(this)
 inline fun <reified T> Array<out T>.toVarargs(): Varargs = LuaValue.varargsOf(this)
+inline fun <reified T> ArrayList<out T>.toVarargs(): Varargs = LuaValue.varargsOf(this)
