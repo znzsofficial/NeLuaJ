@@ -6,7 +6,7 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.androlua.LuaContext
-import org.luaj.lib.jse.CoerceJavaToLua
+import github.znzsofficial.toLuaValue
 
 open class RecyclerListAdapter : ListAdapter<Any, LuaCustRecyclerHolder?> {
     open lateinit var adapterCreator: Creator
@@ -74,15 +74,15 @@ open class RecyclerListAdapter : ListAdapter<Any, LuaCustRecyclerHolder?> {
         DiffUtil.ItemCallback<Any>() {
         override fun areItemsTheSame(oldItem: Any, newItem: Any): Boolean {
             return adapterCreator.areItemsTheSame(
-                CoerceJavaToLua.coerce(oldItem),
-                CoerceJavaToLua.coerce(newItem)
+                oldItem.toLuaValue(),
+                newItem.toLuaValue()
             )
         }
 
         override fun areContentsTheSame(oldItem: Any, newItem: Any): Boolean {
             return adapterCreator.areContentsTheSame(
-                CoerceJavaToLua.coerce(oldItem),
-                CoerceJavaToLua.coerce(newItem)
+                oldItem.toLuaValue(),
+                newItem.toLuaValue()
             )
         }
     }
