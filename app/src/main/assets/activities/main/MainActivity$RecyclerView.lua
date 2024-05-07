@@ -218,7 +218,9 @@ local getList = function()
 
   local DirList = {}
   local _FileList = {}
-  local fileArray = File(path).list()
+  local file = File(path)
+  if not file.canRead() return end
+  local fileArray = file.list()
 
   for _, v : (fileArray) do
     local v = tostring(v)

@@ -1,12 +1,11 @@
 package github.znzsofficial.adapter
 
-import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
 import com.androlua.LuaContext
 
 open class LuaCustRecyclerAdapter : RecyclerView.Adapter<LuaCustRecyclerHolder> {
-    open val adapterCreator: Creator
+    open lateinit var adapterCreator: Creator
     var mContext: LuaContext?
 
     constructor(creator: Creator) {

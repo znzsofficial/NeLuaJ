@@ -3,6 +3,8 @@ package org.luaj.android
 import androidx.lifecycle.lifecycleScope
 import com.androlua.LuaActivity
 import com.androlua.LuaGcable
+import github.znzsofficial.firstArg
+import github.znzsofficial.toLuaValue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -11,7 +13,6 @@ import org.luaj.LuaString
 import org.luaj.LuaValue
 import org.luaj.Varargs
 import org.luaj.lib.VarArgFunction
-import org.luaj.lib.jse.CoerceJavaToLua
 
 
 class xTask(private val mContext: LuaActivity) : VarArgFunction(), LuaGcable {
@@ -19,7 +20,7 @@ class xTask(private val mContext: LuaActivity) : VarArgFunction(), LuaGcable {
     private var coroutine: LuaValue? = null
 
     override fun invoke(args: Varargs): Varargs? =
-        args.arg1().checktable().let { table ->
+        args.firstArg().checktable().let { table ->
             mContext.lifecycleScope.launch(
                 when (table["dispatcher"].tojstring()) {
                     "io" -> Dispatchers.IO
@@ -42,7 +43,7 @@ class xTask(private val mContext: LuaActivity) : VarArgFunction(), LuaGcable {
                     }
                 }
                 // 先把 coroutine 存起来，再用 let 返回
-            }.also { coroutine = CoerceJavaToLua.coerce(it) }.let { coroutine }
+            }.also { coroutine = it.toLuaValue() }.let { coroutine }
         }
 
 
