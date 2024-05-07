@@ -33,6 +33,7 @@ import github.znzsofficial.ifNotNil
 import github.znzsofficial.isNotNil
 import github.znzsofficial.secondArg
 import github.znzsofficial.toLuaValue
+import github.znzsofficial.toVarargs
 import org.luaj.LuaError
 import org.luaj.LuaTable
 import org.luaj.LuaValue
@@ -556,7 +557,7 @@ class LuaLayout(private val realContext: Context) {
                     }
                     mss[i] = toint(pt.asString()).toLuaValue()
                 }
-                if (sp) params["setMargins"]?.ifNotNil()?.invoke(LuaValue.varargsOf(mss))
+                if (sp) params["setMargins"]?.ifNotNil()?.invoke(mss.toVarargs())
             }.onFailure { it.printStackTrace() }
 
             view["LayoutParams"] = params
@@ -573,7 +574,7 @@ class LuaLayout(private val realContext: Context) {
                     }
                     pds[i] = toint(pt.asString()).toLuaValue()
                 }
-                if (sp) view["setPadding"].invoke(LuaValue.varargsOf(pds))
+                if (sp) view["setPadding"].invoke(pds.toVarargs())
             }.onFailure {
                 luaContext
                     .touserdata(LuaContext::class.java)
