@@ -3,6 +3,7 @@ package github.znzsofficial
 import org.luaj.LuaValue
 import org.luaj.Varargs
 import org.luaj.lib.jse.CoerceJavaToLua
+import kotlin.reflect.KClass
 
 inline fun Varargs.firstArg(): LuaValue = this.arg1()
 inline fun Varargs.secondArg(): LuaValue = this.arg(2)
@@ -14,5 +15,7 @@ inline fun LuaValue.ifNotNil(): LuaValue? = takeIf { it.isNotNil() }
 inline fun LuaValue.ifIsFunction(): LuaValue? = takeIf { it.isfunction() }
 
 inline fun <T> T.toLuaValue(): LuaValue = CoerceJavaToLua.coerce(this)
+
+//inline fun <reified T : Any> KClass<T>.toLuaClass(): LuaValue = CoerceJavaToLua.coerce(this.java)
 inline fun <reified T> Array<T>.toVarargs(): Varargs = LuaValue.varargsOf(this)
 inline fun <reified T> ArrayList<T>.toVarargs(): Varargs = LuaValue.varargsOf(this)
