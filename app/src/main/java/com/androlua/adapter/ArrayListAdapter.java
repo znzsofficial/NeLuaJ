@@ -312,9 +312,9 @@ public class ArrayListAdapter<T> extends BaseAdapter implements Filterable {
   public void sort(Comparator<? super T> comparator) {
     synchronized (mLock) {
       if (mOriginalValues != null) {
-        Collections.sort(mOriginalValues, comparator);
+        mOriginalValues.sort(comparator);
       } else {
-        Collections.sort(mObjects, comparator);
+        mObjects.sort(comparator);
       }
     }
     if (mNotifyOnChange) notifyDataSetChanged();
@@ -410,7 +410,7 @@ public class ArrayListAdapter<T> extends BaseAdapter implements Filterable {
         text = (TextView) view;
       } else {
         //  Otherwise, find the TextView field within the layout
-        text = (TextView) view.findViewById(mFieldId);
+        text = view.findViewById(mFieldId);
       }
     } catch (ClassCastException e) {
       Log.e("ArrayAdapter", "You must supply a resource ID for a TextView");

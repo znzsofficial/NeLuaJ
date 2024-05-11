@@ -2,6 +2,7 @@
 package com.nwdxlgzs.rt;
 
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -28,7 +29,7 @@ public class Util {
 
     public static Map<String, String> readProguardConfig(File config) throws IOException {
         Map<String, String> clzMap = new HashMap<String, String>();
-        BufferedReader r = new BufferedReader(new InputStreamReader(new FileInputStream(config), "utf8"));
+        BufferedReader r = new BufferedReader(new InputStreamReader(new FileInputStream(config), StandardCharsets.UTF_8));
         try {
             for (String ln = r.readLine(); ln != null; ln = r.readLine()) {
                 if (ln.startsWith("#") || ln.startsWith(" ")) {

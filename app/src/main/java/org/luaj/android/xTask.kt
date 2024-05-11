@@ -3,10 +3,10 @@ package org.luaj.android
 import androidx.lifecycle.lifecycleScope
 import com.androlua.LuaActivity
 import com.androlua.LuaGcable
-import github.znzsofficial.asString
-import github.znzsofficial.firstArg
-import github.znzsofficial.ifIsFunction
-import github.znzsofficial.toLuaValue
+import com.nekolaksa.asString
+import com.nekolaksa.firstArg
+import com.nekolaksa.ifIsFunction
+import com.nekolaksa.toLuaValue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext

@@ -180,17 +180,14 @@ public class LuaAdapter extends BaseAdapter implements Filterable {
   public void notifyDataSetChanged() {
     // TODO: Implement this method
     super.notifyDataSetChanged();
-    if (updateing == false) {
+    if (!updateing) {
       updateing = true;
       new Handler()
           .postDelayed(
-              new Runnable() {
-                @Override
-                public void run() {
-                  // TODO: Implement this method
-                  updateing = false;
-                }
-              },
+                  () -> {
+                    // TODO: Implement this method
+                    updateing = false;
+                  },
               500);
     }
   }

@@ -1,12 +1,12 @@
 package org.luaj.android
 
-import github.znzsofficial.argAt
-import github.znzsofficial.asString
-import github.znzsofficial.firstArg
-import github.znzsofficial.ifNotNil
-import github.znzsofficial.isNotNil
-import github.znzsofficial.secondArg
-import github.znzsofficial.toLuaValue
+import com.nekolaksa.argAt
+import com.nekolaksa.asString
+import com.nekolaksa.firstArg
+import com.nekolaksa.ifNotNil
+import com.nekolaksa.isNotNil
+import com.nekolaksa.secondArg
+import com.nekolaksa.toLuaValue
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request

@@ -165,13 +165,10 @@ public class LuaMultiAdapter extends BaseAdapter {
       updateing = true;
       new Handler()
           .postDelayed(
-              new Runnable() {
-                @Override
-                public void run() {
-                  // TODO: Implement this method
-                  updateing = false;
-                }
-              },
+                  () -> {
+                    // TODO: Implement this method
+                    updateing = false;
+                  },
               500);
     }
   }

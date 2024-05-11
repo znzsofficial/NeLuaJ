@@ -6,13 +6,9 @@ import com.androlua.LuaActivity
 
 class LuaFragmentAdapter(context: LuaActivity, inter: Creator) :
     FragmentStateAdapter(context.supportFragmentManager, context.lifecycle) {
-    var creator: Creator
-    private val mContext: LuaActivity?
 
-    init {
-        mContext = context
-        creator = inter
-    }
+    var creator: Creator = inter
+    private val mContext: LuaActivity = context
 
     override fun createFragment(position: Int): Fragment {
         return try {
@@ -20,7 +16,7 @@ class LuaFragmentAdapter(context: LuaActivity, inter: Creator) :
             creator.createFragment(position)
         } catch (e: Exception) {
             e.printStackTrace()
-            mContext?.sendError("FragmentAdapter", e)
+            mContext.sendError("FragmentAdapter", e)
             Fragment()
         }
     }
@@ -31,7 +27,7 @@ class LuaFragmentAdapter(context: LuaActivity, inter: Creator) :
             creator.itemCount.toInt()
         } catch (e: Exception) {
             e.printStackTrace()
-            mContext?.sendError("FragmentAdapter", e)
+            mContext.sendError("FragmentAdapter", e)
             0
         }
     }

@@ -30,7 +30,7 @@ public class LuaPagerAdapter extends PagerAdapter {
     @Nullable
     @Override
     public CharSequence getPageTitle(int position) {
-        if (titles != null && titles.size() >= 0) {
+        if (titles != null) {
             return titles.get(position);
         } else {
             return "No Title";

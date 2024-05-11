@@ -195,9 +195,7 @@ public class LuaBuildUtil {
             File finalApk = new File(op.getAbsolutePath() + ".apk");
             if (mDlg != null) {
                 mContext.runOnUiThread(
-                        () -> {
-                            mDlg.setMessage("正在改名...");
-                        });
+                        () -> mDlg.setMessage("正在改名..."));
             }
             op.renameTo(finalApk);
             if (mDlg != null) {
