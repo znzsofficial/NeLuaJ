@@ -20,8 +20,8 @@ public class StringItems extends ArrayList<StringItem> {
         int flags = in.getInt();
         int stringDataOffset = in.getInt();
         int stylesOffset = in.getInt();
-        int offsets[] = new int[stringCount];
-        String strings[] = new String[stringCount];
+        int[] offsets = new int[stringCount];
+        String[] strings = new String[stringCount];
         for (int i = 0; i < stringCount; i++) {
             offsets[i] = in.getInt();
         }

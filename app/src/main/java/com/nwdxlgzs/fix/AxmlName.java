@@ -1238,10 +1238,10 @@ public enum AxmlName {
 	compileSdkVersionCodename(0x010104d2, "compileSdkVersionCodename"), 
 	;
 	
-	private int mResourceId;
-	private String mName;
+	private final int mResourceId;
+	private final String mName;
 	
-	private AxmlName(int resourceId, String name) {
+	AxmlName(int resourceId, String name) {
 		this.mResourceId = resourceId;
 		this.mName = name;
 	}

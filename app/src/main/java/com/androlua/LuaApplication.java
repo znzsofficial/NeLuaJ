@@ -203,10 +203,10 @@ public class LuaApplication extends Application implements LuaContext {
       e.printStackTrace();*/
         }
         try {
-            return new FileInputStream(new File(getLuaPath(name)));
+            return new FileInputStream(getLuaPath(name));
         } catch (Exception e) {
       /*
-      e.printStackTrace();*/
+      e.printStackTrace();*
         }
         try {
             return getAssets().open(name);

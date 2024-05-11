@@ -6,7 +6,7 @@ import android.content.Intent;
 
 public class LuaBroadcastReceiver extends BroadcastReceiver {
 
-  private OnReceiveListener mRlt;
+  private final OnReceiveListener mRlt;
 
   public LuaBroadcastReceiver(OnReceiveListener rlt) {
     mRlt = rlt;
@@ -18,6 +18,6 @@ public class LuaBroadcastReceiver extends BroadcastReceiver {
   }
 
   public interface OnReceiveListener {
-    public void onReceive(android.content.Context context, android.content.Intent intent);
+    void onReceive(android.content.Context context, android.content.Intent intent);
   }
 }

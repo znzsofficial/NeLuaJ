@@ -413,34 +413,32 @@ public class LuaActivity extends AppCompatActivity
     }
 
     public boolean checkAllPermissions() {
-        if (Build.VERSION.SDK_INT >= 23) {
-            if (checkCallingOrSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                    != PackageManager.PERMISSION_GRANTED) {
-                try {
-                    permissions = new ArrayList<>();
-                    PackageManager pm = getPackageManager();
-                    String[] ps2 =
-                            pm.getPackageInfo(getPackageName(), PackageManager.GET_PERMISSIONS)
-                                    .requestedPermissions;
-                    for (String p : ps2) {
-                        try {
-                            if ((pm.getPermissionInfo(p, 0).protectionLevel & 1) != 0)
-                                checkPermission(p);
-                        } catch (Exception e) {
+        if (checkCallingOrSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                != PackageManager.PERMISSION_GRANTED) {
+            try {
+                permissions = new ArrayList<>();
+                PackageManager pm = getPackageManager();
+                String[] ps2 =
+                        pm.getPackageInfo(getPackageName(), PackageManager.GET_PERMISSIONS)
+                                .requestedPermissions;
+                for (String p : ps2) {
+                    try {
+                        if ((pm.getPermissionInfo(p, 0).protectionLevel & 1) != 0)
+                            checkPermission(p);
+                    } catch (Exception e) {
 
-                            e.printStackTrace();
-                        }
+                        e.printStackTrace();
                     }
-                    if (!permissions.isEmpty()) {
-                        String[] ps = new String[permissions.size()];
-                        permissions.toArray(ps);
-                        requestPermissions(ps, 0);
-                        return false;
-                    }
-                } catch (Exception e) {
-
-                    e.printStackTrace();
                 }
+                if (!permissions.isEmpty()) {
+                    String[] ps = new String[permissions.size()];
+                    permissions.toArray(ps);
+                    requestPermissions(ps, 0);
+                    return false;
+                }
+            } catch (Exception e) {
+
+                e.printStackTrace();
             }
         }
         return true;

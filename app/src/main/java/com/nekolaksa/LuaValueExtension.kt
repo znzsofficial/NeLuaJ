@@ -1,4 +1,4 @@
-package github.znzsofficial
+package com.nekolaksa
 
 import org.luaj.LuaValue
 import org.luaj.Varargs
