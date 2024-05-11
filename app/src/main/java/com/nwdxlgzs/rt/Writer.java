@@ -12,34 +12,30 @@ import java.util.*;
 import static com.nwdxlgzs.rt.Parser.*;
 
 public class Writer extends Visitor {
-    static final Comparator<Attr> ATTR_CMP = new Comparator<Attr>() {
-
-        @Override
-        public int compare(Attr a, Attr b) {
-            int x = a.resourceId - b.resourceId;
+    static final Comparator<Attr> ATTR_CMP = (a, b) -> {
+        int x = a.resourceId - b.resourceId;
+        if (x == 0) {
+            x = a.name.data.compareTo(b.name.data);
             if (x == 0) {
-                x = a.name.data.compareTo(b.name.data);
-                if (x == 0) {
-                    boolean aNsIsnull = a.ns == null;
-                    boolean bNsIsnull = b.ns == null;
-                    if (aNsIsnull) {
-                        if (bNsIsnull) {
-                            x = 0;
-                        } else {
-                            x = -1;
-                        }
+                boolean aNsIsnull = a.ns == null;
+                boolean bNsIsnull = b.ns == null;
+                if (aNsIsnull) {
+                    if (bNsIsnull) {
+                        x = 0;
                     } else {
-                        if (bNsIsnull) {
-                            x = 1;
-                        } else {
-                            x = a.ns.data.compareTo(b.ns.data);
-                        }
+                        x = -1;
                     }
-
+                } else {
+                    if (bNsIsnull) {
+                        x = 1;
+                    } else {
+                        x = a.ns.data.compareTo(b.ns.data);
+                    }
                 }
+
             }
-            return x;
         }
+        return x;
     };
     protected List<NodeImpl> firsts = new ArrayList<NodeImpl>(3);
     private Map<String, Ns> nses = new HashMap<String, Ns>();
@@ -258,8 +254,7 @@ public class Writer extends Visitor {
             Attr a = new Attr(ns == null ? null : new StringItem(ns), new StringItem(name), resourceId);
             a.type = type;
 
-            if (value instanceof ValueWrapper) {
-                ValueWrapper valueWrapper = (ValueWrapper) value;
+            if (value instanceof ValueWrapper valueWrapper) {
                 if (valueWrapper.raw != null) {
                     a.raw = new StringItem(valueWrapper.raw);
                 }

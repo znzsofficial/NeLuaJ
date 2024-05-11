@@ -11,7 +11,6 @@ import android.widget.ListAdapter
 import android.widget.ListView
 import androidx.appcompat.app.AlertDialog
 import com.androlua.adapter.ArrayListAdapter
-import java.util.Arrays
 
 // import android.app.AlertDialog;
 /** Created by Administrator on 2017/02/04 0004.  */
@@ -208,7 +207,6 @@ class LuaDialog : AlertDialog, DialogInterface.OnClickListener {
   @Override
   public void dismiss()
   {
-      // TODO: Implement this method
       super.hide();
   }*/
 }

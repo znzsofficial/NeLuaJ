@@ -200,7 +200,7 @@ public class LuaService extends Service
             debug = env.get("debug_mode");
             if (debug.isboolean()) setDebug(debug.toboolean());
             LuaValue theme = env.get("theme");
-            if (theme.isint()) setTheme((int) theme.toint());
+            if (theme.isint()) setTheme(theme.toint());
             else if (theme.isstring())
                 setTheme(android.R.style.class.getField(theme.tojstring()).getInt(null));
         } catch (Exception e) {
@@ -246,7 +246,7 @@ public class LuaService extends Service
       e.printStackTrace();*/
         }
         try {
-            return new FileInputStream(new File(getLuaPath(name)));
+            return new FileInputStream(getLuaPath(name));
         } catch (Exception e) {
       /*if (BuildConfig.DEBUG)
       e.printStackTrace();*/

@@ -219,12 +219,10 @@ public class AxmlEditor {
                                   }
                                   return super.child(ns, name);
                                 }
-                                ;
                               };
                             }
                             return super.child(ns, name);
                           }
-                          ;
                         };
                       }
 
