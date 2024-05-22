@@ -4628,7 +4628,6 @@ return {
 "com.androlua.LuaAccessibilityService",
 "com.androlua.LuaActivity",
 "com.androlua.LuaActivityX",
-"com.androlua.LuaAppWidgetProvider",
 "com.androlua.LuaApplication",
 "com.androlua.LuaBitmap",
 "com.androlua.LuaBitmapDrawable",
