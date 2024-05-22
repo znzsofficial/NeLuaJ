@@ -41,6 +41,7 @@
         android:theme="@style/Theme.NeLuaJ.Material3"
         android:usesCleartextTraffic="true"
         tools:targetApi="tiramisu">
+
         <uses-library
             android:name="org.apache.http.legacy"
             android:required="false" />
@@ -64,6 +65,7 @@
             android:documentLaunchMode="intoExisting"
             android:excludeFromRecents="false"
             android:screenOrientation="fullSensor" />
+
         <activity
             android:name="com.androlua.SplashWelcome"
             android:configChanges="orientation|screenSize|keyboardHidden"
@@ -77,6 +79,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name="com.androlua.UncaughtExceptionActivity"
+            android:label="Crash" />
+
         <activity
             android:name="com.androlua.ImportProject"
             android:configChanges="orientation|screenSize|keyboardHidden"
@@ -146,7 +153,6 @@
 
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
-
                 <category android:name="android.accessibilityservice.category.FEEDBACK_AUDIBLE" />
                 <category android:name="android.accessibilityservice.category.FEEDBACK_HAPTIC" />
                 <category android:name="android.accessibilityservice.category.FEEDBACK_SPOKEN" />
@@ -165,19 +171,8 @@
         <provider
             android:name="androidx.startup.InitializationProvider"
             android:authorities="${applicationId}.androidx-startup"
-            android:exported="false"></provider>
-
-        <receiver
-            android:name="com.androlua.LuaAppWidgetProvider"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/app_widget_provider_info" />
-        </receiver>
+            android:exported="false">
+        </provider>
         <service
             android:name="com.androlua.LuaWallpaperService"
             android:exported="true"

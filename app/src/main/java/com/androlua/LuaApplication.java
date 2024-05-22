@@ -22,7 +22,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-import github.znzsofficial.CrashHandler;
 
 /**
  * Created by nirenr on 2019/12/13.
@@ -41,7 +40,7 @@ public class LuaApplication extends Application implements LuaContext {
         super.onCreate();
         instance = this;
         rmDir(Objects.requireNonNull(getExternalFilesDir("dexfiles")));
-        CrashHandler.getInstance(this).init();
+        UncaughtExceptionHandler.getInstance(this).init();
         DynamicColors.applyToActivitiesIfAvailable(this);
     }
 
@@ -176,19 +175,39 @@ public class LuaApplication extends Application implements LuaContext {
 
     @Override
     public boolean setSharedData(String key, Object value) {
-        SharedPreferences.Editor edit = PreferenceManager.getDefaultSharedPreferences(this).edit();
-        if (value == null) edit.remove(key);
-        else if (value instanceof String) edit.putString(key, value.toString());
-        else if (value instanceof Long) edit.putLong(key, (Long) value);
-        else if (value instanceof Integer) edit.putInt(key, (Integer) value);
-        else if (value instanceof Float) edit.putFloat(key, (Float) value);
-        else if (value instanceof LuaTable)
-            edit.putStringSet(key, new HashSet(((LuaTable) value).values()));
-        else if (value instanceof Set) edit.putStringSet(key, (Set<String>) value);
-        else if (value instanceof Boolean) edit.putBoolean(key, (Boolean) value);
-        else return false;
-        return edit.commit();
+        SharedPreferences.Editor editor = PreferenceManager.getDefaultSharedPreferences(this).edit();
+        if (value == null) {
+            editor.remove(key);
+        } else {
+            switch (value.getClass().getSimpleName()) {
+                case "String":
+                    editor.putString(key, (String) value);
+                    break;
+                case "Long":
+                    editor.putLong(key, (Long) value);
+                    break;
+                case "Integer":
+                    editor.putInt(key, (Integer) value);
+                    break;
+                case "Float":
+                    editor.putFloat(key, (Float) value);
+                    break;
+                case "LuaTable":
+                    editor.putStringSet(key, new HashSet(((LuaTable) value).values()));
+                    break;
+                case "Set":
+                    editor.putStringSet(key, (Set<String>) value);
+                    break;
+                case "Boolean":
+                    editor.putBoolean(key, (Boolean) value);
+                    break;
+                default:
+                    return false;
+            }
+        }
+        return editor.commit();
     }
+
 
     @Override
     public void regGc(LuaGcable obj) {
@@ -232,8 +251,7 @@ public class LuaApplication extends Application implements LuaContext {
             InputStream in = getAssets().open(name);
             in.close();
             return true;
-        } catch (Exception ioe) {
-
+        } catch (Exception ignored) {
         }
         return false;
     }

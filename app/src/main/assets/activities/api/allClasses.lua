@@ -16214,7 +16214,6 @@ return {
     "com.androlua.LuaActivity$1",
     "com.androlua.LuaActivity$2",
     "com.androlua.LuaActivityX",
-    "com.androlua.LuaAppWidgetProvider",
     "com.androlua.LuaApplication",
     "com.androlua.LuaBitmap",
     "com.androlua.LuaBitmapDrawable",
