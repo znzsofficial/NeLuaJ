@@ -5,7 +5,7 @@ import android.view.View
 import androidx.recyclerview.widget.RecyclerView
 import jp.wasabeef.recyclerview.animators.holder.AnimateViewHolder
 
-class AnimateRecyclerHolder(itemView: View?, var creator: Creator) :
+class AnimateRecyclerHolder(itemView: View, var creator: Creator) :
     LuaCustRecyclerHolder(itemView), AnimateViewHolder {
     override fun animateAddImpl(
         holder: RecyclerView.ViewHolder,
