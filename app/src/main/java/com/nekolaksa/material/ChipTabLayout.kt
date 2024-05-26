@@ -29,11 +29,13 @@ class ChipTabLayout @JvmOverloads constructor(
 
     fun addChip(text: String) = Chip(context).apply {
         this.text = text
+        isCheckable = true
         chipGroup.addView(this)
     }
 
     fun addChip(text: String, @StyleRes style: Int) = chipWithStyle(context, style).apply {
         this.text = text
+        isCheckable = true
         chipGroup.addView(this)
     }
 
