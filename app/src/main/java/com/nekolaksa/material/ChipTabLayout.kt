@@ -66,7 +66,7 @@ class ChipTabLayout @JvmOverloads constructor(
 
     fun onSelected(listener: (Chip) -> Unit) {
         chipGroup.setOnCheckedStateChangeListener { _, list ->
-            listener(chipGroup.findViewById<Chip>(list[0]))
+            listener(chipGroup.findViewById(list[0]))
         }
     }
 }
