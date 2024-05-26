@@ -1,5 +1,6 @@
 package github.znzsofficial.adapter
 
+import android.content.Context
 import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
@@ -37,7 +38,7 @@ open class RecyclerListAdapter : ListAdapter<Any, LuaCustRecyclerHolder?> {
         } catch (e: Exception) {
             e.printStackTrace()
             mContext?.sendError("RecyclerListAdapter: onCreateViewHolder", e)
-            LuaCustRecyclerHolder(null)
+            LuaCustRecyclerHolder(View(mContext as Context))
         }
     }
 

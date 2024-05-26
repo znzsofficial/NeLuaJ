@@ -82,6 +82,7 @@
 
         <activity
             android:name="com.androlua.UncaughtExceptionActivity"
+            android:theme="@style/Theme.Material3.DynamicColors.DayNight"
             android:label="Crash" />
 
         <activity

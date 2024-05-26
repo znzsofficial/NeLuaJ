@@ -1,264 +1,213 @@
-package com.androlua;
+package com.androlua
 
-import android.app.Application;
-import android.content.Context;
-import android.content.SharedPreferences;
-import android.os.Environment;
-
-import androidx.preference.PreferenceManager;
-
-import com.google.android.material.color.DynamicColors;
-
-import org.luaj.Globals;
-import org.luaj.LuaTable;
-
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-
+import android.app.Application
+import android.content.Context
+import android.os.Environment
+import androidx.preference.PreferenceManager
+import com.google.android.material.color.DynamicColors
+import org.luaj.Globals
+import org.luaj.LuaTable
+import java.io.File
+import java.io.FileInputStream
 
 /**
  * Created by nirenr on 2019/12/13.
  */
-public class LuaApplication extends Application implements LuaContext {
-    private static LuaApplication instance;
-    private String mExtDir;
-    private static final HashMap sGlobalData = new HashMap();
-
-    public static LuaApplication getInstance() {
-        return instance;
+class LuaApplication : Application(), LuaContext {
+    private var mExtDir: String? = null
+    override fun onCreate() {
+        super.onCreate()
+        instance = this
+        getExternalFilesDir("dexfiles")?.let { rmDir(it) }
+        CrashHandler.instance.init(this)
+        DynamicColors.applyToActivitiesIfAvailable(this)
     }
 
-    @Override
-    public void onCreate() {
-        super.onCreate();
-        instance = this;
-        rmDir(Objects.requireNonNull(getExternalFilesDir("dexfiles")));
-        UncaughtExceptionHandler.getInstance(this).init();
-        DynamicColors.applyToActivitiesIfAvailable(this);
+    override fun getClassLoaders(): ArrayList<ClassLoader>? {
+        return null
     }
 
-    public static boolean rmDir(File dir) {
-        if (dir.isDirectory()) {
-            File[] fs = dir.listFiles();
-            for (File f : fs) rmDir(f);
-        }
-        return dir.delete();
+    override fun call(func: String, vararg args: Any) {
     }
 
-    @Override
-    public ArrayList<ClassLoader> getClassLoaders() {
-        return null;
+    override fun set(name: String, value: Any) {
     }
 
-    @Override
-    public void call(String func, Object... args) {
+    override fun getLuaPath(): String? {
+        return null
     }
 
-    @Override
-    public void set(String name, Object value) {
+    override fun getLuaPath(s: String): String {
+        return File(luaDir, s).absolutePath
     }
 
-    @Override
-    public String getLuaPath() {
-        return null;
+    override fun getLuaPath(dir: String, name: String): String? {
+        return null
     }
 
-    public String getLuaPath(String s) {
-        return new File(getLuaDir(), s).getAbsolutePath();
+    override fun getLuaDir(): String {
+        return filesDir.absolutePath
     }
 
-    @Override
-    public String getLuaPath(String dir, String name) {
-        return null;
+    override fun getLuaDir(dir: String): String? {
+        return null
     }
 
-    public String getLuaDir() {
-        return getFilesDir().getAbsolutePath();
+    override fun getLuaExtDir(): String {
+        if (mExtDir != null) return mExtDir as String
+        val d = File(Environment.getExternalStorageDirectory(), "LuaJ")
+        if (!d.exists()) d.mkdirs()
+        mExtDir = d.absolutePath
+        return mExtDir as String
     }
 
-    @Override
-    public String getLuaDir(String dir) {
-        return null;
+    override fun getLuaExtDir(dir: String): String {
+        val d = File(luaExtDir, dir)
+        if (!d.exists()) d.mkdirs()
+        return d.absolutePath
     }
 
-    public String getLuaExtDir() {
-        if (mExtDir != null) return mExtDir;
-        File d = new File(Environment.getExternalStorageDirectory(), "LuaJ");
-        if (!d.exists()) d.mkdirs();
-        mExtDir = d.getAbsolutePath();
-        return mExtDir;
+    override fun setLuaExtDir(dir: String) {
+        mExtDir = dir
     }
 
-    @Override
-    public String getLuaExtDir(String dir) {
-        File d = new File(getLuaExtDir(), dir);
-        if (!d.exists()) d.mkdirs();
-        return d.getAbsolutePath();
+    override fun getLuaExtPath(path: String): String {
+        return File(luaExtDir, path).absolutePath
     }
 
-    @Override
-    public void setLuaExtDir(String dir) {
-        mExtDir = dir;
+    override fun getLuaExtPath(dir: String, name: String): String {
+        return File(getLuaExtDir(dir), name).absolutePath
     }
 
-    @Override
-    public String getLuaExtPath(String path) {
-        return new File(getLuaExtDir(), path).getAbsolutePath();
+    override fun getContext(): Context {
+        return this
     }
 
-    @Override
-    public String getLuaExtPath(String dir, String name) {
-        return new File(getLuaExtDir(dir), name).getAbsolutePath();
+    override fun getLuaState(): Globals? {
+        return null
     }
 
-    @Override
-    public Context getContext() {
-        return this;
+    override fun doFile(path: String, vararg arg: Any): Any? {
+        return null
     }
 
-    @Override
-    public Globals getLuaState() {
-        return null;
+    override fun sendMsg(msg: String) {
     }
 
-    @Override
-    public Object doFile(String path, Object... arg) {
-        return null;
+    override fun sendError(title: String, msg: Exception) {
     }
 
-    @Override
-    public void sendMsg(String msg) {
+    override fun getWidth(): Int {
+        return 0
     }
 
-    @Override
-    public void sendError(String title, Exception msg) {
+    override fun getHeight(): Int {
+        return 0
     }
 
-    @Override
-    public int getWidth() {
-        return 0;
+    override fun getGlobalData(): Map<*, *> {
+        return sGlobalData
     }
 
-    @Override
-    public int getHeight() {
-        return 0;
+    override fun getSharedData(): Map<String, *> {
+        return PreferenceManager.getDefaultSharedPreferences(this).all
     }
 
-    @Override
-    public Map getGlobalData() {
-        return sGlobalData;
+    override fun getSharedData(key: String): Any {
+        return PreferenceManager.getDefaultSharedPreferences(this).all[key]!!
     }
 
-    @Override
-    public Map<String, ?> getSharedData() {
-        return PreferenceManager.getDefaultSharedPreferences(this).getAll();
+    override fun getSharedData(key: String, def: Any): Any {
+        val ret = PreferenceManager.getDefaultSharedPreferences(this).all[key]
+        if (ret != null) return ret
+        return def
     }
 
-    @Override
-    public Object getSharedData(String key) {
-        return PreferenceManager.getDefaultSharedPreferences(this).getAll().get(key);
-    }
-
-    @Override
-    public Object getSharedData(String key, Object def) {
-        Object ret = PreferenceManager.getDefaultSharedPreferences(this).getAll().get(key);
-        if (ret != null) return ret;
-        return def;
-    }
-
-    @Override
-    public boolean setSharedData(String key, Object value) {
-        SharedPreferences.Editor editor = PreferenceManager.getDefaultSharedPreferences(this).edit();
+    override fun setSharedData(key: String, value: Any?): Boolean {
+        val editor = PreferenceManager.getDefaultSharedPreferences(this).edit()
         if (value == null) {
-            editor.remove(key);
+            editor.remove(key)
         } else {
-            switch (value.getClass().getSimpleName()) {
-                case "String":
-                    editor.putString(key, (String) value);
-                    break;
-                case "Long":
-                    editor.putLong(key, (Long) value);
-                    break;
-                case "Integer":
-                    editor.putInt(key, (Integer) value);
-                    break;
-                case "Float":
-                    editor.putFloat(key, (Float) value);
-                    break;
-                case "LuaTable":
-                    editor.putStringSet(key, new HashSet(((LuaTable) value).values()));
-                    break;
-                case "Set":
-                    editor.putStringSet(key, (Set<String>) value);
-                    break;
-                case "Boolean":
-                    editor.putBoolean(key, (Boolean) value);
-                    break;
-                default:
-                    return false;
+            when (value.javaClass.simpleName) {
+                "String" -> editor.putString(key, value as String)
+                "Long" -> editor.putLong(key, (value as Long))
+                "Integer" -> editor.putInt(key, (value as Int))
+                "Float" -> editor.putFloat(key, (value as Float))
+                "LuaTable" -> editor.putString(
+                    key,
+                    (value as LuaTable).values().toString()
+                )
+
+                "Set" -> editor.putStringSet(key, value as Set<String>)
+                "Boolean" -> editor.putBoolean(key, (value as Boolean))
+                else -> return false
             }
         }
-        return editor.commit();
+        return editor.commit()
     }
 
 
-    @Override
-    public void regGc(LuaGcable obj) {
+    override fun regGc(obj: LuaGcable) {
     }
 
-    @Override
-    public InputStream findResource(String name) {
+    override fun findResource(name: String): FileInputStream? {
         try {
-            if (new File(name).exists()) return new FileInputStream(name);
-        } catch (Exception e) {
-      /*
+            if (File(name).exists()) return FileInputStream(name)
+        } catch (e: Exception) {
+            /*
       e.printStackTrace();*/
         }
         try {
-            return new FileInputStream(getLuaPath(name));
-        } catch (Exception e) {
-      /*
+            return FileInputStream(getLuaPath(name))
+        } catch (e: Exception) {
+            /*
       e.printStackTrace();*
         }
         try {
             return getAssets().open(name);
         } catch (Exception ioe) {
-      /*
+      / *
       e.printStackTrace();*/
         }
-        return null;
+        return null
     }
 
-    public boolean checkResource(String name) {
+    fun checkResource(name: String): Boolean {
         try {
-            if (new File(name).exists()) return true;
-        } catch (Exception ignored) {
+            if (File(name).exists()) return true
+        } catch (ignored: Exception) {
         }
         try {
-            return new File(getLuaPath(name)).exists();
-        } catch (Exception e) {
-      /*
+            return File(getLuaPath(name)).exists()
+        } catch (e: Exception) {
+            /*
       e.printStackTrace();*/
         }
         try {
-            InputStream in = getAssets().open(name);
-            in.close();
-            return true;
-        } catch (Exception ignored) {
+            val `in` = assets.open(name)
+            `in`.close()
+            return true
+        } catch (ignored: Exception) {
         }
-        return false;
+        return false
     }
 
-    @Override
-    public String findFile(String filename) {
-        if (filename.startsWith("/")) return filename;
-        return getLuaPath(filename);
+    override fun findFile(filename: String): String {
+        if (filename.startsWith("/")) return filename
+        return getLuaPath(filename)
+    }
+
+    companion object {
+        @JvmStatic
+        var instance: LuaApplication? = null
+
+        private val sGlobalData: HashMap<*, *> = HashMap<Any?, Any?>()
+
+        fun rmDir(dir: File): Boolean {
+            if (dir.isDirectory) {
+                for (f in dir.listFiles()!!) rmDir(f)
+            }
+            return dir.delete()
+        }
     }
 }

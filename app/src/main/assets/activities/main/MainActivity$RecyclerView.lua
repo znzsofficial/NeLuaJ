@@ -1,6 +1,7 @@
 import "java.io.File"
 import "java.lang.Runtime"
 import "androidx.core.view.GravityCompat"
+import "android.view.LayoutInflater"
 
 local ColorUtil = this.globalData.ColorUtil
 -- Anime
@@ -14,6 +15,7 @@ import "androidx.recyclerview.widget.LinearLayoutManager"
 -- RecyclerAdapter
 import "github.znzsofficial.adapter.PopupRecyclerAdapter"
 import "github.znzsofficial.adapter.LuaCustRecyclerHolder"
+import "com.nekolaksa.internal.FileItemHolder"
 
 import "android.util.TypedValue"
 local getDp = lambda i : TypedValue.applyDimension(1,i,activity.getResources().getDisplayMetrics())
@@ -37,6 +39,7 @@ local Bean_Path
 local:res
 local:table
 local:utf8
+local:R
 
 local _M = {}
 local FileList
@@ -126,10 +129,9 @@ _M.init=function()
       requestManager.clear(holder.Tag.icon)
     end,]]
     onCreateViewHolder=function(parent,viewType)
-      local views = {}
-      local holder=LuaCustRecyclerHolder(loadlayout(item_layout,views))
-      holder.Tag = views
-      return holder
+       local inflater = LayoutInflater.from(parent.getContext())
+       local view = inflater.inflate(R.layout.item_file, parent, false)
+       return FileItemHolder(view)
     end,
     onBindViewHolder=function(holder,position)
       local view = holder.Tag

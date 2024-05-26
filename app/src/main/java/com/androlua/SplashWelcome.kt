@@ -32,34 +32,17 @@ class SplashWelcome : ComponentActivity() {
     @CallLuaFunction
     public override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        //SplashScreen.installSplashScreen(this)
         app = application as LuaApplication
         localDir = app.luaDir
-//        try {
-//            if (File(app!!.getLuaPath("setup.png")).exists())
-//                window.setBackgroundDrawable(
-//                    BitmapDrawable(
-//                        resources,
-//                        app!!.getLuaPath("setup.png")
-//                    )
-//                )
-//        } catch (e: Exception) {
-//            e.printStackTrace();
-//        }
         if (checkInfo()) {
-            LuaApplication.getInstance().setSharedData("UnZiped", false)
-            //Log.i("start execute", "welcome");
+            LuaApplication.instance?.setSharedData("UnZiped", false)
             lifecycleScope.launch(Dispatchers.IO) {
-                try {
-                    //Log.i("start unpack", "welcome");
+                runCatching {
                     unApk("assets/", localDir)
-                } catch (e: IOException) {
-                    e.printStackTrace()
                 }
                 withContext(Dispatchers.Main) {
-                    //Log.i("start", "welcome");
                     startActivity()
-                    LuaApplication.getInstance().setSharedData("UnZiped", true)
+                    LuaApplication.instance?.setSharedData("UnZiped", true)
                 }
             }
         } else {
@@ -183,8 +166,8 @@ class SplashWelcome : ComponentActivity() {
             val watchiter: Iterator<String> = dirtest.iterator()
             var find = false
             while (watchiter.hasNext()) {
-                val dirtestwatchn = watchiter.next()
-                if (fp.startsWith(dirtestwatchn)) {
+                val dirtestwatchNext = watchiter.next()
+                if (fp.startsWith(dirtestwatchNext)) {
                     find = true
                     break
                 }
@@ -202,7 +185,7 @@ class SplashWelcome : ComponentActivity() {
         zipFile!!.close()
     }
 
-    private inner class FileWritingTask internal constructor(
+    private inner class FileWritingTask(
         private val zipEntry: ZipEntry,
         private val path: String
     ) : Runnable {
