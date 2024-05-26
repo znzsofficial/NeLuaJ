@@ -1,5 +1,7 @@
 package github.znzsofficial.adapter
 
+import android.content.Context
+import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
 import com.androlua.LuaContext
@@ -53,7 +55,7 @@ open class LuaCustRecyclerAdapter : RecyclerView.Adapter<LuaCustRecyclerHolder> 
         } catch (e: Exception) {
             e.printStackTrace()
             mContext?.sendError("RecyclerAdapter: onCreateViewHolder", e)
-            LuaCustRecyclerHolder(null)
+            LuaCustRecyclerHolder(View(mContext as Context))
         }
     }
 
