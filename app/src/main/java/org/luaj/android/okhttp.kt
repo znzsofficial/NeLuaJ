@@ -1,12 +1,12 @@
 package org.luaj.android
 
-import com.nekolaksa.argAt
-import com.nekolaksa.asString
-import com.nekolaksa.firstArg
-import com.nekolaksa.ifNotNil
-import com.nekolaksa.isNotNil
-import com.nekolaksa.secondArg
-import com.nekolaksa.toLuaValue
+import com.nekolaska.argAt
+import com.nekolaska.asString
+import com.nekolaska.firstArg
+import com.nekolaska.ifNotNil
+import com.nekolaska.isNotNil
+import com.nekolaska.secondArg
+import com.nekolaska.toLuaValue
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
