@@ -81,11 +81,6 @@
         </activity>
 
         <activity
-            android:name="com.androlua.UncaughtExceptionActivity"
-            android:theme="@style/Theme.Material3.DynamicColors.DayNight"
-            android:label="Crash" />
-
-        <activity
             android:name="com.androlua.ImportProject"
             android:configChanges="orientation|screenSize|keyboardHidden"
             android:exported="true">
