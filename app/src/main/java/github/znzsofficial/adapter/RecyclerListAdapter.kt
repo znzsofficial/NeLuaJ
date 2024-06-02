@@ -10,7 +10,7 @@ import com.androlua.LuaContext
 import com.nekolaska.toLuaValue
 
 open class RecyclerListAdapter @JvmOverloads constructor(
-    private val mContext: LuaContext? = null,
+    open var mContext: LuaContext? = null,
     private val adapterCreator: Creator
 ) : ListAdapter<Any, LuaCustRecyclerHolder>(DiffCallback(adapterCreator)) {
 
@@ -87,6 +87,5 @@ open class RecyclerListAdapter @JvmOverloads constructor(
         fun onViewRecycled(viewHolder: RecyclerView.ViewHolder?)
         fun areItemsTheSame(oldItem: Any, newItem: Any): Boolean
         fun areContentsTheSame(oldItem: Any, newItem: Any): Boolean
-        fun getPopupText(view: View, position: Int): CharSequence?
     }
 }

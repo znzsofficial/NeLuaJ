@@ -2,29 +2,19 @@ package github.znzsofficial.adapter
 
 import android.view.View
 import com.androlua.LuaContext
+import github.znzsofficial.adapter.PopupRecyclerListAdapter.PopupCreator
 import me.zhanghai.android.fastscroll.PopupTextProvider
 
-class PopupRecyclerAdapter : LuaCustRecyclerAdapter, PopupTextProvider {
-   override var adapterCreator: Creator
-
-    constructor(adapterCreator: PopupCreator) : super(adapterCreator) {
-        this.adapterCreator = adapterCreator
-        mContext = null
-    }
-
-    constructor(context: LuaContext, adapterCreator: PopupCreator) : super(
-        context,
-        adapterCreator
-    ) {
-        this.adapterCreator = adapterCreator
-        mContext = context
-    }
+class PopupRecyclerAdapter @JvmOverloads constructor(
+    override var mContext: LuaContext? = null,
+    private val adapterCreator: PopupCreator
+) : LuaCustRecyclerAdapter(mContext, adapterCreator), PopupTextProvider {
 
     override fun getPopupText(view: View, position: Int): CharSequence {
         return this.adapterCreator.getPopupText(view, position).toString()
     }
 
     interface PopupCreator : Creator {
-        fun getPopupText(view:View ,i: Int): CharSequence
+        fun getPopupText(view: View, i: Int): CharSequence
     }
 }
