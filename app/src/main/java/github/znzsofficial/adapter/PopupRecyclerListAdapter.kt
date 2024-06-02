@@ -4,28 +4,18 @@ import android.view.View
 import com.androlua.LuaContext
 import me.zhanghai.android.fastscroll.PopupTextProvider
 
-class PopupRecyclerListAdapter : RecyclerListAdapter, PopupTextProvider {
-    override var adapterCreator: Creator
+class PopupRecyclerListAdapter @JvmOverloads constructor(
+    override var mContext: LuaContext? = null,
+    private val adapterCreator: PopupCreator
+) : RecyclerListAdapter(mContext, adapterCreator), PopupTextProvider {
 
-    constructor(adapterCreator: PopupCreator) : super(adapterCreator) {
-        this.adapterCreator = adapterCreator
-        mContext = null
-    }
-
-    constructor(context: LuaContext, adapterCreator: PopupCreator) : super(
-        context,
-        adapterCreator
-    ) {
-        this.adapterCreator = adapterCreator
-        mContext = context
-    }
 
     override fun getPopupText(view: View, position: Int): CharSequence {
         return this.adapterCreator.getPopupText(view, position).toString()
     }
 
     interface PopupCreator : Creator {
-        override fun getPopupText(view: View, position: Int): CharSequence
+        fun getPopupText(view: View, position: Int): CharSequence
     }
 
 }
