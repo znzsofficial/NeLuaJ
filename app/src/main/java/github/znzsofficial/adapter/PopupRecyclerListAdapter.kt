@@ -25,7 +25,7 @@ class PopupRecyclerListAdapter : RecyclerListAdapter, PopupTextProvider {
     }
 
     interface PopupCreator : Creator {
-        override fun getPopupText(view: View, i: Int): CharSequence
+        override fun getPopupText(view: View, position: Int): CharSequence
     }
 
 }

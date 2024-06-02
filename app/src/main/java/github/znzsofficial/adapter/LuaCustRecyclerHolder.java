@@ -5,18 +5,20 @@ import android.view.View;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
+import org.luaj.LuaTable;
+
 public class LuaCustRecyclerHolder extends RecyclerView.ViewHolder {
     public LuaCustRecyclerHolder(@NonNull View itemView) {
         super(itemView);
     }
 
-    public Object Tag = null;
+    public LuaTable Tag = null;
 
-    public void setViews(Object tag) {
+    public void setViews(LuaTable tag) {
         Tag = tag;
     }
 
-    public Object getViews() {
+    public LuaTable getViews() {
         return Tag;
     }
 }
