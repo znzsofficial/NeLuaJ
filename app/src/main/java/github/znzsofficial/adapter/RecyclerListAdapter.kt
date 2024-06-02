@@ -9,19 +9,10 @@ import androidx.recyclerview.widget.RecyclerView
 import com.androlua.LuaContext
 import com.nekolaska.toLuaValue
 
-open class RecyclerListAdapter : ListAdapter<Any, LuaCustRecyclerHolder?> {
-    open lateinit var adapterCreator: Creator
-    var mContext: LuaContext?
-
-    constructor(creator: Creator) : super(DiffCallback(creator)) {
-        mContext = null
-        adapterCreator = creator
-    }
-
-    constructor(context: LuaContext?, creator: Creator) : super(DiffCallback(creator)) {
-        mContext = context
-        adapterCreator = creator
-    }
+open class RecyclerListAdapter @JvmOverloads constructor(
+    private val mContext: LuaContext? = null,
+    private val adapterCreator: Creator
+) : ListAdapter<Any, LuaCustRecyclerHolder>(DiffCallback(adapterCreator)) {
 
     override fun onBindViewHolder(viewHolder: LuaCustRecyclerHolder, i: Int) {
         try {
@@ -96,6 +87,6 @@ open class RecyclerListAdapter : ListAdapter<Any, LuaCustRecyclerHolder?> {
         fun onViewRecycled(viewHolder: RecyclerView.ViewHolder?)
         fun areItemsTheSame(oldItem: Any, newItem: Any): Boolean
         fun areContentsTheSame(oldItem: Any, newItem: Any): Boolean
-        abstract fun getPopupText(view: View, position: Int): CharSequence?
+        fun getPopupText(view: View, position: Int): CharSequence?
     }
 }
