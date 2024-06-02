@@ -97,42 +97,10 @@ class SplashWelcome : ComponentActivity() {
         return false
     }
 
-    /*
-  private void unApk(String dir, String extDir) throws ZipException {
-    File file = new File(extDir);
-    String tempDir = getCacheDir().getPath();
-    rmDir(file);
-    ZipFile zipFile = new ZipFile(getApplicationInfo().publicSourceDir);
-    zipFile.extractFile(dir, tempDir);
-    new File(tempDir + "/" + dir).renameTo(file);
-  }
-
-  private void rmDir(File file, String str) {
-    if (file.isDirectory()) {
-      for (File file2 : file.listFiles()) {
-        rmDir(file2, str);
-      }
-      file.delete();
-    }
-    if (file.getName().endsWith(str)) {
-      file.delete();
-    }
-  }
-
-  private boolean rmDir(File file) {
-    if (file.isDirectory()) {
-      for (File file2 : file.listFiles()) {
-        rmDir(file2);
-      }
-    }
-    return file.delete();
-  }
-  */
     private var zipFile: ZipFile? = null
     private var destPath: String? = null
 
-    @Throws(IOException::class)
-    fun unApk(dir: String, extDir: String?) {
+    private fun unApk(dir: String, extDir: String?) {
         val dirtest = ArrayList<String>()
         val threadPool =
             Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors())

@@ -5,20 +5,12 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
 import com.androlua.LuaContext
+import github.znzsofficial.adapter.RecyclerListAdapter.Creator
 
-open class LuaCustRecyclerAdapter : RecyclerView.Adapter<LuaCustRecyclerHolder> {
-    open lateinit var adapterCreator: Creator
-    var mContext: LuaContext?
-
-    constructor(creator: Creator) {
-        adapterCreator = creator
-        mContext = null
-    }
-
-    constructor(context: LuaContext, creator: Creator) {
-        adapterCreator = creator
-        mContext = context
-    }
+open class LuaCustRecyclerAdapter @JvmOverloads constructor(
+    open var mContext: LuaContext? = null,
+    private val adapterCreator: Creator
+) : RecyclerView.Adapter<LuaCustRecyclerHolder>() {
 
     override fun getItemCount(): Int {
         return try {
@@ -75,6 +67,5 @@ open class LuaCustRecyclerAdapter : RecyclerView.Adapter<LuaCustRecyclerHolder> 
         fun onBindViewHolder(viewHolder: LuaCustRecyclerHolder, i: Int)
         fun onCreateViewHolder(viewGroup: ViewGroup?, i: Int): LuaCustRecyclerHolder
         fun onViewRecycled(viewHolder: LuaCustRecyclerHolder)
-        abstract fun <View> getPopupText(view: View, position: Int): Any
     }
 }
