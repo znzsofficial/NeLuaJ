@@ -14,6 +14,7 @@ import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.IBinder;
@@ -748,21 +749,24 @@ public class LuaActivity extends AppCompatActivity
     }
 
     public Intent registerReceiver(LuaBroadcastReceiver receiver, IntentFilter filter) {
-        // TODO: Implement this method
-        return super.registerReceiver(receiver, filter);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+            return super.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        else return super.registerReceiver(receiver, filter);
     }
 
     public Intent registerReceiver(LuaBroadcastReceiver.OnReceiveListener ltr, IntentFilter filter) {
-        // TODO: Implement this method
         LuaBroadcastReceiver receiver = new LuaBroadcastReceiver(ltr);
-        return super.registerReceiver(receiver, filter);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+            return super.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        else return super.registerReceiver(receiver, filter);
     }
 
     public Intent registerReceiver(IntentFilter filter) {
-        // TODO: Implement this method
         if (mReceiver != null) unregisterReceiver(mReceiver);
         mReceiver = new LuaBroadcastReceiver(this);
-        return super.registerReceiver(mReceiver, filter);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+            return super.registerReceiver(mReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        else return super.registerReceiver(mReceiver, filter);
     }
 
     @Override

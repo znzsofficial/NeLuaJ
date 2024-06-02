@@ -137,7 +137,6 @@ class LuaApplication : Application(), LuaContext {
                     key,
                     (value as LuaTable).values().toString()
                 )
-
                 "Set" -> editor.putStringSet(key, value as Set<String>)
                 "Boolean" -> editor.putBoolean(key, (value as Boolean))
                 else -> return false
