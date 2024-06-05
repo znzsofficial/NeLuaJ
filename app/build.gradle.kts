@@ -22,6 +22,8 @@ android {
     configurations {
         all {
             exclude(group = "androidx.asynclayoutinflater", module = "asynclayoutinflater")
+            exclude(group = "androidx.localbroadcastmanager", module = "localbroadcastmanager")
+            exclude(group = "androidx.slidingpanelayout", module = "slidingpanelayout")
         }
     }
     buildTypes {
@@ -69,6 +71,7 @@ dependencies {
     implementation(libs.core.ktx)
     implementation(libs.appcompat)
     implementation(libs.material)
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.espresso.core)
@@ -92,7 +95,6 @@ dependencies {
     implementation(libs.androidx.lifecycle.common)
     implementation(libs.androidx.lifecycle.process)
     implementation(libs.androidx.lifecycle.runtime)
-    implementation(libs.androidx.localbroadcastmanager)
     implementation(libs.androidx.navigation.common)
     implementation(libs.androidx.navigation.fragment)
     implementation(libs.androidx.navigation.runtime)
@@ -101,7 +103,6 @@ dependencies {
     implementation(libs.androidx.preference)
     implementation(libs.androidx.startup.runtime)
     implementation(libs.androidx.swiperefreshlayout)
-    implementation(libs.androidx.slidingpanelayout)
     implementation(libs.androidx.recyclerview)
     implementation(libs.androidx.transition)
     implementation(libs.androidx.viewpager)

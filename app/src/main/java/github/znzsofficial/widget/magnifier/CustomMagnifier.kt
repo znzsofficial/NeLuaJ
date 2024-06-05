@@ -24,7 +24,6 @@ class CustomMagnifier(private val mView: View) {
     private val matrix = Matrix()
     private var zoom = 1.25f
     private val verticalOffset: Float
-    private var cornerRadius = 16
     private var mElevation = 4.0f
 
     init {
@@ -33,7 +32,7 @@ class CustomMagnifier(private val mView: View) {
         mCardView.addView(mImageView)
         mCardView.visibility = View.GONE
         // 设置卡片圆角
-        mCardView.radius = cornerRadius.toFloat()
+        mCardView.radius = 16f
         mCardView.cardElevation = TypedValue.applyDimension(
             TypedValue.COMPLEX_UNIT_DIP,
             mElevation,
@@ -87,9 +86,8 @@ class CustomMagnifier(private val mView: View) {
         mCardView.layoutParams = layoutParams
     }
 
-    fun setCornerRadius(radius: Int) {
-        cornerRadius = radius
-        mCardView.radius = cornerRadius.toFloat()
+    fun setCornerRadius(radius: Float) {
+        mCardView.radius = radius
     }
 
     @JvmOverloads
