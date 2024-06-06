@@ -22,7 +22,7 @@ _M.initMagnifier=function(view)
     -- 不存在Magnifier时
     SupportProperties.Magnifier = false
 
-    Magnifier = bindClass "github.znzsofficial.widget.magnifier.CustomMagnifier";
+    Magnifier = bindClass "com.nekolaska.widget.CustomMagnifier";
     _M.magnifier = Magnifier(view)
     .setCornerRadius(24)
     .setDimensions(320,128)

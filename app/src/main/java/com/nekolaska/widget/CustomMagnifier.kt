@@ -1,4 +1,4 @@
-package github.znzsofficial.widget.magnifier
+package com.nekolaska.widget
 
 import android.app.Activity
 import android.graphics.Bitmap
