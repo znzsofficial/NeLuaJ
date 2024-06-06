@@ -12,7 +12,7 @@ import "com.google.android.material.card.MaterialCardView"
 import "com.google.android.material.navigation.NavigationView";
 import "com.google.android.material.divider.MaterialDivider";
 import "com.google.android.material.tabs.TabLayout"
-import "github.znzsofficial.widget.container.MyFullDraggableContainer"
+import "com.nekolaska.widget.MyFullDraggableContainer"
 import "vinx.material.textfield.MaterialTextField"
 
 local ColorUtil = this.globalData.ColorUtil
