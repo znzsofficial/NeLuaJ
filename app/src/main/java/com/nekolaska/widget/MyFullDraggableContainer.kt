@@ -1,4 +1,4 @@
-package github.znzsofficial.widget.container
+package com.nekolaska.widget
 
 import android.content.Context
 import android.view.MotionEvent
