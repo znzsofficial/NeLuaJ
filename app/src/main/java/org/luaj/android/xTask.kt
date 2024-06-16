@@ -23,22 +23,23 @@ class xTask(private val mContext: LuaActivity) : VarArgFunction(), LuaGcable {
 
     override fun invoke(args: Varargs): Varargs? =
         args.firstArg().checktable().let { table ->
-            mContext.lifecycleScope.launch(
-                when (table["dispatcher"].asString()) {
-                    "io" -> Dispatchers.IO
-                    "unconfined" -> Dispatchers.Unconfined
-                    else -> Dispatchers.Default
-                }
-            ) {
+            mContext.lifecycleScope.launch {
                 try {
-                    table["task"].ifIsFunction()?.invoke()
+                    withContext(
+                        when (table["dispatcher"].asString()) {
+                            "io" -> Dispatchers.IO
+                            else -> Dispatchers.Default
+                        }
+                    ) {
+                        table["task"].ifIsFunction()?.invoke()
+                    }
                 } catch (e: LuaError) {
                     mContext.sendError("xTask: Background", e)
                     LuaString.valueOf(e.message)
                 }.let { result ->
                     table["callback"].ifIsFunction()?.apply {
                         runCatching {
-                            withContext(Dispatchers.Main) { invoke(result) }
+                            invoke(result)
                         }.onFailure {
                             mContext.sendError("xTask: Main", it as LuaError)
                         }
