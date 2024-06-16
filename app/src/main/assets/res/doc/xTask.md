@@ -15,7 +15,7 @@ xTask {
 }
 ```
 
-dispatcher为"io"或"unconfined"时，使用对应调度器
+dispatcher为"io"，使用io调度器
 
 回调函数的参数为异步函数的返回值或错误信息
 
