@@ -51,6 +51,7 @@ import org.luaj.LuaError;
 import org.luaj.LuaMetaTable;
 import org.luaj.LuaTable;
 import org.luaj.LuaValue;
+import org.luaj.android.Koroutines;
 import org.luaj.android.call;
 import org.luaj.android.file;
 import org.luaj.android.http;

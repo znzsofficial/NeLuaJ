@@ -11,7 +11,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.luaj.LuaError
-import org.luaj.LuaString
 import org.luaj.LuaValue
 import org.luaj.Varargs
 import org.luaj.lib.VarArgFunction
@@ -19,23 +18,23 @@ import org.luaj.lib.VarArgFunction
 
 class xTask(private val mContext: LuaActivity) : VarArgFunction(), LuaGcable {
 
-    private var coroutine: LuaValue? = null
+    private var job: LuaValue? = null
 
     override fun invoke(args: Varargs): Varargs? =
         args.firstArg().checktable().let { table ->
             mContext.lifecycleScope.launch {
-                try {
-                    withContext(
-                        when (table["dispatcher"].asString()) {
-                            "io" -> Dispatchers.IO
-                            else -> Dispatchers.Default
-                        }
-                    ) {
-                        table["task"].ifIsFunction()?.invoke()
+                withContext(
+                    when (table["dispatcher"].asString()) {
+                        "io" -> Dispatchers.IO
+                        else -> Dispatchers.Default
                     }
-                } catch (e: LuaError) {
-                    mContext.sendError("xTask: Background", e)
-                    LuaString.valueOf(e.message)
+                ) {
+                    try {
+                        table["task"].ifIsFunction()?.invoke()
+                    } catch (e: LuaError) {
+                        mContext.sendError("xTask: Background", e)
+                        NIL
+                    }
                 }.let { result ->
                     table["callback"].ifIsFunction()?.apply {
                         runCatching {
@@ -45,17 +44,17 @@ class xTask(private val mContext: LuaActivity) : VarArgFunction(), LuaGcable {
                         }
                     }
                 }
-                // 先把 coroutine 存起来，再用 let 返回
-            }.also { coroutine = it.toLuaValue() }.let { coroutine }
+                // 先把 job 存起来，再用 let 返回
+            }.also { job = it.toLuaValue() }.let { job }
         }
 
 
     override fun gc() {
-        coroutine = null
+        job = null
     }
 
     override fun isGc(): Boolean {
-        return coroutine == null
+        return job == null
     }
 
 }
