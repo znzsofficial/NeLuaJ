@@ -1,0 +1,32 @@
+package org.luaj.android
+
+import androidx.lifecycle.lifecycleScope
+import com.androlua.LuaActivity
+import com.nekolaska.firstArg
+import com.nekolaska.toLuaValue
+import kotlinx.coroutines.launch
+import org.luaj.LuaFunction
+import org.luaj.Varargs
+import kotlin.coroutines.CoroutineContext
+
+class Koroutines(private val mContext: LuaActivity) {
+
+    suspend fun withContext(
+        dispatcher: CoroutineContext,
+        block: LuaFunction
+    ) {
+        kotlinx.coroutines.withContext(dispatcher) {
+            block.invoke(this.toLuaValue())
+        }
+    }
+
+    suspend fun delay(time: Long) {
+        kotlinx.coroutines.delay(time)
+    }
+
+    fun launch(args: Varargs) {
+        mContext.lifecycleScope.launch {
+            args.firstArg().invoke(this.toLuaValue())
+        }
+    }
+}
