@@ -1,17 +1,19 @@
 ### 项目支持
+
 QQ群组：603327362
 
 未来将在这里发布最新版本，也欢迎在这里提交建议和反馈。
 
 ### 前言
+
 **建议有一定安卓开发基础的用户使用。**
 
 如果你认为本编辑器不自带中文、模板，或从其它编辑器复制来的代码无法运行让你困惑，那么你不适合使用它。如果你仅从QQ群或小论坛里接触编程相关的内容，那你同样不适合使用它。
 
 ### LuaJ++的特点
 
-** 全局环境中默认导入了 okhttp,json,print,printf,res,call, file,thread,timer,dump,xTask,Http,http 等模块，可以直接调用 **
-
+** 全局环境中默认导入了 okhttp,json,print,printf,res,call, file,thread,timer,dump,xTask,Http,http
+等模块，可以直接调用 **
 
 ### 值得注意的地方
 
@@ -43,11 +45,11 @@ loadlayout 支持更多属性，例如textStyle, layout_anchor, pages (for ViewP
 
 ## 依赖
 
-AppCompat 1.7.0-alpha03
+AppCompat 1.7.0
 
-Material 1.11.0
+Material 1.12.0
 
-Lottie 6.4.0
+Lottie 6.4.1
 
 Coil 2.6.0
 
@@ -58,7 +60,6 @@ Zip4J 2.11.5
 android-fastscroll 1.2.0
 
 com.drakeet.drawer 1.0.3
-
 
 ### 感觉不如原神
 
