@@ -51,7 +51,6 @@ import org.luaj.LuaError;
 import org.luaj.LuaMetaTable;
 import org.luaj.LuaTable;
 import org.luaj.LuaValue;
-import org.luaj.android.Koroutines;
 import org.luaj.android.call;
 import org.luaj.android.file;
 import org.luaj.android.http;
@@ -90,7 +89,7 @@ public class LuaActivity extends AppCompatActivity
     private static final String NAME = "name";
 
     private Globals globals;
-    private final StringBuilder toastbuilder = new StringBuilder();
+    private final StringBuilder toastBuilder = new StringBuilder();
     private Toast toast;
     private long lastShow;
     public static ArrayList<String> logs = new ArrayList<>();
@@ -568,14 +567,14 @@ public class LuaActivity extends AppCompatActivity
         if (!debug) return;
         long now = System.currentTimeMillis();
         if (toast == null || now - lastShow > 1000) {
-            toastbuilder.setLength(0);
+            toastBuilder.setLength(0);
             toast = Toast.makeText(this, text, Toast.LENGTH_LONG);
-            toastbuilder.append(text);
+            toastBuilder.append(text);
             toast.show();
         } else {
-            toastbuilder.append("\n");
-            toastbuilder.append(text);
-            toast.setText(toastbuilder.toString());
+            toastBuilder.append("\n");
+            toastBuilder.append(text);
+            toast.setText(toastBuilder.toString());
             toast.setDuration(Toast.LENGTH_LONG);
         }
         lastShow = now;
@@ -926,7 +925,6 @@ public class LuaActivity extends AppCompatActivity
                     @CallLuaFunction
                     @Override
                     public void onServiceDisconnected(ComponentName comp) {
-
                         runFunc("onServiceDisconnected", comp);
                     }
                 };
