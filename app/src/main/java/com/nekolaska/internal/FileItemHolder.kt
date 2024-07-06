@@ -19,7 +19,7 @@ class FileItemHolder(itemView: View) : LuaCustRecyclerHolder(itemView) {
             set("icon", itemView.findViewById<View>(R.id.icon).toLuaValue())
         }
     }
-
+   
     fun unbind() {
         Tag.apply {
             set("contents", LuaValue.NIL)
