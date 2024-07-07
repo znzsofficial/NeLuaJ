@@ -8,7 +8,6 @@ import com.androlua.LuaBitmap;
 import com.androlua.LuaBitmapDrawable;
 import com.androlua.LuaContext;
 import com.androlua.LuaLayout;
-import com.google.android.material.color.DynamicColors;
 
 import org.luaj.Globals;
 import org.luaj.LuaError;
@@ -20,51 +19,49 @@ import org.luaj.lib.jse.CoerceJavaToLua;
 import java.io.File;
 import java.util.Locale;
 
-public class res extends TwoArgFunction {
+public final class res extends TwoArgFunction {
 
+    private final LuaContext context;
     private String mLanguage;
     private Globals globals;
-    private LuaTable stringTable;
-    private final LuaContext activity;
-    private LuaTable dimenTable;
     private LuaTable colorTable;
     private Configuration configuration;
 
-    private int getOrientation() {
-        return configuration.orientation;
-    }
-
-    private boolean isDarkMode() {
-        return (configuration.uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
-    }
-
-    public res(LuaContext activity) {
-        this.activity = activity;
+    public res(LuaContext ctx) {
+        this.context = ctx;
         mLanguage = Locale.getDefault().getLanguage();
-        if (activity instanceof LuaActivity context) {
-            configuration = context.getResources().getConfiguration();
+        if (ctx instanceof LuaActivity activity) {
+            configuration = activity.getResources().getConfiguration();
         }
     }
 
-    public LuaValue call(LuaValue modname, LuaValue env) {
+    public LuaValue call(LuaValue modName, LuaValue env) {
         globals = env.checkglobals();
         LuaTable res = new LuaTable();
-        res.set("string", new string());
-        res.set("drawable", new drawable());
-        res.set("bitmap", new bitmap());
-        res.set("layout", new layout());
-        res.set("view", new view());
-        res.set("font", new font());
+        res.set("string", new string(context));
+        res.set("drawable", new drawable(context));
+        res.set("bitmap", new bitmap(context));
+        res.set("layout", new layout(context));
+        res.set("view", new view(context));
+        res.set("font", new font(context));
         if (configuration != null) {
-            res.set("dimen", new dimen());
-            res.set("color", new color());
+            res.set("dimen", new dimen(context, configuration));
+            res.set("color", new color(context, configuration));
         }
         env.set("res", res);
         if (!env.get("package").isnil()) env.get("package").get("loaded").set("res", res);
         return NIL;
     }
 
-    private class dimen extends LuaValue {
+    private final class dimen extends LuaValue {
+        private LuaTable dimenTable;
+        private final Configuration configuration;
+        private final LuaContext activity;
+
+        public dimen(LuaContext ctx, Configuration configuration) {
+            this.configuration = configuration;
+            this.activity = ctx;
+        }
 
         @Override
         public int type() {
@@ -86,13 +83,21 @@ public class res extends TwoArgFunction {
             dimenTable = new LuaTable();
             String path = activity.getLuaPath("res/dimen", "init.lua");
             if (new File(path).exists()) globals.loadfile(path, dimenTable).call();
-            switch (getOrientation()) {
+            switch (configuration.orientation) {
                 case Configuration.ORIENTATION_PORTRAIT:
                     path = activity.getLuaPath("res/dimen", "port.lua");
                     if (new File(path).exists()) globals.loadfile(path, dimenTable).call();
                     break;
                 case Configuration.ORIENTATION_LANDSCAPE:
                     path = activity.getLuaPath("res/dimen", "land.lua");
+                    if (new File(path).exists()) globals.loadfile(path, dimenTable).call();
+                    break;
+                case Configuration.ORIENTATION_SQUARE:
+                    path = activity.getLuaPath("res/dimen", "square.lua");
+                    if (new File(path).exists()) globals.loadfile(path, dimenTable).call();
+                    break;
+                case Configuration.ORIENTATION_UNDEFINED:
+                    path = activity.getLuaPath("res/dimen", "undefined.lua");
                     if (new File(path).exists()) globals.loadfile(path, dimenTable).call();
                     break;
             }
@@ -105,7 +110,7 @@ public class res extends TwoArgFunction {
             dimenTable = new LuaTable();
             String path = activity.getLuaPath("res/dimen", "init.lua");
             if (new File(path).exists()) globals.loadfile(path, dimenTable).call();
-            switch (getOrientation()) {
+            switch (configuration.orientation) {
                 case Configuration.ORIENTATION_PORTRAIT:
                     path = activity.getLuaPath("res/dimen", "port.lua");
                     if (new File(path).exists()) globals.loadfile(path, dimenTable).call();
@@ -114,13 +119,32 @@ public class res extends TwoArgFunction {
                     path = activity.getLuaPath("res/dimen", "land.lua");
                     if (new File(path).exists()) globals.loadfile(path, dimenTable).call();
                     break;
+                case Configuration.ORIENTATION_SQUARE:
+                    path = activity.getLuaPath("res/dimen", "square.lua");
+                    if (new File(path).exists()) globals.loadfile(path, dimenTable).call();
+                    break;
+                case Configuration.ORIENTATION_UNDEFINED:
+                    path = activity.getLuaPath("res/dimen", "undefined.lua");
+                    if (new File(path).exists()) globals.loadfile(path, dimenTable).call();
+                    break;
             }
             return dimenTable.get(key);
         }
     }
 
 
-    private class color extends LuaValue {
+    private final class color extends LuaValue {
+        private final Configuration configuration;
+        private final LuaContext activity;
+
+        private boolean isDarkMode() {
+            return (configuration.uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
+        }
+
+        public color(LuaContext ctx, Configuration configuration) {
+            this.configuration = configuration;
+            this.activity = ctx;
+        }
 
         @Override
         public int type() {
@@ -167,7 +191,13 @@ public class res extends TwoArgFunction {
         }
     }
 
-    private class string extends LuaValue {
+    private final class string extends LuaValue {
+        private final LuaContext activity;
+        private LuaTable stringTable;
+
+        public string(LuaContext ctx) {
+            this.activity = ctx;
+        }
 
         @Override
         public int type() {
@@ -218,25 +248,6 @@ public class res extends TwoArgFunction {
             return stringTable;
         }
 
-        //
-        //    @Override
-        //    public LuaValue get(String key) {
-        //      String language = Locale.getDefault().getLanguage();
-        //      if (!language.equals(mLanguage)) {
-        //        mLanguage = language;
-        //        stringTable = null;
-        //      }
-        //      if (stringTable == null) {
-        //        LuaTable defTable = new LuaTable();
-        //        String p = activity.getLuaPath("res/string", "init.lua");
-        //        if (new File(p).exists()) globals.loadfile(p, defTable).call();
-        //        stringTable = defTable.clone();
-        //
-        //        p = activity.getLuaPath("res/string", mLanguage + ".lua");
-        //        if (new File(p).exists()) globals.loadfile(p, stringTable).call();
-        //      }
-        //      return stringTable.get(key);
-        //    }
         @Override
         public LuaValue get(String key) {
             if (stringTable != null) return stringTable.get(key);
@@ -249,7 +260,6 @@ public class res extends TwoArgFunction {
                 stringTable = new LuaTable();
                 String p = activity.getLuaPath("res/string", "init.lua");
                 if (new File(p).exists()) globals.loadfile(p, stringTable).call();
-
                 // 加载指定语言的字符串资源文件
                 p = activity.getLuaPath("res/string", mLanguage + ".lua");
                 if (new File(p).exists()) {
@@ -273,7 +283,13 @@ public class res extends TwoArgFunction {
         }
     }
 
-    private class drawable extends LuaValue {
+    private final class drawable extends LuaValue {
+        private final LuaContext activity;
+
+        drawable(LuaContext ctx) {
+            this.activity = ctx;
+        }
+
         @Override
         public int type() {
             return LuaValue.TTABLE;
@@ -315,7 +331,13 @@ public class res extends TwoArgFunction {
         }
     }
 
-    private class bitmap extends LuaValue {
+    private final class bitmap extends LuaValue {
+        private final LuaContext activity;
+
+        bitmap(LuaContext ctx) {
+            this.activity = ctx;
+        }
+
         @Override
         public int type() {
             return LuaValue.TTABLE;
@@ -362,7 +384,13 @@ public class res extends TwoArgFunction {
         }
     }
 
-    private class layout extends LuaValue {
+    private final class layout extends LuaValue {
+        private final LuaContext activity;
+
+        layout(LuaContext ctx) {
+            this.activity = ctx;
+        }
+
         @Override
         public int type() {
             return LuaValue.TTABLE;
@@ -397,7 +425,13 @@ public class res extends TwoArgFunction {
         }
     }
 
-    private class view extends LuaValue {
+    private final class view extends LuaValue {
+        private final LuaContext activity;
+
+        view(LuaContext ctx) {
+            this.activity = ctx;
+        }
+
         @Override
         public int type() {
             return LuaValue.TTABLE;
@@ -433,7 +467,13 @@ public class res extends TwoArgFunction {
         }
     }
 
-    private class font extends LuaValue {
+    private final class font extends LuaValue {
+        private final LuaContext activity;
+
+        font(LuaContext ctx) {
+            this.activity = ctx;
+        }
+
         @Override
         public int type() {
             return LuaValue.TTABLE;
