@@ -236,7 +236,6 @@ public class LuaActivity extends AppCompatActivity
         return list;
     }
 
-
     public void setAllowThread(boolean bool) {
         StrictMode.ThreadPolicy policy;
         if (bool) {
