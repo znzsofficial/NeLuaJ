@@ -399,7 +399,7 @@ public class LuaActivity extends AppCompatActivity
         return logs;
     }
 
-    public ArrayListAdapter getLogAdapter() {
+    public ArrayListAdapter<String> getLogAdapter() {
         return adapter;
     }
 
