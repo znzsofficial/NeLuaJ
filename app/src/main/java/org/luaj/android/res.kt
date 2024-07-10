@@ -1,6 +1,7 @@
 package org.luaj.android
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Typeface
 import com.androlua.LuaActivity
@@ -42,8 +43,8 @@ class res(private val context: LuaContext) : TwoArgFunction() {
         private val globals: Globals,
         private val configuration: Configuration
     ) : LuaValue() {
-        private var dimenTable: LuaTable? = null
-
+        private var dimenTable: LuaTable = LuaTable()
+        private var inited = false
         override fun type(): Int {
             return TTABLE
         }
@@ -58,7 +59,6 @@ class res(private val context: LuaContext) : TwoArgFunction() {
 
         @SuppressLint("SwitchIntDef")
         override fun checktable(): LuaTable {
-            dimenTable = LuaTable()
             var path = activity.getLuaPath("res/dimen", "init.lua")
             if (File(path).exists()) globals.loadfile(path, dimenTable).call()
             when (configuration.orientation) {
@@ -77,32 +77,13 @@ class res(private val context: LuaContext) : TwoArgFunction() {
                     if (File(path).exists()) globals.loadfile(path, dimenTable).call()
                 }
             }
-            return dimenTable as LuaTable
+            inited = true
+            return dimenTable
         }
 
-        @SuppressLint("SwitchIntDef")
         override fun get(key: String): LuaValue {
-            if (dimenTable != null) return dimenTable!![key]
-            dimenTable = LuaTable()
-            var path = activity.getLuaPath("res/dimen", "init.lua")
-            if (File(path).exists()) globals.loadfile(path, dimenTable).call()
-            when (configuration.orientation) {
-                Configuration.ORIENTATION_PORTRAIT -> {
-                    path = activity.getLuaPath("res/dimen", "port.lua")
-                    if (File(path).exists()) globals.loadfile(path, dimenTable).call()
-                }
-
-                Configuration.ORIENTATION_LANDSCAPE -> {
-                    path = activity.getLuaPath("res/dimen", "land.lua")
-                    if (File(path).exists()) globals.loadfile(path, dimenTable).call()
-                }
-
-                Configuration.ORIENTATION_UNDEFINED -> {
-                    path = activity.getLuaPath("res/dimen", "undefined.lua")
-                    if (File(path).exists()) globals.loadfile(path, dimenTable).call()
-                }
-            }
-            return dimenTable!![key]
+            if (inited) return dimenTable[key]
+            return checktable()[key]
         }
     }
 
@@ -112,7 +93,8 @@ class res(private val context: LuaContext) : TwoArgFunction() {
         private val globals: Globals,
         private val configuration: Configuration
     ) : LuaValue() {
-        private var colorTable: LuaTable? = null
+        private var colorTable = LuaTable()
+        private var inited = false
         private val isDarkMode: Boolean
             get() = (configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
 
@@ -129,7 +111,6 @@ class res(private val context: LuaContext) : TwoArgFunction() {
         }
 
         override fun checktable(): LuaTable {
-            colorTable = LuaTable()
             var path = activity.getLuaPath("res/color", "init.lua")
             if (File(path).exists()) globals.loadfile(path, colorTable).call()
             path = if (isDarkMode) {
@@ -138,28 +119,20 @@ class res(private val context: LuaContext) : TwoArgFunction() {
                 activity.getLuaPath("res/color", "day.lua")
             }
             if (File(path).exists()) globals.loadfile(path, colorTable).call()
-            return colorTable!!
+            inited = true
+            return colorTable
         }
 
         override fun get(key: String): LuaValue {
-            if (colorTable != null) return colorTable!![key]
-            colorTable = LuaTable()
-            var path = activity.getLuaPath("res/color", "init.lua")
-            if (File(path).exists()) globals.loadfile(path, colorTable).call()
-            path = if (isDarkMode) {
-                activity.getLuaPath("res/color", "night.lua")
-            } else {
-                activity.getLuaPath("res/color", "day.lua")
-            }
-            if (File(path).exists()) globals.loadfile(path, colorTable).call()
-            return colorTable!![key]
+            if (inited) return colorTable[key]
+            return checktable()[key]
         }
     }
 
     private inner class string(private val activity: LuaContext, private val globals: Globals) :
         LuaValue() {
-        private var stringTable: LuaTable? = null
-        private var mLanguage: String? = null
+        private var stringTable = LuaTable()
+        private var inited = false
 
         override fun type(): Int {
             return TTABLE
@@ -174,40 +147,10 @@ class res(private val context: LuaContext) : TwoArgFunction() {
         }
 
         override fun checktable(): LuaTable {
-            if (stringTable == null) {
-                mLanguage = Locale.getDefault().language
-                stringTable = LuaTable()
-                var p = activity.getLuaPath("res/string", "init.lua")
-                if (File(p).exists()) globals.loadfile(p, stringTable).call()
-
-                // 加载指定语言的字符串资源文件
-                p = activity.getLuaPath("res/string", "$mLanguage.lua")
-                if (File(p).exists()) {
-                    globals.loadfile(p, stringTable).call()
-                } else {
-                    // 如果当前设备的语言不存在对应的资源文件，则加载默认的语言资源文件
-                    p = activity.getLuaPath("res/string", "default.lua")
-                    if (File(p).exists()) {
-                        val defValue: LuaValue = globals.loadfile(p).call()
-                        if (defValue.isstring()) {
-                            val defLanguage = defValue.tojstring()
-                            p = activity.getLuaPath("res/string", "$defLanguage.lua")
-                            if (File(p).exists()) {
-                                globals.loadfile(p, stringTable).call()
-                            }
-                        }
-                    }
-                }
-            }
-            return stringTable!!
-        }
-
-        override fun get(key: String): LuaValue {
-            if (stringTable != null) return stringTable!![key]
-            mLanguage = Locale.getDefault().language
-            stringTable = LuaTable()
+            val mLanguage = Locale.getDefault().language
             var p = activity.getLuaPath("res/string", "init.lua")
             if (File(p).exists()) globals.loadfile(p, stringTable).call()
+
             // 加载指定语言的字符串资源文件
             p = activity.getLuaPath("res/string", "$mLanguage.lua")
             if (File(p).exists()) {
@@ -226,7 +169,13 @@ class res(private val context: LuaContext) : TwoArgFunction() {
                     }
                 }
             }
-            return stringTable!![key]
+            inited = true
+            return stringTable
+        }
+
+        override fun get(key: String): LuaValue {
+            if (inited) return stringTable[key]
+            return checktable()[key]
         }
     }
 
@@ -392,7 +341,7 @@ class res(private val context: LuaContext) : TwoArgFunction() {
 
         override fun get(arg: String): LuaValue {
             val p = activity.getLuaPath("res/layout", "$arg.lua")
-            return LuaLayout(activity.context)
+            return LuaLayout(activity as Context)
                 .load(globals.loadfile(p, globals).call(), globals)
         }
     }
