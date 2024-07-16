@@ -20,7 +20,7 @@ return function()
 
   local Build = bindClass "android.os.Build"
   local Environment = bindClass "android.os.Environment"
-  if (Build.VERSION.SDK_INT >= 11) then
+  if (Build.VERSION.SDK_INT >= 30) then
     try
       if not (Environment.isExternalStorageManager()) then
         import "com.google.android.material.dialog.MaterialAlertDialogBuilder"

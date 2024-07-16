@@ -1,4 +1,4 @@
-package com.nekolaska.widget
+package com.nekolaska.internal
 
 import android.content.Context
 import android.view.MotionEvent
@@ -14,7 +14,6 @@ class MyFullDraggableContainer(context: Context?) : FullDraggableContainer(conte
             onTouchEvent(event)
         } else false
     }
-
     fun setSwipeable(z: Boolean) {
         isSwipeable = z
     }

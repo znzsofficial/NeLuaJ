@@ -5145,8 +5145,6 @@ return {
 "com.myopicmobile.textwarrior.common.UndoStack",
 "com.myopicmobile.textwarrior.common.WriteTask",
 "com.myopicmobile.textwarrior.common.llex",
-"com.nekolaska.widget.MyFullDraggableContainer",
-"com.nekolaska.widget.CustomMagnifier",
 "com.sun.security.cert.internal.x509.X509V1CertImpl",
 "dalvik.annotation.optimization.CriticalNative",
 "dalvik.annotation.optimization.FastNative",
