@@ -1,0 +1,125 @@
+package com.nekolaska.widget
+
+import android.content.Context
+import android.graphics.Color
+import android.graphics.Typeface
+import android.util.AttributeSet
+import android.view.Gravity
+import android.widget.LinearLayout
+import androidx.appcompat.widget.AppCompatTextView
+import androidx.cardview.widget.CardView
+
+class SelectBox @JvmOverloads constructor(
+    context: Context, attrs: AttributeSet? = null
+) : CardView(context, attrs) {
+    private var textColor = Color.BLACK
+    private var selectedColor = Color.parseColor("#bbdefb")
+    private var listener: SelectBoxListener? = null
+    private val layout = LinearLayout(context).apply {
+        orientation = LinearLayout.HORIZONTAL
+        layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+    }
+
+    init {
+        addView(layout)
+        radius = 12f
+        elevation = 0f
+    }
+
+    fun setBoxColor(color: Int) {
+        setCardBackgroundColor(color)
+    }
+
+    fun setItemTextColor(color: Int) {
+        textColor = color
+    }
+
+    private fun uncheckAllExcept(title: String) {
+        for (i in 0 until layout.childCount) {
+            val child = layout.getChildAt(i)
+            if (child is SelectBoxItem && child.text != title) {
+                child.uncheck()
+            }
+        }
+    }
+
+    fun selectItem(title: String) {
+        for (i in 0 until layout.childCount) {
+            val child = layout.getChildAt(i)
+            if (child is SelectBoxItem && child.text == title) {
+                child.check()
+                break
+            }
+        }
+    }
+
+    fun setSelectedColor(color: Int) {
+        selectedColor = color
+    }
+
+    fun setOnSelectedListener(func: SelectBoxListener) {
+        listener = func
+    }
+
+    fun setItems(titles: List<String>) {
+        for (title in titles) addItem(title)
+    }
+
+    fun addItem(title: String) {
+        layout.addView(SelectBoxItem(context).apply {
+            text = title
+            textView.setTextColor(textColor)
+            uncheck()
+        })
+    }
+
+    interface SelectBoxListener {
+        fun onSelected(title: String)
+    }
+
+    inner class SelectBoxItem @JvmOverloads constructor(
+        context: Context, attrs: AttributeSet? = null
+    ) : CardView(context, attrs) {
+        private var checked = false
+        var text
+            get() = textView.text.toString()
+            set(value) {
+                textView.text = value
+            }
+
+        fun uncheck() {
+            checked = false
+            setCardBackgroundColor(Color.TRANSPARENT)
+        }
+
+        fun check() {
+            checked = true
+            setCardBackgroundColor(selectedColor)
+            listener?.onSelected(text)
+            uncheckAllExcept(text)
+        }
+
+        val textView = AppCompatTextView(context).apply {
+            layoutParams =
+                LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).apply {
+                    setMargins(16, 8, 16, 8)
+                }
+            gravity = Gravity.CENTER
+            typeface = Typeface.DEFAULT_BOLD
+        }
+
+        init {
+            radius = 12f
+            elevation = 0f
+            addView(textView)
+            setOnClickListener {
+                if (checked) {
+                    uncheck()
+                } else {
+                    check()
+                }
+            }
+        }
+
+    }
+}

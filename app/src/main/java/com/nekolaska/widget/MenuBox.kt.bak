@@ -1,0 +1,84 @@
+package com.nekolaska.widget
+
+import android.annotation.SuppressLint
+import android.content.Context
+import android.graphics.Color
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffColorFilter
+import android.graphics.Typeface
+import android.util.AttributeSet
+import android.view.Gravity
+import androidx.appcompat.widget.AppCompatTextView
+import androidx.appcompat.widget.PopupMenu
+import androidx.cardview.widget.CardView
+import androidx.core.content.ContextCompat
+
+
+class MenuBox @JvmOverloads constructor(
+    context: Context, attrs: AttributeSet? = null
+) : CardView(context, attrs) {
+    private var listener: MenuBoxListener? = null
+    private val menu = PopupMenu(context, this)
+
+    @SuppressLint("PrivateResource")
+    private val drawable = ContextCompat.getDrawable(
+        context,
+        com.google.android.material.R.drawable.mtrl_ic_arrow_drop_down
+    )?.apply {
+        colorFilter = PorterDuffColorFilter(Color.BLACK, PorterDuff.Mode.SRC_ATOP)
+    }
+
+    private val text = AppCompatTextView(context).apply {
+        gravity = Gravity.CENTER
+        typeface = Typeface.DEFAULT_BOLD
+        setPadding(24, 8, 24, 8)
+        setCompoundDrawablesWithIntrinsicBounds(null, null, drawable, null)
+    }
+
+    fun setOnSelectedListener(func: MenuBoxListener) {
+        listener = func
+    }
+
+    fun setBoxColor(color: Int) {
+        setCardBackgroundColor(color)
+    }
+
+    fun setText(text: String) {
+        this.text.text = text
+    }
+
+    fun setTextColor(color: Int) {
+        this.text.setTextColor(color)
+    }
+
+    fun setIconColor(color: Int) {
+        drawable?.colorFilter = PorterDuffColorFilter(color, PorterDuff.Mode.SRC_ATOP)
+        text.setCompoundDrawablesWithIntrinsicBounds(null, null, drawable, null)
+    }
+
+    fun addItem(title: String) {
+        menu.menu.add(title).setOnMenuItemClickListener {
+            text.text = it.title
+            listener?.onSelected(it.title.toString())
+            true
+        }
+    }
+
+    fun setItems(titles: List<String>) {
+        for (title in titles) addItem(title)
+    }
+
+    init {
+        addView(text)
+        radius = 12f
+        elevation = 0f
+        setOnClickListener {
+            menu.show()
+        }
+        setOnTouchListener(menu.dragToOpenListener)
+    }
+
+    interface MenuBoxListener {
+        fun onSelected(text: String)
+    }
+}
