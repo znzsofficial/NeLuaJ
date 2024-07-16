@@ -17449,8 +17449,6 @@ return {
     "com.myopicmobile.textwarrior.common.llex$CharInputSteam",
     "com.myopicmobile.textwarrior.common.llex$SemInfo",
     "com.myopicmobile.textwarrior.common.llex$Token",
-    "com.nekolaska.widget.MyFullDraggableContainer",
-    "com.nekolaska.widget.CustomMagnifier",
     "com.sun.security.cert.internal.x509.X509V1CertImpl",
     "dalvik.annotation.optimization.CriticalNative",
     "dalvik.annotation.optimization.FastNative",

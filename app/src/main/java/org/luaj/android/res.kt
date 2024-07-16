@@ -38,7 +38,7 @@ class res(private val context: LuaContext) : TwoArgFunction() {
         return NIL
     }
 
-    private inner class dimen(
+    private class dimen(
         private val activity: LuaContext,
         private val globals: Globals,
         private val configuration: Configuration
@@ -88,7 +88,7 @@ class res(private val context: LuaContext) : TwoArgFunction() {
     }
 
 
-    private inner class color(
+    private class color(
         private val activity: LuaContext,
         private val globals: Globals,
         private val configuration: Configuration
@@ -129,7 +129,7 @@ class res(private val context: LuaContext) : TwoArgFunction() {
         }
     }
 
-    private inner class string(private val activity: LuaContext, private val globals: Globals) :
+    private class string(private val activity: LuaContext, private val globals: Globals) :
         LuaValue() {
         private var stringTable = LuaTable()
         private var inited = false
@@ -179,7 +179,7 @@ class res(private val context: LuaContext) : TwoArgFunction() {
         }
     }
 
-    private inner class drawable(private val activity: LuaContext, private val globals: Globals) :
+    private class drawable(private val activity: LuaContext, private val globals: Globals) :
         LuaValue() {
         override fun type(): Int {
             return TTABLE
@@ -229,7 +229,7 @@ class res(private val context: LuaContext) : TwoArgFunction() {
         }
     }
 
-    private inner class bitmap(private val activity: LuaContext, private val globals: Globals) :
+    private class bitmap(private val activity: LuaContext, private val globals: Globals) :
         LuaValue() {
         override fun type(): Int {
             return TTABLE
@@ -283,7 +283,7 @@ class res(private val context: LuaContext) : TwoArgFunction() {
         }
     }
 
-    private inner class layout(private val activity: LuaContext, private val globals: Globals) :
+    private class layout(private val activity: LuaContext, private val globals: Globals) :
         LuaValue() {
         override fun type(): Int {
             return TTABLE
@@ -314,7 +314,7 @@ class res(private val context: LuaContext) : TwoArgFunction() {
         }
     }
 
-    private inner class view(private val activity: LuaContext, private val globals: Globals) :
+    private class view(private val activity: LuaContext, private val globals: Globals) :
         LuaValue() {
         override fun type(): Int {
             return TTABLE
@@ -346,7 +346,7 @@ class res(private val context: LuaContext) : TwoArgFunction() {
         }
     }
 
-    private inner class font(private val activity: LuaContext) : LuaValue() {
+    private class font(private val activity: LuaContext) : LuaValue() {
         override fun type(): Int {
             return TTABLE
         }

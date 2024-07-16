@@ -1,4 +1,4 @@
-package com.nekolaska.widget
+package com.nekolaska.internal
 
 import android.app.Activity
 import android.graphics.Bitmap
