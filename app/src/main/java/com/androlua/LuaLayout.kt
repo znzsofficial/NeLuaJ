@@ -736,11 +736,13 @@ class LuaLayout(private val initialContext: Context) {
             toint["flagForceAscii"] = -0x80000000
 
             // layout_scrollFlags
+            toint["noScroll"] = 0
             toint["scroll"] = 1
             toint["exitUtilCollapsed"] = 2
             toint["enterAlways"] = 4
             toint["enterAlwaysCollapsed"] = 8
             toint["snap"] = 16
+            toint["snapMargins"] = 32
 
             // layout_collapseMode
             toint["pin"] = 1
