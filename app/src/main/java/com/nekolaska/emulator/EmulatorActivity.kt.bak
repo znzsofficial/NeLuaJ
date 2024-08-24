@@ -1,0 +1,144 @@
+package com.nekolaska.emulator
+
+import android.os.Bundle
+import android.view.KeyEvent
+import android.view.WindowManager
+import com.ym.library.R
+import com.ym.library.base.BaseEmulatorActivity
+import com.ym.library.base.c
+import com.ym.library.sdk.EmulatorManager
+
+/**
+ * @Desc:自定义Nes游戏界面 在这里可以定义界面控件 诸如按钮等
+ * @Author:Kevin
+ * @Date:2023/2/17 15:25:37
+ */
+class EmulatorActivity : BaseEmulatorActivity() {
+    private val manager: EmulatorManager = EmulatorManager.getInstance()
+    private fun pressKey(key: EmulatorManager.ControllerKey) {
+        manager.pressKey(EmulatorManager.Player.PLAYER1, key)
+    }
+
+    private fun unPressKey(key: EmulatorManager.ControllerKey) {
+        manager.unPressKey(EmulatorManager.Player.PLAYER1, key)
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        actionBar?.hide()
+        supportActionBar?.hide()
+        window.setFlags(
+            WindowManager.LayoutParams.FLAG_FULLSCREEN,
+            WindowManager.LayoutParams.FLAG_FULLSCREEN
+        )
+    }
+
+    override fun getLayoutResId(): Int {
+        return R.layout.activity_base_emulator_show;
+    }
+
+    override fun b(var1: c) {
+        var1.a(R.string.game_menu_reset, R.drawable.ic_reload)
+        var1.a(R.string.game_menu_save, R.drawable.ic_save)
+        var1.a(R.string.game_menu_load, R.drawable.ic_load)
+        var1.a(R.string.game_menu_cheats, R.drawable.ic_cheats)
+        var1.a(R.string.game_menu_back_to_past, R.drawable.ic_time_machine)
+        var1.a(R.string.game_menu_screenshot, R.drawable.ic_make_screenshot)
+    }
+
+    override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
+        when (keyCode) {
+            KeyEvent.KEYCODE_DPAD_UP -> {
+                unPressKey(EmulatorManager.ControllerKey.UP)
+                return true
+            }
+
+            KeyEvent.KEYCODE_DPAD_DOWN -> {
+                unPressKey(EmulatorManager.ControllerKey.DOWN)
+                return true
+            }
+
+            KeyEvent.KEYCODE_DPAD_LEFT -> {
+                unPressKey(EmulatorManager.ControllerKey.LEFT)
+                return true
+            }
+
+            KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                unPressKey(EmulatorManager.ControllerKey.RIGHT)
+                return true
+            }
+
+
+            KeyEvent.KEYCODE_BUTTON_START -> {
+                unPressKey(EmulatorManager.ControllerKey.START)
+                return true
+            }
+
+            KeyEvent.KEYCODE_BUTTON_SELECT -> {
+                unPressKey(EmulatorManager.ControllerKey.SELECT)
+                return true
+            }
+
+            KeyEvent.KEYCODE_BUTTON_A -> {
+                //A键
+                unPressKey(EmulatorManager.ControllerKey.A)
+                return true
+            }
+
+            KeyEvent.KEYCODE_BUTTON_B -> {
+                //B键
+                unPressKey(EmulatorManager.ControllerKey.B)
+                return true
+            }
+        }
+        return super.onKeyUp(keyCode, event)
+    }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        when (keyCode) {
+            KeyEvent.KEYCODE_DPAD_UP -> {
+                pressKey(EmulatorManager.ControllerKey.UP)
+                return true
+            }
+
+            KeyEvent.KEYCODE_DPAD_DOWN -> {
+                pressKey(EmulatorManager.ControllerKey.DOWN)
+                return true
+            }
+
+            KeyEvent.KEYCODE_DPAD_LEFT -> {
+                pressKey(EmulatorManager.ControllerKey.LEFT)
+                return true
+            }
+
+            KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                pressKey(EmulatorManager.ControllerKey.RIGHT)
+                return true
+            }
+
+
+            KeyEvent.KEYCODE_BUTTON_START -> {
+                pressKey(EmulatorManager.ControllerKey.START)
+                return true
+            }
+
+            KeyEvent.KEYCODE_BUTTON_SELECT -> {
+                pressKey(EmulatorManager.ControllerKey.SELECT)
+                return true
+            }
+
+            KeyEvent.KEYCODE_BUTTON_A -> {
+                //A键
+                pressKey(EmulatorManager.ControllerKey.A)
+                return true
+            }
+
+            KeyEvent.KEYCODE_BUTTON_B -> {
+                //B键
+                pressKey(EmulatorManager.ControllerKey.B)
+                return true
+            }
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+}

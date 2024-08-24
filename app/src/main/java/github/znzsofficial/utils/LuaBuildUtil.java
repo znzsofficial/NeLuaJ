@@ -109,6 +109,7 @@ public class LuaBuildUtil {
         final String[] finalPs = ps;
         String finalVerCode = verCode;
         mDlg = new ProgressDialog(mContext);
+        mDlg.setProgressStyle(ProgressDialog.STYLE_SPINNER);
         mDlg.setMessage("正在打包...");
         mDlg.show();
         new Thread(

@@ -3,6 +3,7 @@ pluginManagement {
         google()
         mavenCentral()
         gradlePluginPortal()
+        maven("https://mirrors.tuna.tsinghua.edu.cn")
     }
 }
 dependencyResolutionManagement {
@@ -11,9 +12,9 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
         maven("https://jitpack.io")
+        maven("https://mirrors.tuna.tsinghua.edu.cn")
         maven("https://repo.eclipse.org/content/groups/releases/")
         maven("https://maven.aliyun.com/nexus/content/groups/public/")
-        maven("https://mirrors.tuna.tsinghua.edu.cn")
     }
 }
 

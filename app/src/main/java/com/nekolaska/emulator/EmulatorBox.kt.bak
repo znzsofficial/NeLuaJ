@@ -1,0 +1,74 @@
+package com.nekolaska.emulator
+
+import android.app.Activity
+import com.ym.library.sdk.EmulatorManager
+import java.io.File
+
+
+class EmulatorBox(private val mActivity: Activity) {
+    private val manager = EmulatorManager.getInstance()
+    fun start(path: String) {
+        manager.startGame(mActivity, EmulatorActivity::class.java, File(path))
+    }
+
+    fun startDefault(path: String) {
+        manager.startGame(mActivity, File(path))
+    }
+
+    fun setShowController(show: Boolean) {
+        manager.set(EmulatorManager.Settings.SHOW_CONTROLLER, show)
+    }
+
+    fun setQuality(quality: String) {
+        when (quality) {
+            "low" -> manager.set(
+                EmulatorManager.Settings.EMULATION_QUALITY,
+                EmulatorManager.EmulationQuality.LOW
+            )
+
+            "medium" -> manager.set(
+                EmulatorManager.Settings.EMULATION_QUALITY,
+                EmulatorManager.EmulationQuality.MEDIUM
+            )
+
+            "high" -> manager.set(
+                EmulatorManager.Settings.EMULATION_QUALITY,
+                EmulatorManager.EmulationQuality.HIGH
+            )
+        }
+    }
+
+    fun setOrientation(orientation: String) {
+        when (orientation) {
+            "horizontal" -> manager.set(
+                EmulatorManager.Settings.SCREEN_ORIENTATION,
+                EmulatorManager.EmulatorScreenOrientation.HORIZONTAL
+            )
+
+            "vertical" -> manager.set(
+                EmulatorManager.Settings.SCREEN_ORIENTATION,
+                EmulatorManager.EmulatorScreenOrientation.VERTICAL
+            )
+
+            "auto" -> manager.set(
+                EmulatorManager.Settings.SCREEN_ORIENTATION,
+                EmulatorManager.EmulatorScreenOrientation.AUTO
+            )
+        }
+    }
+
+    fun setFullScreen(fullScreen: Boolean) {
+        manager.set(EmulatorManager.Settings.FORCE_FULL_SCREEN, fullScreen)
+    }
+
+    fun scanDir(path: String): MutableList<File> {
+        val ret = mutableListOf<File>()
+        File(path).listFiles()?.forEach {
+            if (it.name.endsWith(".nes")) {
+                ret.add(it)
+            }
+        }
+        return ret
+    }
+
+}
