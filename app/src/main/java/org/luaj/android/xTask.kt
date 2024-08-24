@@ -8,19 +8,19 @@ import com.nekolaska.firstArg
 import com.nekolaska.ifIsFunction
 import com.nekolaska.toLuaValue
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.luaj.LuaError
-import org.luaj.LuaValue
 import org.luaj.Varargs
 import org.luaj.lib.VarArgFunction
 
 
 class xTask(private val mContext: LuaActivity) : VarArgFunction(), LuaGcable {
 
-    private var job: LuaValue? = null
+    private var job: Job? = null
 
-    override fun invoke(args: Varargs): Varargs? =
+    override fun invoke(args: Varargs): Varargs =
         args.firstArg().checktable().let { table ->
             mContext.lifecycleScope.launch {
                 withContext(
@@ -45,11 +45,12 @@ class xTask(private val mContext: LuaActivity) : VarArgFunction(), LuaGcable {
                     }
                 }
                 // 先把 job 存起来，再用 let 返回
-            }.also { job = it.toLuaValue() }.let { job }
+            }.also { job = it }.let { job.toLuaValue() }
         }
 
 
     override fun gc() {
+        job?.cancel()
         job = null
     }
 

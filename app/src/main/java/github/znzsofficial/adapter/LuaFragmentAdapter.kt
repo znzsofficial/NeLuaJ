@@ -15,7 +15,6 @@ class LuaFragmentAdapter(context: LuaActivity, inter: Creator) :
             // 根据位置返回对应的 Fragment
             creator.createFragment(position)
         } catch (e: Exception) {
-            e.printStackTrace()
             mContext.sendError("FragmentAdapter", e)
             Fragment()
         }
@@ -24,9 +23,8 @@ class LuaFragmentAdapter(context: LuaActivity, inter: Creator) :
     override fun getItemCount(): Int {
         return try {
             // 返回 Fragment 的数量
-            creator.itemCount.toInt()
+            creator.getItemCount()
         } catch (e: Exception) {
-            e.printStackTrace()
             mContext.sendError("FragmentAdapter", e)
             0
         }
@@ -34,6 +32,6 @@ class LuaFragmentAdapter(context: LuaActivity, inter: Creator) :
 
     interface Creator {
         fun createFragment(i: Int): Fragment
-        val itemCount: Long
+        fun getItemCount(): Int
     }
 }

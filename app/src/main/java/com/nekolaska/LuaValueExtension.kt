@@ -8,15 +8,28 @@ import org.luaj.lib.jse.CoerceLuaToJava
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
+@Suppress("NOTHING_TO_INLINE")
 inline fun Varargs.firstArg(): LuaValue = this.arg1()
+
+@Suppress("NOTHING_TO_INLINE")
 inline fun Varargs.secondArg(): LuaValue = this.arg(2)
+
+@Suppress("NOTHING_TO_INLINE")
 inline fun Varargs.argAt(index: Int): LuaValue = this.arg(index)
+
+@Suppress("NOTHING_TO_INLINE")
 inline fun Varargs.asString(): String = this.tojstring()
+
+@Suppress("NOTHING_TO_INLINE")
 inline fun LuaValue.isNotNil(): Boolean = !this.isnil()
 
+@Suppress("NOTHING_TO_INLINE")
 inline fun LuaValue.ifNotNil(): LuaValue? = takeIf { it.isNotNil() }
+
+@Suppress("NOTHING_TO_INLINE")
 inline fun LuaValue.ifIsFunction(): LuaValue? = takeIf { it.isfunction() }
 
+@Suppress("unused")
 suspend fun LuaValue.suspendInvoke(varargs: Varargs) = suspendCancellableCoroutine {
     try {
         it.resume(this.invoke(varargs))
@@ -25,10 +38,14 @@ suspend fun LuaValue.suspendInvoke(varargs: Varargs) = suspendCancellableCorouti
     }
 }
 
+@Suppress("NOTHING_TO_INLINE")
 inline fun <T> T.toLuaValue(): LuaValue = CoerceJavaToLua.coerce(this)
 
+@Suppress("NOTHING_TO_INLINE", "unused")
 inline fun <T> LuaValue.toAny(clazz: Class<T>): Any? = CoerceLuaToJava.coerce(this, clazz)
 
 //inline fun <reified T : Any> KClass<T>.toLuaClass(): LuaValue = CoerceJavaToLua.coerce(this.java)
 inline fun <reified T> Array<T>.toVarargs(): Varargs = LuaValue.varargsOf(this)
+
+@Suppress("unused")
 inline fun <reified T> ArrayList<T>.toVarargs(): Varargs = LuaValue.varargsOf(this)

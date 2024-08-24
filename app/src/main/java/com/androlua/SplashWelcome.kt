@@ -17,8 +17,6 @@ import java.util.concurrent.TimeUnit
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 
-// import net.lingala.zip4j.ZipFile;
-// import net.lingala.zip4j.exception.ZipException;
 class SplashWelcome : ComponentActivity() {
     private var isUpdate = false
     private lateinit var app: LuaApplication
@@ -36,14 +34,14 @@ class SplashWelcome : ComponentActivity() {
         localDir = app.luaDir
         if (checkInfo()) {
             LuaApplication.instance?.setSharedData("UnZiped", false)
-            lifecycleScope.launch(Dispatchers.IO) {
+            lifecycleScope.launch {
                 runCatching {
-                    unApk("assets/", localDir)
+                    withContext(Dispatchers.IO) {
+                        unApk("assets/", localDir)
+                    }
                 }
-                withContext(Dispatchers.Main) {
-                    startActivity()
-                    LuaApplication.instance?.setSharedData("UnZiped", true)
-                }
+                startActivity()
+                LuaApplication.instance?.setSharedData("UnZiped", true)
             }
         } else {
             startActivity()

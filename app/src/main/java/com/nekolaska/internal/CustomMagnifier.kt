@@ -10,6 +10,7 @@ import android.widget.FrameLayout
 import androidx.appcompat.widget.AppCompatImageView
 import androidx.cardview.widget.CardView
 
+@Suppress("DEPRECATION")
 class CustomMagnifier(private val mView: View) {
     private var imageHeight: Float
     private var imageWidth: Float

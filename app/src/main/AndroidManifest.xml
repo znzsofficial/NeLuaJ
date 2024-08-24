@@ -24,6 +24,7 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 
     <application
         android:name="com.androlua.LuaApplication"
@@ -50,6 +51,9 @@
             android:name="android.max_aspect"
             android:value="4" />
 
+        <activity
+            android:name="com.nekolaska.emulator.EmulatorActivity"
+            android:exported="true" />
         <activity
             android:name="com.androlua.LuaActivity"
             android:configChanges="orientation|screenSize|keyboardHidden"
@@ -103,6 +107,7 @@
 
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
+
                 <category android:name="android.accessibilityservice.category.FEEDBACK_AUDIBLE" />
                 <category android:name="android.accessibilityservice.category.FEEDBACK_HAPTIC" />
                 <category android:name="android.accessibilityservice.category.FEEDBACK_SPOKEN" />
@@ -113,16 +118,18 @@
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
             android:exported="false"
-            android:grantUriPermissions="true">
+            android:grantUriPermissions="true"
+            tools:replace="android:authorities">
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/luaj_filepaths" />
+                android:resource="@xml/luaj_filepaths"
+                tools:replace="android:resource" />
         </provider>
         <provider
             android:name="androidx.startup.InitializationProvider"
             android:authorities="${applicationId}.androidx-startup"
-            android:exported="false">
-        </provider>
+            android:exported="false" />
+
         <service
             android:name="com.androlua.LuaWallpaperService"
             android:exported="true"

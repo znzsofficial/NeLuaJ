@@ -14,9 +14,8 @@ open class LuaCustRecyclerAdapter @JvmOverloads constructor(
 
     override fun getItemCount(): Int {
         return try {
-            adapterCreator.itemCount.toInt()
+            adapterCreator.getItemCount()
         } catch (e: Exception) {
-            e.printStackTrace()
             mContext?.sendError("RecyclerAdapter: getItemCount", e)
             0
         }
@@ -26,7 +25,6 @@ open class LuaCustRecyclerAdapter @JvmOverloads constructor(
         return try {
             adapterCreator.getItemViewType(i).toInt()
         } catch (e: Exception) {
-            e.printStackTrace()
             mContext?.sendError("RecyclerAdapter: getItemViewType", e)
             -1
         }
@@ -36,7 +34,6 @@ open class LuaCustRecyclerAdapter @JvmOverloads constructor(
         try {
             adapterCreator.onBindViewHolder(holder, i)
         } catch (e: Exception) {
-            e.printStackTrace()
             mContext?.sendError("RecyclerAdapter: onBindViewHolder", e)
         }
     }
@@ -45,7 +42,6 @@ open class LuaCustRecyclerAdapter @JvmOverloads constructor(
         return try {
             adapterCreator.onCreateViewHolder(viewGroup, i)
         } catch (e: Exception) {
-            e.printStackTrace()
             mContext?.sendError("RecyclerAdapter: onCreateViewHolder", e)
             LuaCustRecyclerHolder(View(mContext as Context))
         }
@@ -56,13 +52,12 @@ open class LuaCustRecyclerAdapter @JvmOverloads constructor(
         try {
             adapterCreator.onViewRecycled(holder)
         } catch (e: Exception) {
-            e.printStackTrace()
             mContext?.sendError("RecyclerAdapter: onViewRecycled", e)
         }
     }
 
     interface Creator {
-        val itemCount: Long
+        fun getItemCount(): Int
         fun getItemViewType(i: Int): Long
         fun onBindViewHolder(viewHolder: LuaCustRecyclerHolder, i: Int)
         fun onCreateViewHolder(viewGroup: ViewGroup?, i: Int): LuaCustRecyclerHolder
