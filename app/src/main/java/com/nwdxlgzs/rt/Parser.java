@@ -1,16 +1,13 @@
 
 package com.nwdxlgzs.rt;
 
-import com.nwdxlgzs.rt.ResConst;
-import com.nwdxlgzs.rt.StringItems;
+import static com.nwdxlgzs.rt.NodeVisitor.TYPE_INT_BOOLEAN;
+import static com.nwdxlgzs.rt.NodeVisitor.TYPE_STRING;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.IntBuffer;
-
-import static com.nwdxlgzs.rt.NodeVisitor.TYPE_INT_BOOLEAN;
-import static com.nwdxlgzs.rt.NodeVisitor.TYPE_STRING;
 
 public class Parser implements ResConst {
 
@@ -34,7 +31,7 @@ public class Parser implements ResConst {
     private int classAttribute;
     private int fileSize = -1;
     private int idAttribute;
-    private ByteBuffer in;
+    private final ByteBuffer in;
     private int lineNumber;
     private int nameIdx;
     private int nsIdx;

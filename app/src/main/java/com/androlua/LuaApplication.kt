@@ -21,6 +21,7 @@ class LuaApplication : Application(), LuaContext {
         getExternalFilesDir("dexfiles")?.let { rmDir(it) }
         CrashHandler.instance.init(this)
         DynamicColors.applyToActivitiesIfAvailable(this)
+        //EmulatorSDK.init(this)
     }
 
     override fun getClassLoaders(): ArrayList<ClassLoader>? {

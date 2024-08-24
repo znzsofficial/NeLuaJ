@@ -66,18 +66,20 @@ android {
 }
 
 dependencies {
-    implementation(libs.kotlin.reflect)
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar"))))
-    implementation(libs.core.ktx)
-    implementation(libs.appcompat)
-    implementation(libs.material)
+    implementation(libs.kotlin.reflect)
     //implementation("me.jahnen.libaums:core:0.10.0")
+    //implementation("me.jahnen.libaums:httpserver:0.6.2")
+    //implementation("io.github.beseting:NesEmulator:1.0.1")
+    //implementation("net.gotev:speech:1.6.2")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.espresso.core)
 
     //AndroidX
+    implementation(libs.core.ktx)
+    implementation(libs.appcompat)
     implementation(libs.androidx.activity)
     implementation(libs.androidx.annotation)
     implementation(libs.androidx.collection)
@@ -111,6 +113,7 @@ dependencies {
     implementation(libs.androidx.window)
 
     //Material
+    implementation(libs.material)
     implementation(libs.collapsingtoolbarlayout.subtitle)
 
     //Zip4J

@@ -1,0 +1,193 @@
+package com.nekolaska.speech
+
+import android.Manifest
+import android.app.Activity
+import android.content.pm.PackageManager
+import android.os.Build
+import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import net.gotev.speech.GoogleVoiceTypingDisabledException
+import net.gotev.speech.Speech
+import net.gotev.speech.SpeechDelegate
+import net.gotev.speech.SpeechRecognitionNotAvailable
+import net.gotev.speech.SpeechUtil
+import net.gotev.speech.SupportedLanguagesListener
+import net.gotev.speech.TextToSpeechCallback
+import net.gotev.speech.UnsupportedReason
+import java.util.Locale
+
+
+class SpeechTool(private val context: Activity) {
+
+    init {
+        Speech.init(context, context.packageName)
+    }
+
+    fun say(str: String) {
+        Speech.getInstance().say(str.trim())
+    }
+
+    fun say(str: String, callback: Callback) {
+        Speech.getInstance().say(str.trim(), object : TextToSpeechCallback {
+            override fun onStart() {
+                callback.invoke("TTS onStart")
+            }
+
+            override fun onCompleted() {
+                callback.invoke("TTS onCompleted")
+            }
+
+            override fun onError() {
+                callback.invoke("TTS onError")
+            }
+        })
+    }
+
+    fun listen(callback: Callback) {
+        if (Speech.getInstance().isListening) {
+            Speech.getInstance().stopListening()
+        } else {
+            if (ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.RECORD_AUDIO
+                ) == PackageManager.PERMISSION_GRANTED
+            ) {
+                onRecordAudioPermissionGranted(callback)
+            } else {
+                ActivityCompat.requestPermissions(
+                    context,
+                    arrayOf(Manifest.permission.RECORD_AUDIO),
+                    221
+                )
+            }
+        }
+    }
+
+    fun onRequestPermissionsResult(
+        requestCode: Int,
+        grantResults: IntArray
+    ) {
+        if (requestCode == 221) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                onRecordAudioPermissionGranted(null)
+            } else {
+                Toast.makeText(context, "您需要授予使用麦克风的权限", Toast.LENGTH_LONG)
+                    .show()
+            }
+        }
+    }
+
+    private fun onRecordAudioPermissionGranted(callback: Callback?) {
+        try {
+            Speech.getInstance().stopTextToSpeech()
+            Speech.getInstance().startListening(object : SpeechDelegate {
+                override fun onStartOfSpeech() {
+                    //Log.i("speech", "speech recognition is now active")
+                }
+
+                override fun onSpeechRmsChanged(value: Float) {
+                    //Log.d("speech", "rms is now: $value")
+                }
+
+                override fun onSpeechPartialResults(results: List<String>) {
+                    StringBuilder().apply {
+                        for (res in results) {
+                            append(res).append(" ")
+                        }
+                        callback?.invoke(toString())
+                    }
+                }
+
+                override fun onSpeechResult(result: String) {
+                    callback?.invoke(result)
+                    if (result.isEmpty()) {
+                        say("请重复")
+                    } else {
+                        say(result)
+                    }
+                }
+            })
+        } catch (_: SpeechRecognitionNotAvailable) {
+            showSpeechNotSupportedDialog()
+        } catch (_: GoogleVoiceTypingDisabledException) {
+            showEnableGoogleVoiceTyping()
+        }
+    }
+
+    private fun showSpeechNotSupportedDialog() {
+        AlertDialog.Builder(context)
+            .setMessage("此设备不支持语音识别。要安装 Google 以使用语音识别吗？")
+            .setCancelable(false)
+            .setPositiveButton(android.R.string.yes) { _, _ ->
+                SpeechUtil.redirectUserToGoogleAppOnPlayStore(
+                    context
+                )
+            }
+            .setNegativeButton(android.R.string.no, null)
+            .show()
+    }
+
+    private fun showEnableGoogleVoiceTyping() {
+        AlertDialog.Builder(context)
+            .setMessage("请启用 Google 语音输入来使用语音识别！")
+            .setCancelable(false)
+            .setPositiveButton(android.R.string.yes, null)
+            .show()
+    }
+
+    fun release() {
+        Speech.getInstance().shutdown()
+    }
+
+    fun onSetSpeechToTextLanguage() {
+        Speech.getInstance().getSupportedSpeechToTextLanguages(object : SupportedLanguagesListener {
+            override fun onSupportedLanguages(supportedLanguages: List<String>) {
+                val items = supportedLanguages.toTypedArray()
+
+                AlertDialog.Builder(context)
+                    .setTitle("当前语言: " + Speech.getInstance().speechToTextLanguage)
+                    .setItems(items) { _, i ->
+                        val locale: Locale
+                        if (Build.VERSION.SDK_INT >= 21) {
+                            locale = Locale.forLanguageTag(supportedLanguages[i])
+                        } else {
+                            val langParts = supportedLanguages[i].split("-".toRegex())
+                                .dropLastWhile { it.isEmpty() }.toTypedArray()
+
+                            locale = if (langParts.size >= 2) {
+                                Locale(langParts[0], langParts[1])
+                            } else {
+                                Locale(langParts[0])
+                            }
+                        }
+
+                        Speech.getInstance().setLocale(locale)
+                        Toast.makeText(
+                            context,
+                            "选中: " + items[i],
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                    .setPositiveButton(android.R.string.cancel, null)
+                    .show()
+            }
+
+            override fun onNotSupported(reason: UnsupportedReason) {
+                when (reason) {
+                    UnsupportedReason.GOOGLE_APP_NOT_FOUND -> showSpeechNotSupportedDialog()
+                    UnsupportedReason.EMPTY_SUPPORTED_LANGUAGES -> AlertDialog.Builder(context)
+                        .setTitle("设置语音转文本语言")
+                        .setMessage("此设备目前不支持任何语言")
+                        .setPositiveButton(android.R.string.ok, null)
+                        .show()
+                }
+            }
+        })
+    }
+
+    interface Callback {
+        fun invoke(result: String)
+    }
+}
