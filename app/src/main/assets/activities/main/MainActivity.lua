@@ -62,8 +62,8 @@ function onCreate()
 end
 
 function onRequestPermissionsResult(r,p,g)
-  LuaFileUtil.checkRoot()
-  LuaFileUtil.checkBackup()
+  LuaFileUtil.checkDirectory(Bean.Path.app_root_pro_dir)
+  checkBackup()
   mRecycler.post(function()
     MainActivity.RecyclerView
     .init()

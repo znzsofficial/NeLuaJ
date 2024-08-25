@@ -119,7 +119,7 @@ _M.init = function()
                 getItemViewType = function()
                     return 0
                 end,
-                getPopupText = function(view, position)
+                getPopupText = function(_, position)
                     return utf8.sub(FileList[position + 1].file_name, 1, 1)
                 end,
                 --[[onViewRecycled=function(holder)
@@ -225,7 +225,7 @@ local getList = function()
     end
     local fileArray = file.list()
 
-    for _, v : (fileArray) do
+    for _, v in (fileArray) do
         local v = tostring(v)
         local full_path = path .. "/" .. v
         if File(full_path).isDirectory() then
@@ -294,12 +294,10 @@ local updateCallback = function()
 end
 
 _M.update = function()
-    if executor.getActiveCount() < executor.getMaximumPoolSize() then
-        executor.execute(function()
-            getList()
-            handler.post(updateCallback)
-        end)
-    end
+    executor.execute(function()
+        getList()
+        handler.post(updateCallback)
+    end)
     return _M
 end
 
