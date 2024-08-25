@@ -34,8 +34,8 @@ class LuaApplication : Application(), LuaContext {
     override fun set(name: String, value: Any) {
     }
 
-    override fun getLuaPath(): String? {
-        return null
+    override fun getLuaPath(): String {
+        return File(luaDir).absolutePath
     }
 
     override fun getLuaPath(s: String): String {

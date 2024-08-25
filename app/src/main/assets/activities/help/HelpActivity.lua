@@ -5,7 +5,7 @@ import "android.view.WindowManager"
 import "android.view.View"
 import "android.graphics.drawable.ColorDrawable"
 import "com.youbenzi.mdtool.tool.MDTool"
-import "mods.utils.LuaFileUtil"
+local LuaFileUtil = luajava.bindClass "com.nekolaska.io.LuaFileUtil".INSTANCE
 import "mods.utils.UiUtil"
 local ColorUtil = this.globalData.ColorUtil
 local res = res

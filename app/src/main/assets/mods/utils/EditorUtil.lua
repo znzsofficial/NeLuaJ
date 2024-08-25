@@ -1,7 +1,6 @@
 local:res
 local:table
 local ColorUtil = this.globalData.ColorUtil
-import "mods.utils.LuaFileUtil"
 import "mods.utils.TabUtil"
 import "mods.utils.MagnifierManager"
 local _M1 = require "mods.utils.EditorUtil$1"
@@ -123,7 +122,7 @@ function _M.save(path, str, editor)
   end
   _M.last_history[path] = editor.getSelectionEnd()
   -- 检查备份文件夹
-  LuaFileUtil.checkBackup()
+  checkBackup()
   -- 保存备份
   local _path = path:gsub(Bean.Path.app_root_pro_dir,"")
   local backups = Bean.Path.backup_dir.."/"..os.date("%Y-%m-%d").."/"..os.date("%H_%M").._path
