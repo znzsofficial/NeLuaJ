@@ -8,10 +8,7 @@ import org.luaj.LuaTable
 import org.luaj.LuaValue
 
 class FileItemHolder(itemView: View) : LuaCustRecyclerHolder(itemView) {
-    init {
-        Tag = LuaTable()
-    }
-
+    val Tag = LuaTable()
     fun bind(): LuaTable {
         return Tag.apply {
             set("contents", itemView.findViewById<View>(R.id.contents).toLuaValue())
@@ -19,7 +16,8 @@ class FileItemHolder(itemView: View) : LuaCustRecyclerHolder(itemView) {
             set("icon", itemView.findViewById<View>(R.id.icon).toLuaValue())
         }
     }
-   
+
+
     fun unbind() {
         Tag.apply {
             set("contents", LuaValue.NIL)
