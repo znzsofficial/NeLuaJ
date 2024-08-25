@@ -1,5 +1,4 @@
 local String = bindClass "java.lang.String"
-local Runnable = bindClass"java.lang.Runnable"
 local File = bindClass "java.io.File"
 local FileInputStream = bindClass "java.io.FileInputStream"
 local LuaUtil=bindClass"com.androlua.LuaUtil"
@@ -9,7 +8,7 @@ local Handler = bindClass"android.os.Handler"
 
 local ByteBuffer, FileChannel, Paths, Files, Okio
 
-if SupportProperties.NIO
+if SupportProperties.NIO then
   ByteBuffer = bindClass "java.nio.ByteBuffer"
   FileChannel = bindClass "java.nio.channels.FileChannel"
   Files = bindClass "java.nio.file.Files";
@@ -113,8 +112,7 @@ function _M.extract(zipPath)
   local zipFile = ZipFile(zipPath)
   local handler = Handler(this.getMainLooper())
   local executor = Executors.newSingleThreadExecutor()
-  executor.execute(Runnable{
-    run = function()
+  executor.execute(function()
       local destinationPath = Bean.Path.app_root_dir.."/tmp"
       try
         zipFile.extractAll(destinationPath)
@@ -123,13 +121,10 @@ function _M.extract(zipPath)
         finally
         zipFile.close()
       end
-      handler.post(Runnable{
-        run = function()
+      handler.post(function()
           print("解压完成")
-        end
-      })
-    end
-  })
+        end)
+    end)
   executor.shutdown()
 end
 

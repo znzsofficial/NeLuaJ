@@ -46,7 +46,7 @@ local _M = {}
 local FileList
 local Anim
 
-_M.suffix_image_map = {
+local suffix_image = setmetatable({
     lua = "file_code",
     luac = "file_c_code",
     java = "file_code",
@@ -74,10 +74,9 @@ _M.suffix_image_map = {
     jpg = "file_img",
     jpeg = "file_img",
     gif = "file_img",
-}
-local suffix_image = setmetatable({}, {
-    __index = function(t, key)
-        return _M.suffix_image_map[key] or "file"
+}, {
+    __index = function(self, key)
+        return self[key] or "file"
     end
 })
 

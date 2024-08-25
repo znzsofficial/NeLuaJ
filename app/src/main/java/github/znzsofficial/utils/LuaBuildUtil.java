@@ -4,6 +4,7 @@ import android.app.ProgressDialog;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
+import androidx.appcompat.view.ContextThemeWrapper;
 
 import com.androlua.LuaActivity;
 import com.androlua.LuaUtil;
@@ -108,8 +109,7 @@ public class LuaBuildUtil {
         String fverName = verName;
         final String[] finalPs = ps;
         String finalVerCode = verCode;
-        mDlg = new ProgressDialog(mContext);
-        mDlg.setProgressStyle(ProgressDialog.STYLE_SPINNER);
+        mDlg = new ProgressDialog(new ContextThemeWrapper(mContext, android.R.style.Theme_DeviceDefault_Dialog));
         mDlg.setMessage("正在打包...");
         mDlg.show();
         new Thread(
@@ -135,7 +135,7 @@ public class LuaBuildUtil {
         File bf = new File(mRootDir, "bin");
         bf.mkdirs();
         File op = new File(bf, mProjDir.getName());
-        Log.i("luaj", "bin: " + op);
+//        Log.i("luaj", "bin: " + op);
 //        CharSequence lb = mContext.getApplicationInfo().nonLocalizedLabel;
 //        String apkg = mContext.getPackageName();
 //        String vr = "1.0";
