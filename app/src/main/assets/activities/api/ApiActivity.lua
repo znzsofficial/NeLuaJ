@@ -7,7 +7,6 @@ import "android.graphics.drawable.ColorDrawable"
 import "com.google.android.material.dialog.MaterialAlertDialogBuilder"
 import "android.view.View"
 import "android.view.WindowManager"
-import "mods.utils.UiUtil"
 local:res
 local ColorUtil = this.globalData.ColorUtil
 local:table
@@ -43,7 +42,7 @@ local window = activity.getWindow()
 .setStatusBarColor(ColorUtil.getColorBackground())
 .addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
 .clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
-if UiUtil.isNightMode()
+if this.isNightMode() then
   window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE)
  else
   window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR)

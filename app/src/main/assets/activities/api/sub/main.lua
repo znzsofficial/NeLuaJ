@@ -10,7 +10,6 @@ import "android.view.View"
 import "android.view.WindowManager"
 import "android.animation.ObjectAnimator"
 import "android.animation.AnimatorSet"
-local DecelerateInterpolator = luajava.newInstance "android.view.animation.DecelerateInterpolator"
 import "com.androlua.adapter.LuaAdapter"
 import "androidx.cardview.widget.CardView"
 import "android.text.SpannableString"
@@ -22,7 +21,7 @@ import "android.text.method.LinkMovementMethod"
 import "com.google.android.material.card.MaterialCardView"
 import "com.google.android.material.textview.MaterialTextView"
 import "com.google.android.material.dialog.MaterialAlertDialogBuilder"
-import "mods.utils.UiUtil"
+local DecelerateInterpolator = luajava.newInstance "android.view.animation.DecelerateInterpolator"
 
 local thisField
 
@@ -59,7 +58,7 @@ local window = activity.getWindow()
 .setStatusBarColor(ColorUtil.getColorBackground())
 .addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
 .clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
-if UiUtil.isNightMode()
+if this.isNightMode()
   window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE)
  else
   window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR)
