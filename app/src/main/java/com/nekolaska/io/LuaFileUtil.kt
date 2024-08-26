@@ -11,13 +11,8 @@ import java.nio.file.Paths
 import kotlin.concurrent.thread
 
 object LuaFileUtil {
-    val impl = if (try {
-            Class.forName("java.nio.file.Files")
-            true
-        } catch (e: ClassNotFoundException) {
-            false
-        }
-    ) NioImpl() else OkioImpl()
+    val impl =
+        if (runCatching { Class.forName("java.nio.file.Files") }.isSuccess) NioImpl() else OkioImpl()
 
     fun create(path: String, content: String) {
         impl.create(path)
