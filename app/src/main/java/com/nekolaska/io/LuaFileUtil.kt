@@ -11,21 +11,17 @@ import java.nio.file.Paths
 import kotlin.concurrent.thread
 
 object LuaFileUtil {
-    private val hasNio by lazy {
-        try {
+    val impl = if (try {
             Class.forName("java.nio.file.Files")
             true
         } catch (e: ClassNotFoundException) {
             false
         }
-    }
-    val impl = if (hasNio) NioImpl() else OkioImpl()
+    ) NioImpl() else OkioImpl()
+
     fun create(path: String, content: String) {
-        val file = File(path)
-        if (!file.exists()) {
-            file.createNewFile()
-        }
-        write(path, content, file)
+        impl.create(path)
+        impl.write(path, content)
     }
 
     fun write(path: String, content: String): Boolean {
@@ -34,11 +30,23 @@ object LuaFileUtil {
 
     fun write(path: String, content: String, file: File): Boolean {
         if (!file.exists()) return false
-        return impl.write(path, content, file)
+        return impl.write(path, content)
     }
 
     fun read(path: String): String {
         return impl.read(path)
+    }
+
+    fun remove(path: String): Boolean {
+        return impl.remove(path)
+    }
+
+    fun rename(oldPath: String, newPath: String): Boolean {
+        return impl.rename(oldPath, newPath)
+    }
+
+    fun checkDirectory(path: String) {
+        return impl.checkDirectory(path)
     }
 
     fun extract(zipPath: String, outPath: String) {
@@ -51,24 +59,13 @@ object LuaFileUtil {
         LuaUtil.zip(srcFolderPath, destZipFilePath, fileName)
     }
 
-    fun remove(path: String): Boolean {
-        return File(path).delete()
-    }
-
-    fun rename(oldPath: String, newPath: String): Boolean {
-        return File(oldPath).renameTo(File(newPath))
-    }
-
-    fun checkDirectory(path: String) {
-        val file = File(path)
-        if (!file.exists()) {
-            file.mkdirs()
-        }
-    }
-
     interface Impl {
-        fun write(path: String, content: String, file: File): Boolean
+        fun write(path: String, content: String): Boolean
         fun read(path: String): String
+        fun remove(path: String): Boolean
+        fun checkDirectory(path: String)
+        fun rename(oldPath: String, newPath: String): Boolean
+        fun create(path: String)
     }
 
     class NioImpl : Impl {
@@ -80,7 +77,7 @@ object LuaFileUtil {
             }
         }
 
-        override fun write(path: String, content: String, file: File): Boolean {
+        override fun write(path: String, content: String): Boolean {
             return try {
                 Files.write(Paths.get(path), content.toByteArray(Charsets.UTF_8))
                 true
@@ -88,26 +85,78 @@ object LuaFileUtil {
                 false
             }
         }
+
+        override fun remove(path: String): Boolean {
+            return try {
+                Files.delete(Paths.get(path))
+                true
+            } catch (e: Exception) {
+                false
+            }
+        }
+
+        override fun checkDirectory(path: String) {
+            val tmpPath = Paths.get(path)
+            if (!Files.isDirectory(tmpPath)) {
+                Files.createDirectories(tmpPath)
+            }
+        }
+
+        override fun rename(oldPath: String, newPath: String): Boolean {
+            return try {
+                Files.move(Paths.get(oldPath), Paths.get(newPath))
+                true
+            } catch (e: Exception) {
+                false
+            }
+        }
+
+        override fun create(path: String) {
+            Paths.get(path).let {
+                if (!Files.exists(it)) Files.createFile(it)
+            }
+        }
     }
 
     class OkioImpl : Impl {
         override fun read(path: String): String {
             return try {
-                val source = File(path).source().buffer()
-                source.readUtf8()
+                File(path).source().buffer().readUtf8()
             } catch (e: Exception) {
                 ""
             }
         }
 
-        override fun write(path: String, content: String, file: File): Boolean {
+        override fun write(path: String, content: String): Boolean {
             return try {
-                val sink = File(path).sink().buffer()
-                sink.writeUtf8(content)
-                sink.close()
+                File(path).sink().buffer().apply {
+                    writeUtf8(content)
+                    close()
+                }
                 true
             } catch (e: Exception) {
                 false
+            }
+        }
+
+        override fun remove(path: String): Boolean {
+            return File(path).delete()
+        }
+
+        override fun checkDirectory(path: String) {
+            val file = File(path)
+            if (!file.exists()) {
+                file.mkdirs()
+            }
+        }
+
+        override fun rename(oldPath: String, newPath: String): Boolean {
+            return File(oldPath).renameTo(File(newPath))
+        }
+
+        override fun create(path: String) {
+            File(path).apply {
+                if (!exists()) createNewFile()
             }
         }
     }
