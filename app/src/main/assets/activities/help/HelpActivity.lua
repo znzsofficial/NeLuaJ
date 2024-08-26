@@ -6,7 +6,6 @@ import "android.view.View"
 import "android.graphics.drawable.ColorDrawable"
 import "com.youbenzi.mdtool.tool.MDTool"
 local LuaFileUtil = luajava.bindClass "com.nekolaska.io.LuaFileUtil".INSTANCE
-import "mods.utils.UiUtil"
 local ColorUtil = this.globalData.ColorUtil
 local res = res
 activity.setTitle("NeLuaJ+" .. res.string.help)
@@ -23,7 +22,7 @@ local window = activity.getWindow()
                        .setStatusBarColor(ColorUtil.getColorBackground())
                        .addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
                        .clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
-if UiUtil.isNightMode() then
+if this.isNightMode() then
     window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE)
 else
     window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR)
@@ -102,6 +101,8 @@ else
                 vpg.setCurrentItem(0)
                 activity.setTitle("NeLuaJ+" .. res.string.help)
                 return true
+            else
+                activity.finish()
             end
         end
     end

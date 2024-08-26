@@ -1258,4 +1258,8 @@ public class LuaActivity extends AppCompatActivity
                 Intent.createChooser(share, file.getName()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
     }
 
+    public boolean isNightMode() {
+        Configuration config = getResources().getConfiguration();
+        return (config.uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
+    }
 }
