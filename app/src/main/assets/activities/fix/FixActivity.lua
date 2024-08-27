@@ -1,19 +1,18 @@
 require "environment"
 import "android.content.ClipData"
 import "android.content.Context"
-local ArrayListAdapter = bindClass "com.androlua.adapter.ArrayListAdapter"
 import "android.widget.ListView"
 import "android.widget.Toast"
 import "com.androlua.LuaLexer"
 import "com.androlua.LuaTokenTypes"
+import "com.androlua.adapter.ArrayListAdapter"
 import "java.io.File"
 import "java.lang.String"
 import "res"
 
-local ColorUtil = this.globalData.ColorUtil
 local rs
+local path = ...
 local table = table
-local insert = table.insert
 local string = string
 local package = package
 activity.setTitle('需要导入的类')
@@ -21,7 +20,7 @@ activity.setTitle('需要导入的类')
 .getSupportActionBar()
 .setElevation(0)
 
-local function fiximport(path)
+local function fixImport()
   try
     local allClasses = require "activities.api.PublicClasses"
     local cache={}
@@ -83,22 +82,26 @@ local function fiximport(path)
   end
 end
 
-local path = ...
-local dir = File(path).getParent()
-
 local list=ListView(activity)
 list.ChoiceMode=ListView.CHOICE_MODE_MULTIPLE;
 
+xTask{
+    task = fiximport,
+    callback = function(v)
+        try
+            rs = v
+            local adp=ArrayListAdapter(activity,android.R.layout.simple_list_item_multiple_choice,v)
+            list.Adapter=adp
+            activity.setContentView(list)
+        catch
+            print("分析失败")
+            activity.finish()
+        end
+    end
+}
+
 task(fiximport,path,function(v)
-  try
-    rs = v
-    local adp=ArrayListAdapter(activity,android.R.layout.simple_list_item_multiple_choice,v)
-    list.Adapter=adp
-    activity.setContentView(list)
-    catch
-    print("分析失败")
-    activity.finish()
-  end
+
 end)
 
 function onCreateOptionsMenu(menu)

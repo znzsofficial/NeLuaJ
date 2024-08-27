@@ -13,6 +13,11 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.database.Cursor;
+import android.graphics.BitmapFactory;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffColorFilter;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -80,6 +85,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+import coil.ComponentRegistry;
+import coil.ImageLoader;
+import coil.decode.GifDecoder;
+import coil.decode.ImageDecoderDecoder;
+import coil.decode.SvgDecoder;
 import dalvik.system.DexClassLoader;
 
 public class LuaActivity extends AppCompatActivity
@@ -1261,5 +1271,32 @@ public class LuaActivity extends AppCompatActivity
     public boolean isNightMode() {
         Configuration config = getResources().getConfiguration();
         return (config.uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
+    }
+
+    public PorterDuffColorFilter getFilter(int color) {
+        return new PorterDuffColorFilter(color, PorterDuff.Mode.SRC_ATOP);
+    }
+
+    public Drawable getResDrawable(String name) {
+        String path = getLuaDir() + "/res/drawable/" + name + ".png";
+        return new BitmapDrawable(getResources(), BitmapFactory.decodeFile(path));
+    }
+
+    public Drawable getResDrawable(String name, int color) {
+        String path = getLuaDir() + "/res/drawable/" + name + ".png";
+        Drawable drawable = new BitmapDrawable(getResources(), BitmapFactory.decodeFile(path));
+        drawable.setColorFilter(getFilter(color));
+        return drawable;
+    }
+
+    public ImageLoader getImageLoader() {
+        var builder = new ComponentRegistry.Builder();
+        if (Build.VERSION.SDK_INT >= 28) {
+            builder.add(new ImageDecoderDecoder.Factory());
+        } else {
+            builder.add(new GifDecoder.Factory());
+        }
+        builder.add(new SvgDecoder.Factory());
+        return new ImageLoader.Builder(this).components(builder.build()).build();
     }
 }
