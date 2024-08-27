@@ -42,33 +42,3 @@ welcome 使用多线程解压
 loadlayout 支持更多属性，例如textStyle, layout_anchor, pages (for ViewPager) 等
 
 新增 xTask 函数，使用 Kotlin 协程实现
-
-## 依赖
-
-AppCompat 1.7.0-alpha03
-
-Material 1.11.0
-
-Lottie 6.4.0
-
-Coil 2.6.0
-
-Okhttp 4.12.0
-
-Zip4J 2.11.5
-
-android-fastscroll 1.2.0
-
-com.drakeet.drawer 1.0.3
-
-### 感觉不如原神
-
-你说的对，但是《​NeLuaJ+》是由NekoLaska
-自主研发的一款全新的在安卓使用Lua语言开发应用的工具。
-游戏发生在一个被称作「Android」的幻想世界，
-在这里，被神选中的人将被授予「语法糖」，
-导引Java API之力。
-你将扮演一位名为「程序员」的神秘角色，
-在自由的旅行中邂逅性格各异、能力独特的同伴们，
-和他们一起击败Bug，找回失散的类库——同时，
-逐步发掘「LuaJ++」的真相。​
