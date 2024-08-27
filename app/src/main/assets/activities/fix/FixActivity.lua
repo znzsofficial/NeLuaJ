@@ -86,7 +86,7 @@ local list=ListView(activity)
 list.ChoiceMode=ListView.CHOICE_MODE_MULTIPLE;
 
 xTask{
-    task = fiximport,
+    task = fixImport,
     callback = function(v)
         try
             rs = v
@@ -99,10 +99,6 @@ xTask{
         end
     end
 }
-
-task(fiximport,path,function(v)
-
-end)
 
 function onCreateOptionsMenu(menu)
   menu.add(res.string.logs).setShowAsAction(1)
