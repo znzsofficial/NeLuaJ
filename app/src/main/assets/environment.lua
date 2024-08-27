@@ -5,12 +5,9 @@ for _,v in File(this.getLuaDir("libs/")).listFiles() do
   v.setReadOnly()
 end
 
-
 this.globalData.ColorUtil = luajava.newInstance("github.daisukiKaffuChino.utils.LuaThemeUtil",activity)
 MDC_R = bindClass "com.google.android.material.R"
 Compat_R = bindClass "androidx.appcompat.R"
-
-SupportProperties = require "mods.property.SupportProperties"
 
 MainActivity={}
 MainActivity.Public=require"activities.main.MainActivity$1"
@@ -29,4 +26,3 @@ checkBackup = function()
 end
 LuaFileUtil = bindClass "com.nekolaska.io.LuaFileUtil".INSTANCE
 PathManager = require "mods.utils.PathManager"
-DrawableUtil = require "mods.utils.DrawableUtil"

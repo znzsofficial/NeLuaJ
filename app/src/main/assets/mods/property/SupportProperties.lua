@@ -1,3 +1,0 @@
-return {
-    Magnifier = true
-}
