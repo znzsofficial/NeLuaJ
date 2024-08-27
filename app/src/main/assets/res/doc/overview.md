@@ -51,7 +51,7 @@ Material 1.12.0
 
 Lottie 6.4.1
 
-Coil 2.6.0
+Coil 2.7.0
 
 Okhttp 4.12.0
 
