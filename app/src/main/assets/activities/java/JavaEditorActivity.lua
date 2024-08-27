@@ -11,13 +11,13 @@ function onCreateOptionsMenu(menu)
     local menu_show = 2; --MenuItem.SHOW_AS_ACTION_ALWAYS;
     menu.add("撤销")
         .setShowAsAction(menu_show)
-        .setIcon(DrawableUtil.getDrawable("undo", ColorTitle))
+        .setIcon(this.getResDrawable("undo", ColorTitle))
         .onMenuItemClick = function(a)
         mEditor.undo()
     end
     menu.add("重做")
         .setShowAsAction(menu_show)
-        .setIcon(DrawableUtil.getDrawable("redo", ColorTitle))
+        .setIcon(this.getResDrawable("redo", ColorTitle))
         .onMenuItemClick = function(a)
         mEditor.redo()
     end

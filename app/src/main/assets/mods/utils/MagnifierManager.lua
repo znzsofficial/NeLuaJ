@@ -19,9 +19,6 @@ _M.initMagnifier=function(view)
 
     catch
 
-    -- 不存在Magnifier时
-    SupportProperties.Magnifier = false
-
     Magnifier = bindClass "com.nekolaska.internal.CustomMagnifier";
     _M.magnifier = Magnifier(view)
     .setCornerRadius(24)

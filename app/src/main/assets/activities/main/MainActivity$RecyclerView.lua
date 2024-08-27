@@ -22,9 +22,8 @@ import "android.util.TypedValue"
 local getDp = function(i)
     return TypedValue.applyDimension(1, i, activity.getResources().getDisplayMetrics())
 end
-import "coil.Coil"
-import "coil.target.Target"
-import "coil.request.ImageRequest"
+
+local ImageRequestBuilder = bindClass "coil.request.ImageRequest$Builder"
 
 import "mods.utils.EditorUtil"
 import "mods.utils.ActivityUtil"
@@ -40,6 +39,7 @@ local Bean_Path
 local res = res
 local table = table
 local utf8 = utf8
+local rawget = rawget
 local R = R
 
 local _M = {}
@@ -76,7 +76,7 @@ local suffix_image = setmetatable({
     gif = "file_img",
 }, {
     __index = function(self, key)
-        return self[key] or "file"
+        return rawget(self, key) or "file"
     end
 })
 
@@ -97,8 +97,8 @@ _M.init = function()
 
     local res_drawable = res.drawable
 
-    local imageLoader = Coil.imageLoader(this)
-    local error_project = DrawableUtil.getDrawable("android_studio", ColorUtil.getColorSecondary())
+    local imageLoader = this.getImageLoader()
+    local error_project = this.getResDrawable("android_studio", ColorUtil.getColorSecondary())
     -- 清空文件列表
     FileList = {}
 
@@ -141,7 +141,7 @@ _M.init = function()
 
                     if v.img == "Project" then
                         imageLoader.enqueue(
-                                ImageRequest .Builder(activity)
+                                ImageRequestBuilder(activity)
                                              .data(v_path .. "/icon.png")
                                              .target(LuaTarget(LuaTarget.Listener {
                                     onError = function()
