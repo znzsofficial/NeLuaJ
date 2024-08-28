@@ -41,9 +41,9 @@
         <item name="sideSheetModalStyle">@style/Widget.Material3.SideSheet.Modal.Detached</item>
     </style>
 
-    <style name="Theme.NeLuaJ.Compat" parent="Theme.AppCompat.DayNight"></style>
+    <style name="Theme.NeLuaJ.Compat" parent="Theme.AppCompat.DayNight"/>
 
-    <style name="Theme.NeLuaJ.Compat.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar"></style>
+    <style name="Theme.NeLuaJ.Compat.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar"/>
 
     <style name="WelcomeTheme" parent="Theme.NeLuaJ.Material3">
         <item name="windowActionModeOverlay">true</item>
