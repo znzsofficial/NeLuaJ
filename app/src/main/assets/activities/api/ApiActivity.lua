@@ -1,7 +1,7 @@
 require "environment"
+import "com.androlua.Ticker"
 import "android.widget.ArrayAdapter"
 import "android.widget.Toast"
-import "com.androlua.Ticker"
 import "android.content.Context"
 import "android.graphics.drawable.ColorDrawable"
 import "com.google.android.material.dialog.MaterialAlertDialogBuilder"
