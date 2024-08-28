@@ -166,7 +166,7 @@ class SplashWelcome : ComponentActivity() {
                     parentFile.mkdirs()
                 }
             }
-            if (parentFile.isDirectory) {
+            if (parentFile?.isDirectory == true) {
                 try {
                     val inputStream = zipFile!!.getInputStream(zipEntry)
                     val outputStream: OutputStream = FileOutputStream(file)
@@ -183,7 +183,7 @@ class SplashWelcome : ComponentActivity() {
             } else {
                 throw RuntimeException(
                     "ParentFile( path = \""
-                            + parentFile.absolutePath
+                            + parentFile?.absolutePath
                             + "\" ) is not a directory, the application can't write the File( name = \""
                             + file.name
                             + "\" ) in a file."

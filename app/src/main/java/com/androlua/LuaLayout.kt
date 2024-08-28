@@ -30,6 +30,7 @@ import com.nekolaska.asString
 import com.nekolaska.firstArg
 import com.nekolaska.ifNotNil
 import com.nekolaska.isNotNil
+import com.nekolaska.require
 import com.nekolaska.secondArg
 import com.nekolaska.toLuaValue
 import com.nekolaska.toVarargs
@@ -42,6 +43,12 @@ import org.luaj.Varargs
 import org.luaj.lib.VarArgFunction
 import org.luaj.lib.jse.CoerceLuaToJava
 import java.util.Locale
+
+@Suppress("NOTHING_TO_INLINE")
+private inline fun LuaValue.toView(): View = this.touserdata(View::class.java)
+
+@Suppress("NOTHING_TO_INLINE")
+private inline fun LuaValue.toLuaContext(): LuaContext = this.touserdata(LuaContext::class.java)
 
 //inline fun <T : View> T.onClick(crossinline onClick: (v: T) -> Unit) {
 //    setOnClickListener { onClick(it as T) }
@@ -118,13 +125,13 @@ class LuaLayout(private val initialContext: Context) {
             }
             if (s[len - 1] == '%') {
                 val f = s.substring(0, len - 1).toFloat()
-                return f * luaContext.touserdata(LuaContext::class.java).width / 100
+                return f * luaContext.toLuaContext().width / 100
             }
 
             if (s[len - 2] == '%') {
                 val f = s.substring(0, len - 2).toFloat()
-                if (s[len - 1] == 'h') return f * luaContext.touserdata(LuaContext::class.java).height / 100
-                if (s[len - 1] == 'w') return f * luaContext.touserdata(LuaContext::class.java).width / 100
+                if (s[len - 1] == 'h') return f * luaContext.toLuaContext().height / 100
+                if (s[len - 1] == 'w') return f * luaContext.toLuaContext().width / 100
             }
             val t = s.substring(len - 2)
             val i = types[t]
@@ -159,8 +166,8 @@ class LuaLayout(private val initialContext: Context) {
             ViewGroup.LayoutParams::class.java.toLuaValue()
     ): LuaValue {
         var params = params
-        val viewClazz = layout[1]
-        if (viewClazz.isnil()) throw LuaError(
+        val viewClass = layout[1]
+        if (viewClass.isnil()) throw LuaError(
             """
                 loadlayout error: Fist value Must be a Class, checked import package.
                 
@@ -168,17 +175,17 @@ class LuaLayout(private val initialContext: Context) {
                 """.trimIndent()
         )
         val isAdapterView =
-            viewClazz.isuserdata() && AdapterView::class.java.isAssignableFrom(
-                viewClazz.touserdata(
+            viewClass.isuserdata() && AdapterView::class.java.isAssignableFrom(
+                viewClass.touserdata(
                     Class::class.java
                 )
             )
         val view = layout["style"].run {
-            if (isNotNil()) viewClazz.call(
+            if (isNotNil()) viewClass.call(
                 ContextThemeWrapper(initialContext, toint()).toLuaValue(),
                 NIL,
                 this
-            ) else viewClazz.call(luaContext)
+            ) else viewClass.call(luaContext)
         }
         params = params.call(Wrap, Wrap)
         try {
@@ -191,21 +198,19 @@ class LuaLayout(private val initialContext: Context) {
                         if (key.toint() > 1) {
                             var v = next.secondArg()
                             if (v.isstring()) v =
-                                luaContext.touserdata(LuaContext::class.java).luaState.p.y.call(
-                                    v
-                                )
+                                luaContext.toLuaContext().luaState.require(v)
                             // v =
                             // mContext.touserdata(LuaContext.class).getLuaState().package_.require.call(v);
                             if (isAdapterView) {
                                 view.jset(
                                     "adapter",
                                     LuaAdapter(
-                                        luaContext.touserdata(LuaContext::class.java),
+                                        luaContext.toLuaContext(),
                                         v.checktable()
                                     )
                                 )
                             } else {
-                                v = load(v, env, viewClazz["LayoutParams"])
+                                v = load(v, env, viewClass["LayoutParams"])
                                 view["addView"].call(v)
                             }
                         }
@@ -322,7 +327,7 @@ class LuaLayout(private val initialContext: Context) {
                                 while (i < ts.length()) {
                                     val v = ts[i + 1]
                                     if (v.isuserdata()) {
-                                        list.add(v.touserdata(View::class.java))
+                                        list.add(v.toView())
                                     } else if (v.istable()) {
                                         list.add(
                                             load(v.checktable(), env).touserdata(
@@ -332,11 +337,11 @@ class LuaLayout(private val initialContext: Context) {
                                     } else if (v.isstring()) {
                                         list.add(
                                             load(
-                                                luaContext.touserdata(LuaContext::class.java).luaState.p.y.call(
+                                                luaContext.toLuaContext().luaState.require(
                                                     v
                                                 ), env
                                             )
-                                                .touserdata(View::class.java)
+                                                .toView()
                                         )
                                     }
                                     i++
@@ -356,32 +361,27 @@ class LuaLayout(private val initialContext: Context) {
                                     while (i < views.length()) {
                                         val v = views[i + 1]
                                         if (v.isuserdata()) {
-                                            viewList.add(v.touserdata(View::class.java))
+                                            viewList.add(v.toView())
                                         } else if (v.istable()) {
                                             viewList.add(
-                                                load(v.checktable(), env).touserdata(
-                                                    View::class.java
-                                                )
+                                                load(v.checktable(), env).toView()
                                             )
                                         } else if (v.isstring()) {
                                             viewList.add(
                                                 load(
-                                                    luaContext.touserdata(LuaContext::class.java).luaState.p.y.call(
+                                                    luaContext.toLuaContext().luaState.require(
                                                         v
                                                     ), env
-                                                )
-                                                    .touserdata(View::class.java)
+                                                ).toView()
                                             )
                                         }
                                         i++
                                     }
                                 }
-                                var i = 0
-                                while (i < titles.length()) {
-                                    val v = titles[i + 1]
-                                    titleList.add(v.touserdata(String::class.java))
-                                    i++
-                                }
+                                generateSequence(1) { it + 1 }
+                                    .takeWhile { it <= titles.length() }
+                                    .map { titles[it].asString() }
+                                    .toCollection(titleList)
                                 view["setAdapter"].jcall(LuaPagerAdapter(viewList, titleList))
                                 continue
                             }
@@ -450,13 +450,12 @@ class LuaLayout(private val initialContext: Context) {
                                 } else if (tValue.isstring()) {
                                     val str = tValue.asString()
                                     if (str.startsWith("#")) {
-                                        val clr = parseColor(str)
-                                        view.jset("backgroundColor", clr)
+                                        view.jset("backgroundColor", parseColor(str))
                                     } else {
                                         view.jset(
                                             "background",
                                             LuaBitmapDrawable(
-                                                luaContext.touserdata(LuaContext::class.java),
+                                                luaContext.toLuaContext(),
                                                 str
                                             )
                                         )
@@ -488,7 +487,10 @@ class LuaLayout(private val initialContext: Context) {
                                 else if (tValue.asString() == "true") params["addRule"].jcall(
                                     rules[keyString]
                                 )
-                                else params["addRule"].jcall(rules[keyString], ids[tValue.asString()])
+                                else params["addRule"].jcall(
+                                    rules[keyString],
+                                    ids[tValue.asString()]
+                                )
                             } else if (keyString == "layout_behavior") {
                                 when (tValue.asString()) {
                                     "@string/appbar_scrolling_view_behavior" -> {
@@ -535,7 +537,7 @@ class LuaLayout(private val initialContext: Context) {
                     }
                 } catch (e: Exception) {
                     luaContext
-                        .touserdata(LuaContext::class.java)
+                        .toLuaContext()
                         .sendError(
                             "loadlayout " + view + ": " + next.firstArg() + "=" + next.secondArg(),
                             e
@@ -549,7 +551,8 @@ class LuaLayout(private val initialContext: Context) {
                 var sp = false
                 for (i in ms.indices) {
                     var pt = layout[ms[i]]
-                    if (pt.isnil()) pt = layout["layout_margin"]
+                    if (pt.isnil())
+                        pt = layout["layout_margin"]
                     if (pt.isnil()) {
                         pt = view[pt]
                     } else {
@@ -566,7 +569,8 @@ class LuaLayout(private val initialContext: Context) {
                 var sp = false
                 for (i in ps.indices) {
                     var pt = layout[ps[i]]
-                    if (pt.isnil()) pt = layout["padding"]
+                    if (pt.isnil())
+                        pt = layout["padding"]
                     if (pt.isnil()) {
                         pt = view[pt]
                     } else {
@@ -577,12 +581,12 @@ class LuaLayout(private val initialContext: Context) {
                 if (sp) view["setPadding"].invoke(pds.toVarargs())
             }.onFailure {
                 luaContext
-                    .touserdata(LuaContext::class.java)
+                    .toLuaContext()
                     .sendError("loadlayout " + layout.checktable().dump(), it as Exception)
                 it.printStackTrace()
             }
         } catch (e: Exception) {
-            luaContext.touserdata(LuaContext::class.java)
+            luaContext.toLuaContext()
                 .sendError("loadlayout " + layout.checktable().dump(), e)
             e.printStackTrace()
         }
