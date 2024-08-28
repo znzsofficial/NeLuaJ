@@ -12,8 +12,7 @@ import androidx.viewpager.widget.PagerAdapter;
 
 import java.util.List;
 
-@Keep
-public class LuaPagerAdapter extends PagerAdapter {
+public final class LuaPagerAdapter extends PagerAdapter {
     private final DataSetObservable mObservable = new DataSetObservable();
     List<View> pagerViews;
     List<String> titles;

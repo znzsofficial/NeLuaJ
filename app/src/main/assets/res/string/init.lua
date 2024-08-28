@@ -654,8 +654,6 @@ return {
 icode = [[
 ver_name="1.0"
 ver_code="1"
-developer="dev"
-description="a luaj application"
 NeLuaJ_Theme="Theme_NeLuaJ_Compat"
 debug_mode=true
 user_permission={
