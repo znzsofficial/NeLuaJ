@@ -1,12 +1,15 @@
 package com.nekolaska
 
 import kotlinx.coroutines.suspendCancellableCoroutine
+import org.luaj.Globals
 import org.luaj.LuaValue
 import org.luaj.Varargs
 import org.luaj.lib.jse.CoerceJavaToLua
-import org.luaj.lib.jse.CoerceLuaToJava
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+
+@Suppress("NOTHING_TO_INLINE")
+inline fun Globals.require(value: LuaValue): LuaValue = this.p.y.call(value)
 
 @Suppress("NOTHING_TO_INLINE")
 inline fun Varargs.firstArg(): LuaValue = this.arg1()
@@ -41,8 +44,8 @@ suspend fun LuaValue.suspendInvoke(varargs: Varargs) = suspendCancellableCorouti
 @Suppress("NOTHING_TO_INLINE")
 inline fun <T> T.toLuaValue(): LuaValue = CoerceJavaToLua.coerce(this)
 
-@Suppress("NOTHING_TO_INLINE", "unused")
-inline fun <T> LuaValue.toAny(clazz: Class<T>): Any? = CoerceLuaToJava.coerce(this, clazz)
+//@Suppress("NOTHING_TO_INLINE", "unused")
+//inline fun <T> LuaValue.toAny(clazz: Class<T>): Any = CoerceLuaToJava.coerce(this, clazz)
 
 //inline fun <reified T : Any> KClass<T>.toLuaClass(): LuaValue = CoerceJavaToLua.coerce(this.java)
 inline fun <reified T> Array<T>.toVarargs(): Varargs = LuaValue.varargsOf(this)

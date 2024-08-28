@@ -53,6 +53,7 @@ class LuaFragment(var creator: Creator?) : Fragment() {
             "androidx.fragment.app.Fragment"
         )
     )
+    @Suppress("DEPRECATION")
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         super.onActivityCreated(savedInstanceState)
         creator?.onActivityCreated(savedInstanceState)
