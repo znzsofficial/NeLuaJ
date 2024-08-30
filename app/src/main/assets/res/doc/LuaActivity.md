@@ -22,12 +22,13 @@ activity.isNightMode()
 返回是否为夜间模式
 
 activity.getRootView()
+activity.getDecorView()
 返回ViewGroup
 
 activity.setAllowThread(bool)
 不建议使用（
 
 activity.getImageLoader()
-获取支持加载SVG和GIF的Coil ImageLoader实例
+创建一个支持加载SVG和GIF的Coil ImageLoader实例
 
 ```
