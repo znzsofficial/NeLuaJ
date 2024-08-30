@@ -205,7 +205,7 @@ function _M.init()
     end
     local ms = {
       "onCreate","onStart","onResume",
-      "onPause","onStop","onDestroy","onError",
+      "onPause","onStop","onDestroy","onError","onReceive",
       "onActivityResult","onResult","onNightModeChanged",
       "onContentChanged","onConfigurationChanged",
       "onContextItemSelected","onCreateContextMenu",

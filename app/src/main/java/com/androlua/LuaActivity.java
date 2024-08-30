@@ -388,6 +388,11 @@ public class LuaActivity extends AppCompatActivity
         setContentView(new LuaLayout(this).load(view, globals).touserdata(View.class));
     }
 
+    public void setContentView(LuaTable view, LuaTable env) {
+        isSetViewed = true;
+        setContentView(new LuaLayout(this).load(view, env).touserdata(View.class));
+    }
+
     public void setFragment(Fragment fragment) {
         setContentView(new View(this));
         getSupportFragmentManager().beginTransaction().replace(android.R.id.content, fragment).commit();
@@ -446,7 +451,6 @@ public class LuaActivity extends AppCompatActivity
                     return false;
                 }
             } catch (Exception e) {
-
                 e.printStackTrace();
             }
         }
@@ -684,6 +688,10 @@ public class LuaActivity extends AppCompatActivity
         return globals;
     }
 
+    public ViewGroup getDecorView() {
+        return (ViewGroup) getWindow().getDecorView();
+    }
+
     public ViewGroup getRootView() {
         return (ViewGroup) getWindow().getDecorView().getRootView();
     }
@@ -791,7 +799,6 @@ public class LuaActivity extends AppCompatActivity
     @CallLuaFunction
     @Override
     public void onReceive(Context context, Intent intent) {
-        // TODO: Implement this method
         runFunc("onReceive", context, intent);
     }
 
@@ -941,7 +948,6 @@ public class LuaActivity extends AppCompatActivity
     }
 
     public boolean bindService(ServiceConnection conn, int flag) {
-        // TODO: Implement this method
         Intent service = new Intent(this, LuaService.class);
         String path = "service.lua";
         service.putExtra(NAME, path);
