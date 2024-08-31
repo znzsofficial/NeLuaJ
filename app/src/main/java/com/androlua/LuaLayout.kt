@@ -742,7 +742,7 @@ class LuaLayout(private val initialContext: Context) {
             // layout_scrollFlags
             toint["noScroll"] = 0
             toint["scroll"] = 1
-            toint["exitUtilCollapsed"] = 2
+            toint["exitUntilCollapsed"] = 2
             toint["enterAlways"] = 4
             toint["enterAlwaysCollapsed"] = 8
             toint["snap"] = 16
