@@ -189,7 +189,7 @@ public class LuaLayout {
 
         // layout_scrollFlags
         toint.put("scroll", 1);
-        toint.put("exitUtilCollapsed", 2);
+        toint.put("exitUntilCollapsed", 2);
         toint.put("enterAlways", 4);
         toint.put("enterAlwaysCollapsed", 8);
         toint.put("snap", 16);
