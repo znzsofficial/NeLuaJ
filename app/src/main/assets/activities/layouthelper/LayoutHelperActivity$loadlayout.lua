@@ -557,7 +557,7 @@ local function loadlayout(t, root, group, p)
         end
     end
     if not t[1] then
-        error(string.format("loadlayout error: Fist value Must be a Class, checked import package.\n\tat %s", dump2(t)), 0)
+        error(string.format("loadlayout error: First value Must be a Class, checked import package.\n\tat %s", dump2(t)), 0)
     end
 
     if style then

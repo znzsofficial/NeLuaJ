@@ -169,7 +169,7 @@ class LuaLayout(private val initialContext: Context) {
         val viewClass = layout[1]
         if (viewClass.isnil()) throw LuaError(
             """
-                loadlayout error: Fist value Must be a Class, checked import package.
+                loadlayout error: First value Must be a Class, checked import package.
                 
                 at ${layout.checktable().dump()}
                 """.trimIndent()
