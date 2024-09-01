@@ -404,7 +404,7 @@ public class LuaLayout {
         LuaValue cls = layout.get(1);
         if (cls.isnil())
             throw new LuaError(
-                    "loadlayout error: Fist value Must be a Class, checked import package.\n\nat "
+                    "loadlayout error: First value Must be a Class, checked import package.\n\nat "
                             + layout.checktable().dump());
         boolean isAdapterView =
                 cls.isuserdata() && AdapterView.class.isAssignableFrom(cls.touserdata(Class.class));
