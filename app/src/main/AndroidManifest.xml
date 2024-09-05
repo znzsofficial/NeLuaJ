@@ -46,14 +46,10 @@
         <uses-library
             android:name="org.apache.http.legacy"
             android:required="false" />
-
         <meta-data
             android:name="android.max_aspect"
             android:value="4" />
 
-        <activity
-            android:name="com.nekolaska.emulator.EmulatorActivity"
-            android:exported="true" />
         <activity
             android:name="com.androlua.LuaActivity"
             android:configChanges="orientation|screenSize|keyboardHidden"
