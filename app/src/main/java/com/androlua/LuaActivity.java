@@ -38,12 +38,12 @@ import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.webkit.MimeTypeMap;
 import android.widget.ListView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.view.ActionMode;
-import androidx.appcompat.widget.AppCompatTextView;
 import androidx.core.content.FileProvider;
 import androidx.fragment.app.Fragment;
 import androidx.preference.PreferenceManager;
@@ -236,8 +236,8 @@ public class LuaActivity extends AppCompatActivity
                 new ArrayListAdapter<>(this, android.R.layout.simple_list_item_1) {
                     @Override
                     public View getView(int position, View convertView, ViewGroup parent) {
-                        AppCompatTextView view =
-                                (AppCompatTextView) super.getView(position, convertView, parent);
+                        TextView view =
+                                (TextView) super.getView(position, convertView, parent);
                         if (convertView == null) view.setTextIsSelectable(true);
                         return view;
                     }

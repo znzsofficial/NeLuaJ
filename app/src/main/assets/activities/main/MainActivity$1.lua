@@ -78,7 +78,7 @@ function _M.createProject(name)
     File(base_path .. "/res/color").mkdirs()
     LuaFileUtil
     .create(base_path .. "/main.lua", res.string.mcode)
-    .create(base_path .. "/init.lua", 'app_name="'..appname..'"\npackage_name="'..packagename..'"\n'..res.string.icode)
+    .create(base_path .. "/init.lua", 'app_name = "'..appname..'"\npackage_name = "'..packagename..'"\n'..res.string.icode)
     .create(base_path .. "/res/string/init.lua", 'app_title="' .. appname .. '"')
     .create(base_path .. "/res/string/en.lua", '--English')
     .create(base_path .. "/res/string/zh.lua", '--Chinese')
