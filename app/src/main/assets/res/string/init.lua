@@ -652,11 +652,13 @@ return {
   },
 }]]
 icode = [[
-ver_name="1.0"
-ver_code="1"
-NeLuaJ_Theme="Theme_NeLuaJ_Compat"
-debug_mode=true
-user_permission={
+ver_name = "1.0"
+ver_code = "1"
+min_sdk = "21"
+target_sdk = "29"
+debug_mode = true
+NeLuaJ_Theme = "Theme_NeLuaJ_Compat"
+user_permission = {
   "INTERNET",
   "WRITE_EXTERNAL_STORAGE"
 }]]
