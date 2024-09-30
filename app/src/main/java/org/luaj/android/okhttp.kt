@@ -28,6 +28,7 @@ class okhttp : TwoArgFunction() {
             set("post", post())
             set("put", put())
             set("delete", delete())
+            set("head", head())
         }
         env["okhttp"] = okhttp
         if (env["package"].isNotNil()) env["package"]["loaded"]["okhttp"] = okhttp
@@ -118,6 +119,22 @@ class okhttp : TwoArgFunction() {
                 ).put(
                     builder.build()
                 ).build()
+            ).execute().toLuaValue()
+        }
+    }
+
+    inner class head : VarArgFunction() {
+        override fun invoke(args: Varargs): Varargs {
+            val requestBuilder = Request.Builder()
+            args.secondArg().ifNotNil()?.checktable()?.apply {
+                for (key in keys()) {
+                    requestBuilder.addHeader(key.asString(), get(key).asString())
+                }
+            }
+            return client.newCall(
+                requestBuilder.url(
+                    args.firstArg().checkjstring()
+                ).head().build()
             ).execute().toLuaValue()
         }
     }
