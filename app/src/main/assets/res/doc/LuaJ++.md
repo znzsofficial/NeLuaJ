@@ -219,6 +219,14 @@ a/=1
 ```
 
 #### ** 调用java优化 **
+- javaClass 拓展函数/属性
+```lua
+Object.list{}
+Object.new()
+print(Object.class)
+Object.override{}
+```
+
 - 直接()构建实例或实现接口,抽象类
 ```lua
 b=ArrayList()
