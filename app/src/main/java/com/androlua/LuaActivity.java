@@ -45,6 +45,7 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.view.ActionMode;
 import androidx.core.content.FileProvider;
+import androidx.core.util.TypedValueCompat;
 import androidx.fragment.app.Fragment;
 import androidx.preference.PreferenceManager;
 
@@ -85,11 +86,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-import coil.ComponentRegistry;
 import coil.ImageLoader;
-import coil.decode.GifDecoder;
-import coil.decode.ImageDecoderDecoder;
-import coil.decode.SvgDecoder;
 import dalvik.system.DexClassLoader;
 
 public class LuaActivity extends AppCompatActivity
@@ -886,7 +883,7 @@ public class LuaActivity extends AppCompatActivity
 
     @Override
     public Map getGlobalData() {
-        return LuaApplication.getInstance().getGlobalData();
+        return LuaApplication.instance.getGlobalData();
     }
 
     @Override
@@ -1296,13 +1293,10 @@ public class LuaActivity extends AppCompatActivity
     }
 
     public ImageLoader getImageLoader() {
-        var builder = new ComponentRegistry.Builder();
-        if (Build.VERSION.SDK_INT >= 28) {
-            builder.add(new ImageDecoderDecoder.Factory());
-        } else {
-            builder.add(new GifDecoder.Factory());
-        }
-        builder.add(new SvgDecoder.Factory());
-        return new ImageLoader.Builder(this).components(builder.build()).build();
+        return LuaApplication.loader;
+    }
+
+    public float dpToPx(float dp) {
+        return TypedValueCompat.dpToPx(dp, getResources().getDisplayMetrics());
     }
 }
