@@ -29,6 +29,6 @@ activity.setAllowThread(bool)
 不建议使用（
 
 activity.getImageLoader()
-创建一个支持加载SVG和GIF的Coil ImageLoader实例
+返回支持加载SVG和GIF的Coil ImageLoader唯一单例
 
 ```

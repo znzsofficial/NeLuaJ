@@ -19,9 +19,6 @@ import "github.znzsofficial.adapter.LuaCustRecyclerHolder"
 import "com.nekolaska.internal.FileItemHolder"
 
 import "android.util.TypedValue"
-local getDp = function(i)
-    return TypedValue.applyDimension(1, i, activity.getResources().getDisplayMetrics())
-end
 
 local ImageRequestBuilder = bindClass "coil.request.ImageRequest$Builder"
 
@@ -92,13 +89,16 @@ _M.init = function()
 
     luajava.newInstance("me.zhanghai.android.fastscroll.FastScrollerBuilder", mRecycler)
            .useMd2Style()
-           .setPadding(0, getDp(8), getDp(2), getDp(8))
+           .setPadding(0, this.dpToPx(8), this.dpToPx(2), this.dpToPx(8))
            .build()
 
     local res_drawable = res.drawable
 
     local imageLoader = this.getImageLoader()
     local error_project = this.getResDrawable("android_studio", ColorUtil.getColorSecondary())
+
+    local size = this.dpToPx(28)
+    error_project.setBounds(0, 0, size, size)
     -- 清空文件列表
     FileList = {}
 
@@ -122,9 +122,6 @@ _M.init = function()
                 getPopupText = function(_, position)
                     return utf8.sub(FileList[position + 1].file_name, 1, 1)
                 end,
-                --[[onViewRecycled=function(holder)
-                  requestManager.clear(holder.Tag.icon)
-                end,]]
                 onCreateViewHolder = function(parent, viewType)
                     local view = inflater.inflate(R.layout.item_file, parent, false)
                     return FileItemHolder(view)
@@ -145,17 +142,24 @@ _M.init = function()
                                              .data(v_path .. "/icon.png")
                                              .target(LuaTarget(LuaTarget.Listener {
                                     onError = function()
-                                        view.icon.setImageDrawable(error_project)
+                                        pcall(function()
+                                            view.name.setCompoundDrawables(error_project, nil, nil, nil)
+                                        end)
                                     end,
                                     onSuccess = function(drawable)
-                                        view.icon.setImageDrawable(drawable)
+                                        drawable.setBounds(0, 0, size, size)
+                                        view.name.setCompoundDrawables(drawable, nil, nil, nil)
                                     end
                                 }))          .build()
                         )
                     elseif (v.isDirectory and (v.file_name == "mods" or v.file_name == "libs")) then
-                        view.icon.setImageDrawable(res_drawable["folder_mod"])
+                        local drawable = res_drawable["folder_mod"]
+                        drawable.setBounds(0, 0, size, size)
+                        view.name.setCompoundDrawables(drawable, nil, nil, nil)
                     else
-                        view.icon.setImageDrawable(res_drawable[v.img])
+                        local drawable = res_drawable[v.img]
+                        drawable.setBounds(0, 0, size, size)
+                        view.name.setCompoundDrawables(drawable, nil, nil, nil)
                     end
 
                     view.contents.onLongClick = function()

@@ -151,6 +151,7 @@ return {
 
             {
                 LinearLayout;
+                backgroundColor = ColorBackground;
                 layout_gravity = "start";
                 orientation = "vertical";
                 layout_width = "match_parent";
@@ -166,30 +167,22 @@ return {
                     inlineLabel = true,
                     clipToPadding = false,
                 },
-
                 {
-                    LinearLayout,
-                    backgroundColor = ColorBackground;
+                    SwipeRefreshLayout;
+                    layout_gravity = "start";
                     layout_width = "match_parent";
                     layout_height = "match_parent";
+                    id = "swipeRefresh";
+                    ProgressBackgroundColorSchemeColor = ColorBackground,
+                    ColorSchemeColors = { ColorUtil.getColorPrimary() },
                     {
-                        SwipeRefreshLayout;
-                        layout_gravity = "start";
-                        layout_width = "match_parent";
-                        layout_height = "match_parent";
-                        id = "swipeRefresh";
-                        ProgressBackgroundColorSchemeColor = ColorBackground,
-                        ColorSchemeColors = { ColorUtil.getColorPrimary() },
-                        {
-                            RecyclerView,
-                            layout_width = "match_parent",
-                            layout_height = "match_parent",
-                            dividerHeight = "0",
-                            id = "mRecycler",
-                        },
-
-                    };
-                },
+                        RecyclerView,
+                        layout_width = "match_parent",
+                        layout_height = "match_parent",
+                        dividerHeight = 0,
+                        id = "mRecycler",
+                    },
+                };
             }
         };
     };

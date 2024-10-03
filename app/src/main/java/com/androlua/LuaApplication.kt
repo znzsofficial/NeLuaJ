@@ -2,8 +2,14 @@ package com.androlua
 
 import android.app.Application
 import android.content.Context
+import android.os.Build
 import android.os.Environment
 import androidx.preference.PreferenceManager
+import coil.ComponentRegistry
+import coil.ImageLoader
+import coil.decode.GifDecoder
+import coil.decode.ImageDecoderDecoder
+import coil.decode.SvgDecoder
 import com.google.android.material.color.DynamicColors
 import org.luaj.Globals
 import org.luaj.LuaTable
@@ -18,6 +24,13 @@ class LuaApplication : Application(), LuaContext {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        loader = ImageLoader.Builder(this).components(ComponentRegistry.Builder().apply {
+            add(
+                if (Build.VERSION.SDK_INT >= 28) ImageDecoderDecoder.Factory()
+                else GifDecoder.Factory()
+            )
+            add(SvgDecoder.Factory())
+        }.build()).build()
         getExternalFilesDir("dexfiles")?.let { rmDir(it) }
         CrashHandler.instance.init(this)
         DynamicColors.applyToActivitiesIfAvailable(this)
@@ -138,6 +151,7 @@ class LuaApplication : Application(), LuaContext {
                     key,
                     (value as LuaTable).values().toString()
                 )
+
                 "Set" -> editor.putStringSet(key, value as Set<String>)
                 "Boolean" -> editor.putBoolean(key, (value as Boolean))
                 else -> return false
@@ -199,7 +213,11 @@ class LuaApplication : Application(), LuaContext {
 
     companion object {
         @JvmStatic
-        var instance: LuaApplication? = null
+        lateinit var instance: LuaApplication
+
+        @JvmStatic
+        lateinit var loader: ImageLoader
+
 
         private val sGlobalData: HashMap<*, *> = HashMap<Any?, Any?>()
 

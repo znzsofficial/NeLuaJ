@@ -465,7 +465,7 @@ public class LuaService extends Service
 
     @Override
     public Map getGlobalData() {
-        return LuaApplication.getInstance().getGlobalData();
+        return LuaApplication.instance.getGlobalData();
     }
 
     @Override
