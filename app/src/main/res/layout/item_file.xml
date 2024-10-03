@@ -1,49 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/item_contents"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:paddingStart='12dp'
-    android:paddingTop='2dp'
-    android:paddingEnd='12dp'
-    android:paddingBottom='2dp'>
+    android:layout_marginStart="16dp"
+    android:layout_marginTop="6dp"
+    android:layout_marginEnd="16dp"
+    android:layout_marginBottom="6dp"
+    android:checkable="false"
+    android:clickable="true"
+    app:cardCornerRadius="32dp"
+    app:strokeWidth="0px">
 
-    <com.google.android.material.card.MaterialCardView
-        android:id="@+id/item_contents"
+
+    <com.google.android.material.textview.MaterialTextView
+        android:id="@+id/item_name"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_margin="4dp"
-        app:cardCornerRadius="32dp"
-        app:strokeWidth="0px">
+        android:layout_height="match_parent"
+        android:layout_marginStart="20dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="20dp"
+        android:layout_marginBottom="8dp"
+        android:drawablePadding="8dp"
+        android:ellipsize="middle"
+        android:gravity="center_vertical|start"
+        android:maxLines="1"
+        android:textSize="16sp" />
 
-        <androidx.constraintlayout.widget.ConstraintLayout
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:layout_marginTop="12dp"
-            android:layout_marginBottom="12dp"
-            android:layout_marginStart="20dp">
-
-            <androidx.appcompat.widget.AppCompatImageView
-                android:id="@+id/item_icon"
-                android:layout_width="28dp"
-                android:layout_height="28dp"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toTopOf="parent" />
-
-            <com.google.android.material.textview.MaterialTextView
-                android:id="@+id/item_name"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:textSize="16sp"
-                android:singleLine="true"
-                android:ellipsize="start"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintStart_toEndOf="@id/item_icon"
-                app:layout_constraintTop_toTopOf="parent" />
-
-        </androidx.constraintlayout.widget.ConstraintLayout>
-    </com.google.android.material.card.MaterialCardView>
-
-</LinearLayout>
+</com.google.android.material.card.MaterialCardView>
