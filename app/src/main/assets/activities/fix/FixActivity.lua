@@ -109,7 +109,7 @@ end
 
 function onOptionsItemSelected(item)
   if item.Title=="复制" then
-    try
+      local insert = table.insert
       local buf={}
       local cm=activity.getSystemService(Context.CLIPBOARD_SERVICE)
       local cs=list.getCheckedItemPositions()
@@ -124,7 +124,6 @@ function onOptionsItemSelected(item)
       local cd = ClipData.newPlainText("label", str)
       cm.setPrimaryClip(cd)
       Toast.makeText(activity,"已复制到剪切板",1000).show()
-    end
    elseif item.title=="反选" then
     try
       for n=0,#rs-1 do
