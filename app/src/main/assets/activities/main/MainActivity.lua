@@ -24,8 +24,6 @@ local res = res
 
 --[[
  ToDo：
- 修改LuaLayout(95%)
- 修复打包(80%)
  保存上次打开的文件路径
  设置:(0%)
  高亮颜色
@@ -249,9 +247,9 @@ function onCreateOptionsMenu(menu)
     menu.add(res.string.exit).onMenuItemClick = function(a)
         activity.finish(true)
     end
-catch(e)
-print(e)
-end
+    catch(e)
+        print(e)
+    end
 end
 
 function onPause()
