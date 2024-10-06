@@ -11,7 +11,7 @@ NeLuaJ+ 对 LuaJ++ 的 res模块 进行了一些修改并增强了多语言支�
 
 ## res.bitmap / res.drawable
 
-返回 drawable 文件夹内图片的Drawable对象或BitmapDrawable对象
+返回 drawable 文件夹内图片的Bitmap对象或Drawable对象
 
 ## res.font
 

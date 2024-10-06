@@ -989,7 +989,6 @@ public class LuaActivity extends AppCompatActivity
     }
 
     public ComponentName startService(String path, Object[] arg) {
-        // TODO: Implement this method
         Intent intent = new Intent(this, LuaService.class);
         intent.putExtra(NAME, path);
         if (path.charAt(0) != '/' && luaDir != null) path = luaDir + "/" + path;
