@@ -37,6 +37,9 @@ this.loadImage(data, function(drawable)
 end)
 this.loadImage(data, imageView)
 
+--获取指定颜色的 PorterDuffColorFilter
+this.getFilter(color)
+
 --不建议使用
 this.setAllowThread(bool)
 ```
