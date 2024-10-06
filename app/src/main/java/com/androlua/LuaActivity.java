@@ -87,6 +87,7 @@ import java.util.Objects;
 import java.util.Set;
 
 import coil.ImageLoader;
+import coil.request.ImageRequest;
 import dalvik.system.DexClassLoader;
 
 public class LuaActivity extends AppCompatActivity
