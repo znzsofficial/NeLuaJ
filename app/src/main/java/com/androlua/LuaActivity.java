@@ -1,9 +1,10 @@
 package com.androlua;
 
 import android.Manifest;
-import android.annotation.SuppressLint;
 import android.app.ActivityManager;
 import android.content.BroadcastReceiver;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -37,6 +38,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.webkit.MimeTypeMap;
+import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -44,6 +46,7 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.view.ActionMode;
+import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 import androidx.core.util.TypedValueCompat;
 import androidx.fragment.app.Fragment;
@@ -54,6 +57,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import org.luaj.Globals;
 import org.luaj.LuaError;
+import org.luaj.LuaFunction;
 import org.luaj.LuaMetaTable;
 import org.luaj.LuaTable;
 import org.luaj.LuaValue;
@@ -89,6 +93,7 @@ import java.util.Set;
 import coil.ImageLoader;
 import coil.request.ImageRequest;
 import dalvik.system.DexClassLoader;
+import github.znzsofficial.neluaj.R;
 
 public class LuaActivity extends AppCompatActivity
         implements ResourceFinder, LuaContext, LuaBroadcastReceiver.OnReceiveListener, LuaMetaTable {
@@ -127,7 +132,7 @@ public class LuaActivity extends AppCompatActivity
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         Uri d = getIntent().getData();
-        // Log.i("luaj", "onCreate: "+d);
+
         luaDir = getFilesDir().getAbsolutePath();
         if (d != null) {
             String p = d.getPath();
@@ -148,12 +153,12 @@ public class LuaActivity extends AppCompatActivity
         int idx = pageName.lastIndexOf(".");
         if (idx > 0) pageName = pageName.substring(0, idx);
         sLuaActivityMap.put(pageName, this);
-        ListView mLogView = getLogView();
         mLuaDexLoader = new LuaDexLoader(this, luaDir);
         mLuaDexLoader.loadLibs();
         globals = JsePlatform.standardGlobals();
         // globals.finder = this;
         globals.m = this;
+        adapter = new ArrayListAdapter<>(this, R.layout.item_log);
         initENV();
     /* globals.package_.searchers.insert(0,new VarArgFunction() {
         public Varargs invoke(Varargs args) {
@@ -199,7 +204,7 @@ public class LuaActivity extends AppCompatActivity
             doFile(getLuaPath(), arg);
             runMainFunc(pageName, arg);
             runFunc("onCreate");
-            if (!isSetViewed) setContentView(mLogView);
+            if (!isSetViewed) showLogView(false);
             mOnKeyShortcut = globals.get("onKeyShortcut");
             if (mOnKeyShortcut.isnil()) mOnKeyShortcut = null;
             mOnKeyDown = globals.get("onKeyDown");
@@ -218,30 +223,40 @@ public class LuaActivity extends AppCompatActivity
             }
         } catch (final Exception e) {
             sendError("Error", e);
-            e.printStackTrace();
-            setContentView(mLogView);
+            showLogView(true);
             Intent res = new Intent();
             res.putExtra(DATA, e.toString());
             setResult(-1, res);
         }
     }
 
-    private ListView getLogView() {
-        ListView list = new ListView(this);
-        list.setFastScrollEnabled(true);
-        list.setFastScrollAlwaysVisible(true);
-        adapter =
-                new ArrayListAdapter<>(this, android.R.layout.simple_list_item_1) {
-                    @Override
-                    public View getView(int position, View convertView, ViewGroup parent) {
-                        TextView view =
-                                (TextView) super.getView(position, convertView, parent);
-                        if (convertView == null) view.setTextIsSelectable(true);
-                        return view;
-                    }
-                };
+    private void showLogView(boolean isError) {
+        setTheme(com.google.android.material.R.style.Theme_Material3_DynamicColors_DayNight);
+        if (isError) setTitle("Runtime Error");
+        else setTitle("Log");
+        Objects.requireNonNull(getSupportActionBar()).setElevation(0);
+        setContentView(R.layout.log_view);
+        ((TextView) findViewById(R.id.file_name)).setText(new File(luaFile).getName());
+        ListView list = findViewById(R.id.log_list);
         list.setAdapter(adapter);
-        return list;
+        findViewById(R.id.clear).setOnClickListener(v -> adapter.clear());
+        findViewById(R.id.copy).setOnClickListener(v -> {
+            // 合并所有字符串
+            StringBuilder combinedString = new StringBuilder();
+            for (int i = 0; i < adapter.getCount(); i++) {
+                combinedString.append(adapter.getItem(i));
+                if (i < adapter.getCount() - 1) {
+                    combinedString.append("\n"); // 添加分隔
+                }
+            }
+            ClipboardManager clipboard = ContextCompat.getSystemService(this, ClipboardManager.class);
+            // 创建 ClipData 对象
+            ClipData clip = ClipData.newPlainText("log", combinedString);
+            // 将数据设置到剪贴板
+            if (clipboard != null) {
+                clipboard.setPrimaryClip(clip);
+            }
+        });
     }
 
     public void setAllowThread(boolean bool) {
@@ -348,7 +363,6 @@ public class LuaActivity extends AppCompatActivity
 
     protected void initENV() {
         if (!new File(luaDir + "/init.lua").exists()) return;
-
         try {
             LuaTable env = new LuaTable();
             globals.loadfile("init.lua", env).call();
@@ -408,9 +422,9 @@ public class LuaActivity extends AppCompatActivity
         debug = bool;
     }
 
-    public ArrayList<String> getLogs() {
-        return logs;
-    }
+//    public ArrayList<String> getLogs() {
+//        return logs;
+//    }
 
     public ArrayListAdapter<String> getLogAdapter() {
         return adapter;
@@ -572,8 +586,6 @@ public class LuaActivity extends AppCompatActivity
         return getLuaPath(filename);
     }
 
-    // 显示toast
-    @SuppressLint("ShowToast")
     public void showToast(String text) {
         if (!debug) return;
         long now = System.currentTimeMillis();
@@ -1295,6 +1307,20 @@ public class LuaActivity extends AppCompatActivity
 
     public ImageLoader getImageLoader() {
         return LuaApplication.loader;
+    }
+
+    public void loadImage(Object data, LuaFunction callback) {
+        LuaApplication.loader.enqueue(new ImageRequest.Builder(this)
+                .data(data)
+                .target(new SimpleTarget(callback))
+                .build());
+    }
+
+    public void loadImage(Object data, ImageView view) {
+        LuaApplication.loader.enqueue(new ImageRequest.Builder(this)
+                .data(data)
+                .target(view)
+                .build());
     }
 
     public float dpToPx(float dp) {

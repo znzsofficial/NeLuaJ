@@ -2,7 +2,7 @@ require "environment"
 import "android.view.View"
 import "android.view.WindowManager"
 import "android.graphics.Color"
-import "com.androlua.LuaTarget"
+import "coil.target.Target"
 local ImageRequestBuilder = bindClass "coil.request.ImageRequest$Builder"
 
 activity.getSupportActionBar().hide()
@@ -26,13 +26,13 @@ local imageLoader = this.getImageLoader()
 
 imageLoader.enqueue(
         ImageRequestBuilder(this)
-                     .data(this.getLuaDir() .. "/res/drawable/sync.png")
-                     .target(LuaTarget(LuaTarget.Listener {
+                    .data(this.getLuaDir() .. "/res/drawable/sync.png")
+                    .target(Target {
             onSuccess = function(drawable)
                 drawable.setColorFilter(this.getFilter(this.globalData.ColorUtil.getColorOnPrimaryContainer()))
                 binding.switchBg.setImageDrawable(drawable)
             end
-        }))          .build()
+        })          .build()
 )
 
 imageLoader.enqueue(
