@@ -28,15 +28,11 @@ function _M.new(para, path)
   end
 end
 
-local function adapter(t)
-  return ArrayAdapter(activity,android.R.layout.simple_list_item_1,t)
-end
 
 function _M.showLog(context)
-  local logAdapter = adapter(context.getLogs())
   local dialog = MaterialAlertDialogBuilder(context)
   .setTitle(res.string.logs)
-  .setAdapter(logAdapter, function(dialog, i)
+  .setAdapter(this.logAdapter, function(dialog, i)
     local log = context.getLogs()[i]
     MaterialAlertDialogBuilder(context)
     .setMessage(log)
@@ -52,7 +48,7 @@ function _M.showLog(context)
     MainActivity.Public.snack("日志已清空")
   end)
   .show()
-  dialog.listView.setSelection(logAdapter.getCount() - 1)
+  dialog.listView.setSelection(this.logAdapter.getCount() - 1)
 end
 
 return _M

@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">NeLuaJ+</string>
-    <string name="drawer_open">打开侧滑</string>
-    <string name="drawer_close">关闭侧滑</string>
-    <string name="accsibility_service_description">辅助功能</string>
+    <string name="app_name" translatable="false">NeLuaJ+</string>
+    <string name="drawer_open">Open Drawer</string>
+    <string name="drawer_close">Close Drawer</string>
+    <string name="accsibility_service_description">Accessibility Service</string>
+    <string name="clear">Clear</string>
+    <string name="copy_all">Copy All</string>
 </resources>

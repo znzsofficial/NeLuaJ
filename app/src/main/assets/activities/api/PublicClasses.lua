@@ -4650,7 +4650,6 @@ return {
 "com.androlua.LuaTimer",
 "com.androlua.LuaTimerTask",
 "com.androlua.LuaTokenTypes",
-"com.androlua.LuaTarget",
 "com.androlua.LuaUtil",
 "com.androlua.LuaView",
 "com.androlua.LuaWallpaperService",
