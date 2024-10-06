@@ -61,16 +61,7 @@ class LuaLayout(private val initialContext: Context) {
     private val dm: DisplayMetrics = initialContext.resources.displayMetrics
     private val views = HashMap<String, LuaValue>()
     private val luaContext: LuaValue = initialContext.toLuaValue()
-    private val imageLoader: ImageLoader = ImageLoader.Builder(initialContext).components(
-        ComponentRegistry.Builder().apply {
-            if (Build.VERSION.SDK_INT >= 28) {
-                add(ImageDecoderDecoder.Factory())
-            } else {
-                add(GifDecoder.Factory())
-            }
-            add(SvgDecoder.Factory())
-        }.build()
-    ).build()
+    private val imageLoader: ImageLoader = LuaApplication.loader
     private val scaleTypeValues: Array<ScaleType> = ScaleType.entries.toTypedArray()
 
     val id: HashMap<*, *>
@@ -533,6 +524,7 @@ class LuaLayout(private val initialContext: Context) {
                             }
                         } else {
                             view[key] = tValue
+                            //view.jset(key.asString(), tValue)
                         }
                     }
                 } catch (e: Exception) {
