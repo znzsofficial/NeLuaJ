@@ -4,11 +4,15 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Typeface
+import coil.executeBlocking
+import coil.request.ImageRequest
 import com.androlua.LuaActivity
+import com.androlua.LuaApplication
 import com.androlua.LuaBitmap
-import com.androlua.LuaBitmapDrawable
 import com.androlua.LuaContext
 import com.androlua.LuaLayout
+import com.nekolaska.toLuaValue
+import kotlinx.coroutines.Dispatchers
 import org.luaj.Globals
 import org.luaj.LuaError
 import org.luaj.LuaTable
@@ -17,6 +21,10 @@ import org.luaj.lib.TwoArgFunction
 import org.luaj.lib.jse.CoerceJavaToLua
 import java.io.File
 import java.util.Locale
+
+inline fun File.ifExists(block: File.() -> Unit) {
+    if (exists()) block()
+}
 
 class res(private val context: LuaContext) : TwoArgFunction() {
     override fun call(modName: LuaValue, env: LuaValue): LuaValue {
@@ -181,6 +189,19 @@ class res(private val context: LuaContext) : TwoArgFunction() {
 
     private class drawable(private val activity: LuaContext, private val globals: Globals) :
         LuaValue() {
+        private val extension = listOf(
+            "bmp",
+            "jpeg",
+            "jpg",
+            "png",
+            "gif",
+            "svg",
+            "webp",
+            "heif",
+            "heic",
+            "avif"
+        )
+
         override fun type(): Int {
             return TTABLE
         }
@@ -206,24 +227,16 @@ class res(private val context: LuaContext) : TwoArgFunction() {
 
         override fun get(arg: String): LuaValue {
             val p = activity.getLuaPath("res/drawable", arg)
-            if (File("$p.png").exists()) return CoerceJavaToLua.coerce(
-                LuaBitmapDrawable(
-                    activity,
-                    "$p.png"
-                )
-            )
-            if (File("$p.jpg").exists()) return CoerceJavaToLua.coerce(
-                LuaBitmapDrawable(
-                    activity,
-                    "$p.jpg"
-                )
-            )
-            if (File("$p.gif").exists()) return CoerceJavaToLua.coerce(
-                LuaBitmapDrawable(
-                    activity,
-                    "$p.gif"
-                )
-            )
+            extension.forEach {
+                File("$p.$it").ifExists {
+                    return LuaApplication.loader.executeBlocking(
+                        ImageRequest.Builder(activity.context)
+                            .dispatcher(Dispatchers.Main.immediate)
+                            .data(this)
+                            .build()
+                    ).drawable.toLuaValue()
+                }
+            }
             if (File("$p.lua").exists()) return globals.loadfile("$p.lua", globals).call()
             return NIL
         }

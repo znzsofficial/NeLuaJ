@@ -250,12 +250,10 @@ public class LuaArrayAdapter extends BaseAdapter implements Filterable {
 
         @Override
         public void run() {
-            // TODO: Implement this method
             try {
                 LuaBitmap.getBitmap(mContext, mPath);
                 mHandler.sendEmptyMessage(0);
             } catch (LuaError e) {
-                e.printStackTrace();
                 mContext.sendError("AsyncLoader error", e);
             }
         }
