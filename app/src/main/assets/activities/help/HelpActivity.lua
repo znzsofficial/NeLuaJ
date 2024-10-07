@@ -84,16 +84,14 @@ lv.onItemClick = function(l, v, p, i)
 end
 
 if bindClass "android.os.Build".VERSION.SDK_INT >= 33 then
-    activity.onBackPressedDispatcher.addCallback(this, luajava.bindClass "androidx.activity.OnBackPressedCallback".override {
-        handleOnBackPressed = function()
+    this.onBackPressedDispatcher.addCallback(this, luajava.bindClass"com.androlua.LuaBackPressedCallback"(function()
             if vpg.getCurrentItem() ~= 0 then
                 vpg.setCurrentItem(0)
                 activity.setTitle("NeLuaJ+" .. res.string.help)
             else
                 activity.finish()
             end
-        end
-    }(true))
+        end))
 else
     function onKeyDown(code, event)
         if code == KeyEvent.KEYCODE_BACK then

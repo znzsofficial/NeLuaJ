@@ -67,10 +67,17 @@ local suffix_image = setmetatable({
     mp4 = "file_video",
     m3u8 = "file_video",
     avi = "file_video",
+    idsig = "file_sig",
     png = "file_img",
     jpg = "file_img",
     jpeg = "file_img",
     gif = "file_img",
+    bmp = "file_img",
+    svg = "file_img",
+    webp = "file_img",
+    heif = "file_img",
+    heic = "file_img",
+    avif = "file_img"
 }, {
     __index = function(self, key)
         return rawget(self, key) or "file"
@@ -189,6 +196,7 @@ _M.init = function()
                         elseif v.img == "file_img" then
                             ActivityUtil.new("photo", v_path)
                         elseif v.img == "file_zip"
+                                or v.img == "file_sig"
                                 or v.img == "file_audio"
                                 or v.img == "file_video"
                                 or v.img == "file_java"

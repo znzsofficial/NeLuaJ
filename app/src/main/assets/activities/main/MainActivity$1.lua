@@ -255,6 +255,7 @@ function _M.dirMenu(path, name, position)
     end
 end
 
+--[[
 function _M.build()
     local layout = {}
     MaterialAlertDialogBuilder(activity)
@@ -270,6 +271,7 @@ function _M.build()
             .show();
     layout.pro_path.setText(Bean.Path.app_root_pro_dir .. "/" .. Bean.Project.this_project)
 end
+]]
 
 function _M.InstallApk(filePath)
     local intent = Intent(Intent.ACTION_VIEW);

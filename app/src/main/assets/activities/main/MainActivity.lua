@@ -192,7 +192,7 @@ function onCreateOptionsMenu(menu)
     end
     local menu2 = menu.addSubMenu(res.string.project .. "…")
     menu2.add(res.string.build).onMenuItemClick = function(a)
-        MainActivity.Public.build()
+        this.startPackage("com.nekolaska.Builder")
     end
     menu2.add(res.string.create_project).onMenuItemClick = function(a)
         MainActivity.Public.createProject()
@@ -287,11 +287,9 @@ local exit = function()
 end
 
 if bindClass "android.os.Build".VERSION.SDK_INT >= 33 then
-    activity.getOnBackPressedDispatcher().addCallback(this, luajava.bindClass "androidx.activity.OnBackPressedCallback".override {
-        handleOnBackPressed = function()
-            exit()
-        end
-    }(true))
+    this.onBackPressedDispatcher.addCallback(this, luajava.bindClass"com.androlua.LuaBackPressedCallback"(function()
+        exit()
+    end))
 else
     function onKeyDown(code, event)
         if string.find(tostring(event), "KEYCODE_BACK") ~= nil then
