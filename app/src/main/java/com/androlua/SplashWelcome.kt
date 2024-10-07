@@ -2,9 +2,11 @@ package com.androlua
 
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.lifecycleScope
+import dalvik.system.ZipPathValidator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -33,7 +35,7 @@ class SplashWelcome : ComponentActivity() {
         app = application as LuaApplication
         localDir = app.luaDir
         if (checkInfo()) {
-            LuaApplication.instance?.setSharedData("UnZiped", false)
+            LuaApplication.instance.setSharedData("UnZiped", false)
             lifecycleScope.launch {
                 runCatching {
                     withContext(Dispatchers.IO) {
@@ -41,7 +43,7 @@ class SplashWelcome : ComponentActivity() {
                     }
                 }
                 startActivity()
-                LuaApplication.instance?.setSharedData("UnZiped", true)
+                LuaApplication.instance.setSharedData("UnZiped", true)
             }
         } else {
             startActivity()
@@ -99,6 +101,9 @@ class SplashWelcome : ComponentActivity() {
     private var destPath: String? = null
 
     private fun unApk(dir: String, extDir: String?) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            ZipPathValidator.clearCallback()
+        }
         val dirtest = ArrayList<String>()
         val threadPool =
             Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors())
