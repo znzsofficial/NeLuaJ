@@ -17506,7 +17506,6 @@ return {
     "github.znzsofficial.neluaj.R$style",
     "github.znzsofficial.neluaj.R$xml",
     "github.znzsofficial.utils.CompileUtil",
-    "github.znzsofficial.utils.LuaBuildUtil",
     "java.io.Bits",
     "java.io.BufferedInputStream",
     "java.io.BufferedOutputStream",

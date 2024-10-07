@@ -1254,6 +1254,12 @@ public class LuaActivity extends AppCompatActivity
         return "application/octet-stream";
     }
 
+    public void startPackage(String pkg) {
+        Intent intent = getPackageManager().getLaunchIntentForPackage(pkg);
+        if (intent != null) startActivity(intent);
+        else Toast.makeText(this, "未找到应用", Toast.LENGTH_SHORT).show();
+    }
+
     public void installApk(String path) {
         Intent share = new Intent(Intent.ACTION_VIEW);
         File file = new File(path);
