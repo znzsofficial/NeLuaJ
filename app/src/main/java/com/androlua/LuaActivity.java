@@ -639,7 +639,7 @@ public class LuaActivity extends AppCompatActivity
 
     @Override
     public String getLuaPath(String path) {
-        return new File(getLuaDir(), path).getAbsolutePath();
+        return new File(luaDir, path).getAbsolutePath();
     }
 
     @Override
@@ -654,7 +654,7 @@ public class LuaActivity extends AppCompatActivity
 
     @Override
     public String getLuaDir(String dir) {
-        return new File(getLuaDir(), dir).getAbsolutePath();
+        return new File(luaDir, dir).getAbsolutePath();
     }
 
     @Override
@@ -1299,12 +1299,12 @@ public class LuaActivity extends AppCompatActivity
     }
 
     public Drawable getResDrawable(String name) {
-        String path = getLuaDir() + "/res/drawable/" + name + ".png";
+        String path = luaDir + "/res/drawable/" + name + ".png";
         return new BitmapDrawable(getResources(), BitmapFactory.decodeFile(path));
     }
 
     public Drawable getResDrawable(String name, int color) {
-        String path = getLuaDir() + "/res/drawable/" + name + ".png";
+        String path = luaDir + "/res/drawable/" + name + ".png";
         Drawable drawable = new BitmapDrawable(getResources(), BitmapFactory.decodeFile(path));
         drawable.setColorFilter(getFilter(color));
         return drawable;

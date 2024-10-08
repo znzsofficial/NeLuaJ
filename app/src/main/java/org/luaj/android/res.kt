@@ -1,12 +1,12 @@
 package org.luaj.android
 
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Typeface
 import coil.executeBlocking
 import coil.request.ImageRequest
-import com.androlua.LuaActivity
 import com.androlua.LuaApplication
 import com.androlua.LuaBitmap
 import com.androlua.LuaContext
@@ -36,7 +36,7 @@ class res(private val context: LuaContext) : TwoArgFunction() {
         res["layout"] = layout(context, globals)
         res["view"] = view(context, globals)
         res["font"] = font(context)
-        if (context is LuaActivity) {
+        if (context is Activity) {
             val configuration = context.resources.configuration
             res["dimen"] = dimen(context, globals, configuration)
             res["color"] = color(context, globals, configuration)
