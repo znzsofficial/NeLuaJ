@@ -37,8 +37,8 @@ class SplashWelcome : ComponentActivity() {
         if (checkInfo()) {
             LuaApplication.instance.setSharedData("UnZiped", false)
             lifecycleScope.launch {
-                runCatching {
-                    withContext(Dispatchers.IO) {
+                withContext(Dispatchers.IO) {
+                    runCatching {
                         unApk("assets/", localDir)
                     }
                 }
