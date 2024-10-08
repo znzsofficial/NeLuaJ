@@ -124,12 +124,12 @@ defer后语句将在函数结束时运行，多个defer将按照后入先出原�
 #### ** 支持?操作符 **
 ```lua
 ?a print(1)`print(2)
-a=?a print(1)`print(2)
+a = ?a print(1)`print(2)
 ```
 
 #### ** 支持三目 if **
 ```lua
-b=if a 1 else 2
+b = if a 1 else 2
 print(b)
 ```
 
@@ -138,8 +138,8 @@ print(b)
 ```lua
 try
   error("err")
-catch(m)
-  print("catch",m)
+catch(e)
+  print("catch", e)
 finally
   print("finally")
 end
@@ -157,12 +157,19 @@ lambda () -> print("lambda")
 ```
 #### ** 支持import **
 
-import将导入包并设置为局部变量，支持别名。
+import将导入包并设置为局部变量
 
 import "java.lang.String"
+返回值为 javaClass
+
+import "java.lang.*"
+返回值为 javaPackage
 
 import str "java.lang.String"
+设置别名
 
+import "java.lang.*", "java.io.*"
+一次性导入多个包或类
 
 ** 支持module **
 
@@ -245,7 +252,7 @@ c=abstract{
 ```lua
 list=ArrayList.override{
   function add(superCall, arg)
-  superCall(arg)
+    superCall(arg)
   end
 }()
 list=ArrayList{
@@ -356,15 +363,15 @@ mViewPager.addOnPageChangeListener{
 
 - 函数式接口可简写
 ```lua
-Runnable {
+obj.run(Runnable {
   run = function()
     -- do something
   end
-}
+})
 -->
-function()
+obj.run(function()
   -- do something
-end
+end)
 ```
 
 ** 支持增强型字符串格式化 **
