@@ -5,6 +5,8 @@ import net.lingala.zip4j.ZipFile
 import okio.buffer
 import okio.sink
 import okio.source
+import org.luaj.LuaTable
+import org.luaj.lib.jse.JsePlatform
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -53,6 +55,10 @@ object LuaFileUtil {
     fun compress(srcFolderPath: String, destZipFilePath: String, fileName: String) {
         LuaUtil.zip(srcFolderPath, destZipFilePath, fileName)
     }
+
+    fun loadLua(path: String) = JsePlatform.standardGlobals().apply {
+        loadfile(path).call()
+    } as LuaTable
 
     interface Impl {
         fun write(path: String, content: String): Boolean

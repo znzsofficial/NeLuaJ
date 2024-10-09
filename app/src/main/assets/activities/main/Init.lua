@@ -68,4 +68,25 @@ _M.initBar = function()
     return _M
 end
 
+_M.initCheck = function()
+    local layout = error_Text.getParent()
+    local textView = error_Text
+    textView.onClick = function()
+        textView.text = mLuaEditor.getError()
+    end
+    local ticker = luajava.newInstance"com.androlua.Ticker"
+    ticker.Period = 250
+    ticker.onTick = function()
+        local error = mLuaEditor.getError()
+        if error then
+            layout.visibility = 0
+            textView.text = error
+        else
+            layout.visibility = 8
+        end
+    end
+    ticker.start()
+    return _M
+end
+
 return _M
