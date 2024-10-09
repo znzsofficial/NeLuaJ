@@ -1,5 +1,7 @@
 modules="Modules"
+backup="Backup"
 nofile="No file opened"
+noProject="No project opened"
 save_success="Save successful"
 save_fail="Save failed"
 save_same="This file has not been modified."

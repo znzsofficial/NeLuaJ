@@ -55,7 +55,7 @@ function onCreate()
         window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR)
     end
     Bean.Path.this_dir = Bean.Path.app_root_pro_dir
-    Init.initView().initBar()
+    Init.initView().initBar().initCheck()
 end
 
 function onRequestPermissionsResult(r, p, g)
@@ -196,6 +196,18 @@ function onCreateOptionsMenu(menu)
     end
     menu2.add(res.string.create_project).onMenuItemClick = function(a)
         MainActivity.Public.createProject()
+    end
+    menu2.add(res.string.backup).onMenuItemClick = function(a)
+        if mLuaEditor.getVisibility() == 4 then
+            MainActivity.Public.snack(res.string.nofile)
+            return
+        elseif Bean.Project.this_project == "" then
+            MainActivity.Public.snack(res.string.noProject)
+            return
+        end
+        local project_dir = Bean.Path.app_root_pro_dir .. "/" .. Bean.Project.this_project
+        local init = LuaFileUtil.loadLua(project_dir .. "/init.lua")
+        LuaFileUtil.compress(project_dir, Bean.Path.app_root_dir .. "/Backup", init.app_name .. "-" .. os.date("%Y-%m-%d-%H-%M-%S") .. ".zip")
     end
     local menu3 = menu.addSubMenu(res.string.tools .. "…")
     menu3.add(res.string.logs).onMenuItemClick = function(a)

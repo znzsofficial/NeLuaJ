@@ -12,6 +12,7 @@ import "com.google.android.material.card.MaterialCardView"
 import "com.google.android.material.navigation.NavigationView";
 import "com.google.android.material.divider.MaterialDivider";
 import "com.google.android.material.tabs.TabLayout"
+import "com.google.android.material.textview.MaterialTextView"
 import "com.nekolaska.internal.MyFullDraggableContainer"
 import "com.nekolaska.internal.MyFileTabView"
 import "vinx.material.textfield.MaterialTextField"
@@ -135,6 +136,19 @@ return {
                         MaterialDivider,
                         layout_width = "fill",
                         layout_height = "1dp";
+                    },
+                    {
+                        LinearLayout,
+                        visibility = 8,
+                        backgroundColor = ColorUtil.getColorSurface(),
+                        layout_width = "match",
+                        layout_height = "wrap",
+                        {
+                            MaterialTextView,
+                            id = "error_Text",
+                            layout_width = "match",
+                            layout_height = "wrap",
+                        }
                     },
                     {
                         HorizontalScrollView,

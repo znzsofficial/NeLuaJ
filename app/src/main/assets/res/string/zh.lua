@@ -1,5 +1,7 @@
 modules="模块"
+backup="备份"
 nofile="未打开文件"
+noProject="未打开工程"
 save_success="保存成功"
 save_fail="保存失败"
 save_same="此文件未改动"

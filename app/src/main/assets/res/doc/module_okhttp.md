@@ -17,5 +17,8 @@ okhttp.post(url, body, headers)
 ## okhttp.put
 okhttp.put(url, body, headers)
 
+## okhttp.patch
+okhttp.patch(url, body, headers)
+
 ## okhttp.head
 okhttp.head(url, headers)
