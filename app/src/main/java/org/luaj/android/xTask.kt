@@ -30,7 +30,7 @@ class xTask(private val mContext: LuaActivity) : VarArgFunction(), LuaGcable {
                     }
                 ) {
                     try {
-                        table["task"].ifIsFunction()?.invoke()
+                        table["task"].ifIsFunction()?.call(coroutineContext.toLuaValue())
                     } catch (e: LuaError) {
                         mContext.sendError("xTask: Background", e)
                         NIL

@@ -7,10 +7,11 @@ NeLuaJ+ 实现了基于 kotlin 协程的异步函数。
 ```lua
 xTask {
     --dispatcher = "io",
-    task = function()
+    task = function(coroutineContext)
         return "ret"
     end,
     callback = function(result)
+        print(result)
     end
 }
 ```
