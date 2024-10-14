@@ -1284,6 +1284,8 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         @JvmField
         var sActivity: LuaActivity? = null
         private val sLuaActivityMap = HashMap<String?, LuaActivity?>()
+
+        @JvmStatic
         fun logError(title: String?, msg: Exception) {
             sActivity?.sendMsg(title + ": " + msg.message)
             logs.add("$title: $msg")

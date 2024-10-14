@@ -5,7 +5,6 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.Drawable
-import android.os.Build
 import android.text.TextUtils
 import android.util.DisplayMetrics
 import android.util.TypedValue
@@ -14,11 +13,7 @@ import android.view.ViewGroup
 import android.widget.AdapterView
 import android.widget.ImageView.ScaleType
 import androidx.appcompat.view.ContextThemeWrapper
-import coil.ComponentRegistry
 import coil.ImageLoader
-import coil.decode.GifDecoder
-import coil.decode.ImageDecoderDecoder
-import coil.decode.SvgDecoder
 import coil.request.ImageRequest
 import com.androlua.adapter.ArrayListAdapter
 import com.androlua.adapter.LuaAdapter
@@ -312,61 +307,61 @@ class LuaLayout(private val initialContext: Context) {
                             }
 
                             "pages" -> {
-                                val ts = tValue.checktable()
-                                val list = ArrayList<View>()
-                                var i = 0
-                                while (i < ts.length()) {
-                                    val v = ts[i + 1]
-                                    if (v.isuserdata()) {
-                                        list.add(v.toView())
-                                    } else if (v.istable()) {
-                                        list.add(
-                                            load(v.checktable(), env).touserdata(
-                                                View::class.java
-                                            )
-                                        )
-                                    } else if (v.isstring()) {
-                                        list.add(
+                                val views = tValue.checktable()
+                                val list = mutableListOf<View>()
+                                val luaContext = luaContext.toLuaContext()
+                                for (i in 1 until views.length() + 1) {  // 从1开始，避免i+1的使用
+                                    val v = views[i]
+                                    when {
+                                        v.isuserdata() -> list.add(v.toView())
+                                        v.istable() -> list.add(
                                             load(
-                                                luaContext.toLuaContext().luaState.require(
-                                                    v
-                                                ), env
-                                            )
-                                                .toView()
+                                                v.checktable(),
+                                                env
+                                            ).touserdata(View::class.java)
                                         )
+
+                                        v.isstring() -> {
+                                            list.add(
+                                                load(
+                                                    luaContext.luaState.require(v),
+                                                    env
+                                                ).toView()
+                                            )
+                                        }
                                     }
-                                    i++
                                 }
                                 view["setAdapter"].jcall(LuaPagerAdapter(list))
                                 continue
                             }
 
                             "pagesWithTitle" -> {
-                                val tab = tValue.checktable()
-                                val views = tab[1].checktable()
-                                val titles = tab[2].checktable()
-                                val viewList = ArrayList<View>()
-                                val titleList = ArrayList<String>()
-                                run {
-                                    var i = 0
-                                    while (i < views.length()) {
-                                        val v = views[i + 1]
-                                        if (v.isuserdata()) {
-                                            viewList.add(v.toView())
-                                        } else if (v.istable()) {
-                                            viewList.add(
-                                                load(v.checktable(), env).toView()
-                                            )
-                                        } else if (v.isstring()) {
-                                            viewList.add(
-                                                load(
-                                                    luaContext.toLuaContext().luaState.require(
-                                                        v
-                                                    ), env
-                                                ).toView()
-                                            )
-                                        }
-                                        i++
+                                val (views, titles) = tValue.checktable().let {
+                                    it[1].checktable() to it[2].checktable()
+                                }
+
+                                val viewList = mutableListOf<View>()
+                                val titleList = mutableListOf<String>()
+                                val luaContext = luaContext.toLuaContext()
+
+                                for (i in 1 until views.length() + 1) {
+                                    val v = views[i]
+                                    when {
+                                        v.isuserdata() -> viewList.add(v.toView())
+                                        v.istable() -> viewList.add(
+                                            load(
+                                                v.checktable(),
+                                                env
+                                            ).toView()
+                                        )
+
+                                        v.isstring() -> viewList.add(
+                                            load(
+                                                luaContext.luaState.require(
+                                                    v
+                                                ), env
+                                            ).toView()
+                                        )
                                     }
                                 }
                                 generateSequence(1) { it + 1 }
@@ -392,36 +387,12 @@ class LuaLayout(private val initialContext: Context) {
                                             )
                                         )
                                     } else {
-                                        // if (src.startsWith("http")) {
-                                        //                      new AsyncTaskX<String, String, Bitmap>() {
-                                        //                        @Override
-                                        //                        protected Bitmap a(String... strings) {
-                                        //                          try {
-                                        //                            return LuaBitmap.getHttpBitmap(context, src);
-                                        //                          } catch (Exception e) {
-                                        //                            e.printStackTrace();
-                                        //                            return null;
-                                        //                          }
-                                        //                        }
-                                        //
-                                        //                        @Override
-                                        //                        protected void a(Bitmap bitmap) {
-                                        //                          if (bitmap != null) view.jset("ImageBitmap",
-                                        // bitmap);
-                                        //                        }
-                                        //                      }.execute();
                                         imageLoader.enqueue(
                                             ImageRequest.Builder(initialContext)
                                                 .data(tValue.asString()).target {
                                                     view.jset("ImageDrawable", it)
                                                 }.build()
                                         )
-                                        // } else {
-                                        //                      view.jset(
-                                        //                          "ImageBitmap",
-                                        //
-                                        // LuaBitmap.getBitmap(mContext.touserdata(LuaContext.class), src));
-                                        // }
                                     }
                                 } catch (e: Exception) {
                                     e.printStackTrace()
