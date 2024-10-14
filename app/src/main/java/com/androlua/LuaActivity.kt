@@ -28,7 +28,6 @@ import android.os.IBinder
 import android.os.StrictMode
 import android.os.StrictMode.ThreadPolicy
 import android.provider.MediaStore
-import android.text.TextUtils
 import android.util.DisplayMetrics
 import android.util.Log
 import android.view.ContextMenu
@@ -124,7 +123,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         luaDir = filesDir.absolutePath
         if (d != null) {
             var p = d.path
-            if (!TextUtils.isEmpty(p)) {
+            if (!p.isNullOrEmpty()) {
                 val f = File(p)
                 if (f.isFile()) {
                     p = f.getParent()
@@ -408,13 +407,6 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
 
     fun setDebug(bool: Boolean) {
         debug = bool
-    }
-
-    //    public ArrayList<String> getLogs() {
-    //        return logs;
-    //    }
-    fun getLogAdapter(): ArrayListAdapter<String?> {
-        return adapter
     }
 
     private fun initSize() {
@@ -1279,7 +1271,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         private const val NAME = "name"
 
         @JvmField
-        var logs: ArrayList<String?> = ArrayList<String?>()
+        var logs = ArrayList<String?>()
 
         @JvmField
         var sActivity: LuaActivity? = null
