@@ -1,7 +1,7 @@
 import "com.google.android.material.dialog.MaterialAlertDialogBuilder"
-local ArrayAdapter = bindClass "android.widget.ArrayAdapter"
+local ArrayListAdapter = bindClass "com.androlua.adapter.ArrayListAdapter"
 local _M ={}
-local:res
+local res = res
 
 _M.lua_path = activity.getLuaDir()
 
@@ -30,10 +30,11 @@ end
 
 
 function _M.showLog(context)
+  local adapter = ArrayListAdapter(context, context.logs)
   local dialog = MaterialAlertDialogBuilder(context)
   .setTitle(res.string.logs)
-  .setAdapter(this.logAdapter, function(dialog, i)
-    local log = context.getLogs()[i]
+  .setAdapter(adapter, function(dialog, i)
+    local log = adapter.getItem(i)
     MaterialAlertDialogBuilder(context)
     .setMessage(log)
     .setPositiveButton(android.R.string.copy, function()
@@ -48,7 +49,7 @@ function _M.showLog(context)
     MainActivity.Public.snack("日志已清空")
   end)
   .show()
-  dialog.listView.setSelection(this.logAdapter.getCount() - 1)
+  dialog.listView.setSelection(adapter.getCount() - 1)
 end
 
 return _M
