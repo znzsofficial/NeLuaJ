@@ -1,7 +1,7 @@
 package com.nekolaska.internal
 
 import android.view.View
-import com.nekolaska.toLuaValue
+import com.nekolaska.ktx.toLuaValue
 import github.znzsofficial.adapter.LuaCustRecyclerHolder
 import github.znzsofficial.neluaj.R
 import org.luaj.LuaTable

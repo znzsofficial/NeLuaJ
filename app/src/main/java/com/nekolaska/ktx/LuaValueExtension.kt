@@ -1,4 +1,4 @@
-package com.nekolaska
+package com.nekolaska.ktx
 
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.luaj.Globals
@@ -7,6 +7,7 @@ import org.luaj.Varargs
 import org.luaj.lib.jse.CoerceJavaToLua
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+
 
 @Suppress("NOTHING_TO_INLINE")
 inline fun Globals.require(value: LuaValue): LuaValue = this.p.y.call(value)

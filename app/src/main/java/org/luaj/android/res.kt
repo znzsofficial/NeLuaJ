@@ -11,7 +11,7 @@ import com.androlua.LuaApplication
 import com.androlua.LuaBitmap
 import com.androlua.LuaContext
 import com.androlua.LuaLayout
-import com.nekolaska.toLuaValue
+import com.nekolaska.ktx.toLuaValue
 import kotlinx.coroutines.Dispatchers
 import org.luaj.Globals
 import org.luaj.LuaError
