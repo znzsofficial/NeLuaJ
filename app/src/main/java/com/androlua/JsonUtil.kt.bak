@@ -1,0 +1,234 @@
+package com.androlua
+
+import com.androlua.JsonUtil.HistoryData
+import org.json.JSONArray
+import org.json.JSONException
+import org.json.JSONObject
+import java.io.BufferedReader
+import java.io.BufferedWriter
+import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.io.IOException
+import java.io.InputStream
+import java.io.InputStreamReader
+import java.io.OutputStreamWriter
+import java.lang.Exception
+import java.lang.StringBuilder
+import java.util.ArrayList
+import java.util.HashMap
+
+/**
+ * Created by Administrator on 2017/04/22 0022.
+ */
+object JsonUtil {
+    private val cache: MutableMap<String?, MutableMap<String?, String?>?> =
+        HashMap<String?, MutableMap<String?, String?>?>()
+
+    fun read(path: String?): MutableMap<String?, String?> {
+        var map = cache[path]
+        if (map != null) return map
+        map = HashMap<String?, String?>()
+        try {
+            val stream: InputStream = FileInputStream(path)
+            val reader = BufferedReader(InputStreamReader(stream, "UTF-8"))
+            val stringBuilder = StringBuilder()
+            var input: String?
+            while ((reader.readLine().also { input = it }) != null) {
+                stringBuilder.append(input)
+            }
+            stream.close()
+
+            val letters = JSONObject(stringBuilder.toString())
+            val keys: MutableIterator<*> = letters.keys()
+            while (keys.hasNext()) {
+                val letter = keys.next() as String
+                map.put(letter, letters.getString(letter))
+            }
+        } catch (ignored: IOException) {
+        } catch (ignored: JSONException) {
+        }
+        cache.put(path, map)
+        return map
+    }
+
+    fun read2(path: String): MutableMap<String?, String?> {
+        val map: MutableMap<String?, String?> = HashMap<String?, String?>()
+        if (!File(path).exists()) return map
+        try {
+            val stream: InputStream = FileInputStream(path)
+            val reader = BufferedReader(InputStreamReader(stream, "UTF-8"))
+            val stringBuilder = StringBuilder()
+            var input: String?
+            while ((reader.readLine().also { input = it }) != null) {
+                stringBuilder.append(input)
+            }
+            stream.close()
+
+            val letters = JSONObject(stringBuilder.toString())
+            val keys: MutableIterator<*> = letters.keys()
+            while (keys.hasNext()) {
+                val letter = keys.next() as String
+                map.put(letter, letters.getString(letter))
+            }
+        } catch (ignored: IOException) {
+        } catch (ignored: JSONException) {
+        }
+        return map
+    }
+
+    fun save(path: String?, map: MutableMap<String?, String?>) {
+        val json = JSONObject(map)
+        try {
+            val writer = BufferedWriter(OutputStreamWriter(FileOutputStream(path), "UTF-8"))
+            writer.write(json.toString(4))
+            writer.close()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun save(path: String?, json: JSONObject) {
+        try {
+            val writer = BufferedWriter(OutputStreamWriter(FileOutputStream(path), "UTF-8"))
+            writer.write(json.toString(4))
+            writer.close()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun load(path: String): ArrayList<String?> {
+        val map = ArrayList<String?>()
+        if (!File(path).exists()) return map
+        try {
+            val stream: InputStream = FileInputStream(path)
+            val reader = BufferedReader(InputStreamReader(stream, "UTF-8"))
+            val stringBuilder = StringBuilder()
+            var input: String?
+            while ((reader.readLine().also { input = it }) != null) {
+                stringBuilder.append(input)
+            }
+            stream.close()
+            val letters = JSONArray(stringBuilder.toString())
+            val len = letters.length()
+            for (i in 0 until len) {
+                map.add(letters.getString(i))
+            }
+        } catch (ignored: IOException) {
+        } catch (ignored: JSONException) {
+        }
+        return map
+    }
+
+
+    fun save(path: String?, map: MutableList<String?>?) {
+        val json = JSONArray(map)
+        try {
+            val writer = BufferedWriter(OutputStreamWriter(FileOutputStream(path), "UTF-8"))
+            writer.write(json.toString(4))
+            writer.close()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun saveText(path: String?, map: MutableList<String?>) {
+        try {
+            val writer = BufferedWriter(OutputStreamWriter(FileOutputStream(path), "UTF-8"))
+            for (t in map) {
+                writer.write(t)
+                writer.newLine()
+            }
+            writer.close()
+        } catch (e: IOException) {
+            e.printStackTrace()
+        }
+    }
+
+    fun reset() {
+        cache.clear()
+    }
+
+    fun loadHistoryData(path: String): ArrayList<HistoryData?> {
+        val list = ArrayList<HistoryData?>()
+        if (!File(path).exists()) return list
+        try {
+            val stream: InputStream = FileInputStream(File(path))
+            val reader = BufferedReader(InputStreamReader(stream, "UTF-8"))
+            val stringBuilder = StringBuilder()
+            var input: String?
+            while ((reader.readLine().also { input = it }) != null) {
+                stringBuilder.append(input)
+            }
+            stream.close()
+            try {
+                val json = JSONObject(stringBuilder.toString()).getJSONArray("history")
+                val len = json.length()
+                for (i in 0 until len) {
+                    list.add(HistoryData(json.getJSONObject(i)))
+                }
+            } catch (e: JSONException) {
+                e.printStackTrace()
+            }
+        } catch (e: IOException) {
+            e.printStackTrace()
+        }
+        return list
+    }
+
+    fun saveHistoryData(path: String?, history: ArrayList<HistoryData>) {
+        val json = JSONObject()
+        val list = JSONArray()
+        try {
+            for (data in history) {
+                list.put(data.toJson())
+            }
+            json.put("history", list)
+        } catch (e: JSONException) {
+            e.printStackTrace()
+        }
+        try {
+            val writer = BufferedWriter(OutputStreamWriter(FileOutputStream(path), "UTF-8"))
+            writer.write(json.toString(2))
+            writer.close()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    class HistoryData {
+        private var mPath: String?
+        private var mIdx: Int
+
+        constructor(json: JSONObject) {
+            mPath = json.optString("path")
+            mIdx = json.optInt("idx")
+        }
+
+        constructor(path: String?, idx: Int) {
+            mPath = path
+            mIdx = idx
+        }
+
+        fun getPath(): String? {
+            return mPath
+        }
+
+
+        fun getIdx(): Int {
+            return mIdx
+        }
+
+        fun toJson(): JSONObject {
+            val j = JSONObject()
+            try {
+                j.put("path", mPath)
+                j.put("idx", mIdx)
+            } catch (e: JSONException) {
+                e.printStackTrace()
+            }
+            return j
+        }
+    }
+}

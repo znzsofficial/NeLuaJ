@@ -185,8 +185,7 @@ class LuaLayout(private val initialContext: Context) {
                             var v = next.secondArg()
                             if (v.isstring()) v =
                                 luaContext.toLuaContext().luaState.require(v)
-                            // v =
-                            // mContext.touserdata(LuaContext.class).getLuaState().package_.require.call(v);
+                            // v = mContext.touserdata(LuaContext.class).getLuaState().package_.require.call(v);
                             if (isAdapterView) {
                                 view.jset(
                                     "adapter",
