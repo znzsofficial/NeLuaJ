@@ -2,8 +2,8 @@ package org.luaj.android
 
 import androidx.lifecycle.lifecycleScope
 import com.androlua.LuaActivity
-import com.nekolaska.firstArg
-import com.nekolaska.toLuaValue
+import com.nekolaska.ktx.firstArg
+import com.nekolaska.ktx.toLuaValue
 import kotlinx.coroutines.launch
 import org.luaj.LuaFunction
 import org.luaj.Varargs

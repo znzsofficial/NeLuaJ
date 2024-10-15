@@ -7,7 +7,7 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.androlua.LuaContext
-import com.nekolaska.toLuaValue
+import com.nekolaska.ktx.toLuaValue
 
 open class RecyclerListAdapter @JvmOverloads constructor(
     open var mContext: LuaContext? = null,
