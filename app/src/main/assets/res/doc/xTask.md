@@ -14,6 +14,8 @@ xTask {
         print(result)
     end
 }
+-- 或
+xTask(function(coroutineContext)  end,function()  end)
 ```
 
 dispatcher为"io"，使用io调度器
