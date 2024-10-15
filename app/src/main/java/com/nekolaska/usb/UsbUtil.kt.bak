@@ -10,7 +10,7 @@ import android.content.ServiceConnection
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.os.IBinder
-import com.nekolaska.toLuaValue
+import com.nekolaska.ktx.toLuaValue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
