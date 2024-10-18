@@ -200,8 +200,11 @@ _M.init = function()
                                 or v.img == "file_audio"
                                 or v.img == "file_video"
                                 or v.img == "file_java"
-                                or v.img == "file_c_code" then
-                            MainActivity.Public.openFile(v_path, v.file_name)
+                                or v.img == "file_c_code"
+                                or v.img == "file" then
+                            this.openFile(v_path, function()
+                                MainActivity.Public.snack(res.string.NoSupport)
+                            end)
                         elseif v.img == "file_apk" then
                             MainActivity.Public.InstallApk(v_path)
                         else

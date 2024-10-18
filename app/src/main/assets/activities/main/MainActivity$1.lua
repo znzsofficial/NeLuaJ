@@ -283,6 +283,7 @@ function _M.InstallApk(filePath)
     activity.startActivity(intent)
 end
 
+--[[
 function _M.openFile(path, FileName)
     try
     local ExtensionName = FileName:match("%.(.+)")
@@ -302,6 +303,7 @@ function _M.openFile(path, FileName)
 end
 end
 
+
 function _M.signApk()
 MaterialAlertDialogBuilder(activity)
 .setTitle("目标文件")
@@ -318,5 +320,6 @@ end )
 .show();
 file_name.setText(Bean.Path.app_root_dir.."/bin/").setSingleLine(false)
 end
+]]
 
 return _M
