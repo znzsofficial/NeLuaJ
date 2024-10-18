@@ -1,6 +1,7 @@
 modules="模块"
 backup="备份"
 nofile="未打开文件"
+NoSupport="找不到支持打开此文件的应用"
 noProject="未打开工程"
 save_success="保存成功"
 save_fail="保存失败"
