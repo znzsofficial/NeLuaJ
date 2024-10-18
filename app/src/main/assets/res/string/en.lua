@@ -1,6 +1,7 @@
 modules="Modules"
 backup="Backup"
 nofile="No file opened"
+NoSupport="No supported application was found to open this file"
 noProject="No project opened"
 save_success="Save successful"
 save_fail="Save failed"

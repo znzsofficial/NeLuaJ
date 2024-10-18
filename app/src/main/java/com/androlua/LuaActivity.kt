@@ -1179,6 +1179,29 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         return "application/octet-stream"
     }
 
+    fun openFile(path: String) {
+        openFile(path, null)
+    }
+
+    fun openFile(path: String, callback: LuaFunction?) {
+        val file = File(path)
+        // 创建Intent并设置相关标志和类型
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
+                    Intent.FLAG_ACTIVITY_NEW_TASK
+            setDataAndType(getUriForFile(file), getType(file))
+        }
+        startActivity(intent)
+        if (callback != null) {
+            if (intent.resolveActivity(packageManager) != null) {
+                startActivity(intent)
+            } else {
+                callback.call()
+            }
+        } else startActivity(intent)
+    }
+
     fun startPackage(pkg: String) {
         val intent = packageManager.getLaunchIntentForPackage(pkg)
         if (intent != null) startActivity(intent)
@@ -1189,16 +1212,6 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         val share = Intent(Intent.ACTION_VIEW)
         val file = File(path)
         share.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        share.setDataAndType(getUriForFile(file), getType(file))
-        share.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        startActivity(share)
-    }
-
-    fun openFile(path: String) {
-        val share = Intent(Intent.ACTION_VIEW)
-        val file = File(path)
-        share.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        share.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
         share.setDataAndType(getUriForFile(file), getType(file))
         share.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         startActivity(share)
@@ -1234,7 +1247,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
 
     fun getResDrawable(name: String?, color: Int): Drawable {
         val path = "$luaDir/res/drawable/$name.png"
-        val drawable: Drawable = BitmapDrawable(resources, BitmapFactory.decodeFile(path))
+        val drawable = BitmapDrawable(resources, BitmapFactory.decodeFile(path))
         drawable.colorFilter = getFilter(color)
         return drawable
     }
