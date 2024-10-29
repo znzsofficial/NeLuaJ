@@ -27,6 +27,7 @@ import com.nekolaska.ktx.ifNotNil
 import com.nekolaska.ktx.isNotNil
 import com.nekolaska.ktx.require
 import com.nekolaska.ktx.secondArg
+import com.nekolaska.ktx.toLuaInstance
 import com.nekolaska.ktx.toLuaValue
 import com.nekolaska.ktx.toVarargs
 import github.daisukiKaffuChino.LuaPagerAdapter
@@ -55,7 +56,7 @@ private inline fun LuaValue.toLuaContext(): LuaContext = this.touserdata(LuaCont
 class LuaLayout(private val initialContext: Context) {
     private val dm: DisplayMetrics = initialContext.resources.displayMetrics
     private val views = HashMap<String, LuaValue>()
-    private val luaContext: LuaValue = initialContext.toLuaValue()
+    private val luaContext: LuaValue = initialContext.toLuaInstance()
     private val imageLoader: ImageLoader = LuaApplication.loader
     private val scaleTypeValues: Array<ScaleType> = ScaleType.entries.toTypedArray()
 
@@ -168,7 +169,7 @@ class LuaLayout(private val initialContext: Context) {
             )
         val view = layout["style"].run {
             if (isNotNil()) viewClass.call(
-                ContextThemeWrapper(initialContext, toint()).toLuaValue(),
+                ContextThemeWrapper(initialContext, toint()).toLuaInstance(),
                 NIL,
                 this
             ) else viewClass.call(luaContext)

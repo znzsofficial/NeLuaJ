@@ -6,12 +6,13 @@ LuaFragmentAdapter 继承 FragmentStateAdapter，可以帮助你以贴近原生�
 ### 示例
 
 ```lua
-LuaFragmentAdapter(activity, LuaFragmentAdapter.Creator{
-    createFragment = function(i)
-      return Fragments[i+1]
-    end,
-    getItemCount = function()
-      return #Fragments
-    end,
-  })
+LuaFragmentAdapter(activity,
+        LuaFragmentAdapter.Creator {
+            createFragment = function(i)
+                return Fragments[i + 1]
+            end,
+            getItemCount = function()
+                return #Fragments
+            end,
+        })
 ```

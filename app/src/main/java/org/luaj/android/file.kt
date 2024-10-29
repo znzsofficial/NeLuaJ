@@ -58,7 +58,6 @@ class file : TwoArgFunction() {
                         .isDirectory()
                 ) "dir" else "file"
             )
-
         }
     }
 

@@ -66,6 +66,7 @@ local data = {
     { text = "LuaJ++", file = "LuaJ++.md" },
     { text = "LuaActivity", file = "LuaActivity.md" },
     { text = "LuaCustRecyclerAdapter", file = "LuaCustRecyclerAdapter.md" },
+    { text = "LuaFragment", file = "LuaFragment.md" },
     { text = "LuaFragmentAdapter", file = "LuaFragmentAdapter.md" },
     { text = "xTask", file = "xTask.md" },
     { text = "Coil", file = "Coil.md" },
@@ -84,14 +85,14 @@ lv.onItemClick = function(l, v, p, i)
 end
 
 if bindClass "android.os.Build".VERSION.SDK_INT >= 33 then
-    this.onBackPressedDispatcher.addCallback(this, luajava.bindClass"com.androlua.LuaBackPressedCallback"(function()
+    this.addOnBackPressedCallback(function()
             if vpg.getCurrentItem() ~= 0 then
                 vpg.setCurrentItem(0)
                 activity.setTitle("NeLuaJ+" .. res.string.help)
             else
                 activity.finish()
             end
-        end))
+        end)
 else
     function onKeyDown(code, event)
         if code == KeyEvent.KEYCODE_BACK then

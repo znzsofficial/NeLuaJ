@@ -1,5 +1,5 @@
-local:res
-local:table
+local res = res
+local table = table
 local ColorUtil = this.globalData.ColorUtil
 import "mods.utils.TabUtil"
 import "mods.utils.MagnifierManager"
@@ -234,7 +234,8 @@ function _M.init()
     .addPackage("os",{"clock","date","difftime","execute","exit","getenv","remove","rename","setlocale","time","tmpname"})
     .addPackage("file",{"exists","info","list","mkdir","readall","save","type"})
     .addPackage("json",{"decode","encode"})
-    .addPackage("okhttp",{"delete","get","post","put"})
+    .addPackage("okHttp",{"get","unsafe","post","postText","postJson"})
+    .addPackage("okhttp",{"delete","get","head","post","put"})
     .addPackage("res",{"bitmap","color","dimen","drawable","font","layout","string","view",})
     .addPackage("luajava",{"astable","bindClass","createProxy","instanceof","loadLib","new","newInstance"})
     .addPackage("io",{"close","flush","input","lines","open","output","popen","read","tmpfile","type","write"})
@@ -260,7 +261,7 @@ function _M.load(path)
     changeTitle(path)
     --print("来自RecyclerView"..tostring(_M.fromRecy))
     --如果是来自RV的加载就选择tab
-    if _M.fromRecy
+    if _M.fromRecy then
       TabUtil.Table[path].obj.select()
     end
     --载入指针位置

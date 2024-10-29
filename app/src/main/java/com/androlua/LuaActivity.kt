@@ -57,6 +57,7 @@ import com.androlua.LuaBroadcastReceiver.OnReceiveListener
 import com.androlua.LuaService.LuaBinder
 import com.androlua.adapter.ArrayListAdapter
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.nekolaska.ktx.toLuaInstance
 import dalvik.system.DexClassLoader
 import github.znzsofficial.neluaj.R
 import org.luaj.Globals
@@ -65,6 +66,7 @@ import org.luaj.LuaFunction
 import org.luaj.LuaMetaTable
 import org.luaj.LuaTable
 import org.luaj.LuaValue
+import org.luaj.android.AsyncOkHttp
 import org.luaj.android.call
 import org.luaj.android.file
 import org.luaj.android.http
@@ -178,6 +180,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
             globals.set("timer", timer(this))
             globals.set("call", call(this))
             globals.set("xTask", xTask(this))
+            globals.set("okHttp", AsyncOkHttp(this).toLuaInstance())
             globals.load(res(this))
             globals.load(json())
             globals.load(file())
@@ -192,16 +195,26 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
             runMainFunc(pageName, arg)
             runFunc("onCreate")
             if (!isSetViewed) showLogView(false)
-            mOnKeyShortcut = globals.get("onKeyShortcut")
-            mOnKeyShortcut?.let { if (it.isnil()) mOnKeyShortcut = null }
-            mOnKeyDown = globals.get("onKeyDown")
-            mOnKeyDown?.let { if (it.isnil()) mOnKeyDown = null }
-            mOnKeyUp = globals.get("onKeyUp")
-            mOnKeyUp?.let { if (it.isnil()) mOnKeyUp = null }
-            mOnKeyLongPress = globals.get("onKeyLongPress")
-            mOnKeyLongPress?.let { if (it.isnil()) mOnKeyLongPress = null }
-            mOnTouchEvent = globals.get("onTouchEvent")
-            mOnTouchEvent?.let { if (it.isnil()) mOnTouchEvent = null }
+            globals.get("onKeyShortcut").apply {
+                mOnKeyShortcut = if (isnil()) null
+                else this
+            }
+            globals.get("onKeyDown").apply {
+                mOnKeyDown = if (isnil()) null
+                else this
+            }
+            globals.get("onKeyUp").apply {
+                mOnKeyUp = if (isnil()) null
+                else this
+            }
+            globals.get("onKeyLongPress").apply {
+                mOnKeyLongPress = if (isnil()) null
+                else this
+            }
+            globals.get("onTouchEvent").apply {
+                mOnTouchEvent = if (isnil()) null
+                else this
+            }
             if (intent.getBooleanExtra(
                     "isVersionChanged",
                     false
@@ -392,6 +405,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     }
 
     fun setFragment(fragment: Fragment) {
+        isSetViewed = true
         setContentView(View(this))
         supportFragmentManager.beginTransaction().replace(android.R.id.content, fragment)
             .commit()
@@ -1276,6 +1290,10 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
 
     fun dpToPx(dp: Float): Float {
         return TypedValueCompat.dpToPx(dp, resources.displayMetrics)
+    }
+
+    fun addOnBackPressedCallback(callback: LuaFunction) {
+        onBackPressedDispatcher.addCallback(LuaBackPressedCallback(callback))
     }
 
     companion object {
