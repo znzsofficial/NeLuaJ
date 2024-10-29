@@ -50,6 +50,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.util.TypedValueCompat
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import androidx.preference.PreferenceManager
 import coil.ImageLoader
 import coil.request.ImageRequest
@@ -60,6 +61,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.nekolaska.ktx.toLuaInstance
 import dalvik.system.DexClassLoader
 import github.znzsofficial.neluaj.R
+import kotlinx.coroutines.launch
 import org.luaj.Globals
 import org.luaj.LuaError
 import org.luaj.LuaFunction
@@ -1270,23 +1272,22 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         return LuaApplication.loader
     }
 
-    fun loadImage(data: Any?, callback: LuaFunction) {
+    fun loadImage(data: Any?, callback: LuaFunction) =
         LuaApplication.loader.enqueue(
             ImageRequest.Builder(this)
                 .data(data)
                 .target(SimpleTarget(callback))
                 .build()
         )
-    }
 
-    fun loadImage(data: Any?, view: ImageView) {
+
+    fun loadImage(data: Any?, view: ImageView) =
         LuaApplication.loader.enqueue(
             ImageRequest.Builder(this)
                 .data(data)
                 .target(view)
                 .build()
         )
-    }
 
     fun dpToPx(dp: Float): Float {
         return TypedValueCompat.dpToPx(dp, resources.displayMetrics)
@@ -1294,6 +1295,11 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
 
     fun addOnBackPressedCallback(callback: LuaFunction) {
         onBackPressedDispatcher.addCallback(LuaBackPressedCallback(callback))
+    }
+
+    fun delay(time: Long, callback: LuaFunction) = lifecycleScope.launch {
+        kotlinx.coroutines.delay(time)
+        callback.call()
     }
 
     companion object {
