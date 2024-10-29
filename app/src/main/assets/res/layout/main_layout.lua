@@ -2,6 +2,7 @@ import "com.androlua.LuaEditor";
 import "android.widget.LinearLayout";
 import "android.widget.HorizontalScrollView";
 import "androidx.appcompat.widget.AppCompatImageView"
+import "androidx.appcompat.widget.AppCompatEditText"
 import "androidx.coordinatorlayout.widget.CoordinatorLayout";
 import "androidx.drawerlayout.widget.DrawerLayout";
 import "androidx.recyclerview.widget.RecyclerView";
@@ -15,7 +16,7 @@ import "com.google.android.material.tabs.TabLayout"
 import "com.google.android.material.textview.MaterialTextView"
 import "com.nekolaska.internal.MyFullDraggableContainer"
 import "com.nekolaska.internal.MyFileTabView"
-import "vinx.material.textfield.MaterialTextField"
+--import "vinx.material.textfield.MaterialTextField"
 
 local ColorUtil = this.globalData.ColorUtil
 
@@ -63,13 +64,14 @@ return {
                     orientation = "horizontal";
                     gravity = "center",
                     {
-                        MaterialTextField,
+                        AppCompatEditText,
                         layout_width = "64%w",
                         layout_height = "match",
                         layout_marginLeft = "12dp",
-                        Hint = "Search Code",
+                        background = 0,
+                        --Hint = "Search Code",
                         id = "mSearchEdit",
-                        style = MDC_R.style.Widget_Material3_TextInputLayout_FilledBox,
+                        --style = MDC_R.style.Widget_Material3_TextInputLayout_FilledBox,
                         TintColor = ColorUtil.getColorPrimary(),
                         singleLine = true,
                     },

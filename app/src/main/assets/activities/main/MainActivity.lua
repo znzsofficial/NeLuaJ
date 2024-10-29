@@ -283,7 +283,7 @@ local exit = function()
             Anim.setDuration(500)
                 .setInterpolator(DecelerateInterpolator)
                 .start()
-            task(500, function()
+            this.delay(500, function()
                 mSearch.setVisibility(8)
             end)
         else

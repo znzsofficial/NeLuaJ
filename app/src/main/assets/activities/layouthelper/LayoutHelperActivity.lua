@@ -27,7 +27,7 @@ package.path=package.path..";"..LayoutHelperActivity.data.this_project_lua_dir..
 local load_dialog = ProgressBarDialog()
 local loadlayout2
 
-task(1,function()
+this.delay(1,function()
 
   try
 
@@ -182,7 +182,7 @@ local save_dialog = MaterialAlertDialogBuilder(activity)
 
   local load_dialog = ProgressBarDialog()
 
-  task(1,function()
+  this.delay(1,function()
 
     local dump_layouttable = LayoutHelperActivity.mods.dumpLayouttable(
     LayoutHelperActivity.data.current_layout_table
