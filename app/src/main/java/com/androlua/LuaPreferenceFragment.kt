@@ -35,22 +35,21 @@ class LuaPreferenceFragment(private var mPreferences: LuaTable) : PreferenceFrag
         for (i in 1..len) {
             val p = preferences[i].checktable()
             try {
-                val cls = p[1]
-                require(!cls.isnil()) { "First value Must be a Class<Preference>, checked import package." }
-                val pf = cls.jcall(activity) as Preference
-                pf.onPreferenceChangeListener = this
-                pf.onPreferenceClickListener = this
-                val ks = p.keys()
-                for (et in ks) {
+                val clazz = p[1]
+                require(!clazz.isnil()) { "First value Must be a Class<Preference>, checked import package." }
+                val preference = clazz.jcall(activity) as Preference
+                preference.onPreferenceChangeListener = this
+                preference.onPreferenceClickListener = this
+                for (et in p.keys()) {
                     if (et.isstring()) {
                         try {
-                            CoerceJavaToLua.coerce(pf).jset(et.tojstring(), p[et])
+                            CoerceJavaToLua.coerce(preference).jset(et.tojstring(), p[et])
                         } catch (e: LuaError) {
                             e.printStackTrace()
                         }
                     }
                 }
-                ps.addPreference(pf)
+                ps.addPreference(preference)
             } catch (e: Exception) {
                 LuaActivity.logError("LuaPreferenceFragment", e)
             }

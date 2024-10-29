@@ -209,10 +209,9 @@ end)
 .setNegativeButton(android.R.string.cancel,finish)
 
 if bindClass "android.os.Build".VERSION.SDK_INT >= 33 then
-this.onBackPressedDispatcher.addCallback(this, luajava.bindClass"com.androlua.LuaBackPressedCallback"(function()
-handleOnBackPressed=function()
+this.addOnBackPressedCallback(function()
   save_dialog.show()
-end))
+end)
 else
 function onKeyDown(code,event)
     if string.find(tostring(event),"KEYCODE_BACK") ~= nil then

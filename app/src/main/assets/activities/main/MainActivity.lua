@@ -299,9 +299,7 @@ local exit = function()
 end
 
 if bindClass "android.os.Build".VERSION.SDK_INT >= 33 then
-    this.onBackPressedDispatcher.addCallback(this, luajava.bindClass"com.androlua.LuaBackPressedCallback"(function()
-        exit()
-    end))
+    this.addOnBackPressedCallback(exit)
 else
     function onKeyDown(code, event)
         if string.find(tostring(event), "KEYCODE_BACK") ~= nil then
