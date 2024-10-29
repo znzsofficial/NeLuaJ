@@ -32,12 +32,19 @@ this.getDecorView()
 --返回支持加载SVG和GIF的Coil ImageLoader唯一单例
 this.getImageLoader()
 
---直接使用Coil异步加载图片, data 类型见 https://coil-kt.github.io/coil/getting_started/#supported-data-types
+--直接使用Coil异步加载图片
+--data 类型见 https://coil-kt.github.io/coil/getting_started/#supported-data-types
 this.loadImage(data, function(drawable)
 end)
 this.loadImage(data, imageView)
 
---获取指定颜色的 BlendModeColorFilter / PorterDuffColorFilter
+-- 直接设置 onBackPressedDispatcher 的 Callback
+-- 监听返回键 (仅 API33 以上)
+this.addOnBackPressedCallback(function()
+end)
+
+--获取指定颜色的
+--BlendModeColorFilter / PorterDuffColorFilter
 this.getFilter(color)
 
 --不建议使用

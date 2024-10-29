@@ -5,6 +5,8 @@ import org.luaj.Globals
 import org.luaj.LuaValue
 import org.luaj.Varargs
 import org.luaj.lib.jse.CoerceJavaToLua
+import org.luaj.lib.jse.JavaClass
+import org.luaj.lib.jse.JavaInstance
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -45,6 +47,8 @@ suspend fun LuaValue.suspendInvoke(varargs: Varargs) = suspendCancellableCorouti
 @Suppress("NOTHING_TO_INLINE")
 inline fun <T> T.toLuaValue(): LuaValue = CoerceJavaToLua.coerce(this)
 
+@Suppress("NOTHING_TO_INLINE")
+inline fun <T> T.toLuaInstance(): LuaValue = JavaInstance(this)
 //@Suppress("NOTHING_TO_INLINE", "unused")
 //inline fun <T> LuaValue.toAny(clazz: Class<T>): Any = CoerceLuaToJava.coerce(this, clazz)
 

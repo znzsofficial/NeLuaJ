@@ -1,24 +1,61 @@
 ### 介绍
-NeLuaJ+ 实现了基于 OkHttp3 的同步网络模块
+NeLuaJ+ 实现了基于 OkHttp3 的同步网络模块和异步网络模块
 
 函数返回值均为 Response 对象
 
-headers 为可选参数
+headers 均为可选参数
 
-## okhttp.get
+## 同步模式
+headers 和 body 类型为 LuaTable
+
+### okhttp.get
 okhttp.get(url, headers)
 
-## okhttp.delete
+### okhttp.delete
 okhttp.delete(url, body, headers)
 
-## okhttp.post
+### okhttp.post
 okhttp.post(url, body, headers)
 
-## okhttp.put
+### okhttp.put
 okhttp.put(url, body, headers)
 
-## okhttp.patch
+### okhttp.patch
 okhttp.patch(url, body, headers)
 
-## okhttp.head
+### okhttp.head
 okhttp.head(url, headers)
+
+## 异步模式
+headers 类型为 Map
+
+body 类型为 application/x-www-form-urlencoded
+
+或 text/plain
+
+或 application/json
+
+编码格式的字符串
+
+### okHttp.unsafe
+不安全的 okHttp 模块实例
+
+### okHttp.get
+okHttp.get(url, headers, function(code, body)
+
+end)
+
+### okHttp.post
+okHttp.post(url, body, headers, function(code, body)
+
+end)
+
+### okHttp.postText
+okHttp.post(url, body, headers, function(code, body)
+
+end)
+
+### okHttp.postJson
+okHttp.post(url, body, headers, function(code, body)
+
+end)
