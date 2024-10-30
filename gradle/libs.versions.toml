@@ -1,12 +1,12 @@
 [versions]
-activity = "1.9.2"
-agp = "8.8.0-alpha07"
-annotation = "1.8.2"
+activity = "1.9.3"
+agp = "8.8.0-alpha08"
+annotation = "1.9.0"
 appcompat = "1.7.0"
 coil = "2.7.0"
 collapsingtoolbarlayout-subtitle = "1.5.0"
 collection = "1.4.4"
-constraintlayout = "2.2.0-beta01"
+constraintlayout = "2.2.0-rc01"
 coordinatorlayout = "1.3.0-alpha02"
 customview = "1.2.0-alpha02"
 documentfile = "1.1.0-alpha01"
@@ -17,7 +17,7 @@ dynamicanimation = "1.1.0-alpha03"
 emoji2 = "1.5.0"
 fragment = "1.8.4"
 gridlayout = "1.1.0-beta01"
-kotlin = "2.0.20"
+kotlin = "2.0.21"
 core-ktx = "1.13.1"
 junit = "4.13.2"
 androidx-test-ext-junit = "1.2.1"
@@ -27,7 +27,7 @@ library = "1.3.0"
 lifecycle-runtime = "2.8.6"
 lottie = "6.4.1"
 material = "1.12.0"
-navigation = "2.8.2"
+navigation = "2.8.3"
 okhttp = "4.12.0"
 palette = "1.0.0"
 preference = "1.2.1"
@@ -55,8 +55,8 @@ androidx-dynamicanimation = { module = "androidx.dynamicanimation:dynamicanimati
 androidx-emoji2 = { module = "androidx.emoji2:emoji2", version.ref = "emoji2" }
 androidx-fragment = { module = "androidx.fragment:fragment", version.ref = "fragment" }
 androidx-gridlayout = { module = "androidx.gridlayout:gridlayout", version.ref = "gridlayout" }
-androidx-legacy-support-core-ui = { module = "androidx.legacy:legacy-support-core-ui", version.ref = "legacy-support-core-utils" }
-androidx-legacy-support-core-utils = { module = "androidx.legacy:legacy-support-core-utils", version.ref = "legacy-support-core-utils" }
+#androidx-legacy-support-core-ui = { module = "androidx.legacy:legacy-support-core-ui", version.ref = "legacy-support-core-utils" }
+#androidx-legacy-support-core-utils = { module = "androidx.legacy:legacy-support-core-utils", version.ref = "legacy-support-core-utils" }
 androidx-lifecycle-common = { module = "androidx.lifecycle:lifecycle-common", version.ref = "lifecycle-runtime" }
 androidx-lifecycle-process = { module = "androidx.lifecycle:lifecycle-process", version.ref = "lifecycle-runtime" }
 androidx-lifecycle-runtime = { module = "androidx.lifecycle:lifecycle-runtime", version.ref = "lifecycle-runtime" }
