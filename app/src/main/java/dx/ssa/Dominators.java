@@ -276,7 +276,7 @@ public final class Dominators {
         public SsaBasicBlock rep;
 
         public SsaBasicBlock ancestor;
-        public ArrayList<SsaBasicBlock> bucket;
+        public final ArrayList<SsaBasicBlock> bucket;
 
         public DFSInfo() {
             bucket = new ArrayList<SsaBasicBlock>();

@@ -393,7 +393,7 @@ public final class Rop {
      *
      * @return {@code true} iff this operation can possibly throw
      */
-    public final boolean canThrow() {
+    public boolean canThrow() {
         return (exceptions.size() != 0);
     }
 }

@@ -17,8 +17,6 @@
 package dx.ssa;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -33,7 +31,6 @@ import dx.rop.code.Rop;
 import dx.rop.code.Rops;
 import dx.rop.code.SourcePosition;
 import dx.rop.code.ThrowingCstInsn;
-import dx.rop.cst.Constant;
 import dx.rop.cst.CstString;
 import dx.rop.cst.TypedConstant;
 import dx.rop.type.StdTypeList;
@@ -45,7 +42,9 @@ import dx.rop.type.TypeBearer;
  * insn size by about 3%.
  */
 public class ConstCollector {
-    /** Maximum constants to collect per method. Puts cap on reg use */
+    /**
+     * Maximum constants to collect per method. Puts cap on reg use
+     */
     private static final int MAX_COLLECTED_CONSTANTS = 5;
 
     /**
@@ -63,7 +62,9 @@ public class ConstCollector {
      */
     private static final boolean COLLECT_ONE_LOCAL = false;
 
-    /** method we're processing */
+    /**
+     * method we're processing
+     */
     private final SsaMethod ssaMeth;
 
     /**
@@ -100,7 +101,7 @@ public class ConstCollector {
 
         // Constant to new register containing the constant
         HashMap<TypedConstant, RegisterSpec> newRegs
-                = new HashMap<TypedConstant, RegisterSpec> (toCollect);
+                = new HashMap<TypedConstant, RegisterSpec>(toCollect);
 
         for (int i = 0; i < toCollect; i++) {
             TypedConstant cst = constantList.get(i);
@@ -134,10 +135,10 @@ public class ConstCollector {
                 SsaBasicBlock resultBlock
                         = constBlock.insertNewSuccessor(successorBlock);
                 PlainInsn insn
-                    = new PlainInsn(
-                            Rops.opMoveResultPseudo(result.getTypeBearer()),
-                            SourcePosition.NO_INFO,
-                            result, RegisterSpecList.EMPTY);
+                        = new PlainInsn(
+                        Rops.opMoveResultPseudo(result.getTypeBearer()),
+                        SourcePosition.NO_INFO,
+                        result, RegisterSpecList.EMPTY);
 
                 resultBlock.addInsnToHead(insn);
             }
@@ -186,7 +187,7 @@ public class ConstCollector {
                 int pred = insn.getBlock().getPredecessors().nextSetBit(0);
                 ArrayList<SsaInsn> predInsns;
                 predInsns = ssaMeth.getBlocks().get(pred).getInsns();
-                insn = predInsns.get(predInsns.size()-1);
+                insn = predInsns.get(predInsns.size() - 1);
             }
 
             if (insn.canThrow()) {
@@ -222,13 +223,8 @@ public class ConstCollector {
                     }
                 }
             }
-
-            Integer has = countUses.get(cst);
-            if (has == null) {
-                countUses.put(cst, 1);
-            } else {
-                countUses.put(cst, has + 1);
-            }
+            // modified by nekolaska
+            countUses.merge(cst, 1, Integer::sum);
         }
 
         // Collect constants that have been reused.
@@ -239,28 +235,35 @@ public class ConstCollector {
             }
         }
 
+        // modified by nekolaska
         // Sort by use, with most used at the beginning of the list.
-        Collections.sort(constantList, new Comparator<Constant>() {
-            public int compare(Constant a, Constant b) {
-                int ret;
-                ret = countUses.get(b) - countUses.get(a);
-
-                if (ret == 0) {
-                    /*
-                     * Provide sorting determinisim for constants with same
-                     * usage count.
-                     */
-                    ret = a.compareTo(b);
-                }
-
-                return ret;
-            }
-
-            @Override
-            public boolean equals (Object obj) {
-                return obj == this;
-            }
+        constantList.sort((a, b) -> {
+            int comparison = Integer.compare(countUses.get(b), countUses.get(a));
+            return comparison != 0 ? comparison : a.compareTo(b);
         });
+
+        // Sort by use, with most used at the beginning of the list.
+//        Collections.sort(constantList, new Comparator<Constant>() {
+//            public int compare(Constant a, Constant b) {
+//                int ret;
+//                ret = countUses.get(b) - countUses.get(a);
+//
+//                if (ret == 0) {
+//                    /*
+//                     * Provide sorting determinisim for constants with same
+//                     * usage count.
+//                     */
+//                    ret = a.compareTo(b);
+//                }
+//
+//                return ret;
+//            }
+//
+//            @Override
+//            public boolean equals (Object obj) {
+//                return obj == this;
+//            }
+//        });
 
         return constantList;
     }
@@ -273,11 +276,11 @@ public class ConstCollector {
      * be removed by the dead code eliminator
      *
      * @param origReg {@code non-null;} original register
-     * @param newReg {@code non-null;} new register that will replace
-     * {@code origReg}
+     * @param newReg  {@code non-null;} new register that will replace
+     *                {@code origReg}
      */
     private void fixLocalAssignment(RegisterSpec origReg,
-            RegisterSpec newReg) {
+                                    RegisterSpec newReg) {
         for (SsaInsn use : ssaMeth.getUseListForRegister(origReg.getReg())) {
             RegisterSpec localAssignment = use.getLocalAssignment();
             if (localAssignment == null) {
@@ -302,9 +305,9 @@ public class ConstCollector {
 
             SsaInsn newInsn
                     = SsaInsn.makeFromRop(
-                        new PlainInsn(Rops.opMarkLocal(newReg),
-                        SourcePosition.NO_INFO, null,
-                                RegisterSpecList.make(newReg)),
+                    new PlainInsn(Rops.opMarkLocal(newReg),
+                            SourcePosition.NO_INFO, null,
+                            RegisterSpecList.make(newReg)),
                     use.getBlock());
 
             ArrayList<SsaInsn> insns = use.getBlock().getInsns();
@@ -317,12 +320,12 @@ public class ConstCollector {
      * Updates all uses of various consts to use the values in the newly
      * assigned registers.
      *
-     * @param newRegs {@code non-null;} mapping between constant and new reg
+     * @param newRegs      {@code non-null;} mapping between constant and new reg
      * @param origRegCount {@code >=0;} original SSA reg count, not including
-     * newly added constant regs
+     *                     newly added constant regs
      */
     private void updateConstUses(HashMap<TypedConstant, RegisterSpec> newRegs,
-            int origRegCount) {
+                                 int origRegCount) {
 
         /*
          * set of constants associated with a local variable; used

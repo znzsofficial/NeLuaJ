@@ -94,6 +94,8 @@ public final class CstBoolean
      * @return the value
      */
     public boolean getValue() {
-        return (getIntBits() == 0) ? false : true;
+        // modified by nekolaska
+        //return (getIntBits() == 0) ? false : true;
+        return getIntBits() != 0;
     }
 }

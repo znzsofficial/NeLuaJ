@@ -43,7 +43,6 @@ import dx.dex.file.DexFile;
 import dx.dex.file.EncodedField;
 import dx.dex.file.EncodedMethod;
 import dx.rop.code.AccessFlags;
-import dx.rop.code.LocalVariableInfo;
 import dx.rop.code.RopMethod;
 import dx.rop.cst.CstString;
 import dx.rop.cst.CstType;
@@ -219,10 +218,10 @@ public final class DexMaker {
      * Declares {@code type}.
      *
      * @param flags a bitwise combination of {@link Modifier#PUBLIC}, {@link
-     *     Modifier#FINAL} and {@link Modifier#ABSTRACT}.
+     *              Modifier#FINAL} and {@link Modifier#ABSTRACT}.
      */
     public void declare(TypeId<?> type, String sourceFile, int flags,
-            TypeId<?> supertype, TypeId<?>... interfaces) {
+                        TypeId<?> supertype, TypeId<?>... interfaces) {
         TypeDeclaration declaration = getTypeDeclaration(type);
         int supportedFlags = Modifier.PUBLIC | Modifier.FINAL | Modifier.ABSTRACT;
         if ((flags & ~supportedFlags) != 0) {
@@ -243,12 +242,12 @@ public final class DexMaker {
      * Declares a method or constructor.
      *
      * @param flags a bitwise combination of {@link Modifier#PUBLIC}, {@link
-     *     Modifier#PRIVATE}, {@link Modifier#PROTECTED}, {@link Modifier#STATIC},
-     *     {@link Modifier#FINAL} and {@link Modifier#SYNCHRONIZED}.
-     *     <p><strong>Warning:</strong> the {@link Modifier#SYNCHRONIZED} flag
-     *     is insufficient to generate a synchronized method. You must also use
-     *     {@link Code#monitorEnter} and {@link Code#monitorExit} to acquire
-     *     a monitor.
+     *              Modifier#PRIVATE}, {@link Modifier#PROTECTED}, {@link Modifier#STATIC},
+     *              {@link Modifier#FINAL} and {@link Modifier#SYNCHRONIZED}.
+     *              <p><strong>Warning:</strong> the {@link Modifier#SYNCHRONIZED} flag
+     *              is insufficient to generate a synchronized method. You must also use
+     *              {@link Code#monitorEnter} and {@link Code#monitorExit} to acquire
+     *              a monitor.
      */
     public Code declare(MethodId<?, ?> method, int flags) {
         TypeDeclaration typeDeclaration = getTypeDeclaration(method.declaringType);
@@ -257,7 +256,7 @@ public final class DexMaker {
         }
 
         int supportedFlags = Modifier.PUBLIC | Modifier.PRIVATE | Modifier.PROTECTED
-                | Modifier.STATIC | Modifier.FINAL | Modifier.SYNCHRONIZED|Modifier.TRANSIENT;
+                | Modifier.STATIC | Modifier.FINAL | Modifier.SYNCHRONIZED | Modifier.TRANSIENT;
         if ((flags & ~supportedFlags) != 0) {
             throw new IllegalArgumentException("Unexpected flag: "
                     + Integer.toHexString(flags));
@@ -280,13 +279,13 @@ public final class DexMaker {
     /**
      * Declares a field.
      *
-     * @param flags a bitwise combination of {@link Modifier#PUBLIC}, {@link
-     *     Modifier#PRIVATE}, {@link Modifier#PROTECTED}, {@link Modifier#STATIC},
-     *     {@link Modifier#FINAL}, {@link Modifier#VOLATILE}, and {@link
-     *     Modifier#TRANSIENT}.
+     * @param flags       a bitwise combination of {@link Modifier#PUBLIC}, {@link
+     *                    Modifier#PRIVATE}, {@link Modifier#PROTECTED}, {@link Modifier#STATIC},
+     *                    {@link Modifier#FINAL}, {@link Modifier#VOLATILE}, and {@link
+     *                    Modifier#TRANSIENT}.
      * @param staticValue a constant representing the initial value for the
-     *     static field, possibly null. This must be null if this field is
-     *     non-static.
+     *                    static field, possibly null. This must be null if this field is
+     *                    non-static.
      */
     public void declare(FieldId<?, ?> fieldId, int flags, Object staticValue) {
         TypeDeclaration typeDeclaration = getTypeDeclaration(fieldId.declaringType);
@@ -353,7 +352,7 @@ public final class DexMaker {
             checksum += sum;
         }
 
-        return "Generated_" + checksum +".jar";
+        return "Generated_" + checksum + ".jar";
     }
 
     private ClassLoader generateClassLoader(File result, File dexCache, ClassLoader parent) {
@@ -389,11 +388,11 @@ public final class DexMaker {
      * exception by either providing a non-null value or setting the system
      * property.
      *
-     * @param parent the parent ClassLoader to be used when loading our
-     *     generated types
+     * @param parent   the parent ClassLoader to be used when loading our
+     *                 generated types
      * @param dexCache the destination directory where generated and optimized
-     *     dex files will be written. If null, this class will try to guess the
-     *     application's private data dir.
+     *                 dex files will be written. If null, this class will try to guess the
+     *                 application's private data dir.
      */
     public ClassLoader generateAndLoad(ClassLoader parent, File dexCache) throws IOException {
         if (dexCache == null) {
@@ -443,7 +442,9 @@ public final class DexMaker {
     private static class TypeDeclaration {
         private final TypeId<?> type;
 
-        /** declared state */
+        /**
+         * declared state
+         */
         private boolean declared;
         private int flags;
         private TypeId<?> supertype;

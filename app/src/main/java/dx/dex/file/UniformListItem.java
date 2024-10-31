@@ -125,7 +125,7 @@ public final class UniformListItem<T extends OffsettedItem>
 
     /** {@inheritDoc} */
     @Override
-    public final String toHuman() {
+    public String toHuman() {
         StringBuffer sb = new StringBuffer(100);
         boolean first = true;
 
@@ -149,7 +149,7 @@ public final class UniformListItem<T extends OffsettedItem>
      *
      * @return {@code non-null;} the list
      */
-    public final List<T> getItems() {
+    public List<T> getItems() {
         return items;
     }
 

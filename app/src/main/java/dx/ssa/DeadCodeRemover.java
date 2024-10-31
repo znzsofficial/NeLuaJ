@@ -30,10 +30,14 @@ import dx.rop.code.RegisterSpecList;
  * block to entry block.
  */
 public class DeadCodeRemover {
-    /** method we're processing */
+    /**
+     * method we're processing
+     */
     private final SsaMethod ssaMeth;
 
-    /** ssaMeth.getRegCount() */
+    /**
+     * ssaMeth.getRegCount()
+     */
     private final int regCount;
 
     /**
@@ -42,7 +46,9 @@ public class DeadCodeRemover {
      */
     private final BitSet worklist;
 
-    /** use list indexed by register; modified during operation */
+    /**
+     * use list indexed by register; modified during operation
+     */
     private final ArrayList<SsaInsn>[] useList;
 
     /**
@@ -80,7 +86,7 @@ public class DeadCodeRemover {
 
         int regV;
 
-        while ( 0 <= (regV = worklist.nextSetBit(0)) ) {
+        while (0 <= (regV = worklist.nextSetBit(0))) {
             worklist.clear(regV);
 
             if (useList[regV].size() == 0
@@ -167,9 +173,9 @@ public class DeadCodeRemover {
      * operations with no side effects.
      *
      * @param regV register to examine
-     * @param set a set of registers that we've already determined
-     * are only used as sources in operations with no side effect or null
-     * if this is the first recursion
+     * @param set  a set of registers that we've already determined
+     *             are only used as sources in operations with no side effect or null
+     *             if this is the first recursion
      * @return true if usage is circular without side effect
      */
     private boolean isCircularNoSideEffect(int regV, BitSet set) {
@@ -225,37 +231,43 @@ public class DeadCodeRemover {
      * registers defined by an instruction with no side effect.
      */
     static private class NoSideEffectVisitor implements SsaInsn.Visitor {
-        BitSet noSideEffectRegs;
+        final BitSet noSideEffectRegs;
 
         /**
          * Passes in data structures that will be filled out after
          * ssaMeth.forEachInsn() is called with this instance.
          *
          * @param noSideEffectRegs to-build bitset of regs that are
-         * results of regs with no side effects
+         *                         results of regs with no side effects
          */
         public NoSideEffectVisitor(BitSet noSideEffectRegs) {
             this.noSideEffectRegs = noSideEffectRegs;
         }
 
-        /** {@inheritDoc} */
-        public void visitMoveInsn (NormalSsaInsn insn) {
+        /**
+         * {@inheritDoc}
+         */
+        public void visitMoveInsn(NormalSsaInsn insn) {
             // If we're tracking local vars, some moves have side effects.
             if (!hasSideEffect(insn)) {
                 noSideEffectRegs.set(insn.getResult().getReg());
             }
         }
 
-        /** {@inheritDoc} */
-        public void visitPhiInsn (PhiInsn phi) {
+        /**
+         * {@inheritDoc}
+         */
+        public void visitPhiInsn(PhiInsn phi) {
             // If we're tracking local vars, then some phis have side effects.
             if (!hasSideEffect(phi)) {
                 noSideEffectRegs.set(phi.getResult().getReg());
             }
         }
 
-        /** {@inheritDoc} */
-        public void visitNonMoveInsn (NormalSsaInsn insn) {
+        /**
+         * {@inheritDoc}
+         */
+        public void visitNonMoveInsn(NormalSsaInsn insn) {
             RegisterSpec result = insn.getResult();
             if (!hasSideEffect(insn) && result != null) {
                 noSideEffectRegs.set(result.getReg());

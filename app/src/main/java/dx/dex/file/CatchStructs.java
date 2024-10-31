@@ -40,7 +40,9 @@ public final class CatchStructs {
      */
     private static final int TRY_ITEM_WRITE_SIZE = 4 + (2 * 2);
 
-    /** {@code non-null;} code that contains the catches */
+    /**
+     * {@code non-null;} code that contains the catches
+     */
     private final DalvCode code;
 
     /**
@@ -102,7 +104,7 @@ public final class CatchStructs {
     /**
      * Does a human-friendly dump of this instance.
      *
-     * @param out {@code non-null;} where to dump
+     * @param out    {@code non-null;} where to dump
      * @param prefix {@code non-null;} prefix to attach to each line of output
      */
     public void debugPrint(PrintWriter out, String prefix) {
@@ -139,11 +141,11 @@ public final class CatchStructs {
 
         // Write out the handlers "header" consisting of its size in entries.
         encodedHandlerHeaderSize =
-            out.writeUleb128(handlerOffsets.size());
+                out.writeUleb128(handlerOffsets.size());
 
         // Now write the lists out in order, noting the offset of each.
         for (Map.Entry<CatchHandlerList, Integer> mapping :
-                 handlerOffsets.entrySet()) {
+                handlerOffsets.entrySet()) {
             CatchHandlerList list = mapping.getKey();
             int listSize = list.size();
             boolean catchesAll = list.catchesAll();
@@ -181,14 +183,14 @@ public final class CatchStructs {
      */
     public int writeSize() {
         return (triesSize() * TRY_ITEM_WRITE_SIZE) +
-                + encodedHandlers.length;
+                encodedHandlers.length;
     }
 
     /**
      * Writes this instance to the given stream.
      *
      * @param file {@code non-null;} file this instance is part of
-     * @param out {@code non-null;} where to write to
+     * @param out  {@code non-null;} where to write to
      */
     public void writeTo(DexFile file, AnnotatedOutput out) {
         finishProcessingIfNecessary();
@@ -207,7 +209,7 @@ public final class CatchStructs {
             if (insnCount >= 65536) {
                 throw new UnsupportedOperationException(
                         "bogus exception range: " + Hex.u4(start) + ".." +
-                        Hex.u4(end));
+                                Hex.u4(end));
             }
 
             out.writeInt(start);
@@ -223,12 +225,12 @@ public final class CatchStructs {
      * Only one of {@code printTo} or {@code annotateTo} should
      * be non-null.
      *
-     * @param prefix {@code non-null;} prefix for each line
-     * @param printTo {@code null-ok;} where to print to
+     * @param prefix     {@code non-null;} prefix for each line
+     * @param printTo    {@code null-ok;} where to print to
      * @param annotateTo {@code null-ok;} where to consume bytes and annotate to
      */
     private void annotateEntries(String prefix, PrintWriter printTo,
-            AnnotatedOutput annotateTo) {
+                                 AnnotatedOutput annotateTo) {
         finishProcessingIfNecessary();
 
         boolean consume = (annotateTo != null);
@@ -247,7 +249,7 @@ public final class CatchStructs {
             CatchTable.Entry entry = table.get(i);
             CatchHandlerList handlers = entry.getHandlers();
             String s1 = subPrefix + "try " + Hex.u2or4(entry.getStart())
-                + ".." + Hex.u2or4(entry.getEnd());
+                    + ".." + Hex.u2or4(entry.getEnd());
             String s2 = handlers.toHuman(subPrefix, "");
 
             if (consume) {
@@ -259,7 +261,7 @@ public final class CatchStructs {
             }
         }
 
-        if (! consume) {
+        if (!consume) {
             // Only emit the handler lists if we are consuming bytes.
             return;
         }
@@ -272,7 +274,7 @@ public final class CatchStructs {
         CatchHandlerList lastList = null;
 
         for (Map.Entry<CatchHandlerList, Integer> mapping :
-                 handlerOffsets.entrySet()) {
+                handlerOffsets.entrySet()) {
             CatchHandlerList list = mapping.getKey();
             int offset = mapping.getValue();
 
@@ -294,16 +296,16 @@ public final class CatchStructs {
      * Helper for {@link #annotateEntries} to annotate a catch handler list
      * while consuming it.
      *
-     * @param handlers {@code non-null;} handlers to annotate
-     * @param offset {@code >= 0;} the offset of this handler
-     * @param size {@code >= 1;} the number of bytes the handlers consume
-     * @param prefix {@code non-null;} prefix for each line
-     * @param printTo {@code null-ok;} where to print to
+     * @param handlers   {@code non-null;} handlers to annotate
+     * @param offset     {@code >= 0;} the offset of this handler
+     * @param size       {@code >= 1;} the number of bytes the handlers consume
+     * @param prefix     {@code non-null;} prefix for each line
+     * @param printTo    {@code null-ok;} where to print to
      * @param annotateTo {@code non-null;} where to annotate to
      */
     private static void annotateAndConsumeHandlers(CatchHandlerList handlers,
-            int offset, int size, String prefix, PrintWriter printTo,
-            AnnotatedOutput annotateTo) {
+                                                   int offset, int size, String prefix, PrintWriter printTo,
+                                                   AnnotatedOutput annotateTo) {
         String s = handlers.toHuman(prefix, Hex.u2(offset) + ": ");
 
         if (printTo != null) {
