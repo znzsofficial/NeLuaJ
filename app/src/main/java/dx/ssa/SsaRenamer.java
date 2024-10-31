@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Objects;
 
 import dx.rop.code.LocalItem;
 import dx.rop.code.PlainInsn;
@@ -254,16 +255,18 @@ public class SsaRenamer implements Runnable {
         return ssaReg < ropRegCount;
     }
 
-    /**
-     * Returns true if a and b are equal or are both null.
-     *
-     * @param a null-ok
-     * @param b null-ok
-     * @return Returns true if a and b are equal or are both null
-     */
-    private static boolean equalsHandlesNulls(Object a, Object b) {
-        return a == b ||  (a != null && a.equals(b));
+    /*
+      替换为 {@link Objects#equals(Object, Object)}
+      Compares, handling nulls safely
+
+      @param a first object
+     * @param b second object
+     * @return true if they're equal or both null.
+
+     private static boolean equalsHandleNulls(Object a, Object b) {
+        return (a == b) || ((a != null) && a.equals(b));
     }
+     */
 
     /**
      * Processes all insns in a block and renames their registers
@@ -532,7 +535,7 @@ public class SsaRenamer implements Runnable {
                         ssaSourceReg, ropResult.getType(), newLocal);
 
             if (!Optimizer.getPreserveLocals() || (onlyOneAssociatedLocal
-                    && equalsHandlesNulls(newLocal, sourceLocal)) &&
+                    && Objects.equals(newLocal, sourceLocal)) &&
                     threshold == 0) {
                 /*
                  * We don't have to keep this move to preserve local

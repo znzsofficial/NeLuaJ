@@ -55,13 +55,13 @@ public class EscapeAnalysis {
      */
     static class EscapeSet {
         /** set containing all registers related to an object */
-        BitSet regSet;
+        final BitSet regSet;
         /** escape state of the object */
         EscapeState escape;
         /** list of objects that are put into this object */
-        ArrayList<EscapeSet> childSets;
+        final ArrayList<EscapeSet> childSets;
         /** list of objects that this object is put into */
-        ArrayList<EscapeSet> parentSets;
+        final ArrayList<EscapeSet> parentSets;
         /** flag to indicate this object is a scalar replaceable array */
         boolean replaceableArray;
 

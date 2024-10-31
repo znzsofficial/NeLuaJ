@@ -151,7 +151,7 @@ public final class CstNat extends Constant {
      * @return {@code true} iff this is a reference to an
      * instance initialization method
      */
-    public final boolean isInstanceInit() {
+    public boolean isInstanceInit() {
         return name.getString().equals("<init>");
     }
 
@@ -163,7 +163,7 @@ public final class CstNat extends Constant {
      * @return {@code true} iff this is a reference to an
      * instance initialization method
      */
-    public final boolean isClassInit() {
+    public boolean isClassInit() {
         return name.getString().equals("<clinit>");
     }
 }

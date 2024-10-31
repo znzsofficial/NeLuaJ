@@ -141,10 +141,10 @@ public class DebugInfoDecoder {
      */
     static private class PositionEntry {
         /** bytecode address */
-        public int address;
+        public final int address;
 
         /** line number */
-        public int line;
+        public final int line;
 
         public PositionEntry(int address, int line) {
             this.address = address;
@@ -157,22 +157,22 @@ public class DebugInfoDecoder {
      */
     static private class LocalEntry {
         /** address of event */
-        public int address;
+        public final int address;
 
         /** {@code true} iff it's a local start */
-        public boolean isStart;
+        public final boolean isStart;
 
         /** register number */
-        public int reg;
+        public final int reg;
 
         /** index of name in strings table */
-        public int nameIndex;
+        public final int nameIndex;
 
         /** index of type in types table */
-        public int typeIndex;
+        public final int typeIndex;
 
         /** index of type signature in strings table */
-        public int signatureIndex;
+        public final int signatureIndex;
 
         public LocalEntry(int address, boolean isStart, int reg, int nameIndex,
                 int typeIndex, int signatureIndex) {

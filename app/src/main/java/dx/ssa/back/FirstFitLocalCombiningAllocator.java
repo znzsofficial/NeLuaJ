@@ -473,7 +473,7 @@ public class FirstFitLocalCombiningAllocator extends RegisterAllocator {
                     ssaMeth.getBlocks().get(predBlocks.nextSetBit(0));
             ArrayList<SsaInsn> insnList = predBlock.getInsns();
 
-            /**
+            /*
              * If the predecessor block has a check-cast, it will be the last
              * instruction
              */
@@ -485,7 +485,7 @@ public class FirstFitLocalCombiningAllocator extends RegisterAllocator {
             RegisterSpec checkRegSpec = checkCastInsn.getSources().get(0);
             int checkReg = checkRegSpec.getReg();
 
-            /**
+            /*
              * See if either register is already mapped. Most likely the move
              * result will be mapped already since the cast result is stored
              * in a local variable.
@@ -659,12 +659,7 @@ public class FirstFitLocalCombiningAllocator extends RegisterAllocator {
                     LocalItem local = assignment.getLocalItem();
 
                     ArrayList<RegisterSpec> regList
-                        = localVariables.get(local);
-
-                    if (regList == null) {
-                        regList = new ArrayList<RegisterSpec>();
-                        localVariables.put(local, regList);
-                    }
+                            = localVariables.computeIfAbsent(local, k -> new ArrayList<RegisterSpec>());
 
                     regList.add(assignment);
                 }

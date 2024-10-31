@@ -155,7 +155,9 @@ class AppDataDirGuesser {
                 }
             }
         }
-        return results.toArray(new File[results.size()]);
+        // modified by nekolaska
+        //return results.toArray(new File[results.size()]);
+        return results.toArray(new File[0]);
     }
 
     static String[] splitPathList(String input) {

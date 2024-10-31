@@ -17,6 +17,7 @@
 package dx.rop.code;
 
 import java.util.HashMap;
+import java.util.Objects;
 
 import dx.rop.cst.Constant;
 import dx.rop.cst.CstString;
@@ -208,8 +209,7 @@ public final class RegisterSpec
         }
 
         return type.getType().equals(other.type.getType())
-            && ((local == other.local)
-                    || ((local != null) && local.equals(other.local)));
+            && (Objects.equals(local, other.local));
     }
 
     /**
@@ -225,8 +225,7 @@ public final class RegisterSpec
     private boolean equals(int reg, TypeBearer type, LocalItem local) {
         return (this.reg == reg)
             && this.type.equals(type)
-            && ((this.local == local)
-                    || ((this.local != null) && this.local.equals(local)));
+            && (Objects.equals(this.local, local));
     }
 
     /**
@@ -302,17 +301,17 @@ public final class RegisterSpec
     }
 
     /** {@inheritDoc} */
-    public final int getBasicType() {
+    public int getBasicType() {
         return type.getBasicType();
     }
 
     /** {@inheritDoc} */
-    public final int getBasicFrameType() {
+    public int getBasicFrameType() {
         return type.getBasicFrameType();
     }
 
     /** {@inheritDoc} */
-    public final boolean isConstant() {
+    public boolean isConstant() {
         return false;
     }
 
@@ -548,8 +547,7 @@ public final class RegisterSpec
      * @return an appropriate instance
      */
     public RegisterSpec withLocalItem(LocalItem local) {
-        if ((this.local== local)
-                    || ((this.local != null) && this.local.equals(local))) {
+        if (Objects.equals(this.local, local)) {
 
             return this;
         }

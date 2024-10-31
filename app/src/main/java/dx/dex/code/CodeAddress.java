@@ -39,7 +39,7 @@ public final class CodeAddress extends ZeroSizeInsn {
 
     /** {@inheritDoc} */
     @Override
-    public final DalvInsn withRegisters(RegisterSpecList registers) {
+    public DalvInsn withRegisters(RegisterSpecList registers) {
         return new CodeAddress(getPosition());
     }
 

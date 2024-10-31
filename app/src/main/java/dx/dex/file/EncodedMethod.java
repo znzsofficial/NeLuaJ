@@ -125,13 +125,13 @@ public final class EncodedMethod extends EncodedMember
     }
 
     /** {@inheritDoc} */
-    public final String toHuman() {
+    public String toHuman() {
         return method.toHuman();
     }
 
     /** {@inheritDoc} */
     @Override
-    public final CstString getName() {
+    public CstString getName() {
         return method.getNat().getName();
     }
 
@@ -150,7 +150,7 @@ public final class EncodedMethod extends EncodedMember
      *
      * @return {@code non-null;} the constant
      */
-    public final CstMethodRef getRef() {
+    public CstMethodRef getRef() {
         return method;
     }
 

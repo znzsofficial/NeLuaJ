@@ -201,7 +201,7 @@ public final class MapItem extends OffsettedItem {
 
     /** {@inheritDoc} */
     @Override
-    public final String toHuman() {
+    public String toHuman() {
         return toString();
     }
 

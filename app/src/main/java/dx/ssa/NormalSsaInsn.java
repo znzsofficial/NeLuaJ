@@ -43,7 +43,7 @@ public final class NormalSsaInsn extends SsaInsn implements Cloneable {
 
     /** {@inheritDoc} */
     @Override
-    public final void mapSourceRegisters(RegisterMapper mapper) {
+    public void mapSourceRegisters(RegisterMapper mapper) {
         RegisterSpecList oldSources = insn.getSources();
         RegisterSpecList newSources = mapper.map(oldSources);
 
@@ -60,7 +60,7 @@ public final class NormalSsaInsn extends SsaInsn implements Cloneable {
      * @param index {@code >=0;} index of source to change
      * @param newSpec spec for new source
      */
-    public final void changeOneSource(int index, RegisterSpec newSpec) {
+    public void changeOneSource(int index, RegisterSpec newSpec) {
         RegisterSpecList origSources = insn.getSources();
         int sz = origSources.size();
         RegisterSpecList newSources = new RegisterSpecList(sz);
@@ -89,7 +89,7 @@ public final class NormalSsaInsn extends SsaInsn implements Cloneable {
      *
      * @param newSources non-null new sources list.
      */
-    public final void setNewSources (RegisterSpecList newSources) {
+    public void setNewSources(RegisterSpecList newSources) {
         RegisterSpecList origSources = insn.getSources();
 
         if (origSources.size() != newSources.size()) {
