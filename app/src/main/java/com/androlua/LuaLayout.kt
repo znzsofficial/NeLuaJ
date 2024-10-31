@@ -43,9 +43,6 @@ import java.util.Locale
 @Suppress("NOTHING_TO_INLINE")
 private inline fun LuaValue.toView(): View = this.touserdata(View::class.java)
 
-@Suppress("NOTHING_TO_INLINE")
-private inline fun LuaValue.toLuaContext(): LuaContext = this.touserdata(LuaContext::class.java)
-
 //inline fun <T : View> T.onClick(crossinline onClick: (v: T) -> Unit) {
 //    setOnClickListener { onClick(it as T) }
 //}
@@ -56,7 +53,8 @@ private inline fun LuaValue.toLuaContext(): LuaContext = this.touserdata(LuaCont
 class LuaLayout(private val initialContext: Context) {
     private val dm: DisplayMetrics = initialContext.resources.displayMetrics
     private val views = HashMap<String, LuaValue>()
-    private val luaContext: LuaValue = initialContext.toLuaInstance()
+    private val luaValueContext: LuaValue = initialContext.toLuaInstance()
+    private val luaContext = luaValueContext.touserdata(LuaContext::class.java)
     private val imageLoader: ImageLoader = LuaApplication.loader
     private val scaleTypeValues: Array<ScaleType> = ScaleType.entries.toTypedArray()
 
@@ -112,13 +110,13 @@ class LuaLayout(private val initialContext: Context) {
             }
             if (s[len - 1] == '%') {
                 val f = s.substring(0, len - 1).toFloat()
-                return f * luaContext.toLuaContext().width / 100
+                return f * luaContext.width / 100
             }
 
             if (s[len - 2] == '%') {
                 val f = s.substring(0, len - 2).toFloat()
-                if (s[len - 1] == 'h') return f * luaContext.toLuaContext().height / 100
-                if (s[len - 1] == 'w') return f * luaContext.toLuaContext().width / 100
+                if (s[len - 1] == 'h') return f * luaContext.height / 100
+                if (s[len - 1] == 'w') return f * luaContext.width / 100
             }
             val t = s.substring(len - 2)
             val i = types[t]
@@ -172,26 +170,26 @@ class LuaLayout(private val initialContext: Context) {
                 ContextThemeWrapper(initialContext, toint()).toLuaInstance(),
                 NIL,
                 this
-            ) else viewClass.call(luaContext)
+            ) else viewClass.call(luaValueContext)
         }
         params = params.call(Wrap, Wrap)
         try {
             var key = NIL
             var next: Varargs
-            while (!layout.next(key).also { next = it }.isnil(1)) {
+            while (!layout.next(key).also { next = it }.firstArg().isnil()) {
                 try {
                     key = next.firstArg()
                     if (key.isint()) {
                         if (key.toint() > 1) {
                             var v = next.secondArg()
                             if (v.isstring()) v =
-                                luaContext.toLuaContext().luaState.require(v)
+                                luaContext.luaState.require(v)
                             // v = mContext.touserdata(LuaContext.class).getLuaState().package_.require.call(v);
                             if (isAdapterView) {
                                 view.jset(
                                     "adapter",
                                     LuaAdapter(
-                                        luaContext.toLuaContext(),
+                                        luaContext,
                                         v.checktable()
                                     )
                                 )
@@ -309,7 +307,7 @@ class LuaLayout(private val initialContext: Context) {
                             "pages" -> {
                                 val views = tValue.checktable()
                                 val list = mutableListOf<View>()
-                                val luaContext = luaContext.toLuaContext()
+                                val luaContext = luaContext
                                 for (i in 1 until views.length() + 1) {  // 从1开始，避免i+1的使用
                                     val v = views[i]
                                     when {
@@ -342,7 +340,7 @@ class LuaLayout(private val initialContext: Context) {
 
                                 val viewList = mutableListOf<View>()
                                 val titleList = mutableListOf<String>()
-                                val luaContext = luaContext.toLuaContext()
+                                val luaContext = luaContext
 
                                 for (i in 1 until views.length() + 1) {
                                     val v = views[i]
@@ -417,7 +415,7 @@ class LuaLayout(private val initialContext: Context) {
                                         view.jset(
                                             "background",
                                             LuaBitmapDrawable(
-                                                luaContext.toLuaContext(),
+                                                luaContext,
                                                 str
                                             )
                                         )
@@ -500,7 +498,6 @@ class LuaLayout(private val initialContext: Context) {
                     }
                 } catch (e: Exception) {
                     luaContext
-                        .toLuaContext()
                         .sendError(
                             "loadlayout " + view + ": " + next.firstArg() + "=" + next.secondArg(),
                             e
@@ -544,12 +541,11 @@ class LuaLayout(private val initialContext: Context) {
                 if (sp) view["setPadding"].invoke(pds.toVarargs())
             }.onFailure {
                 luaContext
-                    .toLuaContext()
                     .sendError("loadlayout " + layout.checktable().dump(), it as Exception)
                 it.printStackTrace()
             }
         } catch (e: Exception) {
-            luaContext.toLuaContext()
+            luaContext
                 .sendError("loadlayout " + layout.checktable().dump(), e)
             e.printStackTrace()
         }
