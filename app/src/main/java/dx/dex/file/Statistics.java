@@ -69,7 +69,7 @@ public final class Statistics {
      *
      * @param out {@code non-null;} where to write to
      */
-    public final void writeAnnotation(AnnotatedOutput out) {
+    public void writeAnnotation(AnnotatedOutput out) {
         if (dataMap.size() == 0) {
             return;
         }

@@ -18,6 +18,7 @@ package dx.ssa;
 
 import java.util.BitSet;
 import java.util.List;
+import java.util.Objects;
 
 import dx.code.Merger;
 import dx.rop.code.LocalItem;
@@ -43,7 +44,7 @@ import dx.rop.type.TypeBearer;
  */
 public class PhiTypeResolver {
 
-    SsaMethod ssaMeth;
+    final SsaMethod ssaMeth;
     /** indexed by register; all registers still defined by unresolved phis */
     private final BitSet worklist;
 
@@ -106,16 +107,18 @@ public class PhiTypeResolver {
         }
     }
 
-    /**
-     * Returns true if a and b are equal, whether
-     * or not either of them are null.
-     * @param a
-     * @param b
-     * @return true if equal
-     */
-    private static boolean equalsHandlesNulls(LocalItem a, LocalItem b) {
+    /*
+      替换为 {@link Objects#equals(Object, Object)}
+      Compares, handling nulls safely
+
+      @param a first object
+     * @param b second object
+     * @return true if they're equal or both null.
+
+     private static boolean equalsHandleNulls(Object a, Object b) {
         return (a == b) || ((a != null) && a.equals(b));
     }
+     */
 
     /**
      * Resolves the result of a phi insn based on its operands. The "void"
@@ -164,7 +167,7 @@ public class PhiTypeResolver {
             }
 
             sameLocals = sameLocals
-                    && equalsHandlesNulls(firstLocal, rs.getLocalItem());
+                    && Objects.equals(firstLocal, rs.getLocalItem());
 
             mergedType = Merger.mergeType(mergedType, rs.getType());
         }
@@ -189,7 +192,7 @@ public class PhiTypeResolver {
         RegisterSpec result = insn.getResult();
 
         if ((result.getTypeBearer() == newResultType)
-                && equalsHandlesNulls(newLocal, result.getLocalItem())) {
+                && Objects.equals(newLocal, result.getLocalItem())) {
             return false;
         }
 

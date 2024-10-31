@@ -16,6 +16,8 @@
 
 package dx.rop.code;
 
+import java.util.Objects;
+
 import dx.rop.type.StdTypeList;
 import dx.rop.type.Type;
 import dx.rop.type.TypeList;
@@ -28,25 +30,33 @@ import dx.util.ToHuman;
  * information.
  */
 public abstract class Insn implements ToHuman {
-    /** {@code non-null;} opcode */
+    /**
+     * {@code non-null;} opcode
+     */
     private final Rop opcode;
 
-    /** {@code non-null;} source position */
+    /**
+     * {@code non-null;} source position
+     */
     private final SourcePosition position;
 
-    /** {@code null-ok;} spec for the result of this instruction, if any */
+    /**
+     * {@code null-ok;} spec for the result of this instruction, if any
+     */
     private final RegisterSpec result;
 
-    /** {@code non-null;} specs for all the sources of this instruction */
+    /**
+     * {@code non-null;} specs for all the sources of this instruction
+     */
     private final RegisterSpecList sources;
 
     /**
      * Constructs an instance.
      *
-     * @param opcode {@code non-null;} the opcode
+     * @param opcode   {@code non-null;} the opcode
      * @param position {@code non-null;} source position
-     * @param result {@code null-ok;} spec for the result, if any
-     * @param sources {@code non-null;} specs for all the sources
+     * @param result   {@code null-ok;} spec for the result, if any
+     * @param sources  {@code non-null;} specs for all the sources
      */
     public Insn(Rop opcode, SourcePosition position, RegisterSpec result,
                 RegisterSpecList sources) {
@@ -70,7 +80,7 @@ public abstract class Insn implements ToHuman {
 
     /**
      * {@inheritDoc}
-     *
+     * <p>
      * Instances of this class compare by identity. That is,
      * {@code x.equals(y)} is only true if {@code x == y}.
      */
@@ -81,7 +91,7 @@ public abstract class Insn implements ToHuman {
 
     /**
      * {@inheritDoc}
-     *
+     * <p>
      * This implementation returns the identity hashcode of this
      * instance. This is proper, since instances of this class compare
      * by identity (see {@link #equals}).
@@ -91,7 +101,9 @@ public abstract class Insn implements ToHuman {
         return System.identityHashCode(this);
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String toString() {
         return toStringWithInline(getInlineString());
@@ -256,16 +268,20 @@ public abstract class Insn implements ToHuman {
     }
 
 
-    /**
-     * Compares, handling nulls safely
-     *
-     * @param a first object
+    /*
+      替换为 {@link Objects#equals(Object, Object)}
+      Compares, handling nulls safely
+
+      @param a first object
      * @param b second object
      * @return true if they're equal or both null.
-     */
-    private static boolean equalsHandleNulls (Object a, Object b) {
+
+     private static boolean equalsHandleNulls(Object a, Object b) {
         return (a == b) || ((a != null) && a.equals(b));
     }
+     */
+
+
 
     /**
      * Compares Insn contents, since {@code Insn.equals()} is defined
@@ -279,8 +295,8 @@ public abstract class Insn implements ToHuman {
         return opcode == b.getOpcode()
                 && position.equals(b.getPosition())
                 && (getClass() == b.getClass())
-                && equalsHandleNulls(result, b.getResult())
-                && equalsHandleNulls(sources, b.getSources())
+                && Objects.equals(result, b.getResult())
+                && Objects.equals(sources, b.getSources())
                 && StdTypeList.equalContents(getCatches(), b.getCatches());
     }
 
@@ -288,12 +304,12 @@ public abstract class Insn implements ToHuman {
      * Returns an instance that is just like this one, except
      * with new result and source registers.
      *
-     * @param result {@code null-ok;} new result register
+     * @param result  {@code null-ok;} new result register
      * @param sources {@code non-null;} new sources registers
      * @return {@code non-null;} an appropriately-constructed instance
      */
     public abstract Insn withNewRegisters(RegisterSpec result,
-            RegisterSpecList sources);
+                                          RegisterSpecList sources);
 
     /**
      * Returns the string form of this instance, with the given bit added in
@@ -423,32 +439,44 @@ public abstract class Insn implements ToHuman {
      * bodies for all methods.
      */
     public static class BaseVisitor implements Visitor {
-        /** {@inheritDoc} */
+        /**
+         * {@inheritDoc}
+         */
         public void visitPlainInsn(PlainInsn insn) {
             // This space intentionally left blank.
         }
 
-        /** {@inheritDoc} */
+        /**
+         * {@inheritDoc}
+         */
         public void visitPlainCstInsn(PlainCstInsn insn) {
             // This space intentionally left blank.
         }
 
-        /** {@inheritDoc} */
+        /**
+         * {@inheritDoc}
+         */
         public void visitSwitchInsn(SwitchInsn insn) {
             // This space intentionally left blank.
         }
 
-        /** {@inheritDoc} */
+        /**
+         * {@inheritDoc}
+         */
         public void visitThrowingCstInsn(ThrowingCstInsn insn) {
             // This space intentionally left blank.
         }
 
-        /** {@inheritDoc} */
+        /**
+         * {@inheritDoc}
+         */
         public void visitThrowingInsn(ThrowingInsn insn) {
             // This space intentionally left blank.
         }
 
-        /** {@inheritDoc} */
+        /**
+         * {@inheritDoc}
+         */
         public void visitFillArrayDataInsn(FillArrayDataInsn insn) {
             // This space intentionally left blank.
         }

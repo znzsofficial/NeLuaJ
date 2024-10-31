@@ -16,6 +16,8 @@
 
 package dx.rop.code;
 
+import java.util.Objects;
+
 import dx.rop.cst.CstString;
 import dx.util.Hex;
 
@@ -132,8 +134,7 @@ public final class SourcePosition {
      */
     public boolean sameLineAndFile(SourcePosition other) {
         return (line == other.line) &&
-            ((sourceFile == other.sourceFile) ||
-             ((sourceFile != null) && sourceFile.equals(other.sourceFile)));
+            (Objects.equals(sourceFile, other.sourceFile));
     }
 
     /**

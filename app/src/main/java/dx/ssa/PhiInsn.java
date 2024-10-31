@@ -267,7 +267,7 @@ public final class PhiInsn extends SsaInsn {
 
     /** {@inheritDoc} */
     @Override
-    public final void mapSourceRegisters(RegisterMapper mapper) {
+    public void mapSourceRegisters(RegisterMapper mapper) {
         for (Operand o : operands) {
             RegisterSpec old = o.regSpec;
             o.regSpec = mapper.map(old);
@@ -340,7 +340,7 @@ public final class PhiInsn extends SsaInsn {
      * @param extra {@code null-ok;} the argument to print after the opcode
      * @return human-readable string for listing dumps
      */
-    protected final String toHumanWithInline(String extra) {
+    private String toHumanWithInline(String extra) {
         StringBuffer sb = new StringBuffer(80);
 
         sb.append(SourcePosition.NO_INFO);
