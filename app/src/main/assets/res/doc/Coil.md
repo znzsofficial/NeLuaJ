@@ -11,7 +11,7 @@
 所有实例支持的基本数据类型包括：`ImageLoader`
 -   String
 -   HttpUrl
--   Uri (,  ,  ,  , and  schemes)`android.resource` `content` `file` `http` `https`
+-   Uri (`android.resource`,  `content`,  `file`,  `http`, `https` and  schemes)    
 -   File
 -   @DrawableRes Int
 -   Drawable
@@ -149,6 +149,7 @@ imageLoader.enqueue(request)
 ---
 ### 同步请求
 > 感谢此代码提供者：QQ1362883587
+
 ```lua
 import "coil.request.ImageRequest"
 import "coil.ImageLoaders"
@@ -233,6 +234,7 @@ imageLoader.enqueue(request)
 
 -   [CrossfadeTransition.Factory](https://coil-kt.github.io/coil/api/coil-core/coil3.transition/-crossfade-transition/)：从当前可绘制对象淡入到成功/错误可绘制对象。
 -   [Transition.Factory.NONE](https://coil-kt.github.io/coil/api/coil-core/coil3.transition/-transition/-factory/-companion/-n-o-n-e)：立即将可绘制对象设置到  `Target`  上，无需动画效果。
+
 ```lua
 import "coil.transition.Transition"
 import "coil.transition.CrossfadeTransition"

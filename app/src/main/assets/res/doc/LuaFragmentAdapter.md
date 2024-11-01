@@ -3,7 +3,7 @@
 
 LuaFragmentAdapter 继承 FragmentStateAdapter，可以帮助你以贴近原生开发的风格创建适配器。
 
-### 示例
+## 示例
 
 ```lua
 LuaFragmentAdapter(activity,

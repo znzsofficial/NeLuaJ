@@ -2,7 +2,7 @@ require "environment"
 import "android.widget.LinearLayout"
 import "android.widget.ListView"
 import "androidx.viewpager2.widget.ViewPager2"
-import "me.zhanghai.android.fastscroll.FastScrollWebView"
+--import "me.zhanghai.android.fastscroll.FastScrollWebView"
 local LuaFragmentAdapter = luajava.bindClass "github.znzsofficial.adapter.LuaFragmentAdapter"
 local LuaFragment = luajava.bindClass "com.androlua.LuaFragment"
 local ColorUtil = this.globalData.ColorUtil
@@ -35,11 +35,10 @@ local pages = {
     },
     -----
     loadlayout {
-        FastScrollWebView,
+        import"fun.ocss.tools.MarkdownView",
         id = "webView",
         layout_width = "match",
         layout_height = "match",
-        backgroundColor = ColorUtil.getColorSurfaceVariant(),
     },
     -----
 }

@@ -435,7 +435,7 @@ public final class DexMaker {
         jarOut.closeEntry();
         jarOut.close();
         // 尝试适配 api 34
-        result.setWritable(false);
+        result.setReadOnly();
         return generateClassLoader(result, dexCache, parent);
     }
 

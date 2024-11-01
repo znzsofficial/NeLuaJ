@@ -1,9 +1,4 @@
 bindClass = luajava.bindClass;
-local File = bindClass "java.io.File"
-
-for _,v in File(this.getLuaDir("libs/")).listFiles() do
-  v.setReadOnly()
-end
 
 this.globalData.ColorUtil = luajava.newInstance("github.daisukiKaffuChino.utils.LuaThemeUtil",activity)
 MDC_R = bindClass "com.google.android.material.R"
@@ -16,6 +11,7 @@ Bean={}
 Bean.Path = require "mods.bean.PathBean"
 Bean.Project = require "mods.bean.ProjectBean"
 
+local File = bindClass"java.io.File"
 checkBackup = function()
   local p = luajava.astable(activity.getExternalMediaDirs())[1].getPath()
   Bean.Path.backup_dir = p.."/backups"
