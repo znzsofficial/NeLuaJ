@@ -4,7 +4,6 @@ import "android.view.KeyEvent"
 import "android.view.WindowManager"
 import "android.view.View"
 import "android.graphics.drawable.ColorDrawable"
-import "com.youbenzi.mdtool.tool.MDTool"
 local LuaFileUtil = luajava.bindClass "com.nekolaska.io.LuaFileUtil".INSTANCE
 local ColorUtil = this.globalData.ColorUtil
 local res = res
@@ -39,7 +38,7 @@ function onOptionsItemSelected(m)
     end
 end
 
-luajava.newInstance("me.zhanghai.android.fastscroll.FastScrollerBuilder", webView).useMd2Style().build()
+--luajava.newInstance("me.zhanghai.android.fastscroll.FastScrollerBuilder", webView).useMd2Style().build()
 
 local MaterialTextView = luajava.bindClass "com.google.android.material.textview.MaterialTextView"
 local LinearLayout = luajava.bindClass "android.widget.LinearLayout"
@@ -81,7 +80,7 @@ lv.onItemClick = function(l, v, p, i)
     activity.setTitle(data[i].text)
     vpg.setCurrentItem(1)
     local md = LuaFileUtil.read(activity.getLuaDir() .. "/res/doc/" .. data[i].file)
-    webView.loadDataWithBaseURL("", MDTool.markdown2Html(md), "text/html", "utf-8", nil)
+    webView.loadFromText(md)
 end
 
 if bindClass "android.os.Build".VERSION.SDK_INT >= 33 then

@@ -17,6 +17,7 @@ WallpaperService wallpaper.lua
 
 #### ** 可省略非必要关键字 **
 - 省略then
+
 ```lua
 if a then
 
@@ -30,6 +31,7 @@ end
 ```
 
 - 省略do
+
 ```lua
 while a do
 
@@ -43,6 +45,7 @@ end
 ```
 
 - 省略in
+
 ```lua
 for k,v in pairs(t) do
 
@@ -56,6 +59,7 @@ end
 ```
 
 - 省略function
+
 ```lua
 local function a()
     
@@ -69,6 +73,7 @@ end
 ```
 
 - 支持switch
+
 ```lua
 switch a
   case 1,3,5,7,9
@@ -83,6 +88,7 @@ end
 ```
 
 - 支持when
+
 ```lua
 a = when a
    case 1,3,5,7,9
@@ -117,9 +123,9 @@ end
 
 ```
 
-
 #### ** 支持defer **
-defer后语句将在函数结束时运行，多个defer将按照后入先出原则运行。
+defer后语句将在函数结束时运行
+多个defer将按照后入先出原则运行。
 
 #### ** 支持?操作符 **
 ```lua
@@ -157,7 +163,7 @@ lambda () -> print("lambda")
 ```
 #### ** 支持import **
 
-import将导入包并设置为局部变量
+import 将导入包并设置为局部变量
 
 import "java.lang.String"
 返回值为 javaClass
@@ -236,13 +242,13 @@ Object.override{}
 
 - 直接()构建实例或实现接口,抽象类
 ```lua
-b=ArrayList()
-m=HashMap()
-i=interface{ 
+b = ArrayList()
+m = HashMap()
+i = interface { 
     methodname=function(arg)
     end
 }
-c=abstract{ 
+c = abstract { 
     methodname=function(super, arg)
     end
 }
@@ -250,12 +256,12 @@ c=abstract{
 
 - 支持覆盖方法
 ```lua
-list=ArrayList.override{
+list = ArrayList.override {
   function add(superCall, arg)
     superCall(arg)
   end
 }()
-list=ArrayList{
+list = ArrayList {
   add = function(s, a)
   end
 }
@@ -277,7 +283,6 @@ Button(this){
 }
 ```
 
-
 - 直接创建数组
 ```lua
 i=int[10]
@@ -290,7 +295,15 @@ i=Integer[10]
 b.add(!)
 ```
 
-- java getter/setter 优化
+- is 方法简写
+```lua
+view.isActivated()
+-->
+view.Activated
+```
+
+- java getter/setter优化
+
 ```lua
 b.setText("")
 -->
@@ -301,12 +314,6 @@ t=b.getText()
 -->
 t=b.text
 t=m.abc
-```
-- is 方法简写
-```lua
-view.isActivated()
--->
-view.Activated
 ```
 
 - 语法糖示例
