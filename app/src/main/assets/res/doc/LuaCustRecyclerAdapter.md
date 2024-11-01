@@ -1,4 +1,4 @@
-### 介绍
+## 介绍
 RecyclerView通过对资源的缓存复用来增强性能。LuaCustRecyclerAdapter可以帮助你以贴近原生开发的风格创建适配器。
 
 PopupRecyclerAdapter 作为 LuaCustRecyclerAdapter 的子类，可以通过实现getPopupText方法为FastScrollerBuilder提供支持
