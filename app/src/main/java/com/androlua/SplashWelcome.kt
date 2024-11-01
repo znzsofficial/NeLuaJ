@@ -181,6 +181,8 @@ class SplashWelcome : ComponentActivity() {
                         outputStream.write(buffer, 0, n)
                     }
                     outputStream.close()
+                    // dex文件不可写
+                    if (path.endsWith(".dex")) file.setReadOnly()
                 } catch (e: IOException) {
                     e.printStackTrace()
                     throw RuntimeException("unzip error at file " + file.absolutePath + ".")
