@@ -48,13 +48,12 @@ public class Enhancer {
 //		System.out.println("[Enhancer::create()] Create class extends from \"" + superclass.getName() + "\" stored in " + cacheDir);
 
         DexMaker dexMaker = new DexMaker();
-        dexMaker.declare(subType, superClsName + ".proxy", Modifier.PUBLIC, superType, interfaceTypeId);
+        dexMaker.declare(subType, superClsName + ".dx", Modifier.PUBLIC, superType, interfaceTypeId);
         generateFieldsAndMethods(dexMaker, superType, subType);
         try {
             ClassLoader loader = dexMaker.generateAndLoad(Enhancer.class.getClassLoader(), new File(cacheDir));
             return loader.loadClass(subClsName);//superclass.getName() + Const.SUBCLASS_SUFFIX);
         } catch (IOException | ClassNotFoundException e) {
-
             e.printStackTrace();
         } finally {
             //new File(cacheDir).delete();
@@ -66,7 +65,7 @@ public class Enhancer {
     public static boolean rmDir(File dir) {
         if (dir.isDirectory()) {
             File[] fs = dir.listFiles();
-            for (File f : fs)
+            if (fs != null) for (File f : fs)
                 rmDir(f);
         }
         return dir.delete();
