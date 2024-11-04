@@ -191,9 +191,9 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
             globals.jset("http", http::class.java)
             globals.jset("R", R::class.java)
             globals.set("android", JavaPackage("android"))
-            var arg = intent.getSerializableExtra(ARG) as Array<Any?>?
+            var arg = intent.getSerializableExtra(ARG) as Array<*>?
             if (arg == null) arg = arrayOfNulls<Any>(0)
-            doFile(luaFile, *arg)
+            doFile(luaFile, arg)
             runMainFunc(pageName, arg)
             runFunc("onCreate")
             if (!isSetViewed) showLogView(false)
@@ -246,8 +246,8 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         (findViewById<View?>(R.id.file_name) as TextView).text = File(luaFile).getName()
         val list = findViewById<ListView>(R.id.log_list)
         list.setAdapter(adapter)
-        findViewById<View?>(R.id.clear).setOnClickListener(View.OnClickListener { v: View? -> adapter.clear() })
-        findViewById<View?>(R.id.copy).setOnClickListener(View.OnClickListener { v: View? ->
+        findViewById<View?>(R.id.clear).setOnClickListener { v: View? -> adapter.clear() }
+        findViewById<View?>(R.id.copy).setOnClickListener { v: View? ->
             // 合并所有字符串
             val combinedString = StringBuilder()
             for (i in 0 until adapter.count) {
@@ -264,7 +264,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
             val clip = ClipData.newPlainText("log", combinedString)
             // 将数据设置到剪贴板
             clipboard?.setPrimaryClip(clip)
-        })
+        }
     }
 
     fun setAllowThread(bool: Boolean) {
@@ -276,12 +276,12 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         StrictMode.setThreadPolicy(policy)
     }
 
-    fun runMainFunc(name: String?, arg: Array<Any?>): Any? {
+    fun runMainFunc(name: String?, vararg arg: Any): Any? {
         try {
             var f = globals.get(name)
-            if (f.isfunction()) return f.jcall(*arg)
+            if (f.isfunction()) return f.jcall(arg)
             f = globals.get("main")
-            if (f.isfunction()) return f.jcall(*arg)
+            if (f.isfunction()) return f.jcall(arg)
         } catch (e: Exception) {
             sendError(name, e)
         }
@@ -309,6 +309,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         return super.onKeyShortcut(keyCode, event)
     }
 
+    @CallLuaFunction
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (mOnKeyDown != null) {
             try {
@@ -321,6 +322,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         return super.onKeyDown(keyCode, event)
     }
 
+    @CallLuaFunction
     override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
         if (mOnKeyUp != null) {
             try {
@@ -333,6 +335,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         return super.onKeyUp(keyCode, event)
     }
 
+    @CallLuaFunction
     override fun onKeyLongPress(keyCode: Int, event: KeyEvent?): Boolean {
         if (mOnKeyLongPress != null) {
             try {
@@ -345,6 +348,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         return super.onKeyLongPress(keyCode, event)
     }
 
+    @CallLuaFunction
     override fun onTouchEvent(event: MotionEvent?): Boolean {
         if (mOnTouchEvent != null) {
             try {
@@ -480,6 +484,12 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     }
 
     @CallLuaFunction
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        runFunc("onOptionsItemSelected", item)
+        return super.onOptionsItemSelected(item)
+    }
+
+    @CallLuaFunction
     override fun onCreateContextMenu(
         contextMenu: ContextMenu?, view: View?, contextMenuInfo: ContextMenuInfo?
     ) {
@@ -488,10 +498,11 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     }
 
     @CallLuaFunction
-    override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        runFunc("onOptionsItemSelected", item)
-        return super.onOptionsItemSelected(item)
+    override fun onContextItemSelected(menuItem: MenuItem): Boolean {
+        runFunc("onContextItemSelected", menuItem)
+        return super.onContextItemSelected(menuItem)
     }
+
 
     @CallLuaFunction
     public override fun onNightModeChanged(i: Int) {
@@ -513,8 +524,8 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
 
     @CallLuaFunction
     override fun onSupportActionModeFinished(mode: ActionMode) {
-        super.onSupportActionModeFinished(mode)
         runFunc("onSupportActionModeFinished", mode)
+        super.onSupportActionModeFinished(mode)
     }
 
     fun runFunc(name: String?, vararg arg: Any?): Any? {
@@ -770,11 +781,6 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         runFunc("onReceive", context, intent)
     }
 
-    @CallLuaFunction
-    override fun onContextItemSelected(menuItem: MenuItem): Boolean {
-        runFunc("onContextItemSelected", menuItem)
-        return super.onContextItemSelected(menuItem)
-    }
 
     @CallLuaFunction
     override fun onContentChanged() {
