@@ -1,8 +1,43 @@
 ### 介绍
-**LuaActivity**比较全面的迁移到了 AndroidX，新增了一些方法，但是有没有差不多（
+**LuaActivity**比较全面的迁移到了 AndroidX，新增了一些方法
 
 全局环境中的 this 和 activity 都指向当前 LuaActivity
 
+### 可能被调用的全局函数
+```lua
+onCreate()
+onStart()
+onResume()
+onPause()
+onStop()
+onDestroy()
+
+onResult(name)
+onActivityResult(requestCode, resultCode, data)
+onContentChanged()
+onConfigurationChanged(newConfig)
+onReceive(context, intent)
+onSupportActionModeStarted(mode)
+onSupportActionModeFinished(mode)
+onPanelClosed(featureId, menu)
+onCreateOptionsMenu(menu)
+onOptionsItemSelected(item)
+onCreateContextMenu(contextMenu, view, contextMenuInfo)
+onContextItemSelected(item)
+onRequestPermissionsResult(requestCode, permissions, grantResults)
+onServiceConnected(componentName, service)
+onServiceDisconnected(componentName)
+
+onKeyShortcut(keyCode, event)
+onKeyLongPress(keyCode, event)
+onKeyUp(keyCode, event)
+onKeyDown(keyCode, event)
+onTouchEvent(event)
+onVersionChanged(new, old)
+
+onError(error, message)
+onNightModeChanged(mode)
+```
 ### 示例
 
 ```lua
@@ -21,6 +56,9 @@ end
 function onNightModeChanged(mode)
     print(mode)
 end
+
+-- 等同于 setContentView(loadlayout(布局表))
+this.setContentView(布局表)
 
 --返回是否为夜间模式
 this.isNightMode()
