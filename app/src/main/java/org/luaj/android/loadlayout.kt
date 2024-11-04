@@ -1,12 +1,10 @@
 package org.luaj.android
 
-import android.view.ViewGroup
 import com.androlua.LuaContext
 import com.androlua.LuaLayout
 import com.nekolaska.ktx.argAt
 import com.nekolaska.ktx.firstArg
 import com.nekolaska.ktx.secondArg
-import com.nekolaska.ktx.toLuaValue
 import org.luaj.Globals
 import org.luaj.Varargs
 import org.luaj.lib.VarArgFunction
@@ -24,6 +22,7 @@ class loadlayout(context: LuaContext) : VarArgFunction() {
                 args.secondArg().checktable(),
                 args.argAt(3)
             )
+
             else -> mContext.sendMsg("loadlayout: invalid arguments").let { NIL }
         }
     }

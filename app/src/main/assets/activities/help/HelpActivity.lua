@@ -71,6 +71,7 @@ local data = {
     { text = "Coil", file = "Coil.md" },
     { text = "res", file = "module_res.md" },
     { text = "okhttp", file = "module_okhttp.md" },
+    { text = "loadlayout", file = "module_loadlayout.md" },
 }
 
 local adp = LuaAdapter(activity, data, item)
