@@ -1308,6 +1308,8 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         callback.call()
     }
 
+    fun getMediaDir() = externalMediaDirs[0]
+
     companion object {
         private const val ARG = "arg"
         private const val DATA = "data"
