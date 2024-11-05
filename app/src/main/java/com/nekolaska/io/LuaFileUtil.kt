@@ -60,6 +60,18 @@ object LuaFileUtil {
         loadfile(path).call()
     } as LuaTable
 
+    fun moveDirectory(src: String, dest: String) {
+        if (File(src).isDirectory) {
+            File(dest).mkdirs()
+            File(src).listFiles()?.forEach {
+                moveDirectory(it.absolutePath, dest + File.separator + it.name)
+            }
+        } else {
+            File(dest).parentFile?.mkdirs()
+            File(src).renameTo(File(dest))
+        }
+    }
+
     interface Impl {
         fun write(path: String, content: String): Boolean
         fun read(path: String): String

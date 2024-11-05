@@ -195,11 +195,12 @@ _M.init = function()
                             _M.update()
                         elseif v.img == "file_img" then
                             ActivityUtil.new("photo", v_path)
+                        elseif v.img == "file_java" then
+                            MainActivity.Public.dexDialog(v_path)
                         elseif v.img == "file_zip"
                                 or v.img == "file_sig"
                                 or v.img == "file_audio"
                                 or v.img == "file_video"
-                                or v.img == "file_java"
                                 or v.img == "file_c_code"
                                 or v.img == "file" then
                             this.openFile(v_path, function()
@@ -290,15 +291,15 @@ local getList = function()
             k = k
         end
         FileList[k] = {}
-        local fileinfo = FileList[k]
-        fileinfo.path = v_path
-        fileinfo.file_name = v.name
-        fileinfo.isDirectory = v.isDirectory
+        local fileInfo = FileList[k]
+        fileInfo.path = v_path
+        fileInfo.file_name = v.name
+        fileInfo.isDirectory = v.isDirectory
         if v.isDirectory then
-            fileinfo.img = isProjectDir and "Project" or "folder"
+            fileInfo.img = isProjectDir and "Project" or "folder"
         else
             local ext = match(v_path, "%.([^%.]+)$")
-            fileinfo.img = suffix_image[ext]
+            fileInfo.img = suffix_image[ext]
         end
     end
 
