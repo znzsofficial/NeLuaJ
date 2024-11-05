@@ -13,7 +13,7 @@ Bean.Project = require "mods.bean.ProjectBean"
 
 local File = bindClass"java.io.File"
 checkBackup = function()
-  local p = luajava.astable(activity.getExternalMediaDirs())[1].getPath()
+  local p = this.getMediaDir()
   Bean.Path.backup_dir = p.."/backups"
   local backup = File(Bean.Path.backup_dir.."/"..os.date("%Y-%m-%d"));
   if not backup.exists() then

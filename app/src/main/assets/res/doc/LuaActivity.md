@@ -85,6 +85,9 @@ end)
 --BlendModeColorFilter / PorterDuffColorFilter
 this.getFilter(color)
 
+--获取 /Android/media 内的私有文件夹
+this.getMediaDir()
+
 --不建议使用
 this.setAllowThread(bool)
 ```

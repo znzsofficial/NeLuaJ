@@ -273,6 +273,23 @@ function _M.build()
 end
 ]]
 
+function _M.dexDialog(path)
+    local file = File(path)
+    MaterialAlertDialogBuilder(activity)
+            .setTitle(file.name)
+            .setMessage(res.string.select_action)
+            .setNeutralButton(res.string.read_only, function()
+        file.setReadOnly()
+    end)
+            .setPositiveButton(res.string.open, function()
+        this.openFile(path, function()
+            MainActivity.Public.snack(res.string.NoSupport)
+        end)
+    end)
+            .setNegativeButton(android.R.string.cancel, nil)
+            .show();
+end
+
 function _M.InstallApk(filePath)
     local intent = Intent(Intent.ACTION_VIEW);
     intent.addCategory("android.intent.category.DEFAULT");
