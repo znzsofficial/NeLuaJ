@@ -16,6 +16,8 @@ import android.widget.Filterable;
 import android.widget.ImageView;
 import android.widget.TextView;
 
+import androidx.core.content.res.ResourcesCompat;
+
 import com.androlua.LoadingDrawable;
 import com.androlua.LuaActivity;
 import com.androlua.LuaBitmap;
@@ -175,7 +177,7 @@ public class LuaArrayAdapter extends BaseAdapter implements Filterable {
                     drawable = new AsyncLoader().getBitmap(mContext, (String) value);
                 else if (value instanceof Drawable) drawable = (Drawable) value;
                 else if (value instanceof Number)
-                    drawable = mRes.getDrawable(((Number) value).intValue());
+                    drawable = ResourcesCompat.getDrawable(mRes, ((Number) value).intValue(), null);
 
                 img.setImageDrawable(drawable);
                 if (drawable instanceof BitmapDrawable) {

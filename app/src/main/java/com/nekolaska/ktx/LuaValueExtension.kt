@@ -5,7 +5,6 @@ import org.luaj.Globals
 import org.luaj.LuaValue
 import org.luaj.Varargs
 import org.luaj.lib.jse.CoerceJavaToLua
-import org.luaj.lib.jse.JavaClass
 import org.luaj.lib.jse.JavaInstance
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException

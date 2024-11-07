@@ -5,7 +5,6 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
 import com.androlua.LuaContext
-import github.znzsofficial.adapter.RecyclerListAdapter.Creator
 
 open class LuaCustRecyclerAdapter @JvmOverloads constructor(
     open var mContext: LuaContext? = null,

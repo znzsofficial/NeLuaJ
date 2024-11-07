@@ -180,17 +180,17 @@ class LuaDialog : AlertDialog, DialogInterface.OnClickListener {
         super.setOnDismissListener(listener)
     }
 
-    override fun show() {
-        super.show()
-    }
-
-    override fun hide() {
-        super.hide()
-    }
-
-    override fun isShowing(): Boolean {
-        return super.isShowing()
-    }
+//    override fun show() {
+//        super.show()
+//    }
+//
+//    override fun hide() {
+//        super.hide()
+//    }
+//
+//    override fun isShowing(): Boolean {
+//        return super.isShowing()
+//    }
 
     override fun onClick(dialog: DialogInterface, which: Int) {
         if (mOnClickListener != null) mOnClickListener!!.onClick(this, getButton(which))

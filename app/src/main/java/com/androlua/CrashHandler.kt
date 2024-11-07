@@ -101,7 +101,7 @@ class CrashHandler : Thread.UncaughtExceptionHandler {
                 } else {
                     pi.versionCode.toString()
                 }
-                infos["versionName"] = versionName
+                infos["versionName"] = versionName as String
                 infos["versionCode"] = versionCode
             }
         } catch (e: PackageManager.NameNotFoundException) {

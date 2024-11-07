@@ -8,7 +8,7 @@ plugins {
 
 android {
     namespace = "github.znzsofficial.neluaj"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "github.znzsofficial.neluaj"
@@ -40,6 +40,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
     compileOptions {
