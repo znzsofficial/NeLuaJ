@@ -42,7 +42,6 @@ import org.luaj.android.res;
 import org.luaj.android.task;
 import org.luaj.android.thread;
 import org.luaj.android.timer;
-import org.luaj.android.xTask;
 import org.luaj.lib.ResourceFinder;
 import org.luaj.lib.jse.JavaPackage;
 import org.luaj.lib.jse.JsePlatform;

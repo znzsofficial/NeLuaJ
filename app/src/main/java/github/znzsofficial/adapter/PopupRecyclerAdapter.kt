@@ -2,7 +2,6 @@ package github.znzsofficial.adapter
 
 import android.view.View
 import com.androlua.LuaContext
-import github.znzsofficial.adapter.PopupRecyclerListAdapter.PopupCreator
 import me.zhanghai.android.fastscroll.PopupTextProvider
 
 class PopupRecyclerAdapter @JvmOverloads constructor(
