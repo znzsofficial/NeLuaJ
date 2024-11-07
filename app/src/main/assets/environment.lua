@@ -13,7 +13,7 @@ Bean.Project = require "mods.bean.ProjectBean"
 
 local File = bindClass"java.io.File"
 checkBackup = function()
-  local p = this.getMediaDir()
+  local p = this.getMediaDir().path
   Bean.Path.backup_dir = p.."/backups"
   local backup = File(Bean.Path.backup_dir.."/"..os.date("%Y-%m-%d"));
   if not backup.exists() then
