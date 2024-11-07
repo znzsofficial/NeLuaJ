@@ -10,7 +10,7 @@ import "java.io.File"
 import "java.lang.String"
 import "res"
 
-local rs
+local clazzList
 local path = ...
 local table = table
 local string = string
@@ -23,8 +23,8 @@ activity.setTitle('需要导入的类')
 local function fixImport()
   try
     local allClasses = require "activities.api.PublicClasses"
-    local cache={}
-    local function checkclass(path,ret)
+    local cache = {}
+    local function check(path, ret)
       if cache[path] then
         return
       end
@@ -43,12 +43,12 @@ local function fixImport()
       for s,e,t in str:gfind("import \"([%w%.]+)\"") do
         local p=package.searchpath(t,path)
         if p then
-          checkclass(p,ret)
+            check(p,ret)
         end
       end
       local lex=LuaLexer(str)
-      local buf={}
-      local last=nil
+      local buf = {}
+      local last = nil
       while true do
         local t=lex.advance()
         if not t then
@@ -74,11 +74,11 @@ local function fixImport()
       end
     end
     local ret={}
-    checkclass(path,ret)
-    return String(ret)
+    check(path,ret)
+    return ret
     catch(e)
-    print(e)
-    return nil
+      print(e)
+      return {}
   end
 end
 
@@ -87,14 +87,18 @@ list.ChoiceMode=ListView.CHOICE_MODE_MULTIPLE;
 
 xTask{
     task = fixImport,
-    callback = function(v)
+    callback = function(slist)
         try
-            rs = v
-            local adp=ArrayListAdapter(activity,android.R.layout.simple_list_item_multiple_choice,v)
-            list.Adapter=adp
+            if #slist == 0 then
+                print("未找到可导入的类")
+                activity.finish()
+                return
+            end
+            clazzList = slist
+            list.Adapter = ArrayListAdapter(activity,android.R.layout.simple_list_item_multiple_choice, slist)
             activity.setContentView(list)
-        catch
-            print("分析失败")
+        catch(e)
+            print("分析失败", e)
             activity.finish()
         end
     end
@@ -114,9 +118,9 @@ function onOptionsItemSelected(item)
       local cm=activity.getSystemService(Context.CLIPBOARD_SERVICE)
       local cs=list.getCheckedItemPositions()
       local buf={}
-      for n=0,#rs-1 do
+      for n=0,#clazzList-1 do
         if cs.get(n) then
-          insert(buf,string.format("import \"%s\"",rs[n]))
+          insert(buf,string.format("import \"%s\"",clazzList[n]))
         end
       end
 
@@ -126,7 +130,7 @@ function onOptionsItemSelected(item)
       Toast.makeText(activity,"已复制到剪切板",1000).show()
    elseif item.title=="反选" then
     try
-      for n=0,#rs-1 do
+      for n=0,#clazzList-1 do
         list.setItemChecked(n,not list.isItemChecked(n))
       end
     end

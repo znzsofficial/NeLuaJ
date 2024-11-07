@@ -191,10 +191,10 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
             globals.jset("http", http::class.java)
             globals.jset("R", R::class.java)
             globals.set("android", JavaPackage("android"))
-            var arg = intent.getSerializableExtra(ARG) as Array<*>?
+            var arg = intent.getSerializableExtra(ARG) as Array<Any?>?
             if (arg == null) arg = arrayOfNulls<Any>(0)
-            doFile(luaFile, arg)
-            runMainFunc(pageName, arg)
+            doFile(luaFile, *arg)
+            runMainFunc(pageName, *arg)
             runFunc("onCreate")
             if (!isSetViewed) showLogView(false)
             globals.get("onKeyShortcut").apply {
@@ -276,17 +276,28 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         StrictMode.setThreadPolicy(policy)
     }
 
-    fun runMainFunc(name: String?, vararg arg: Any): Any? {
+    fun runMainFunc(name: String?, vararg arg: Any?): Any? {
         try {
             var f = globals.get(name)
-            if (f.isfunction()) return f.jcall(arg)
+            if (f.isfunction()) return f.jcall(*arg)
             f = globals.get("main")
-            if (f.isfunction()) return f.jcall(arg)
+            if (f.isfunction()) return f.jcall(*arg)
         } catch (e: Exception) {
             sendError(name, e)
         }
         return null
     }
+//    fun runMainFunc(name: String?, arg: Array<Any?>): Any? {
+//        try {
+//            var f = globals.get(name)
+//            if (f.isfunction()) return f.jcall(*arg)
+//            f = globals.get("main")
+//            if (f.isfunction()) return f.jcall(*arg)
+//        } catch (e: Exception) {
+//            sendError(name, e)
+//        }
+//        return null
+//    }
 
     @CallLuaFunction
     override fun onRequestPermissionsResult(
@@ -447,15 +458,17 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
                 val ps2 =
                     pm.getPackageInfo(packageName, PackageManager.GET_PERMISSIONS)
                         .requestedPermissions
-                for (p in ps2) {
-                    try {
-                        if ((pm.getPermissionInfo(
-                                p,
-                                0
-                            ).protectionLevel and 1) != 0
-                        ) checkPermission(p)
-                    } catch (e: Exception) {
-                        e.printStackTrace()
+                if (ps2 != null) {
+                    for (p in ps2) {
+                        try {
+                            if ((pm.getPermissionInfo(
+                                    p,
+                                    0
+                                ).protectionLevel and 1) != 0
+                            ) checkPermission(p)
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
                     }
                 }
                 if (!permissions!!.isEmpty) {
