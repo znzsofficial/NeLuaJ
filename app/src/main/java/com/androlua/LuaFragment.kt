@@ -106,7 +106,7 @@ class LuaFragment(var creator: Creator?) : Fragment() {
 
     override fun onContextItemSelected(item: MenuItem): Boolean {
         super.onContextItemSelected(item)
-        return creator?.onContextItemSelected(item) ?: false
+        return creator?.onContextItemSelected(item) == true
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

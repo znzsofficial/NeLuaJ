@@ -5,7 +5,6 @@ import android.graphics.Bitmap;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.os.Handler;
-import android.os.Message;
 import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
@@ -36,30 +35,27 @@ import java.util.HashMap;
 public class LuaMultiAdapter extends BaseAdapter {
 
     private BitmapDrawable mDraw;
-    private Resources mRes;
-    private Globals L;
-    private LuaContext mContext;
-    private LuaValue mLayout;
-    private LuaTable mData;
+    private final Resources mRes;
+    private final Globals L;
+    private final LuaContext mContext;
+    private final LuaValue mLayout;
+    private final LuaTable mData;
     private LuaValue mTheme;
-    private LuaLayout loadLayout;
-    private LuaValue insert;
-    private LuaValue remove;
+    private final LuaLayout loadLayout;
+    private final LuaValue insert;
+    private final LuaValue remove;
     private LuaValue mAnimationUtil;
-    private HashMap<View, Animation> mAnimCache = new HashMap<View, Animation>();
-    private HashMap<View, Boolean> mStyleCache = new HashMap<View, Boolean>();
+    private final HashMap<View, Animation> mAnimCache = new HashMap<View, Animation>();
+    private final HashMap<View, Boolean> mStyleCache = new HashMap<View, Boolean>();
 
     private boolean mNotifyOnChange = true;
     private boolean updateing;
-    private Handler mHandler =
-            new Handler() {
-                @Override
-                public void handleMessage(Message msg) {
-                    notifyDataSetChanged();
-                }
-            };
-    private HashMap<String, Boolean> loaded = new HashMap<String, Boolean>();
-    private LuaValue LayoutParams = CoerceJavaToLua.coerce(AdapterView.LayoutParams.class);
+    private final Handler mHandler = new Handler((msg) -> {
+        notifyDataSetChanged();
+        return false;
+    });
+    private final HashMap<String, Boolean> loaded = new HashMap<String, Boolean>();
+    private final LuaValue LayoutParams = CoerceJavaToLua.coerce(AdapterView.LayoutParams.class);
 
     public LuaMultiAdapter(LuaContext context, LuaValue layout) throws LuaError {
         this(context, null, layout);

@@ -38,9 +38,9 @@ public class LuaAdapter extends BaseAdapter implements Filterable {
 
     private final LuaTable mBaseData;
     private BitmapDrawable mDraw;
-    private Resources mRes;
-    private Globals L;
-    private LuaContext mContext;
+    private final Resources mRes;
+    private final Globals L;
+    private final LuaContext mContext;
 
     private final Object mLock = new Object();
 
@@ -63,7 +63,7 @@ public class LuaAdapter extends BaseAdapter implements Filterable {
     private boolean updateing;
 
     @SuppressLint("HandlerLeak")
-    private Handler mHandler =
+    private final Handler mHandler =
             new Handler() {
                 @Override
                 public void handleMessage(Message msg) {
