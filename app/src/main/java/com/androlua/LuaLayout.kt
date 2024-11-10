@@ -13,8 +13,8 @@ import android.view.ViewGroup
 import android.widget.AdapterView
 import android.widget.ImageView.ScaleType
 import androidx.appcompat.view.ContextThemeWrapper
-import coil.ImageLoader
-import coil.request.ImageRequest
+import coil3.ImageLoader
+import coil3.request.ImageRequest
 import com.androlua.adapter.ArrayListAdapter
 import com.androlua.adapter.LuaAdapter
 import com.google.android.material.appbar.AppBarLayout

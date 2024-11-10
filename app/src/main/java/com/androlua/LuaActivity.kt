@@ -52,8 +52,9 @@ import androidx.core.util.TypedValueCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.preference.PreferenceManager
-import coil.ImageLoader
-import coil.request.ImageRequest
+import coil3.ImageLoader
+import coil3.load
+import coil3.request.ImageRequest
 import com.androlua.LuaBroadcastReceiver.OnReceiveListener
 import com.androlua.LuaService.LuaBinder
 import com.androlua.adapter.ArrayListAdapter
@@ -63,6 +64,7 @@ import dalvik.system.DexClassLoader
 import github.znzsofficial.neluaj.R
 import kotlinx.coroutines.launch
 import org.luaj.Globals
+import org.luaj.LuaClosure
 import org.luaj.LuaError
 import org.luaj.LuaFunction
 import org.luaj.LuaMetaTable
@@ -82,12 +84,16 @@ import org.luaj.android.task
 import org.luaj.android.thread
 import org.luaj.android.timer
 import org.luaj.android.xTask
+import org.luaj.compiler.DumpState
 import org.luaj.lib.ResourceFinder
 import org.luaj.lib.jse.JavaPackage
 import org.luaj.lib.jse.JsePlatform
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileNotFoundException
+import java.io.FileOutputStream
+import java.io.IOException
 import java.io.InputStream
 import java.lang.Exception
 import java.lang.StringBuilder
@@ -1295,18 +1301,11 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         LuaApplication.loader.enqueue(
             ImageRequest.Builder(this)
                 .data(data)
-                .target(SimpleTarget(callback))
+                .target(SimpleTarget(this, callback))
                 .build()
         )
 
-
-    fun loadImage(data: Any?, view: ImageView) =
-        LuaApplication.loader.enqueue(
-            ImageRequest.Builder(this)
-                .data(data)
-                .target(view)
-                .build()
-        )
+    fun loadImage(data: Any?, view: ImageView) = view.load(data, LuaApplication.loader)
 
     fun dpToPx(dp: Float): Float {
         return TypedValueCompat.dpToPx(dp, resources.displayMetrics)
@@ -1322,6 +1321,28 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     }
 
     fun getMediaDir() = externalMediaDirs[0]
+
+    private val dumpGlobals by lazy { JsePlatform.standardGlobals() }
+    private fun getByteArray(path: String?): ByteArray {
+        val closure = dumpGlobals.loadfile(path).checkfunction(1) as LuaClosure
+        val stream = ByteArrayOutputStream()
+        return try {
+            DumpState.dump(closure.c, stream, true)
+            stream.toByteArray()
+        } catch (e: kotlin.Exception) {
+            throw LuaError(e)
+        }
+    }
+
+    fun dumpFile(input: String?, output: String?) {
+        try {
+            val fos = FileOutputStream(output)
+            fos.write(getByteArray(input))
+            fos.close()
+        } catch (e: IOException) {
+            sendError("dumpFile", e)
+        }
+    }
 
     companion object {
         private const val ARG = "arg"

@@ -149,8 +149,7 @@ function onCreateOptionsMenu(menu)
         if mLuaEditor.getVisibility() == 4 then
             MainActivity.Public.snack(res.string.nofile)
         else
-            import "github.znzsofficial.utils.CompileUtil"
-            CompileUtil.INSTANCE.dump(path, path .. "c")
+            this.dumpFile(path, path .. "c")
             MainActivity.RecyclerView.update();
         end
     end
@@ -209,6 +208,11 @@ function onCreateOptionsMenu(menu)
         local init = LuaFileUtil.loadLua(project_dir .. "/init.lua")
         LuaFileUtil.compress(project_dir, Bean.Path.app_root_dir .. "/Backup", init.app_name .. "-" .. os.date("%Y-%m-%d-%H-%M-%S") .. ".zip")
     end
+    --[[
+    menu2.add(res.string.migrate).onMenuItemClick = function(a)
+        require("mods.utils.ProjectUpdater").moveIfNotExist()
+    end
+    ]]
     local menu3 = menu.addSubMenu(res.string.tools .. "…")
     menu3.add(res.string.logs).onMenuItemClick = function(a)
         ActivityUtil.showLog(activity)

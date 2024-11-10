@@ -13,10 +13,9 @@ android {
     defaultConfig {
         applicationId = "github.znzsofficial.neluaj"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 33
         versionCode = 1
         versionName = "1.0"
-
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     configurations {
@@ -136,6 +135,7 @@ dependencies {
     implementation(libs.library)
 
     implementation(libs.coil)
+    implementation(libs.coil.network.okhttp)
     implementation(libs.coil.svg)
     implementation(libs.coil.gif)
 }
