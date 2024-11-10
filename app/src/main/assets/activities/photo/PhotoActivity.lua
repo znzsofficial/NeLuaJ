@@ -2,8 +2,7 @@ require "environment"
 import "android.view.View"
 import "android.view.WindowManager"
 import "android.graphics.Color"
-import "coil.target.Target"
-local ImageRequestBuilder = bindClass "coil.request.ImageRequest$Builder"
+local ImageRequestBuilder = bindClass "coil3.request.ImageRequest$Builder"
 
 activity.getSupportActionBar().hide()
 
@@ -22,24 +21,12 @@ end)
 local binding = {}
 activity.setContentView(loadlayout(res.layout.photo_layout, binding))
 
-local imageLoader = this.getImageLoader()
+this.loadImage(this.getLuaDir() .. "/res/drawable/sync.png", function(drawable)
+    drawable.setColorFilter(this.getFilter(this.globalData.ColorUtil.getColorOnPrimaryContainer()))
+    binding.switchBg.setImageDrawable(drawable)
+end)
 
-imageLoader.enqueue(
-        ImageRequestBuilder(this)
-                    .data(this.getLuaDir() .. "/res/drawable/sync.png")
-                    .target(Target {
-            onSuccess = function(drawable)
-                drawable.setColorFilter(this.getFilter(this.globalData.ColorUtil.getColorOnPrimaryContainer()))
-                binding.switchBg.setImageDrawable(drawable)
-            end
-        })          .build()
-)
-
-imageLoader.enqueue(
-        ImageRequestBuilder(this)
-                .data(path)
-                .target(binding.mPhotoView).build()
-)
+this.loadImage(path, binding.mPhotoView)
 
 local i = 1
 local colors = {

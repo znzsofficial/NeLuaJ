@@ -5,11 +5,10 @@ import android.content.Context
 import android.os.Build
 import android.os.Environment
 import androidx.preference.PreferenceManager
-import coil.ComponentRegistry
-import coil.ImageLoader
-import coil.decode.GifDecoder
-import coil.decode.ImageDecoderDecoder
-import coil.decode.SvgDecoder
+import coil3.ComponentRegistry
+import coil3.ImageLoader
+import coil3.gif.AnimatedImageDecoder
+import coil3.svg.SvgDecoder
 import com.google.android.material.color.DynamicColors
 import org.luaj.Globals
 import org.luaj.LuaTable
@@ -26,8 +25,8 @@ class LuaApplication : Application(), LuaContext {
         instance = this
         loader = ImageLoader.Builder(this).components(ComponentRegistry.Builder().apply {
             add(
-                if (Build.VERSION.SDK_INT >= 28) ImageDecoderDecoder.Factory()
-                else GifDecoder.Factory()
+                if (Build.VERSION.SDK_INT >= 28) AnimatedImageDecoder.Factory()
+                else coil3.gif.GifDecoder.Factory()
             )
             add(SvgDecoder.Factory())
         }.build()).build()

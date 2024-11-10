@@ -37,7 +37,7 @@
 
 `ImageLoader`s 是执行  [`ImageRequest`](https://coil-kt.github.io/coil/image_requests/)s  [的服务对象](https://publicobject.com/2019/06/10/value-objects-service-objects-and-glue/)。它们处理缓存、数据获取、图像解码、请求管理、位图池、内存管理等。可以使用构建器创建和配置新实例：
 ```lua
-import "coil.ImageLoader"
+import "coil3.ImageLoader"
 imageLoader = ImageLoader.Builder(activity)
 .crossfade(true) 
 .build()
@@ -53,11 +53,11 @@ imageLoader = ImageLoader.Builder(activity)
 `ImageRequest`可以使用构建器创建：
 
 ```lua
-import "coil.request.ImageRequest"
+import "coil3.request.ImageRequest"
 local request = ImageRequest.Builder(activity)
 .data("https://example.com/image.jpg")
 .crossfade(true)
-.target(imageView) -- 图片View ID
+.target(imageView) -- 图片View ID (coi3 已不支持)
 .build()
 ```
 
@@ -75,19 +75,19 @@ imageLoader.enqueue(request)
 与 Glide 不同，默认情况下不支持 GIF。但是，NeLuaJ+ 已经导入该扩展库。
 在构建您的组件注册表时将解码器添加到您的组件注册表中：`ImageLoader`
 ```lua
-import "coil.ComponentRegistry"
+import "coil3.ComponentRegistry"
 local builder = ComponentRegistry.Builder()
 -- 添加 GIF 扩展库
 import "android.os.Build"
 if Build.VERSION.SDK_INT >= 28 then
-  import "coil.decode.ImageDecoderDecoder"
-  builder.add(ImageDecoderDecoder.Factory())
+  import "coil3.gif.AnimatedImageDecoder"
+  builder.add(AnimatedImageDecoder.Factory())
  else
-  import "coil.decode.GifDecoder"
+  import "coil3.gif.GifDecoder"
   builder.add(GifDecoder.Factory())
 end
 
-import "coil.ImageLoader"
+import "coil3.ImageLoader"
 imageLoader = ImageLoader.Builder(activity)
 .crossfade(true) 
 .components(builder.build()) -- 使用 components 方法添加
@@ -105,13 +105,13 @@ imageLoader = ImageLoader.Builder(activity)
 
 在构建您的组件注册表时将解码器添加到您的组件注册表中：ImageLoader: 
 ```lua
-import "coil.ComponentRegistry"
+import "coil3.ComponentRegistry"
 local builder = ComponentRegistry.Builder()
 -- 添加 SVG 扩展库
-import "coil.decode.SvgDecoder"
+import "coil3.svg.SvgDecoder"
 builder.add(SvgDecoder.Factory())
 
-import "coil.ImageLoader"
+import "coil3.ImageLoader"
 imageLoader = ImageLoader.Builder(activity)
 .crossfade(true) 
 .components(builder.build()) -- 与 GIF 添加方法相同，别告诉我你不会两者结合。
@@ -124,7 +124,7 @@ Coil 通过在文件的前 1 KB 中查找标记来检测 SVG，这应该涵盖�
 ---
 ### Non-View Targets[¶](https://coil-kt.github.io/coil/migrating/#non-view-targets "Permanent link")
 ```lua
-import "coil.target.Target"
+import "coil3.target.Target"
 local target = Target{
   onStart=function(placeholder)
     -- 在加载开始时调用，处理 placeholder drawable
@@ -136,7 +136,7 @@ local target = Target{
     -- 在加载失败时调用，处理错误
   end
 }
-import "coil.request.ImageRequest"
+import "coil3.request.ImageRequest"
 local request = ImageRequest.Builder(activity)
 .data("https://example.com/image.jpg")
 .crossfade(true)
@@ -151,12 +151,12 @@ imageLoader.enqueue(request)
 > 感谢此代码提供者：QQ1362883587
 
 ```lua
-import "coil.request.ImageRequest"
-import "coil.ImageLoaders"
+import "coil3.request.ImageRequest"
+import "coil3.ImageLoaders"
 import "kotlinx.coroutines.Dispatchers"
 
 local request = ImageRequest.Builder(activity)
-.dispatcher(Dispatchers.Main.immediate)
+.dispatcher(Dispatchers.Main.immediate)--(coil3 已删除)
 .data(File/DrawableRes/Drawable/Bitmap/Uri/Byte) -- 请勿使用网络图片，否则会阻塞进程导致崩溃
 .build()
 
@@ -170,8 +170,8 @@ ImageLoaders.create(activity), request).drawable
 > 感谢此方面代码提供者：QQ1362883587
 ```lua
 xTask(function()
-    import "coil.request.ImageRequest"
-    import "coil.ImageLoaders"
+    import "coil3.request.ImageRequest"
+    import "coil3.ImageLoaders"
     local request = ImageRequest.Builder(activity)
     .data(url)
     --.size(300, 300)
@@ -203,7 +203,7 @@ local transformationList = ArrayList()
 transformationList.add(CircleCropTransformation())
 -- 可以继续添加多个
 
-import "coil.request.ImageRequest"
+import "coil3.request.ImageRequest"
 local request = ImageRequest.Builder(activity)
 .data("https://example.com/image.jpg")
 .crossfade(true)
@@ -236,9 +236,9 @@ imageLoader.enqueue(request)
 -   [Transition.Factory.NONE](https://coil-kt.github.io/coil/api/coil-core/coil3.transition/-transition/-factory/-companion/-n-o-n-e)：立即将可绘制对象设置到  `Target`  上，无需动画效果。
 
 ```lua
-import "coil.transition.Transition"
-import "coil.transition.CrossfadeTransition"
-import "coil.request.ImageRequest"
+import "coil3.transition.Transition"
+import "coil3.transition.CrossfadeTransition"
+import "coil3.request.ImageRequest"
 local request = ImageRequest.Builder(activity)
 .data("https://example.com/image.jpg")
 
