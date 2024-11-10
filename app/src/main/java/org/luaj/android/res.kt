@@ -5,14 +5,14 @@ import android.app.Activity
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Typeface
-import coil.executeBlocking
-import coil.request.ImageRequest
+import coil3.asDrawable
+import coil3.executeBlocking
+import coil3.request.ImageRequest
 import com.androlua.LuaApplication
 import com.androlua.LuaBitmap
 import com.androlua.LuaContext
 import com.androlua.LuaLayout
 import com.nekolaska.ktx.toLuaValue
-import kotlinx.coroutines.Dispatchers
 import org.luaj.Globals
 import org.luaj.LuaError
 import org.luaj.LuaTable
@@ -231,10 +231,9 @@ class res(private val context: LuaContext) : TwoArgFunction() {
                 File("$p.$it").ifExists {
                     return LuaApplication.loader.executeBlocking(
                         ImageRequest.Builder(activity.context)
-                            .dispatcher(Dispatchers.Main.immediate)
                             .data(this)
                             .build()
-                    ).drawable.toLuaValue()
+                    ).image?.asDrawable(activity.context.resources).toLuaValue()
                 }
             }
             if (File("$p.lua").exists()) return globals.loadfile("$p.lua", globals).call()

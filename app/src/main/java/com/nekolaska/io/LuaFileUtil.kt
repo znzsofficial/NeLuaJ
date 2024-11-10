@@ -66,11 +66,16 @@ object LuaFileUtil {
             File(src).listFiles()?.forEach {
                 moveDirectory(it.absolutePath, dest + File.separator + it.name)
             }
+            if (File(src).listFiles()?.isEmpty() == true) {
+                File(src).delete()
+            }
         } else {
             File(dest).parentFile?.mkdirs()
             File(src).renameTo(File(dest))
         }
     }
+
+    fun isEmpty(path: String) = File(path).listFiles()?.isEmpty() == true
 
     interface Impl {
         fun write(path: String, content: String): Boolean
