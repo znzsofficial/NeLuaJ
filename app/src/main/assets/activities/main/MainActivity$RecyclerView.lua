@@ -1,6 +1,6 @@
 import "java.io.File"
 import "java.lang.Runtime"
-import "coil.target.Target"
+import "com.androlua.LuaTarget"
 import "androidx.core.view.GravityCompat"
 import "android.view.LayoutInflater"
 
@@ -20,7 +20,7 @@ import "com.nekolaska.internal.FileItemHolder"
 
 import "android.util.TypedValue"
 
-local ImageRequestBuilder = bindClass "coil.request.ImageRequest$Builder"
+local ImageRequestBuilder = bindClass "coil3.request.ImageRequest$Builder"
 
 import "mods.utils.EditorUtil"
 import "mods.utils.ActivityUtil"
@@ -147,7 +147,7 @@ _M.init = function()
                         imageLoader.enqueue(
                                 ImageRequestBuilder(activity)
                                             .data(v_path .. "/icon.png")
-                                            .target(Target {
+                                            .target(LuaTarget(this, LuaTarget.Listener {
                                     onError = function()
                                         pcall(function()
                                             view.name.setCompoundDrawables(error_project, nil, nil, nil)
@@ -159,7 +159,7 @@ _M.init = function()
                                             view.name.setCompoundDrawables(drawable, nil, nil, nil)
                                         end)
                                     end
-                                })          .build()
+                                }))          .build()
                         )
                     elseif (v.isDirectory and (v.file_name == "mods" or v.file_name == "libs")) then
                         local drawable = res_drawable["folder_mod"]
@@ -274,6 +274,7 @@ local getList = function()
 
     local isRoot
     local isProjectDir
+    --if Bean_Path.this_dir ~= Bean_Path.legacy_system_root then
     if Bean_Path.this_dir ~= Bean_Path.system_root then
         if Bean_Path.this_dir == Bean_Path.app_root_pro_dir then
             isProjectDir = true

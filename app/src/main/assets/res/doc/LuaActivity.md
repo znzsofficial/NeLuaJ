@@ -90,4 +90,7 @@ this.getMediaDir()
 
 --不建议使用
 this.setAllowThread(bool)
+
+-- 编译 Lua 文件
+this.dumpFile(inputPath, outputPath)
 ```
