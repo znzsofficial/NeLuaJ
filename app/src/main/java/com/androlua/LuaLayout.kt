@@ -14,6 +14,8 @@ import android.widget.AdapterView
 import android.widget.ImageView.ScaleType
 import androidx.appcompat.view.ContextThemeWrapper
 import coil3.ImageLoader
+import coil3.asDrawable
+import coil3.imageLoader
 import coil3.request.ImageRequest
 import com.androlua.adapter.ArrayListAdapter
 import com.androlua.adapter.LuaAdapter
@@ -55,7 +57,7 @@ class LuaLayout(private val initialContext: Context) {
     private val views = HashMap<String, LuaValue>()
     private val luaValueContext: LuaValue = initialContext.toLuaInstance()
     private val luaContext = luaValueContext.touserdata(LuaContext::class.java)
-    private val imageLoader: ImageLoader = LuaApplication.loader
+    private val imageLoader: ImageLoader = initialContext.imageLoader
     private val scaleTypeValues: Array<ScaleType> = ScaleType.entries.toTypedArray()
 
     val id: HashMap<*, *>
@@ -388,7 +390,7 @@ class LuaLayout(private val initialContext: Context) {
                                         imageLoader.enqueue(
                                             ImageRequest.Builder(initialContext)
                                                 .data(tValue.asString()).target {
-                                                    view.jset("ImageDrawable", it)
+                                                    view.jset("ImageDrawable", it.asDrawable(initialContext.resources))
                                                 }.build()
                                         )
                                     }
