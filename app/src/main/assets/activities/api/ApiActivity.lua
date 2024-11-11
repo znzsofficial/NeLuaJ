@@ -114,7 +114,7 @@ local mainLooper = Looper.getMainLooper()
 local handler = HandlerCompat.createAsync(mainLooper)
 
 function 列表(t, s)
-    local ar = ArrayAdapter(activity, 17367043)
+    local ar = ArrayAdapter(activity, R.layout.item_check)
     if s then
         ar.clear()
         for k, v in ipairs(t) do
