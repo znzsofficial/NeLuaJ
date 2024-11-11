@@ -53,6 +53,7 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.preference.PreferenceManager
 import coil3.ImageLoader
+import coil3.imageLoader
 import coil3.load
 import coil3.request.ImageRequest
 import com.androlua.LuaBroadcastReceiver.OnReceiveListener
@@ -1294,18 +1295,18 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     }
 
     fun getImageLoader(): ImageLoader {
-        return LuaApplication.loader
+        return imageLoader
     }
 
     fun loadImage(data: Any?, callback: LuaFunction) =
-        LuaApplication.loader.enqueue(
+        imageLoader.enqueue(
             ImageRequest.Builder(this)
                 .data(data)
                 .target(SimpleTarget(this, callback))
                 .build()
         )
 
-    fun loadImage(data: Any?, view: ImageView) = view.load(data, LuaApplication.loader)
+    fun loadImage(data: Any?, view: ImageView) = view.load(data, imageLoader)
 
     fun dpToPx(dp: Float): Float {
         return TypedValueCompat.dpToPx(dp, resources.displayMetrics)
