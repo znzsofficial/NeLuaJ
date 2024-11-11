@@ -38,10 +38,10 @@ local primaryOnColor=ColorUtil.ColorOnPrimary
 local secondaryColor=ColorUtil.ColorSecondary
 local tertiaryc=ColorUtil.ColorTertiary
 local textc=ColorUtil.TextColor
+local table = table
 local insert = table.insert
-local:table
-local:utf8
-local:string
+local utf8 = utf8
+local string = string
 
 local clazz=...
 import "activities.api.sub.util"
@@ -58,7 +58,7 @@ local window = activity.getWindow()
 .setStatusBarColor(ColorUtil.getColorBackground())
 .addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
 .clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
-if this.isNightMode()
+if this.isNightMode() then
   window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE)
  else
   window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR)
@@ -206,7 +206,7 @@ for i=1,#aaa do
 end
 
 --分类列表为0时按钮显示灰色并禁用
-for k,v in pairs(eee)
+for k,v in pairs(eee) then
   if table.size(v)==0 then
     local a = table.find(aaa,k)
     local _k = aaa[a]
