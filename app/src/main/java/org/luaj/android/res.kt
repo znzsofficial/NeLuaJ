@@ -7,12 +7,14 @@ import android.content.res.Configuration
 import android.graphics.Typeface
 import coil3.asDrawable
 import coil3.executeBlocking
+import coil3.imageLoader
 import coil3.request.ImageRequest
 import com.androlua.LuaApplication
 import com.androlua.LuaBitmap
 import com.androlua.LuaContext
 import com.androlua.LuaLayout
 import com.nekolaska.ktx.toLuaValue
+import kotlinx.coroutines.Dispatchers
 import org.luaj.Globals
 import org.luaj.LuaError
 import org.luaj.LuaTable
@@ -229,8 +231,9 @@ class res(private val context: LuaContext) : TwoArgFunction() {
             val p = activity.getLuaPath("res/drawable", arg)
             extension.forEach {
                 File("$p.$it").ifExists {
-                    return LuaApplication.loader.executeBlocking(
+                    return activity.context.imageLoader.executeBlocking(
                         ImageRequest.Builder(activity.context)
+                            .coroutineContext(Dispatchers.Main.immediate)
                             .data(this)
                             .build()
                     ).image?.asDrawable(activity.context.resources).toLuaValue()

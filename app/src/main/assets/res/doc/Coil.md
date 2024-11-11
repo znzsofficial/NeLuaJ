@@ -156,7 +156,7 @@ import "coil3.ImageLoaders"
 import "kotlinx.coroutines.Dispatchers"
 
 local request = ImageRequest.Builder(activity)
-.dispatcher(Dispatchers.Main.immediate)--(coil3 已删除)
+.coroutineContext(Dispatchers.Main.immediate)
 .data(File/DrawableRes/Drawable/Bitmap/Uri/Byte) -- 请勿使用网络图片，否则会阻塞进程导致崩溃
 .build()
 

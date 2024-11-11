@@ -7,6 +7,8 @@ import android.os.Environment
 import androidx.preference.PreferenceManager
 import coil3.ComponentRegistry
 import coil3.ImageLoader
+import coil3.PlatformContext
+import coil3.SingletonImageLoader
 import coil3.gif.AnimatedImageDecoder
 import coil3.svg.SvgDecoder
 import com.google.android.material.color.DynamicColors
@@ -18,18 +20,11 @@ import java.io.FileInputStream
 /**
  * Created by nirenr on 2019/12/13.
  */
-class LuaApplication : Application(), LuaContext {
+class LuaApplication : Application(), LuaContext, SingletonImageLoader.Factory {
     private var mExtDir: String? = null
     override fun onCreate() {
         super.onCreate()
         instance = this
-        loader = ImageLoader.Builder(this).components(ComponentRegistry.Builder().apply {
-            add(
-                if (Build.VERSION.SDK_INT >= 28) AnimatedImageDecoder.Factory()
-                else coil3.gif.GifDecoder.Factory()
-            )
-            add(SvgDecoder.Factory())
-        }.build()).build()
         getExternalFilesDir("dexfiles")?.let { rmDir(it) }
         CrashHandler.instance.init(this)
         DynamicColors.applyToActivitiesIfAvailable(this)
@@ -210,13 +205,19 @@ class LuaApplication : Application(), LuaContext {
         return getLuaPath(filename)
     }
 
+    override fun newImageLoader(context: PlatformContext): ImageLoader {
+        return ImageLoader.Builder(this).components(ComponentRegistry.Builder().apply {
+            add(
+                if (Build.VERSION.SDK_INT >= 28) AnimatedImageDecoder.Factory()
+                else coil3.gif.GifDecoder.Factory()
+            )
+            add(SvgDecoder.Factory())
+        }.build()).build()
+    }
+
     companion object {
         @JvmStatic
         lateinit var instance: LuaApplication
-
-        @JvmStatic
-        lateinit var loader: ImageLoader
-
 
         private val sGlobalData: HashMap<*, *> = HashMap<Any?, Any?>()
 
