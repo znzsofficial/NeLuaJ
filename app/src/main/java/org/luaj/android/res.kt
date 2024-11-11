@@ -9,8 +9,7 @@ import coil3.asDrawable
 import coil3.executeBlocking
 import coil3.imageLoader
 import coil3.request.ImageRequest
-import com.androlua.LuaApplication
-import com.androlua.LuaBitmap
+import coil3.toBitmap
 import com.androlua.LuaContext
 import com.androlua.LuaLayout
 import com.nekolaska.ktx.toLuaValue
@@ -191,6 +190,7 @@ class res(private val context: LuaContext) : TwoArgFunction() {
 
     private class drawable(private val activity: LuaContext, private val globals: Globals) :
         LuaValue() {
+        private val loader = activity.context.imageLoader
         private val extension = listOf(
             "bmp",
             "jpeg",
@@ -231,7 +231,7 @@ class res(private val context: LuaContext) : TwoArgFunction() {
             val p = activity.getLuaPath("res/drawable", arg)
             extension.forEach {
                 File("$p.$it").ifExists {
-                    return activity.context.imageLoader.executeBlocking(
+                    return loader.executeBlocking(
                         ImageRequest.Builder(activity.context)
                             .coroutineContext(Dispatchers.Main.immediate)
                             .data(this)
@@ -246,6 +246,20 @@ class res(private val context: LuaContext) : TwoArgFunction() {
 
     private class bitmap(private val activity: LuaContext, private val globals: Globals) :
         LuaValue() {
+        private val loader = activity.context.imageLoader
+        private val extension = listOf(
+            "bmp",
+            "jpeg",
+            "jpg",
+            "png",
+            "gif",
+            "svg",
+            "webp",
+            "heif",
+            "heic",
+            "avif"
+        )
+
         override fun type(): Int {
             return TTABLE
         }
@@ -272,24 +286,16 @@ class res(private val context: LuaContext) : TwoArgFunction() {
         override fun get(arg: String): LuaValue {
             try {
                 val p = activity.getLuaPath("res/drawable", arg)
-                if (File("$p.png").exists()) return CoerceJavaToLua.coerce(
-                    LuaBitmap.getBitmap(
-                        activity,
-                        "$p.png"
-                    )
-                )
-                if (File("$p.jpg").exists()) return CoerceJavaToLua.coerce(
-                    LuaBitmap.getBitmap(
-                        activity,
-                        "$p.jpg"
-                    )
-                )
-                if (File("$p.gif").exists()) return CoerceJavaToLua.coerce(
-                    LuaBitmap.getBitmap(
-                        activity,
-                        "$p.gif"
-                    )
-                )
+                extension.forEach {
+                    File("$p.$it").ifExists {
+                        return loader.executeBlocking(
+                            ImageRequest.Builder(activity.context)
+                                .coroutineContext(Dispatchers.Main.immediate)
+                                .data(this)
+                                .build()
+                        ).image?.toBitmap().toLuaValue()
+                    }
+                }
                 if (File("$p.lua").exists()) return globals.loadfile("$p.lua", globals).call()
                 return NIL
             } catch (e: Exception) {

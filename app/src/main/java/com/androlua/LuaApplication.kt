@@ -2,15 +2,8 @@ package com.androlua
 
 import android.app.Application
 import android.content.Context
-import android.os.Build
 import android.os.Environment
 import androidx.preference.PreferenceManager
-import coil3.ComponentRegistry
-import coil3.ImageLoader
-import coil3.PlatformContext
-import coil3.SingletonImageLoader
-import coil3.gif.AnimatedImageDecoder
-import coil3.svg.SvgDecoder
 import com.google.android.material.color.DynamicColors
 import org.luaj.Globals
 import org.luaj.LuaTable
@@ -20,7 +13,7 @@ import java.io.FileInputStream
 /**
  * Created by nirenr on 2019/12/13.
  */
-class LuaApplication : Application(), LuaContext, SingletonImageLoader.Factory {
+class LuaApplication : Application(), LuaContext {
     private var mExtDir: String? = null
     override fun onCreate() {
         super.onCreate()
@@ -205,15 +198,6 @@ class LuaApplication : Application(), LuaContext, SingletonImageLoader.Factory {
         return getLuaPath(filename)
     }
 
-    override fun newImageLoader(context: PlatformContext): ImageLoader {
-        return ImageLoader.Builder(this).components(ComponentRegistry.Builder().apply {
-            add(
-                if (Build.VERSION.SDK_INT >= 28) AnimatedImageDecoder.Factory()
-                else coil3.gif.GifDecoder.Factory()
-            )
-            add(SvgDecoder.Factory())
-        }.build()).build()
-    }
 
     companion object {
         @JvmStatic
