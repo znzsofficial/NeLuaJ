@@ -72,6 +72,7 @@ local data = {
     { text = "res", file = "module_res.md" },
     { text = "okhttp", file = "module_okhttp.md" },
     { text = "loadlayout", file = "module_loadlayout.md" },
+    { text = "FileObserver", file = "other_FileObserver.md" },
 }
 
 local adp = LuaAdapter(activity, data, item)

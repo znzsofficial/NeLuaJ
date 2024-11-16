@@ -100,6 +100,7 @@ import java.lang.Exception
 import java.lang.StringBuilder
 import java.util.ArrayList
 import java.util.HashMap
+import kotlin.system.measureTimeMillis
 
 open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnReceiveListener,
     LuaMetaTable {
@@ -1316,9 +1317,21 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         onBackPressedDispatcher.addCallback(LuaBackPressedCallback(callback))
     }
 
-    fun delay(time: Long, callback: LuaFunction) = lifecycleScope.launch {
+    fun delay(time: Long, callback: LuaValue) = lifecycleScope.launch {
         kotlinx.coroutines.delay(time)
         callback.call()
+    }
+
+    fun measureTime(action: LuaValue) = measureTimeMillis {
+        action.call()
+    }
+
+    fun repeat(interval: Int, action: LuaValue) = repeat(interval) {
+        action.call()
+    }
+
+    fun lazy(expression: LuaValue) = lazy {
+        expression.call()
     }
 
     fun getMediaDir() = externalMediaDirs[0]
