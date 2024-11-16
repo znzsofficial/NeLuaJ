@@ -93,4 +93,23 @@ this.setAllowThread(bool)
 
 -- 编译 Lua 文件
 this.dumpFile(inputPath, outputPath)
+
+-- 延迟执行
+this.delay(1000, function() 
+    print("hello")
+end)
+
+-- 测量函数执行时间，返回毫秒
+this.measureTime(function()
+end)
+
+-- 循环执行
+this.repeat(100, function()
+end
+
+-- 懒加载
+local v = this.lazy(this.getMediaDir)
+v = this.lazy(function() return "value" end)
+v = this.lazy(lambda () : "value")
+print(v.value)
 ```
