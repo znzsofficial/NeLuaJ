@@ -61,7 +61,7 @@ local item = {
 }
 
 local data = {
-    { text = "NeLuaJ+", file = "overview.md" },
+    { text = res.string.overview, file = "overview.md" },
     { text = "LuaJ++", file = "LuaJ++.md" },
     { text = "LuaActivity", file = "LuaActivity.md" },
     { text = "LuaCustRecyclerAdapter", file = "LuaCustRecyclerAdapter.md" },
@@ -73,6 +73,7 @@ local data = {
     { text = "okhttp", file = "module_okhttp.md" },
     { text = "loadlayout", file = "module_loadlayout.md" },
     { text = "FileObserver", file = "other_FileObserver.md" },
+    { text = res.string.global, file = "global_env.md" },
 }
 
 local adp = LuaAdapter(activity, data, item)
