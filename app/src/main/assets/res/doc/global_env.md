@@ -38,3 +38,5 @@
 | thread     |        线程 |
 | timer      |       定时器 |
 | call       |      调用函数 |
+| lazy       |       懒加载 |
+| dump       |      序列化表 |

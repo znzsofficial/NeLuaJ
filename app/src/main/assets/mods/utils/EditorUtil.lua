@@ -221,7 +221,7 @@ function _M.init()
     end
     mLuaEditor.addNames(ms)
     .addNames({"byte", "boolean", "short", "int", "long", "float", "double", "char"})
-    .addNames({"R","dump","toutf8","loadlayout","printf","thread","xTask"})
+    .addNames({"R","dump","toutf8","loadlayout","printf","thread","xTask","lazy"})
     .addPackage("activity",act)
     .addPackage("this",act)
     .addPackage("debug",{"debug","gethook","getinfo","getlocal","getmetatable","getregistry","getupvalue","getuservalue","sethook","setlocal","setmetatable","setupvalue","setuservalue","traceback","upvalueid","upvaluejoin"})

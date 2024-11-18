@@ -60,6 +60,7 @@ import com.androlua.LuaBroadcastReceiver.OnReceiveListener
 import com.androlua.LuaService.LuaBinder
 import com.androlua.adapter.ArrayListAdapter
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.nekolaska.ktx.firstArg
 import com.nekolaska.ktx.toLuaInstance
 import dalvik.system.DexClassLoader
 import github.znzsofficial.neluaj.R
@@ -71,6 +72,7 @@ import org.luaj.LuaFunction
 import org.luaj.LuaMetaTable
 import org.luaj.LuaTable
 import org.luaj.LuaValue
+import org.luaj.Varargs
 import org.luaj.android.AsyncOkHttp
 import org.luaj.android.call
 import org.luaj.android.file
@@ -87,6 +89,7 @@ import org.luaj.android.timer
 import org.luaj.android.xTask
 import org.luaj.compiler.DumpState
 import org.luaj.lib.ResourceFinder
+import org.luaj.lib.VarArgFunction
 import org.luaj.lib.jse.JavaPackage
 import org.luaj.lib.jse.JsePlatform
 import java.io.ByteArrayOutputStream
@@ -191,6 +194,11 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
             globals.set("call", call(this))
             globals.set("xTask", xTask(this))
             globals.set("okHttp", AsyncOkHttp(this).toLuaInstance())
+            globals.set("lazy", object : VarArgFunction() {
+                override fun invoke(args: Varargs) = lazy {
+                    args.firstArg().invoke(args.subargs(2))
+                }.toLuaInstance()
+            })
             globals.load(res(this))
             globals.load(json())
             globals.load(file())
@@ -1328,10 +1336,6 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
 
     fun repeat(interval: Int, action: LuaValue) = repeat(interval) {
         action.call()
-    }
-
-    fun lazy(expression: LuaValue) = lazy {
-        expression.call()
     }
 
     fun getMediaDir() = externalMediaDirs[0]

@@ -105,11 +105,5 @@ end)
 
 -- 循环执行
 this.repeat(100, function()
-end
-
--- 懒加载
-local v = this.lazy(this.getMediaDir)
-v = this.lazy(function() return "value" end)
-v = this.lazy(lambda () : "value")
-print(v.value)
+end)
 ```
