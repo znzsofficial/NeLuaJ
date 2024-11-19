@@ -38,7 +38,7 @@ function _M.createProject(name)
     local project_dlg = MaterialAlertDialogBuilder(this)
             .setTitle(res.string.create_project)
             .setView(loadlayout(res.layout.new_project, binding))
-    for i = 1, 500 do
+    for i = 1, 1000 do
         if File(Bean.Path.app_root_pro_dir .. "/demo" .. i).exists() then
             continue
         else
@@ -124,12 +124,12 @@ function _M.fileMenu(path, name, position)
     layout.button_rename.onClick = function()
         fileDialog.dismiss()
         MaterialAlertDialogBuilder(activity)
-                .setTitle("文件名")
+                .setTitle(res.string.file_name)
                 .setView(loadlayout(res.layout.dialog_fileinput, sublayout))
                 .setPositiveButton(android.R.string.ok, function()
             local new_path = Bean.Path.this_dir .. "/" .. tostring(sublayout.file_name.getText())
             if File(new_path).exists() then
-                _M.snack("已经存在同名文件")
+                _M.snack(res.string.have_same_name)
                 return
             end
             swipeRefresh.setRefreshing(true)
@@ -150,7 +150,7 @@ function _M.fileMenu(path, name, position)
                 .setPositiveButton(android.R.string.ok, function()
             local new_path = Bean.Path.this_dir .. "/" .. tostring(sublayout.file_name.getText())
             if File(new_path).exists() then
-                _M.snack("已经存在同名文件")
+                _M.snack(res.string.have_same_name)
             else
                 _M.newDir(new_path)
             end
@@ -166,7 +166,7 @@ function _M.fileMenu(path, name, position)
                 .setPositiveButton(android.R.string.ok, function()
             local new_path = Bean.Path.this_dir .. "/" .. tostring(sublayout.file_name.getText())
             if File(new_path).exists() then
-                _M.snack("已经存在同名文件")
+                _M.snack(res.string.have_same_name)
             else
                 swipeRefresh.setRefreshing(true)
                 LuaFileUtil.create(new_path, "")
@@ -206,7 +206,7 @@ function _M.dirMenu(path, name, position)
                 .setPositiveButton(android.R.string.ok, function()
             local new_path = Bean.Path.this_dir .. "/" .. tostring(sublayout.file_name.getText())
             if File(new_path).exists() then
-                _M.snack("已经存在同名文件")
+                _M.snack(res.string.have_same_name)
                 return
             end
             swipeRefresh.setRefreshing(true)
@@ -227,7 +227,7 @@ function _M.dirMenu(path, name, position)
                 .setPositiveButton(android.R.string.ok, function()
             local new_path = path .. "/" .. tostring(sublayout.file_name.getText())
             if File(new_path).exists() then
-                _M.snack("已经存在同名文件")
+                _M.snack(res.string.have_same_name)
             else
                 File(new_path).mkdirs()
                 _M.snack("创建成功")
@@ -244,7 +244,7 @@ function _M.dirMenu(path, name, position)
                 .setPositiveButton(android.R.string.ok, function()
             local new_path = path .. "/" .. tostring(sublayout.file_name.getText())
             if File(new_path).exists() then
-                _M.snack("已经存在同名文件")
+                _M.snack(res.string.have_same_name)
             else
                 LuaFileUtil.create(new_path, "")
                 _M.snack("创建成功")
@@ -291,9 +291,9 @@ function _M.dexDialog(path)
 end
 
 function _M.InstallApk(filePath)
-    local intent = Intent(Intent.ACTION_VIEW);
-    intent.addCategory("android.intent.category.DEFAULT");
-    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+    local intent = Intent(Intent.ACTION_VIEW)
+    intent.addCategory("android.intent.category.DEFAULT")
+    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     local uri = activity.getUriForPath(filePath)
     intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     intent.setDataAndType(uri, "application/vnd.android.package-archive")
