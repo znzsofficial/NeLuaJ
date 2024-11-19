@@ -94,7 +94,7 @@ function _M.init()
 end
 
 function _M.AnalysisImport(code,callBack)
-  task(function(code)
+  xTask(function()
     return pcall(function()
       local importClassList={}
       local buf={}
@@ -128,7 +128,7 @@ function _M.AnalysisImport(code,callBack)
       end
       return importClassList
     end)
-  end,code,map,
+  end,
   function(success,content)
     if success then
       callBack(content or {})

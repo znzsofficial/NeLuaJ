@@ -244,7 +244,7 @@ local getList = function()
     local fileArray = file.list()
 
     for _, v in (fileArray) do
-        local v = tostring(v)
+        v = tostring(v)
         local full_path = path .. "/" .. v
         if File(full_path).isDirectory() then
             local k = #DirList + 1
