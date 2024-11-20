@@ -206,7 +206,7 @@ for i=1,#aaa do
 end
 
 --分类列表为0时按钮显示灰色并禁用
-for k,v in pairs(eee) then
+for k,v in pairs(eee) do
   if table.size(v)==0 then
     local a = table.find(aaa,k)
     local _k = aaa[a]
