@@ -1,22 +1,22 @@
 return function()
-  local PackageManager=luajava.bindClass"android.content.pm.PackageManager"
-  local String=luajava.bindClass"java.lang.String"
-  local ArrayList=luajava.bindClass"java.util.ArrayList"
-  local mAppPermissions = ArrayList()
-
-  local mAppPermissionsTable = luajava.astable(activity.getPackageManager().getPackageInfo(activity.getPackageName(),PackageManager.GET_PERMISSIONS).requestedPermissions)
-
-  for k,v in pairs(mAppPermissionsTable) do
-
-    mAppPermissions.add(v)
-
-  end
-
-  local size = mAppPermissions.size()
-
-  local mArray = mAppPermissions.toArray(String[size])
-
-  activity.requestPermissions(mArray,0)
+  local permission = android.Manifest.permission
+    activity.requestPermissions({
+        permission.WRITE_EXTERNAL_STORAGE,
+        permission.READ_EXTERNAL_STORAGE,
+        permission.INTERNET,
+        permission.ACCESS_NETWORK_STATE,
+        permission.ACCESS_WIFI_STATE,
+        permission.READ_PHONE_STATE,
+        permission.CAMERA,
+        permission.RECORD_AUDIO,
+        permission.MODIFY_AUDIO_SETTINGS,
+        permission.WAKE_LOCK,
+        permission.VIBRATE,
+        permission.REQUEST_INSTALL_PACKAGES,
+        permission.BLUETOOTH_SCAN,
+        permission.BLUETOOTH_CONNECT,
+        permission.BLUETOOTH_ADVERTISE,
+    }, 0)
 
   local Build = bindClass "android.os.Build"
   local Environment = bindClass "android.os.Environment"

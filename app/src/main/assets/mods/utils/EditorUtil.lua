@@ -11,7 +11,7 @@ local _M={}
 _M.last_history = {}
 _M.fromRecy=false
 
-local _clipboardActionMode=nil
+local _clipboardActionMode = nil
 
 local function getActionMode(view)
   return ActionMode.Callback{
@@ -110,17 +110,25 @@ local function initTab()
   })
 end
 
+function _M.setSelection(i, editor)
+  editor = editor or mLuaEditor
+  editor.setSelection(i)
+end
+
 function _M.save(path, str, editor)
   editor = editor or mLuaEditor
   path = path or Bean.Path.this_file
   str = str or tostring(editor.getText())
-
   if Bean.Path.this_file == ""
     return
    elseif str == LuaFileUtil.read(path)
     return "same"
   end
-  _M.last_history[path] = editor.getSelectionEnd()
+
+  local selectionEnd = editor.getSelectionEnd()
+  _M.last_history[path] = selectionEnd
+  this.setSharedData("lastFile", path)
+  this.setSharedData("lastSelect", selectionEnd)
   -- 检查备份文件夹
   checkBackup()
   -- 保存备份
