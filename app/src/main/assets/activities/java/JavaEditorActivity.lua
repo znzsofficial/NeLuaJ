@@ -35,7 +35,7 @@ mEditor.post(function()
         activity.setTitle(File(path).getName())
     else
         mEditor.setText("")
-        activity.setTitle(res.string.nofile)
+        activity.setTitle(res.string.no_file)
     end
     mEditor.setTypeface(res.font.code)
 end)
