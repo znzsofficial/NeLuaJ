@@ -1,5 +1,4 @@
 import "java.io.File"
-import "java.lang.Runtime"
 import "com.androlua.LuaTarget"
 import "androidx.core.view.GravityCompat"
 import "android.view.LayoutInflater"
@@ -30,7 +29,7 @@ local Handler = bindClass "android.os.Handler"
 local Looper = bindClass "android.os.Looper"
 local mainLooper = Looper.getMainLooper()
 local handler = Handler(mainLooper)
-local executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors())
+local executor = Executors.newCachedThreadPool()
 
 local Bean_Path
 local res = res
@@ -116,6 +115,7 @@ _M.init = function()
             false)
 
     local inflater = LayoutInflater.from(this)
+    local itemRes = R.layout.item_file
     -- 实例化 PopupRecyclerAdapter
     adapter_rv = PopupRecyclerAdapter(
             activity,
@@ -130,7 +130,7 @@ _M.init = function()
                     return utf8.sub(FileList[position + 1].file_name, 1, 1)
                 end,
                 onCreateViewHolder = function(parent, viewType)
-                    local view = inflater.inflate(R.layout.item_file, parent, false)
+                    local view = inflater.inflate(itemRes, parent, false)
                     return FileItemHolder(view)
                 end,
                 onViewRecycled = function(holder)
