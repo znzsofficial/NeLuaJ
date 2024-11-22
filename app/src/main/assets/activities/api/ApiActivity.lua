@@ -94,7 +94,7 @@ end
 
 function copyText(str)
     activity.getSystemService(Context.CLIPBOARD_SERVICE).setText(str)
-    Toast.makeText(activity, tostring(str) .. "已复制", Toast.LENGTH_LONG).show()
+    Toast.makeText(activity, tostring(str) .. res.string.copy_success, Toast.LENGTH_LONG).show()
 end
 
 clist.onItemLongClick = function(l, v)

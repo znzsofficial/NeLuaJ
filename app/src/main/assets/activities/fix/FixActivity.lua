@@ -106,28 +106,28 @@ xTask{
 
 function onCreateOptionsMenu(menu)
   menu.add(res.string.logs).setShowAsAction(1)
-  menu.add("反选").setShowAsAction(1)
-  menu.add("复制").setShowAsAction(1)
+  menu.add(res.string.invert).setShowAsAction(1)
+  menu.add(res.string.copy).setShowAsAction(1)
 end
 
 
 function onOptionsItemSelected(item)
-  if item.Title=="复制" then
+  if item.Title==res.string.copy then
       local insert = table.insert
-      local buf={}
-      local cm=activity.getSystemService(Context.CLIPBOARD_SERVICE)
-      local cs=list.getCheckedItemPositions()
-      local buf={}
-      for n=1, #clazzList do
+      local buffer = {}
+      local cm = activity.getSystemService(Context.CLIPBOARD_SERVICE)
+      local cs = list.getCheckedItemPositions()
+      local buffer = {}
+      for n = 0, #clazzList do
         if cs.get(n) then
-          insert(buf,string.format("import \"%s\"",clazzList[n]))
+          insert(buffer, string.format("import \"%s\"",clazzList[n+1]))
         end
       end
 
-      local str=table.concat(buf,"\n")
-      local cd = ClipData.newPlainText("label", str)
+      local str=table.concat(buffer,"\n")
+      local cd = ClipData.newPlainText("import", str)
       cm.setPrimaryClip(cd)
-      Toast.makeText(activity,"已复制到剪切板", 1000).show()
+      Toast.makeText(activity,res.string.copy_success, 1000).show()
    elseif item.title=="反选" then
     try
       for n=0,#clazzList-1 do
