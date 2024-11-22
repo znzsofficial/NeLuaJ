@@ -395,7 +395,7 @@ ed.addTextChangedListener{
 --长按
 li.onItemLongClick=function(l,v)
   thisField=v.Tag.ez.Text
-  Toast.makeText(activity,thisField.."复制成功", Toast.LENGTH_LONG).show()
+  Toast.makeText(activity,thisField..res.string.copy_success, Toast.LENGTH_LONG).show()
   copyText(tostring(thisField))
   return true
 end
@@ -449,7 +449,7 @@ li.onItemClick=function(l,v,a,b)
   bu1="全部复制"
   bu2="无参复制"
   bu3="选中查询"
-  fff="参值"
+  valueType = res.string.parameter_value
   v.BackgroundColor = 0xFFFFFFFF
   nnn=publictable[b]
   thisField=v.Tag.ez.Text
@@ -539,32 +539,32 @@ li.onItemClick=function(l,v,a,b)
 
 
     if tag=="hh"then
-      fff="资源ID"
+      valueType="资源ID"
       if sph.getSelectedView().Tag.text.Text == "color" then
         load("value=tostring(activity.getResources().getColor("..value.."))")()
         asf.setVisibility(1)
         asf.BackgroundColor=tonumber(value)
-        fff="色码"
+        valueType="色码"
       end
       if sph.getSelectedView().Tag.text.Text == "drawable" then
         asg.setVisibility(1)
         asd.setVisibility(8)
         asg.setBackground(activity.getResources().getDrawable(tonumber(value)))
         value="ImageView.setBackground(activity.getResources().getDrawable("..tonumber(value).."))"
-        fff="方法"
+        valueType=res.string.method
       end
       if sph.getSelectedView().Tag.text.Text == "string" then
         load("value=tostring(activity.getResources().getString("..value.."))")()
-        fff="字符"
+        valueType="字符"
       end
     end
-    asd.setText(thisField.."\n\n"..fff..": "..value)
-    dialog.setNegativeButton("复制字段",{onClick=function(v)
+    asd.setText(thisField.."\n\n"..valueType..": "..value)
+    dialog.setNegativeButton(res.string.copy_field, function(v)
         copyText(thisField)
-    end})
-    dialog.setNeutralButton("复制"..fff,{onClick=function(v)
+    end)
+    dialog.setNeutralButton(string.format(res.string.copy_value, valueType), function(v)
         copyText(value)
-    end})
+    end)
 
   end
   if tag=="aa"or tag=="dd"then
