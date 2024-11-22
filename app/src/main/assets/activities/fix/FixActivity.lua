@@ -118,7 +118,7 @@ function onOptionsItemSelected(item)
       local cm=activity.getSystemService(Context.CLIPBOARD_SERVICE)
       local cs=list.getCheckedItemPositions()
       local buf={}
-      for n=0,#clazzList-1 do
+      for n=1, #clazzList do
         if cs.get(n) then
           insert(buf,string.format("import \"%s\"",clazzList[n]))
         end
@@ -127,7 +127,7 @@ function onOptionsItemSelected(item)
       local str=table.concat(buf,"\n")
       local cd = ClipData.newPlainText("label", str)
       cm.setPrimaryClip(cd)
-      Toast.makeText(activity,"已复制到剪切板",1000).show()
+      Toast.makeText(activity,"已复制到剪切板", 1000).show()
    elseif item.title=="反选" then
     try
       for n=0,#clazzList-1 do
