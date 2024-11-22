@@ -45,7 +45,7 @@ menu.add(res.string.close_file).onMenuItemClick = function(a)
         if mTab.getTabCount() == 0 then
             PathManager.update_this_file("")
             activity.setTitle("NeLuaJ+")
-            activity.getSupportActionBar().setSubtitle(res.string.nofile)
+            activity.getSupportActionBar().setSubtitle(res.string.no_file)
             Bean.Project.this_project = ""
             mLuaEditor.setVisibility(4)
         end
@@ -73,7 +73,7 @@ menu.add(res.string.close_all).onMenuItemClick = function(a)
     PathManager.update_this_file("")
     Bean.Project.this_project = ""
     activity.setTitle("NeLuaJ+")
-    activity.getSupportActionBar().setSubtitle(res.string.nofile)
+    activity.getSupportActionBar().setSubtitle(res.string.no_file)
     mLuaEditor.setVisibility(4)
 end
 local menu1 = menu.addSubMenu(res.string.copy)
@@ -116,7 +116,7 @@ tabTable[path] = nil
 if mTab.getTabCount() == 0
 Bean.Path.this_file = ""
 activity.setTitle("NeLuaJ+")
-activity.getSupportActionBar().setSubtitle(res.string.nofile)
+activity.getSupportActionBar().setSubtitle(res.string.no_file)
 mLuaEditor.setVisibility(4)
 end
 end
