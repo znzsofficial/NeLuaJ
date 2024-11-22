@@ -1323,7 +1323,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
 
     fun delay(time: Long, callback: LuaValue) = lifecycleScope.launch {
         kotlinx.coroutines.delay(time)
-        callback.call()
+        runCatching { callback.call() }.onFailure { sendError("delay", it as Exception) }
     }
 
     fun measureTime(action: LuaValue) = measureTimeMillis {
