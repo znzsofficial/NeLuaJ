@@ -21,7 +21,7 @@ return function()
   search_down.onClick=function()
 
     if mLuaEditor.getVisibility() == 4 then
-      print(res.string.nofile)
+      print(res.string.no_file)
       return true
     end
     if mSearchEdit.Text==nil or mSearchEdit.Text=="" then
@@ -82,7 +82,7 @@ return function()
   search_up.onClick=function()
 
     if mLuaEditor.getVisibility() == 4 then
-      print(res.string.nofile)
+      print(res.string.no_file)
       return true
     end
     if mSearchEdit.Text==nil or mSearchEdit.Text=="" then
