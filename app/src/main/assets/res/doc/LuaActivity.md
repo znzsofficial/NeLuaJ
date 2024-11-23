@@ -103,6 +103,9 @@ end)
 this.measureTime(function()
 end)
 
+-- 加载编译后的 xml 布局，返回视图
+this.loadXmlView(File(this.getLuaDir("test.xml")))
+
 -- 循环执行
 this.repeat(100, function()
 end)
