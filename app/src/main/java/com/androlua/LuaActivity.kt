@@ -1,6 +1,7 @@
 package com.androlua
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.ActivityManager.TaskDescription
 import android.content.BroadcastReceiver
 import android.content.ClipData
@@ -12,6 +13,7 @@ import android.content.IntentFilter
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.content.res.XmlResourceParser
 import android.graphics.BitmapFactory
 import android.graphics.BlendMode
 import android.graphics.BlendModeColorFilter
@@ -1336,6 +1338,21 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
 
     fun getMediaDir() = externalMediaDirs[0]
 
+    @SuppressLint("DiscouragedPrivateApi")
+    @Suppress("PrivateApi")
+    fun loadXmlView(file: File) =
+        runCatching {
+            val cls = Class.forName("android.content.res.XmlBlock")
+            val declaredMethod = cls.getDeclaredMethod("newParser")
+            declaredMethod.isAccessible = true
+            layoutInflater.inflate(
+                declaredMethod.invoke(cls.getConstructor(ByteArray::class.java).apply {
+                    isAccessible = true
+                }.newInstance(file.readBytes())) as XmlResourceParser,
+                null
+            )
+        }.getOrNull()
+
     private val dumpGlobals by lazy { JsePlatform.standardGlobals() }
     private fun getByteArray(path: String?): ByteArray {
         val closure = dumpGlobals.loadfile(path).checkfunction(1) as LuaClosure
@@ -1343,7 +1360,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         return try {
             DumpState.dump(closure.c, stream, true)
             stream.toByteArray()
-        } catch (e: kotlin.Exception) {
+        } catch (e: Exception) {
             throw LuaError(e)
         }
     }
