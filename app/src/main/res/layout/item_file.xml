@@ -13,7 +13,6 @@
     app:cardCornerRadius="32dp"
     app:strokeWidth="0px">
 
-
     <com.google.android.material.textview.MaterialTextView
         android:id="@+id/item_name"
         android:layout_width="match_parent"
