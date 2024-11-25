@@ -181,55 +181,57 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         globals.s.e = mLuaDexLoader.classLoaders
         sActivity = this
         try {
-            globals.jset("activity", this)
-            globals.jset("this", this)
-            globals.set("print", print(this))
-            globals.set("printf", printf(this))
-            globals.set("loadlayout", loadlayout(this))
-            globals.set("task", task(this))
-            globals.set("thread", thread(this))
-            globals.set("timer", timer(this))
-            globals.set("call", call(this))
-            globals.set("xTask", xTask(this))
-            globals.set("okHttp", AsyncOkHttp(this).toLuaInstance())
-            globals.set("lazy", object : VarArgFunction() {
-                override fun invoke(args: Varargs) = lazy {
-                    args.firstArg().invoke(args.subargs(2))
-                }.toLuaInstance()
-            })
-            globals.load(res(this))
-            globals.load(json())
-            globals.load(file())
-            globals.load(okhttp())
-            globals.jset("Http", Http::class.java)
-            globals.jset("http", http::class.java)
-            globals.jset("R", R::class.java)
-            globals.set("android", JavaPackage("android"))
-            var arg = intent.getSerializableExtra(ARG) as Array<Any?>?
-            if (arg == null) arg = arrayOfNulls<Any>(0)
-            doFile(luaFile, *arg)
-            runMainFunc(pageName, *arg)
-            runFunc("onCreate")
-            if (!isSetViewed) showLogView(false)
-            globals.get("onKeyShortcut").apply {
-                mOnKeyShortcut = if (isnil()) null
-                else this
-            }
-            globals.get("onKeyDown").apply {
-                mOnKeyDown = if (isnil()) null
-                else this
-            }
-            globals.get("onKeyUp").apply {
-                mOnKeyUp = if (isnil()) null
-                else this
-            }
-            globals.get("onKeyLongPress").apply {
-                mOnKeyLongPress = if (isnil()) null
-                else this
-            }
-            globals.get("onTouchEvent").apply {
-                mOnTouchEvent = if (isnil()) null
-                else this
+            globals.let{
+                it.jset("activity", this)
+                it.jset("this", this)
+                it.set("print", print(this))
+                it.set("printf", printf(this))
+                it.set("loadlayout", loadlayout(this))
+                it.set("task", task(this))
+                it.set("thread", thread(this))
+                it.set("timer", timer(this))
+                it.set("call", call(this))
+                it.set("xTask", xTask(this))
+                it.set("okHttp", AsyncOkHttp(this).toLuaInstance())
+                it.set("lazy", object : VarArgFunction() {
+                    override fun invoke(args: Varargs) = lazy {
+                        args.firstArg().invoke(args.subargs(2))
+                    }.toLuaInstance()
+                })
+                it.load(res(this))
+                it.load(json())
+                it.load(file())
+                it.load(okhttp())
+                it.jset("Http", Http::class.java)
+                it.jset("http", http::class.java)
+                it.jset("R", R::class.java)
+                it.set("android", JavaPackage("android"))
+                var arg = intent.getSerializableExtra(ARG) as Array<Any?>?
+                if (arg == null) arg = arrayOfNulls<Any>(0)
+                doFile(luaFile, *arg)
+                runMainFunc(pageName, *arg)
+                runFunc("onCreate")
+                if (!isSetViewed) showLogView(false)
+                it.get("onKeyShortcut").apply {
+                    mOnKeyShortcut = if (isnil()) null
+                    else this
+                }
+                it.get("onKeyDown").apply {
+                    mOnKeyDown = if (isnil()) null
+                    else this
+                }
+                it.get("onKeyUp").apply {
+                    mOnKeyUp = if (isnil()) null
+                    else this
+                }
+                it.get("onKeyLongPress").apply {
+                    mOnKeyLongPress = if (isnil()) null
+                    else this
+                }
+                it.get("onTouchEvent").apply {
+                    mOnTouchEvent = if (isnil()) null
+                    else this
+                }
             }
             if (intent.getBooleanExtra(
                     "isVersionChanged",
