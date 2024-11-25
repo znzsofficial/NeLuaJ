@@ -73,6 +73,7 @@ local data = {
     { text = "res", file = "module_res.md" },
     { text = "okhttp", file = "module_okhttp.md" },
     { text = "loadlayout", file = "module_loadlayout.md" },
+    { text = "file", file = "module_file.md" },
     { text = "FileObserver", file = "other_FileObserver.md" },
     { text = res.string.global, file = "global_env.md" },
 }

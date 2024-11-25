@@ -1,5 +1,6 @@
 package org.luaj.android
 
+import android.content.Context
 import com.androlua.LuaContext
 import com.androlua.LuaLayout
 import com.nekolaska.ktx.argAt
@@ -15,9 +16,10 @@ class loadlayout(context: LuaContext) : VarArgFunction() {
 
     override fun invoke(args: Varargs): Varargs {
         return when (args.narg()) {
-            1 -> LuaLayout(mContext.context).load(args.firstArg(), globals)
-            2 -> LuaLayout(mContext.context).load(args.firstArg(), args.secondArg().checktable())
-            3 -> LuaLayout(mContext.context).load(
+            // use cast instead of LuaContext.getContext
+            1 -> LuaLayout(mContext as Context).load(args.firstArg(), globals)
+            2 -> LuaLayout(mContext as Context).load(args.firstArg(), args.secondArg().checktable())
+            3 -> LuaLayout(mContext as Context).load(
                 args.firstArg(),
                 args.secondArg().checktable(),
                 args.argAt(3)
