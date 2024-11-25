@@ -22,16 +22,17 @@ class file : TwoArgFunction() {
 
     override fun call(modname: LuaValue?, env: LuaValue): LuaValue? {
         mGlobals = env.checkglobals()
-        val file = LuaTable()
-        file.set("readall", readall())
-        file.set("list", list())
-        file.set("exists", exists())
-        file.set("save", save())
-        file.set("type", _type())
-        file.set("info", info())
-        file.set("mkdir", mkdir())
-        env.set("file", file)
-        if (!env.get("package").isnil()) env.get("package").get("loaded").set("file", file)
+        if (!env.get("package").isnil()) env.get("package").get("loaded")
+            .set("file", LuaTable().apply {
+                set("readall", readall())
+                set("list", list())
+                set("exists", exists())
+                set("save", save())
+                set("type", _type())
+                set("info", info())
+                set("mkdir", mkdir())
+                env.set("file", this@apply)
+            })
         return NIL
     }
 

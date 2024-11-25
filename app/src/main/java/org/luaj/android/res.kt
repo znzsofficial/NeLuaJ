@@ -30,13 +30,14 @@ inline fun File.ifExists(block: File.() -> Unit) {
 class res(private val context: LuaContext) : TwoArgFunction() {
     override fun call(modName: LuaValue, env: LuaValue): LuaValue {
         val globals = env.checkglobals()
-        val res = LuaTable()
-        res["string"] = string(context, globals)
-        res["drawable"] = drawable(context, globals)
-        res["bitmap"] = bitmap(context, globals)
-        res["layout"] = layout(context, globals)
-        res["view"] = view(context, globals)
-        res["font"] = font(context)
+        val res = LuaTable().also {
+            it["string"] = string(context, globals)
+            it["drawable"] = drawable(context, globals)
+            it["bitmap"] = bitmap(context, globals)
+            it["layout"] = layout(context, globals)
+            it["view"] = view(context, globals)
+            it["font"] = font(context)
+        }
         if (context is Activity) {
             val configuration = context.resources.configuration
             res["dimen"] = dimen(context, globals, configuration)
