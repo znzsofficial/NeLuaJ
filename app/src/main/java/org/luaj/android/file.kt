@@ -64,7 +64,7 @@ class file : TwoArgFunction() {
     private inner class info : OneArgFunction() {
         override fun call(arg: LuaValue): LuaValue {
             val ret = LuaTable()
-            val f: File = File(mGlobals.finder.findFile(arg.tojstring()))
+            val f = File(mGlobals.finder.findFile(arg.tojstring()))
             ret.jset("type", if (f.isDirectory()) "dir" else "file")
             if (!f.exists()) ret.jset("type", "")
             ret.jset("path", f.absolutePath)
