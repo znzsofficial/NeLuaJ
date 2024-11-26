@@ -1,3 +1,4 @@
+import com.android.build.api.dsl.Packaging
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -49,6 +50,7 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+    packagingOptions.resources.excludes.add("META-INF/androidx/emoji2/emoji2/LICENSE.txt")
     applicationVariants.all {
         outputs.all {
             val currentDateTime = LocalDateTime.now()
