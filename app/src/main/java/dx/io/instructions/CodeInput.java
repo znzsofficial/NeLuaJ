@@ -26,20 +26,20 @@ public interface CodeInput extends CodeCursor {
      * Returns whether there are any more code units to read. This
      * is analogous to {@code hasNext()} on an interator.
      */
-    public boolean hasMore();
+    boolean hasMore();
 
     /**
      * Reads a code unit.
      */
-    public int read() throws EOFException;
+    int read() throws EOFException;
 
     /**
      * Reads two code units, treating them as a little-endian {@code int}.
      */
-    public int readInt() throws EOFException;
+    int readInt() throws EOFException;
 
     /**
      * Reads four code units, treating them as a little-endian {@code long}.
      */
-    public long readLong() throws EOFException;
+    long readLong() throws EOFException;
 }

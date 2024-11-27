@@ -63,7 +63,7 @@ public final class Form10t extends InsnFormat {
             return false;
         }
 
-        return ti.hasTargetOffset() ? branchFits(ti) : true;
+        return !ti.hasTargetOffset() || branchFits(ti);
     }
 
     /** {@inheritDoc} */

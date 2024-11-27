@@ -395,7 +395,7 @@ public final class PhiInsn extends SsaInsn {
     /**
      * Visitor interface for instances of this (outer) class.
      */
-    public static interface Visitor {
-        public void visitPhiInsn(PhiInsn insn);
+    public interface Visitor {
+        void visitPhiInsn(PhiInsn insn);
     }
 }

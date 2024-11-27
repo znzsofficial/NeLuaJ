@@ -70,7 +70,7 @@ public final class Form21t extends InsnFormat {
             return false;
         }
 
-        return ti.hasTargetOffset() ? branchFits(ti) : true;
+        return !ti.hasTargetOffset() || branchFits(ti);
     }
 
     /** {@inheritDoc} */

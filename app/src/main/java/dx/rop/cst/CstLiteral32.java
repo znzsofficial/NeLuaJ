@@ -82,6 +82,6 @@ public abstract class CstLiteral32
     /** {@inheritDoc} */
     @Override
     public final long getLongBits() {
-        return (long) bits;
+        return bits;
     }
 }

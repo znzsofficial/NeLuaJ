@@ -29,7 +29,7 @@ public interface CatchBuilder {
      *
      * @return {@code non-null;} the constructed table
      */
-    public CatchTable build();
+    CatchTable build();
 
     /**
      * Gets whether this instance has any catches at all (either typed
@@ -37,12 +37,12 @@ public interface CatchBuilder {
      *
      * @return whether this instance has any catches at all
      */
-    public boolean hasAnyCatches();
+    boolean hasAnyCatches();
 
     /**
      * Gets the set of catch types associated with this instance.
      *
      * @return {@code non-null;} the set of catch types
      */
-    public HashSet<Type> getCatchTypes();
+    HashSet<Type> getCatchTypes();
 }

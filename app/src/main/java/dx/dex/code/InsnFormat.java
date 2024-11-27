@@ -279,7 +279,7 @@ public abstract class InsnFormat {
         long bits;
 
         if (value instanceof CstLiteral64) {
-            bits = ((CstLiteral64) value).getLongBits();
+            bits = value.getLongBits();
         } else {
             bits = value.getIntBits();
         }

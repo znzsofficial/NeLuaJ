@@ -39,7 +39,7 @@ import dx.util.Hex;
  * have a larger alignment requirement than the alignment of this instance.
  */
 public final class MixedItemSection extends Section {
-    static enum SortType {
+    enum SortType {
         /** no sorting */
         NONE,
 

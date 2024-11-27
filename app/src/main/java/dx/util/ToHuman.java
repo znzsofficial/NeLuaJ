@@ -27,5 +27,5 @@ public interface ToHuman {
      *
      * @return {@code non-null;} the human string form
      */
-    public String toHuman();
+    String toHuman();
 }

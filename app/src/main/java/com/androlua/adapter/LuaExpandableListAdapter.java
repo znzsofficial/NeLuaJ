@@ -34,30 +34,30 @@ import java.util.HashMap;
 
 public class LuaExpandableListAdapter extends BaseExpandableListAdapter {
 
-    private BitmapDrawable mDraw;
-    private Resources mRes;
-    private Globals L;
-    private LuaContext mContext;
+    private final BitmapDrawable mDraw;
+    private final Resources mRes;
+    private final Globals L;
+    private final LuaContext mContext;
 
-    private LuaTable mGroupData;
-    private LuaTable mChildData;
+    private final LuaTable mGroupData;
+    private final LuaTable mChildData;
 
-    private HashMap<View, Animation> mAnimCache = new HashMap<View, Animation>();
+    private final HashMap<View, Animation> mAnimCache = new HashMap<View, Animation>();
 
-    private LuaTable mGroupLayout;
-    private LuaTable mChildLayout;
+    private final LuaTable mGroupLayout;
+    private final LuaTable mChildLayout;
 
-    private LuaLayout loadlayout;
+    private final LuaLayout loadlayout;
 
     private boolean updateing;
 
     private LuaValue mAnimationUtil;
-    private LuaValue LayoutParams = CoerceJavaToLua.coerce(AdapterView.LayoutParams.class);
+    private final LuaValue LayoutParams = CoerceJavaToLua.coerce(AdapterView.LayoutParams.class);
 
     private boolean mNotifyOnChange;
 
     @SuppressLint("HandlerLeak")
-    private Handler mHandler =
+    private final Handler mHandler =
             new Handler() {
                 @Override
                 public void handleMessage(Message msg) {
@@ -65,7 +65,7 @@ public class LuaExpandableListAdapter extends BaseExpandableListAdapter {
                 }
             };
 
-    private HashMap<String, Boolean> loaded = new HashMap<String, Boolean>();
+    private final HashMap<String, Boolean> loaded = new HashMap<String, Boolean>();
 
     public LuaExpandableListAdapter(LuaContext context, LuaTable groupLayout, LuaTable childLayout)
             throws LuaError {
@@ -337,7 +337,7 @@ public class LuaExpandableListAdapter extends BaseExpandableListAdapter {
         for (LuaValue set : sets) {
             String key2 = set.tojstring();
             Object value2 = fields.jget(key2);
-            if (key2.toLowerCase().equals("src")) setHelper(view, value2);
+            if (key2.equalsIgnoreCase("src")) setHelper(view, value2);
             else javaSetter(view, key2, value2);
         }
     }
@@ -370,7 +370,7 @@ public class LuaExpandableListAdapter extends BaseExpandableListAdapter {
     }
 
     private class GroupItem {
-        private LuaTable mData;
+        private final LuaTable mData;
 
         public GroupItem(LuaTable item) {
             mData = item;

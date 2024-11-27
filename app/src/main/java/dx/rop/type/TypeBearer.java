@@ -28,7 +28,7 @@ public interface TypeBearer
      *
      * @return {@code non-null;} the type
      */
-    public Type getType();
+    Type getType();
 
     /**
      * Gets the frame type corresponding to this type. This method returns
@@ -39,7 +39,7 @@ public interface TypeBearer
      *
      * @return {@code non-null;} the frame type for this instance
      */
-    public TypeBearer getFrameType();
+    TypeBearer getFrameType();
 
     /**
      * Gets the basic type corresponding to this instance.
@@ -47,7 +47,7 @@ public interface TypeBearer
      * @return the basic type; one of the {@code BT_*} constants
      * defined by {@link Type}
      */
-    public int getBasicType();
+    int getBasicType();
 
     /**
      * Gets the basic type corresponding to this instance's frame type. This
@@ -62,7 +62,7 @@ public interface TypeBearer
      * @return the basic frame type; one of the {@code BT_*} constants
      * defined by {@link Type}
      */
-    public int getBasicFrameType();
+    int getBasicFrameType();
 
     /**
      * Returns whether this instance represents a constant value.
@@ -70,5 +70,5 @@ public interface TypeBearer
      * @return {@code true} if this instance represents a constant value
      * and {@code false} if not
      */
-    public boolean isConstant();
+    boolean isConstant();
 }

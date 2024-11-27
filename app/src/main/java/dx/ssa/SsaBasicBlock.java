@@ -672,7 +672,7 @@ public final class SsaBasicBlock {
         int category = rs.getCategory();
 
         return regsUsed.get(reg)
-                || (category == 2 ? regsUsed.get(reg + 1) : false);
+                || (category == 2 && regsUsed.get(reg + 1));
     }
 
     /**

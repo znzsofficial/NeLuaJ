@@ -78,7 +78,7 @@ public class LuaService extends Service
     private ArrayList<String> permissions;
     private boolean isSetViewed;
     private LuaDexLoader mLuaDexLoader;
-    private ArrayList<LuaGcable> mGc = new ArrayList<>();
+    private final ArrayList<LuaGcable> mGc = new ArrayList<>();
     private LuaBroadcastReceiver mReceiver;
     private String pageName = "main";
 

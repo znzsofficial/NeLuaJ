@@ -26,7 +26,7 @@ public interface CodeCursor {
      * written, where the input generally consists of the code for a
      * single method.
      */
-    public int cursor();
+    int cursor();
 
     /**
      * Gets the base address associated with the current cursor. This
@@ -36,12 +36,12 @@ public interface CodeCursor {
      * addresses are relative to the address of a dependant switch
      * instruction.
      */
-    public int baseAddressForCursor();
+    int baseAddressForCursor();
 
     /**
      * Sets the base address for the given target address to be as indicated.
      *
      * @see #baseAddressForCursor
      */
-    public void setBaseAddress(int targetAddress, int baseAddress);
+    void setBaseAddress(int targetAddress, int baseAddress);
 }

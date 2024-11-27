@@ -88,7 +88,7 @@ public final class LocalList extends FixedSizeList {
     /**
      * Disposition of a local entry.
      */
-    public static enum Disposition {
+    public enum Disposition {
         /** local started (introduced) */
         START,
 

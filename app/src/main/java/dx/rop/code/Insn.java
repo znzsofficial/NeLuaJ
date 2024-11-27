@@ -390,48 +390,48 @@ public abstract class Insn implements ToHuman {
     /**
      * Visitor interface for this (outer) class.
      */
-    public static interface Visitor {
+    public interface Visitor {
         /**
          * Visits a {@link PlainInsn}.
          *
          * @param insn {@code non-null;} the instruction to visit
          */
-        public void visitPlainInsn(PlainInsn insn);
+        void visitPlainInsn(PlainInsn insn);
 
         /**
          * Visits a {@link PlainCstInsn}.
          *
          * @param insn {@code non-null;} the instruction to visit
          */
-        public void visitPlainCstInsn(PlainCstInsn insn);
+        void visitPlainCstInsn(PlainCstInsn insn);
 
         /**
          * Visits a {@link SwitchInsn}.
          *
          * @param insn {@code non-null;} the instruction to visit
          */
-        public void visitSwitchInsn(SwitchInsn insn);
+        void visitSwitchInsn(SwitchInsn insn);
 
         /**
          * Visits a {@link ThrowingCstInsn}.
          *
          * @param insn {@code non-null;} the instruction to visit
          */
-        public void visitThrowingCstInsn(ThrowingCstInsn insn);
+        void visitThrowingCstInsn(ThrowingCstInsn insn);
 
         /**
          * Visits a {@link ThrowingInsn}.
          *
          * @param insn {@code non-null;} the instruction to visit
          */
-        public void visitThrowingInsn(ThrowingInsn insn);
+        void visitThrowingInsn(ThrowingInsn insn);
 
         /**
          * Visits a {@link FillArrayDataInsn}.
          *
          * @param insn {@code non-null;} the instruction to visit
          */
-        public void visitFillArrayDataInsn(FillArrayDataInsn insn);
+        void visitFillArrayDataInsn(FillArrayDataInsn insn);
     }
 
     /**

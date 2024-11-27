@@ -328,9 +328,8 @@ public class SsaConverter {
             System.out.println("defsites");
 
             for (int i = 0; i < regCount; i++) {
-                StringBuilder sb = new StringBuilder();
-                sb.append('v').append(i).append(": ");
-                sb.append(defsites[i].toString());
+                String sb = "v" + i + ": " +
+                        defsites[i].toString();
                 System.out.println(sb);
             }
         }
@@ -381,9 +380,8 @@ public class SsaConverter {
             System.out.println("phisites");
 
             for (int i = 0; i < regCount; i++) {
-                StringBuilder sb = new StringBuilder();
-                sb.append('v').append(i).append(": ");
-                sb.append(phisites[i].toString());
+                String sb = "v" + i + ": " +
+                        phisites[i].toString();
                 System.out.println(sb);
             }
         }

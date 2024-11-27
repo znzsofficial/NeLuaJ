@@ -181,16 +181,15 @@ public final class MapItem extends OffsettedItem {
     /** {@inheritDoc} */
     @Override
     public String toString() {
-        StringBuffer sb = new StringBuffer(100);
 
-        sb.append(getClass().getName());
-        sb.append('{');
-        sb.append(section.toString());
-        sb.append(' ');
-        sb.append(type.toHuman());
-        sb.append('}');
+        String sb = getClass().getName() +
+                '{' +
+                section.toString() +
+                ' ' +
+                type.toHuman() +
+                '}';
 
-        return sb.toString();
+        return sb;
     }
 
     /** {@inheritDoc} */

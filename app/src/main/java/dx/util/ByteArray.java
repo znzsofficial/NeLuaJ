@@ -282,7 +282,7 @@ public final class ByteArray {
          *
          * @return {@code 0..size();} the cursor
          */
-        public int getCursor();
+        int getCursor();
     }
 
     /**

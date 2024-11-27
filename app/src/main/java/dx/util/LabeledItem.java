@@ -26,5 +26,5 @@ public interface LabeledItem {
      *
      * @return {@code >= 0;} the label
      */
-    public int getLabel();
+    int getLabel();
 }

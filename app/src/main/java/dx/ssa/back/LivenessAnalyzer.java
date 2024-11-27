@@ -69,7 +69,7 @@ public class LivenessAnalyzer {
     private NextFunction nextFunction;
 
     /** constants for {@link #nextFunction} */
-    private static enum NextFunction {
+    private enum NextFunction {
         LIVE_IN_AT_STATEMENT,
             LIVE_OUT_AT_STATEMENT,
             LIVE_OUT_AT_BLOCK,

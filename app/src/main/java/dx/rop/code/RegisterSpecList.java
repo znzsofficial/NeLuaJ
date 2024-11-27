@@ -384,7 +384,7 @@ public final class RegisterSpecList
 
         for (int i = 0; i < sz; i++) {
             RegisterSpec one = (RegisterSpec) get0(i);
-            boolean replace = (compatRegs == null) ? true : !compatRegs.get(i);
+            boolean replace = compatRegs == null || !compatRegs.get(i);
 
             if (replace) {
                 result.set0(i, one.withReg(base));
