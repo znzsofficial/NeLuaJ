@@ -60,7 +60,7 @@ public enum ItemType implements ToHuman {
      * @param mapValue value when represented in a {@link MapItem}
      * @param typeName {@code non-null;} name of the type
      */
-    private ItemType(int mapValue, String typeName) {
+    ItemType(int mapValue, String typeName) {
         this.mapValue = mapValue;
         this.typeName = typeName;
 

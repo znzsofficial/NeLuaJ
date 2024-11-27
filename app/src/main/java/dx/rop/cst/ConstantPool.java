@@ -29,7 +29,7 @@ public interface ConstantPool {
      *
      * @return {@code >= 1;} the size
      */
-    public int size();
+    int size();
 
     /**
      * Get the {@code n}th entry in the constant pool, which must
@@ -40,7 +40,7 @@ public interface ConstantPool {
      * @throws IllegalArgumentException thrown if {@code n} is
      * in-range but invalid
      */
-    public Constant get(int n);
+    Constant get(int n);
 
     /**
      * Get the {@code n}th entry in the constant pool, which must
@@ -52,7 +52,7 @@ public interface ConstantPool {
      * @throws IllegalArgumentException thrown if {@code n} is
      * in-range and non-zero but invalid
      */
-    public Constant get0Ok(int n);
+    Constant get0Ok(int n);
 
     /**
      * Get the {@code n}th entry in the constant pool, or
@@ -66,5 +66,5 @@ public interface ConstantPool {
      * @return {@code null-ok;} the corresponding entry, or {@code null} if
      * the index is in-range but invalid
      */
-    public Constant getOrNull(int n);
+    Constant getOrNull(int n);
 }

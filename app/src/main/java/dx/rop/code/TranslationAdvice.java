@@ -36,8 +36,8 @@ public interface TranslationAdvice {
      * @return {@code true} iff the target can represent the operation
      * using a constant for the last argument
      */
-    public boolean hasConstantOperation(Rop opcode,
-                                        RegisterSpec sourceA, RegisterSpec sourceB);
+    boolean hasConstantOperation(Rop opcode,
+                                 RegisterSpec sourceA, RegisterSpec sourceB);
 
     /**
      * Returns true if the translation target requires the sources of the
@@ -48,7 +48,7 @@ public interface TranslationAdvice {
      * @return {@code true} iff the target requires the sources to be
      * in order and contiguous.
      */
-    public boolean requiresSourcesInOrder(Rop opcode, RegisterSpecList sources);
+    boolean requiresSourcesInOrder(Rop opcode, RegisterSpecList sources);
 
     /**
      * Gets the maximum register width that can be represented optimally.
@@ -58,5 +58,5 @@ public interface TranslationAdvice {
      *
      * @return register count noted above
      */
-    public int getMaxOptimalRegisterCount();
+    int getMaxOptimalRegisterCount();
 }

@@ -264,7 +264,7 @@ public class LuaMultiAdapter extends BaseAdapter {
         for (LuaValue set : sets) {
             String key2 = set.tojstring();
             Object value2 = fields.jget(key2);
-            if (key2.toLowerCase().equals("src")) setHelper(view, value2);
+            if (key2.equalsIgnoreCase("src")) setHelper(view, value2);
             else javaSetter(view, key2, value2);
         }
     }

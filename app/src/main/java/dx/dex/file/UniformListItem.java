@@ -107,12 +107,11 @@ public final class UniformListItem<T extends OffsettedItem>
     /** {@inheritDoc} */
     @Override
     public String toString() {
-        StringBuffer sb = new StringBuffer(100);
 
-        sb.append(getClass().getName());
-        sb.append(items);
+        String sb = getClass().getName() +
+                items;
 
-        return sb.toString();
+        return sb;
     }
 
     /** {@inheritDoc} */

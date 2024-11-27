@@ -155,28 +155,28 @@ public final class ValueEncoder {
             }
             case VALUE_STRING: {
                 int index = file.getStringIds().indexOf((CstString) cst);
-                writeUnsignedIntegralValue(type, (long) index);
+                writeUnsignedIntegralValue(type, index);
                 break;
             }
             case VALUE_TYPE: {
                 int index = file.getTypeIds().indexOf((CstType) cst);
-                writeUnsignedIntegralValue(type, (long) index);
+                writeUnsignedIntegralValue(type, index);
                 break;
             }
             case VALUE_FIELD: {
                 int index = file.getFieldIds().indexOf((CstFieldRef) cst);
-                writeUnsignedIntegralValue(type, (long) index);
+                writeUnsignedIntegralValue(type, index);
                 break;
             }
             case VALUE_METHOD: {
                 int index = file.getMethodIds().indexOf((CstMethodRef) cst);
-                writeUnsignedIntegralValue(type, (long) index);
+                writeUnsignedIntegralValue(type, index);
                 break;
             }
             case VALUE_ENUM: {
                 CstFieldRef fieldRef = ((CstEnumRef) cst).getFieldRef();
                 int index = file.getFieldIds().indexOf(fieldRef);
-                writeUnsignedIntegralValue(type, (long) index);
+                writeUnsignedIntegralValue(type, index);
                 break;
             }
             case VALUE_ARRAY: {
@@ -269,7 +269,7 @@ public final class ValueEncoder {
      */
     public void writeArray(CstArray array, boolean topLevel) {
         boolean annotates = topLevel && out.annotates();
-        CstArray.List list = ((CstArray) array).getList();
+        CstArray.List list = array.getList();
         int size = list.size();
 
         if (annotates) {
@@ -370,13 +370,11 @@ public final class ValueEncoder {
             return "null";
         }
 
-        StringBuilder sb = new StringBuilder();
+        String sb = cst.typeName() +
+                ' ' +
+                cst.toHuman();
 
-        sb.append(cst.typeName());
-        sb.append(' ');
-        sb.append(cst.toHuman());
-
-        return sb.toString();
+        return sb;
     }
 
     /**

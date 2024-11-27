@@ -8,17 +8,17 @@ import java.util.*;
 public class ArrayExpandableListAdapter extends BaseExpandableListAdapter 
 {
 
-	private Context mContext;
+	private final Context mContext;
 
-	private List<List<String>> mChildData;
+	private final List<List<String>> mChildData;
 
-	private List<String> mGroupData;
+	private final List<String> mGroupData;
 
-	private int mGroupLayout;
+	private final int mGroupLayout;
 
-	private int mChildLayout;
+	private final int mChildLayout;
 
-	private LayoutInflater mLayoutInflater;
+	private final LayoutInflater mLayoutInflater;
 
 	private boolean mNotifyOnChange=true;
 	

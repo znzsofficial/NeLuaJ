@@ -7,5 +7,5 @@ import java.lang.reflect.Method;
  */
 
 public interface MethodFilter {
-    public boolean filter(Method mode,String name);
+    boolean filter(Method mode, String name);
 }

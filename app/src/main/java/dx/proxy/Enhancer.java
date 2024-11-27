@@ -288,7 +288,7 @@ public class Enhancer {
         isVoid = retClass.getSimpleName().equals("void");
         methodReturnType = TypeId.get(retClass);
         Class<?>[] argsClass = method.getParameterTypes();
-        hasParams = (argsClass != null && argsClass.length > 0) ? true : false;
+        hasParams = argsClass != null && argsClass.length > 0;
         if (hasParams) {
             argsTypeId = new TypeId[argsClass.length];
             for (int i = 0; i < argsClass.length; i++) {

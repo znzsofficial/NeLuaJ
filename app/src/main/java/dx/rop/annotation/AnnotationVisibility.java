@@ -35,7 +35,7 @@ public enum AnnotationVisibility implements ToHuman {
      *
      * @param human {@code non-null;} the human-oriented string representation
      */
-    private AnnotationVisibility(String human) {
+    AnnotationVisibility(String human) {
         this.human = human;
     }
 

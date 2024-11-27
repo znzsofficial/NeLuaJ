@@ -29,14 +29,14 @@ public interface TypeList {
      * @return {@code true} if this instance is mutable or
      * {@code false} if it is immutable
      */
-    public boolean isMutable();
+    boolean isMutable();
 
     /**
      * Gets the size of this list.
      *
      * @return {@code >= 0;} the size
      */
-    public int size();
+    int size();
 
     /**
      * Gets the indicated element. It is an error to call this with the
@@ -46,7 +46,7 @@ public interface TypeList {
      * @param n {@code >= 0, < size();} which element
      * @return {@code non-null;} the indicated element
      */
-    public Type getType(int n);
+    Type getType(int n);
 
     /**
      * Gets the number of 32-bit words required to hold instances of
@@ -55,7 +55,7 @@ public interface TypeList {
      *
      * @return {@code >= 0;} the required number of words
      */
-    public int getWordCount();
+    int getWordCount();
 
     /**
      * Returns a new instance which is identical to this one, except that
@@ -65,5 +65,5 @@ public interface TypeList {
      * @param type {@code non-null;} item to append
      * @return {@code non-null;} an appropriately-constructed instance
      */
-    public TypeList withAddedType(Type type);
+    TypeList withAddedType(Type type);
 }

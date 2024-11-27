@@ -30,7 +30,7 @@ public interface DebugInfoConstants {
      * Args: none
      *
      */
-    static final int DBG_END_SEQUENCE = 0x00;
+    int DBG_END_SEQUENCE = 0x00;
 
     /**
      * Advances the program counter/address register without emitting
@@ -41,7 +41,7 @@ public interface DebugInfoConstants {
      * <li>Unsigned LEB128 &mdash; amount to advance pc by
      * </ol>
      */
-    static final int DBG_ADVANCE_PC = 0x01;
+    int DBG_ADVANCE_PC = 0x01;
 
     /**
      * Advances the line register without emitting
@@ -52,7 +52,7 @@ public interface DebugInfoConstants {
      * <li>Signed LEB128 &mdash; amount to change line register by.
      * </ol>
      */
-    static final int DBG_ADVANCE_LINE = 0x02;
+    int DBG_ADVANCE_LINE = 0x02;
 
     /**
      * Introduces a local variable at the current address.<p>
@@ -64,7 +64,7 @@ public interface DebugInfoConstants {
      * <li>Unsigned LEB128 &mdash; type index (shifted by 1) of type.
      * </ol>
      */
-    static final int DBG_START_LOCAL = 0x03;
+    int DBG_START_LOCAL = 0x03;
 
     /**
      * Introduces a local variable at the current address with a type
@@ -79,7 +79,7 @@ public interface DebugInfoConstants {
      * type signature.
      * </ol>
      */
-    static final int DBG_START_LOCAL_EXTENDED = 0x04;
+    int DBG_START_LOCAL_EXTENDED = 0x04;
 
     /**
      * Marks a currently-live local variable as out of scope at the
@@ -90,7 +90,7 @@ public interface DebugInfoConstants {
      * <li>Unsigned LEB128 &mdash; register that contained local
      * </ol>
      */
-    static final int DBG_END_LOCAL = 0x05;
+    int DBG_END_LOCAL = 0x05;
 
     /**
      * Re-introduces a local variable at the current address. The name
@@ -102,7 +102,7 @@ public interface DebugInfoConstants {
      * <li>Unsigned LEB128 &mdash; register to re-start.
      * </ol>
      */
-    static final int DBG_RESTART_LOCAL = 0x06;
+    int DBG_RESTART_LOCAL = 0x06;
 
 
     /**
@@ -113,7 +113,7 @@ public interface DebugInfoConstants {
      * The prologue_end register is cleared by any special
      * ({@code >= OPCODE_BASE}) opcode.
      */
-    static final int DBG_SET_PROLOGUE_END = 0x07;
+    int DBG_SET_PROLOGUE_END = 0x07;
 
     /**
      * Sets the "epilogue_begin" state machine register, indicating that the
@@ -124,7 +124,7 @@ public interface DebugInfoConstants {
      * The epilogue_begin register is cleared by any special
      * ({@code >= OPCODE_BASE}) opcode.
      */
-    static final int DBG_SET_EPILOGUE_BEGIN = 0x08;
+    int DBG_SET_EPILOGUE_BEGIN = 0x08;
 
     /**
      * Sets the current file that that line numbers refer to. All subsequent
@@ -137,7 +137,7 @@ public interface DebugInfoConstants {
      * file name.
      * </ol>
      */
-    static final int DBG_SET_FILE = 0x09;
+    int DBG_SET_FILE = 0x09;
 
     /* IF YOU ADD A NEW OPCODE, increase OPCODE_BASE */
 
@@ -147,8 +147,8 @@ public interface DebugInfoConstants {
      */
 
     /** the smallest value a special opcode can take */
-    static final int DBG_FIRST_SPECIAL = 0x0a;
-    static final int DBG_LINE_BASE = -4;
-    static final int DBG_LINE_RANGE = 15;
+    int DBG_FIRST_SPECIAL = 0x0a;
+    int DBG_LINE_BASE = -4;
+    int DBG_LINE_RANGE = 15;
     // MIN_INSN_LENGTH is always 1
 }
