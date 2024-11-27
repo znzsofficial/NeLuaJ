@@ -354,7 +354,6 @@ public final class ByteArray {
 
         public MyDataInputStream(MyInputStream wrapped) {
             super(wrapped);
-
             this.wrapped = wrapped;
         }
     }
