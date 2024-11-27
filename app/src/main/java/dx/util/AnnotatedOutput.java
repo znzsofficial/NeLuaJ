@@ -27,7 +27,7 @@ public interface AnnotatedOutput
      *
      * @return {@code true} iff annotations are being kept
      */
-    public boolean annotates();
+    boolean annotates();
 
     /**
      * Get whether this instance is intended to keep verbose annotations.
@@ -36,7 +36,7 @@ public interface AnnotatedOutput
      *
      * @return {@code true} iff annotations are to be verbose
      */
-    public boolean isVerbose();
+    boolean isVerbose();
 
     /**
      * Add an annotation for the subsequent output. Any previously
@@ -46,7 +46,7 @@ public interface AnnotatedOutput
      *
      * @param msg {@code non-null;} the annotation message
      */
-    public void annotate(String msg);
+    void annotate(String msg);
 
     /**
      * Add an annotation for a specified amount of subsequent
@@ -59,13 +59,13 @@ public interface AnnotatedOutput
      * cover
      * @param msg {@code non-null;} the annotation message
      */
-    public void annotate(int amt, String msg);
+    void annotate(int amt, String msg);
 
     /**
      * End the most recent annotation. Subsequent output will be unannotated,
      * until the next call to {@link #annotate}.
      */
-    public void endAnnotation();
+    void endAnnotation();
 
     /**
      * Get the maximum width of the annotated output. This is advisory:
@@ -75,5 +75,5 @@ public interface AnnotatedOutput
      *
      * @return {@code >= 1;} the maximum width
      */
-    public int getAnnotationWidth();
+    int getAnnotationWidth();
 }

@@ -50,13 +50,13 @@ public class LuaAdapter extends BaseAdapter implements Filterable {
 
     private CharSequence mPrefix;
 
-    private LuaLayout loadlayout;
+    private final LuaLayout loadlayout;
 
     private LuaFunction mAnimationUtil;
 
-    private HashMap<View, Animation> mAnimCache = new HashMap<View, Animation>();
+    private final HashMap<View, Animation> mAnimCache = new HashMap<View, Animation>();
 
-    private HashMap<View, Boolean> mStyleCache = new HashMap<View, Boolean>();
+    private final HashMap<View, Boolean> mStyleCache = new HashMap<View, Boolean>();
 
     private boolean mNotifyOnChange = true;
 
@@ -84,7 +84,7 @@ public class LuaAdapter extends BaseAdapter implements Filterable {
                 }
             };
 
-    private HashMap<String, Boolean> loaded = new HashMap<String, Boolean>();
+    private final HashMap<String, Boolean> loaded = new HashMap<String, Boolean>();
     private ArrayFilter mFilter;
     private LuaFunction mLuaFilter;
 
@@ -282,7 +282,7 @@ public class LuaAdapter extends BaseAdapter implements Filterable {
         for (LuaValue set : sets) {
             String key2 = set.tojstring();
             Object value2 = fields.jget(key2);
-            if (key2.toLowerCase().equals("src")) setHelper(view, value2);
+            if (key2.equalsIgnoreCase("src")) setHelper(view, value2);
             else javaSetter(view, key2, value2);
         }
     }

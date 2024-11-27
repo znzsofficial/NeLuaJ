@@ -440,7 +440,7 @@ public final class Code {
             if (branch == null) {
                 throw new IllegalArgumentException("branch == null");
             }
-            splitCurrentLabel(branch, Collections.<Label>emptyList());
+            splitCurrentLabel(branch, Collections.emptyList());
             break;
 
         case Rop.BRANCH_THROW:

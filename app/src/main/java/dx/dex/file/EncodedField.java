@@ -83,15 +83,14 @@ public final class EncodedField extends EncodedMember
     /** {@inheritDoc} */
     @Override
     public String toString() {
-        StringBuffer sb = new StringBuffer(100);
 
-        sb.append(getClass().getName());
-        sb.append('{');
-        sb.append(Hex.u2(getAccessFlags()));
-        sb.append(' ');
-        sb.append(field);
-        sb.append('}');
-        return sb.toString();
+        String sb = getClass().getName() +
+                '{' +
+                Hex.u2(getAccessFlags()) +
+                ' ' +
+                field +
+                '}';
+        return sb;
     }
 
     /** {@inheritDoc} */

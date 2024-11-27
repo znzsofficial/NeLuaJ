@@ -271,23 +271,23 @@ public abstract class SsaInsn implements ToHuman, Cloneable {
     /**
      * Visitor interface for this class.
      */
-    public static interface Visitor {
+    public interface Visitor {
         /**
          * Any non-phi move instruction
          * @param insn {@code non-null;} the instruction to visit
          */
-        public void visitMoveInsn(NormalSsaInsn insn);
+        void visitMoveInsn(NormalSsaInsn insn);
 
         /**
          * Any phi insn
          * @param insn {@code non-null;} the instruction to visit
          */
-        public void visitPhiInsn(PhiInsn insn);
+        void visitPhiInsn(PhiInsn insn);
 
         /**
          * Any insn that isn't a move or a phi (which is also a move).
          * @param insn {@code non-null;} the instruction to visit
          */
-        public void visitNonMoveInsn(NormalSsaInsn insn);
+        void visitNonMoveInsn(NormalSsaInsn insn);
     }
 }

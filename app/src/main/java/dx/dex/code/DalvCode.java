@@ -219,7 +219,7 @@ public final class DalvCode {
     /**
      * Class used as a callback for {@link #assignIndices}.
      */
-    public static interface AssignIndicesCallback {
+    public interface AssignIndicesCallback {
         /**
          * Gets the index for the given constant.
          *
@@ -227,6 +227,6 @@ public final class DalvCode {
          * @return {@code >= -1;} the index or {@code -1} if the constant
          * shouldn't actually be reified with an index
          */
-        public int getIndex(Constant cst);
+        int getIndex(Constant cst);
     }
 }

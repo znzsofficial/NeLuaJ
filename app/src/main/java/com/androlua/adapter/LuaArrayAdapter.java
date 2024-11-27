@@ -40,14 +40,14 @@ public class LuaArrayAdapter extends BaseAdapter implements Filterable {
 
     private LuaTable mData;
     private LuaTable mBaseData;
-    private Resources mRes;
-    private LuaContext mContext;
+    private final Resources mRes;
+    private final LuaContext mContext;
 
-    private Globals L;
+    private final Globals L;
 
-    private LuaTable mResource;
+    private final LuaTable mResource;
 
-    private LuaLayout loadlayout;
+    private final LuaLayout loadlayout;
 
     private Animation mAnimation;
 

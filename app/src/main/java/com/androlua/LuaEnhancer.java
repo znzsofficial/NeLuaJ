@@ -30,7 +30,7 @@ public class LuaEnhancer {
         obj.setMethodInterceptor_Enhancer(interceptor);
     }
 
-    public static void setInterceptor(Class obj, MethodInterceptor interceptor) {
+    public static void setInterceptor(Class<?> obj, MethodInterceptor interceptor) {
         try {
             Field field = obj.getDeclaredField("methodInterceptor");
             field.setAccessible(true);
