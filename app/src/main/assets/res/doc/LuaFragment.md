@@ -12,7 +12,7 @@
     ): View?
 
      onViewCreated(view: View, savedInstanceState: Bundle?)
-     onActivityCreated(savedInstanceState: Bundle?)
+     onActivityCreated(savedInstanceState: Bundle?) (Deprecated)
      onStart()
      onResume()
      onPause()

@@ -6,8 +6,8 @@ import android.util.TypedValue;
 import com.google.android.material.color.MaterialColors;
 
 public class LuaThemeUtil {
-    Context context;
-    TypedValue typedValue;
+    final Context context;
+    final TypedValue typedValue;
 
     public LuaThemeUtil(Context context) {
         this.typedValue = new TypedValue();

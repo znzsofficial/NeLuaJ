@@ -4,9 +4,9 @@ import java.lang.reflect.Method;
 
 public class MethodProxy {
 
-    private final Class subClass;
+    private final Class<?> subClass;
     private final String methodName;
-    private final Class[] argsType;
+    private final Class<?>[] argsType;
 
     @SuppressWarnings("rawtypes")
     public MethodProxy(Class subClass, String methodName, Class[] argsType) {

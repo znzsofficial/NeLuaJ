@@ -1,4 +1,3 @@
-import com.android.build.api.dsl.Packaging
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -27,11 +26,6 @@ android {
         }
     }
     buildTypes {
-        debug {
-            isShrinkResources = false
-            isMinifyEnabled = false
-            multiDexEnabled = true
-        }
         release {
             isShrinkResources = false
             isMinifyEnabled = false
@@ -47,9 +41,7 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
+    kotlinOptions { jvmTarget = "17" }
     packagingOptions.resources.excludes.add("META-INF/androidx/emoji2/emoji2/LICENSE.txt")
     applicationVariants.all {
         outputs.all {

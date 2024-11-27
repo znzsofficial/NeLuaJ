@@ -141,6 +141,10 @@ class LuaFragment(var creator: Creator?) : Fragment() {
         fun onSaveInstanceState(outState: Bundle)
         fun onViewStateRestored(savedInstanceState: Bundle?)
         fun onContextItemSelected(item: MenuItem): Boolean
-        fun onCreateContextMenu(menu: ContextMenu, v: View, menuInfo: ContextMenu.ContextMenuInfo?)
+        fun onCreateContextMenu(
+            menu: ContextMenu,
+            v: View,
+            menuInfo: ContextMenu.ContextMenuInfo?
+        )
     }
 }

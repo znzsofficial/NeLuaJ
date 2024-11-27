@@ -6,7 +6,7 @@ public class Const {
 	
 	public static final String SUBCLASS_INVOKE_SUPER_SUFFIX = "_Super";
 	
-	public static Class getPackedType(Class primitive) {
+	public static Class<?> getPackedType(Class<?> primitive) {
 		if (primitive == boolean.class) {
 			return Boolean.class;
 		} else if (primitive == byte.class) {
@@ -28,7 +28,7 @@ public class Const {
 		}
 	}
 	
-	public static String getPrimitiveValueMethodName(Class primitive) {
+	public static String getPrimitiveValueMethodName(Class<?> primitive) {
 		if (primitive == boolean.class) {
 			return "booleanValue";
 		} else if (primitive == byte.class) {
