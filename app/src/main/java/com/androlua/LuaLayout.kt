@@ -390,7 +390,10 @@ class LuaLayout(private val initialContext: Context) {
                                         imageLoader.enqueue(
                                             ImageRequest.Builder(initialContext)
                                                 .data(tValue.asString()).target {
-                                                    view.jset("ImageDrawable", it.asDrawable(initialContext.resources))
+                                                    view.jset(
+                                                        "ImageDrawable",
+                                                        it.asDrawable(initialContext.resources)
+                                                    )
                                                 }.build()
                                         )
                                     }

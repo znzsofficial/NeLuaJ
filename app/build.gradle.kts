@@ -13,17 +13,11 @@ android {
     defaultConfig {
         applicationId = "github.znzsofficial.neluaj"
         minSdk = 26
+        //noinspection OldTargetApi
         targetSdk = 33
         versionCode = 1
         versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-    }
-    configurations {
-        all {
-            exclude(group = "androidx.asynclayoutinflater", module = "asynclayoutinflater")
-            exclude(group = "androidx.localbroadcastmanager", module = "localbroadcastmanager")
-            exclude(group = "androidx.slidingpanelayout", module = "slidingpanelayout")
-        }
     }
     buildTypes {
         release {
@@ -43,13 +37,17 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
     packagingOptions.resources.excludes.add("META-INF/androidx/emoji2/emoji2/LICENSE.txt")
+    configurations.all {
+        exclude(group = "androidx.asynclayoutinflater", module = "asynclayoutinflater")
+        exclude(group = "androidx.localbroadcastmanager", module = "localbroadcastmanager")
+        exclude(group = "androidx.slidingpanelayout", module = "slidingpanelayout")
+    }
     applicationVariants.all {
         outputs.all {
-            val currentDateTime = LocalDateTime.now()
             // 定义时间格式
             val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH_mm_ss")
             // 格式化时间并打印输出
-            val formattedDateTime = currentDateTime.format(formatter)
+            val formattedDateTime = LocalDateTime.now().format(formatter)
             val ver = defaultConfig.versionName
             //val minSdk = project.extensions.getByType(BaseAppModuleExtension::class.java).defaultConfig.minSdk
             //val abi = filters.find { it.filterType == "ABI" }?.identifier ?: "all"

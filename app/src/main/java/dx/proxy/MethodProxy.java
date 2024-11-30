@@ -1,5 +1,7 @@
 package dx.proxy;
 
+import androidx.annotation.NonNull;
+
 import java.lang.reflect.Method;
 
 public class MethodProxy {
@@ -58,6 +60,7 @@ public class MethodProxy {
         return ((EnhancerInterface) object).executeSuperMethod_Enhancer(methodName, argsType, argsValue);
     }
 
+    @NonNull
     @Override
     public String toString() {
         return "MethodProxy{" +
