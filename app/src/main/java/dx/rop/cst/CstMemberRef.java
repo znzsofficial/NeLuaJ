@@ -16,6 +16,8 @@
 
 package dx.rop.cst;
 
+import androidx.annotation.NonNull;
+
 /**
  * Constants of type {@code CONSTANT_*ref_info}.
  */
@@ -86,6 +88,7 @@ public abstract class CstMemberRef extends TypedConstant {
     }
 
     /** {@inheritDoc} */
+    @NonNull
     @Override
     public final String toString() {
         return typeName() + '{' + toHuman() + '}';

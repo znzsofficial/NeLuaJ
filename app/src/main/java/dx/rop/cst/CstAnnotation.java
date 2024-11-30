@@ -16,6 +16,8 @@
 
 package dx.rop.cst;
 
+import androidx.annotation.NonNull;
+
 import dx.rop.annotation.Annotation;
 
 /**
@@ -63,6 +65,7 @@ public final class CstAnnotation extends Constant {
     }
 
     /** {@inheritDoc} */
+    @NonNull
     @Override
     public String toString() {
         return annotation.toString();

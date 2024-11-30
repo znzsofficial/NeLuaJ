@@ -16,6 +16,8 @@
 
 package dx.util;
 
+import androidx.annotation.NonNull;
+
 import java.util.NoSuchElementException;
 
 /**
@@ -124,6 +126,7 @@ public class ListIntSet implements IntSet {
     }
 
     /** @inheritDoc */
+    @NonNull
     public String toString() {
         return ints.toString();
     }

@@ -446,7 +446,7 @@ public final class SsaMethod {
         useList = new ArrayList[registerCount];
 
         for (int i = 0; i < registerCount; i++) {
-            useList[i] = new ArrayList();
+            useList[i] = new ArrayList<>();
         }
 
         forEachInsn(new SsaInsn.Visitor() {
