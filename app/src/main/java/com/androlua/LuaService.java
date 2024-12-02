@@ -24,6 +24,7 @@ import android.view.WindowManager;
 import android.webkit.MimeTypeMap;
 import android.widget.Toast;
 
+import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 import androidx.preference.PreferenceManager;
 
@@ -88,11 +89,7 @@ public class LuaService extends Service
 
     public static void setEnabled(Context context) {
         Intent intent = new Intent(context, LuaService.class);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(intent);
-        } else {
-            context.startService(intent);
-        }
+        ContextCompat.startForegroundService(context, intent);
     }
 
     public static void logError(String title, Exception msg) {
