@@ -54,6 +54,7 @@ import androidx.core.util.TypedValueCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.preference.PreferenceManager
+import androidx.window.layout.WindowMetrics
 import coil3.ImageLoader
 import coil3.imageLoader
 import coil3.load
@@ -181,7 +182,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         globals.s.e = mLuaDexLoader.classLoaders
         sActivity = this
         try {
-            globals.let{
+            globals.let {
                 it.jset("activity", this)
                 it.jset("this", this)
                 it.set("print", print(this))
@@ -457,9 +458,8 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     }
 
     private fun initSize() {
-        val wm = getSystemService(WINDOW_SERVICE) as WindowManager
         val outMetrics = DisplayMetrics()
-        wm.defaultDisplay.getMetrics(outMetrics)
+        ContextCompat.getDisplayOrDefault(this).getMetrics(outMetrics)
         mWidth = outMetrics.widthPixels
         mHeight = outMetrics.heightPixels
     }
@@ -470,27 +470,25 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         ) {
             try {
                 permissions = ArrayList<String?>()
-                val pm = packageManager
-                val ps2 =
-                    pm.getPackageInfo(packageName, PackageManager.GET_PERMISSIONS)
-                        .requestedPermissions
-                if (ps2 != null) {
-                    for (p in ps2) {
-                        try {
-                            if ((pm.getPermissionInfo(
-                                    p,
-                                    0
-                                ).protectionLevel and 1) != 0
-                            ) checkPermission(p)
-                        } catch (e: Exception) {
-                            e.printStackTrace()
+                packageManager.getPackageInfo(packageName, PackageManager.GET_PERMISSIONS)
+                    .requestedPermissions?.let {
+                        for (p in it) {
+                            try {
+                                if ((packageManager.getPermissionInfo(
+                                        p,
+                                        0
+                                    ).protectionLevel and 1) != 0
+                                ) checkPermission(p)
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
                         }
                     }
-                }
-                if (!permissions!!.isEmpty) {
-                    val ps = arrayOfNulls<String>(permissions!!.size)
-                    permissions!!.toArray<String?>(ps)
-                    requestPermissions(ps, 0)
+                if (!permissions.isNullOrEmpty()) {
+                    requestPermissions(
+                        permissions!!.toArray(arrayOfNulls<String>(permissions!!.size)),
+                        0
+                    )
                     return false
                 }
             } catch (e: Exception) {
@@ -766,34 +764,34 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         runFunc("onStop")
     }
 
-    fun registerReceiver(receiver: LuaBroadcastReceiver?, filter: IntentFilter?): Intent? {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) super.registerReceiver(
+    fun registerReceiver(receiver: LuaBroadcastReceiver?, filter: IntentFilter): Intent? {
+        return ContextCompat.registerReceiver(
+            this,
             receiver,
             filter,
-            RECEIVER_NOT_EXPORTED
+            ContextCompat.RECEIVER_NOT_EXPORTED
         )
-        else super.registerReceiver(receiver, filter)
     }
 
-    fun registerReceiver(ltr: OnReceiveListener?, filter: IntentFilter?): Intent? {
+    fun registerReceiver(ltr: OnReceiveListener?, filter: IntentFilter): Intent? {
         val receiver = LuaBroadcastReceiver(ltr)
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) super.registerReceiver(
+        return ContextCompat.registerReceiver(
+            this,
             receiver,
             filter,
-            RECEIVER_NOT_EXPORTED
+            ContextCompat.RECEIVER_NOT_EXPORTED
         )
-        else super.registerReceiver(receiver, filter)
     }
 
-    fun registerReceiver(filter: IntentFilter?): Intent? {
+    fun registerReceiver(filter: IntentFilter): Intent? {
         if (mReceiver != null) unregisterReceiver(mReceiver)
         mReceiver = LuaBroadcastReceiver(this)
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) super.registerReceiver(
+        return ContextCompat.registerReceiver(
+            this,
             mReceiver,
             filter,
-            RECEIVER_NOT_EXPORTED
+            ContextCompat.RECEIVER_NOT_EXPORTED
         )
-        else super.registerReceiver(mReceiver, filter)
     }
 
     override fun unregisterReceiver(receiver: BroadcastReceiver?) {
