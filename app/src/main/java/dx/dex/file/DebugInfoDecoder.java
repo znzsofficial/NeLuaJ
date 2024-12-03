@@ -30,6 +30,8 @@ import static dx.dex.file.DebugInfoConstants.DBG_SET_PROLOGUE_END;
 import static dx.dex.file.DebugInfoConstants.DBG_START_LOCAL;
 import static dx.dex.file.DebugInfoConstants.DBG_START_LOCAL_EXTENDED;
 
+import androidx.annotation.NonNull;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -184,6 +186,7 @@ public class DebugInfoDecoder {
             this.signatureIndex = signatureIndex;
         }
 
+        @NonNull
         public String toString() {
             return String.format("[%x %s v%d %04x %04x %04x]",
                     address, isStart ? "start" : "end", reg,
