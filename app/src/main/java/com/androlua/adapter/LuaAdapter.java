@@ -1,12 +1,9 @@
 package com.androlua.adapter;
 
-import android.annotation.SuppressLint;
-import android.content.res.Resources;
+import android.content.Context;
 import android.graphics.Bitmap;
-import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.os.Handler;
-import android.os.Message;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.animation.Animation;
@@ -16,14 +13,10 @@ import android.widget.Filterable;
 import android.widget.ImageView;
 import android.widget.TextView;
 
-import com.androlua.LoadingDrawable;
 import com.androlua.LuaActivity;
-import com.androlua.LuaBitmap;
-import com.androlua.LuaBitmapDrawable;
 import com.androlua.LuaContext;
 import com.androlua.LuaLayout;
 
-import org.luaj.Globals;
 import org.luaj.LuaError;
 import org.luaj.LuaFunction;
 import org.luaj.LuaTable;
@@ -31,18 +24,20 @@ import org.luaj.LuaValue;
 import org.luaj.lib.jse.CoerceJavaToLua;
 import org.luaj.lib.jse.CoerceLuaToJava;
 
-import java.io.IOException;
 import java.util.HashMap;
+
+import coil3.ImageLoader;
+import coil3.SingletonImageLoader;
 
 public class LuaAdapter extends BaseAdapter implements Filterable {
 
     private final LuaTable mBaseData;
-    private BitmapDrawable mDraw;
-    private final Resources mRes;
-    private final Globals L;
+    //private BitmapDrawable mDraw;
+    //private final Resources mRes;
+    //private final Globals L;
     private final LuaContext mContext;
 
-    private final Object mLock = new Object();
+    //private final Object mLock = new Object();
 
     private LuaTable mLayout;
     private LuaTable mData;
@@ -62,31 +57,12 @@ public class LuaAdapter extends BaseAdapter implements Filterable {
 
     private boolean updateing;
 
-    @SuppressLint("HandlerLeak")
-    private final Handler mHandler =
-            new Handler() {
-                @Override
-                public void handleMessage(Message msg) {
-                    if (msg.what == 0) {
-                        notifyDataSetChanged();
-                    } else {
-                        try {
-                            LuaTable newValues = new LuaTable();
-                            mLuaFilter.jcall(mBaseData, newValues, mPrefix);
-                            mData = newValues;
-                            notifyDataSetChanged();
-                        } catch (LuaError e) {
+    private final Handler mHandler;
 
-                            e.printStackTrace();
-                            mContext.sendError("performFiltering", e);
-                        }
-                    }
-                }
-            };
-
-    private final HashMap<String, Boolean> loaded = new HashMap<String, Boolean>();
+    //private final HashMap<String, Boolean> loaded = new HashMap<String, Boolean>();
     private ArrayFilter mFilter;
     private LuaFunction mLuaFilter;
+    private final ImageLoader imageLoader;
 
     public LuaAdapter(LuaContext context, LuaTable layout) throws LuaError {
         this(context, null, layout);
@@ -101,12 +77,28 @@ public class LuaAdapter extends BaseAdapter implements Filterable {
             layout = mLayout;
         }
         mLayout = layout;
-        mRes = mContext.getContext().getResources();
-
-        L = context.getLuaState();
+        Context context1 = mContext.getContext();
+        //mRes = mContext.getContext().getResources();
+        imageLoader = SingletonImageLoader.get(context1);
+        //L = context.getLuaState();
         mData = data;
         mBaseData = mData;
-        loadlayout = new LuaLayout(context.getContext());
+        mHandler = new Handler((msg) -> {
+            if (msg.what == 0) {
+                notifyDataSetChanged();
+            } else {
+                try {
+                    LuaTable newValues = new LuaTable();
+                    mLuaFilter.jcall(mBaseData, newValues, mPrefix);
+                    mData = newValues;
+                    notifyDataSetChanged();
+                } catch (LuaError e) {
+                    mContext.sendError("performFiltering", e);
+                }
+            }
+            return false;
+        });
+        loadlayout = new LuaLayout(context1);
         loadlayout.load(mLayout, new LuaTable());
     }
 
@@ -187,10 +179,7 @@ public class LuaAdapter extends BaseAdapter implements Filterable {
             updateing = true;
             new Handler()
                     .postDelayed(
-                            () -> {
-                                // TODO: Implement this method
-                                updateing = false;
-                            },
+                            () -> updateing = false,
                             500);
         }
     }
@@ -296,15 +285,15 @@ public class LuaAdapter extends BaseAdapter implements Filterable {
                 else ((TextView) view).setText(value.toString());
             } else if (view instanceof ImageView) {
                 if (value instanceof Bitmap) ((ImageView) view).setImageBitmap((Bitmap) value);
-                else if (value instanceof String)
-                    ((ImageView) view).setImageDrawable(new LuaBitmapDrawable(mContext, (String) value));
-                else if (value instanceof Drawable)
+                else if (value instanceof String) {
+                    AsyncLoader.INSTANCE.loadImage(mContext.getContext(), imageLoader, (String) value, (ImageView) view);
+                    //((ImageView) view).setImageDrawable(new LuaBitmapDrawable(mContext, (String) value));
+                } else if (value instanceof Drawable)
                     ((ImageView) view).setImageDrawable((Drawable) value);
                 else if (value instanceof Number)
                     ((ImageView) view).setImageResource(((Number) value).intValue());
             }
         } catch (Exception e) {
-
             e.printStackTrace();
             mContext.sendError("setHelper", e);
         }
@@ -312,39 +301,6 @@ public class LuaAdapter extends BaseAdapter implements Filterable {
 
     private void javaSetter(Object obj, String methodName, Object value) throws LuaError {
         CoerceJavaToLua.coerce(obj).jset(methodName, value);
-    }
-
-    private class AsyncLoader extends Thread {
-
-        private String mPath;
-
-        private LuaContext mContext;
-
-        public Drawable getBitmap(LuaContext context, String path) throws IOException {
-            mContext = context;
-            mPath = path;
-            if (!path.toLowerCase().startsWith("http://") && !path.toLowerCase().startsWith("https://"))
-                return new BitmapDrawable(mRes, LuaBitmap.getBitmap(context, path));
-            if (LuaBitmap.checkCache(context, path))
-                return new BitmapDrawable(mRes, LuaBitmap.getBitmap(context, path));
-            if (!loaded.containsKey(mPath)) {
-                start();
-                loaded.put(mPath, true);
-            }
-
-            return new LoadingDrawable(mContext.getContext());
-        }
-
-        @Override
-        public void run() {
-            // TODO: Implement this method
-            try {
-                LuaBitmap.getBitmap(mContext, mPath);
-                mHandler.sendEmptyMessage(0);
-            } catch (LuaError e) {
-                mContext.sendError("AsyncLoader", e);
-            }
-        }
     }
 
     /**

@@ -1,5 +1,6 @@
 package com.androlua.adapter;
 
+import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.drawable.BitmapDrawable;
@@ -16,7 +17,6 @@ import android.widget.TextView;
 
 import com.androlua.LoadingDrawable;
 import com.androlua.LuaBitmap;
-import com.androlua.LuaBitmapDrawable;
 import com.androlua.LuaContext;
 import com.androlua.LuaLayout;
 
@@ -29,14 +29,16 @@ import org.luaj.lib.jse.CoerceJavaToLua;
 import java.io.IOException;
 import java.util.HashMap;
 
+import coil3.ImageLoader;
+import coil3.SingletonImageLoader;
+
 /**
  * Created by Administrator on 2017/02/27 0027.
  */
 public class LuaMultiAdapter extends BaseAdapter {
 
-    private BitmapDrawable mDraw;
-    private final Resources mRes;
-    private final Globals L;
+    //private BitmapDrawable mDraw;
+    //private final Resources mRes;
     private final LuaContext mContext;
     private final LuaValue mLayout;
     private final LuaTable mData;
@@ -50,12 +52,13 @@ public class LuaMultiAdapter extends BaseAdapter {
 
     private boolean mNotifyOnChange = true;
     private boolean updateing;
-    private final Handler mHandler = new Handler((msg) -> {
-        notifyDataSetChanged();
-        return false;
-    });
-    private final HashMap<String, Boolean> loaded = new HashMap<String, Boolean>();
+//    private final Handler mHandler = new Handler((msg) -> {
+//        notifyDataSetChanged();
+//        return false;
+//    });
+    //private final HashMap<String, Boolean> loaded = new HashMap<String, Boolean>();
     private final LuaValue LayoutParams = CoerceJavaToLua.coerce(AdapterView.LayoutParams.class);
+    private final ImageLoader imageLoader;
 
     public LuaMultiAdapter(LuaContext context, LuaValue layout) throws LuaError {
         this(context, null, layout);
@@ -64,14 +67,15 @@ public class LuaMultiAdapter extends BaseAdapter {
     public LuaMultiAdapter(LuaContext context, LuaTable data, LuaValue layout) throws LuaError {
         mContext = context;
         mLayout = layout;
-        mRes = mContext.getContext().getResources();
-
-        L = context.getLuaState();
+        Context context1 = mContext.getContext();
+        //mRes = context1.getResources();
+        imageLoader = SingletonImageLoader.get(context1);
+        Globals l = context.getLuaState();
         if (data == null) data = new LuaTable();
         mData = data;
-        loadLayout = new LuaLayout(mContext.getContext());
-        insert = L.get("table").get("insert");
-        remove = L.get("table").get("remove");
+        loadLayout = new LuaLayout(context1);
+        insert = l.get("table").get("insert");
+        remove = l.get("table").get("remove");
         int len = mLayout.length();
         for (int i = 1; i <= len; i++) {
             LuaTable t = new LuaTable();
@@ -90,7 +94,6 @@ public class LuaMultiAdapter extends BaseAdapter {
             int t = mData.get(position + 1).get("__type").toint() - 1;
             return t < 0 ? 0 : t;
         } catch (Exception e) {
-
             e.printStackTrace();
             return 0;
         }
@@ -166,10 +169,7 @@ public class LuaMultiAdapter extends BaseAdapter {
             updateing = true;
             new Handler()
                     .postDelayed(
-                            () -> {
-                                // TODO: Implement this method
-                                updateing = false;
-                            },
+                            () -> updateing = false,
                             500);
         }
     }
@@ -279,14 +279,13 @@ public class LuaMultiAdapter extends BaseAdapter {
             } else if (view instanceof ImageView) {
                 if (value instanceof Bitmap) ((ImageView) view).setImageBitmap((Bitmap) value);
                 else if (value instanceof String)
-                    ((ImageView) view).setImageDrawable(new LuaBitmapDrawable(mContext, (String) value));
+                    AsyncLoader.INSTANCE.loadImage(mContext.getContext(), imageLoader, (String) value, (ImageView) view);
                 else if (value instanceof Drawable)
                     ((ImageView) view).setImageDrawable((Drawable) value);
                 else if (value instanceof Number)
                     ((ImageView) view).setImageResource(((Number) value).intValue());
             }
         } catch (Exception e) {
-
             e.printStackTrace();
             mContext.sendError("setHelper", e);
         }
@@ -296,34 +295,34 @@ public class LuaMultiAdapter extends BaseAdapter {
         CoerceJavaToLua.coerce(obj).jset(methodName, value);
     }
 
-    private class AsyncLoader extends Thread {
-        private String mPath;
-
-        private LuaContext mContext;
-
-        public Drawable getBitmap(LuaContext context, String path) throws IOException {
-            mContext = context;
-            mPath = path;
-            if (!path.toLowerCase().startsWith("http://") && !path.toLowerCase().startsWith("https://"))
-                return new BitmapDrawable(mRes, LuaBitmap.getBitmap(context, path));
-            if (LuaBitmap.checkCache(context, path))
-                return new BitmapDrawable(mRes, LuaBitmap.getBitmap(context, path));
-            if (!loaded.containsKey(mPath)) {
-                start();
-                loaded.put(mPath, true);
-            }
-
-            return new LoadingDrawable(mContext.getContext());
-        }
-
-        @Override
-        public void run() {
-            try {
-                LuaBitmap.getBitmap(mContext, mPath);
-                mHandler.sendEmptyMessage(0);
-            } catch (LuaError e) {
-                mContext.sendError("AsyncLoader", e);
-            }
-        }
-    }
+//    private class AsyncLoader extends Thread {
+//        private String mPath;
+//
+//        private LuaContext mContext;
+//
+//        public Drawable getBitmap(LuaContext context, String path) throws IOException {
+//            mContext = context;
+//            mPath = path;
+//            if (!path.toLowerCase().startsWith("http://") && !path.toLowerCase().startsWith("https://"))
+//                return new BitmapDrawable(mRes, LuaBitmap.getBitmap(context, path));
+//            if (LuaBitmap.checkCache(context, path))
+//                return new BitmapDrawable(mRes, LuaBitmap.getBitmap(context, path));
+//            if (!loaded.containsKey(mPath)) {
+//                start();
+//                loaded.put(mPath, true);
+//            }
+//
+//            return new LoadingDrawable(mContext.getContext());
+//        }
+//
+//        @Override
+//        public void run() {
+//            try {
+//                LuaBitmap.getBitmap(mContext, mPath);
+//                mHandler.sendEmptyMessage(0);
+//            } catch (LuaError e) {
+//                mContext.sendError("AsyncLoader", e);
+//            }
+//        }
+//    }
 }
