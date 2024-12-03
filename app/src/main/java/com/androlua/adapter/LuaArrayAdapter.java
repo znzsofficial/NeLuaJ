@@ -1,11 +1,11 @@
 package com.androlua.adapter;
 
+import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.Rect;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
-import android.os.Handler;
 import android.text.TextUtils;
 import android.view.View;
 import android.view.ViewGroup;
@@ -20,12 +20,10 @@ import androidx.core.content.res.ResourcesCompat;
 
 import com.androlua.LoadingDrawable;
 import com.androlua.LuaActivity;
-import com.androlua.LuaBitmap;
 import com.androlua.LuaBitmapDrawable;
 import com.androlua.LuaContext;
 import com.androlua.LuaLayout;
 
-import org.luaj.Globals;
 import org.luaj.LuaError;
 import org.luaj.LuaFunction;
 import org.luaj.LuaTable;
@@ -33,8 +31,8 @@ import org.luaj.LuaValue;
 import org.luaj.lib.jse.CoerceJavaToLua;
 import org.luaj.lib.jse.CoerceLuaToJava;
 
-import java.io.IOException;
-import java.util.HashMap;
+import coil3.ImageLoader;
+import coil3.SingletonImageLoader;
 
 public class LuaArrayAdapter extends BaseAdapter implements Filterable {
 
@@ -43,7 +41,7 @@ public class LuaArrayAdapter extends BaseAdapter implements Filterable {
     private final Resources mRes;
     private final LuaContext mContext;
 
-    private final Globals L;
+    //private final Globals L;
 
     private final LuaTable mResource;
 
@@ -51,10 +49,11 @@ public class LuaArrayAdapter extends BaseAdapter implements Filterable {
 
     private Animation mAnimation;
 
-    private Drawable mDraw;
+    //private Drawable mDraw;
     private LuaFunction mLuaFilter;
     private ArrayFilter mFilter;
     private boolean mNotifyOnChange;
+    private final ImageLoader imageLoader;
 
     public LuaArrayAdapter(LuaContext context, LuaTable resource) throws LuaError {
         this(context, resource, new LuaTable());
@@ -64,10 +63,12 @@ public class LuaArrayAdapter extends BaseAdapter implements Filterable {
         mContext = context;
         mResource = resource;
         mData = data;
-        mRes = mContext.getContext().getResources();
+        Context context1 = mContext.getContext();
+        imageLoader = SingletonImageLoader.get(context1);
+        mRes = context1.getResources();
         mBaseData = mData;
-        L = context.getLuaState();
-        loadlayout = new LuaLayout(context.getContext());
+        //L = context.getLuaState();
+        loadlayout = new LuaLayout(context1);
         loadlayout.load(mResource, new LuaTable());
     }
 
@@ -174,11 +175,10 @@ public class LuaArrayAdapter extends BaseAdapter implements Filterable {
                 Drawable drawable = null;
                 if (value instanceof Bitmap) drawable = new BitmapDrawable(mRes, (Bitmap) value);
                 else if (value instanceof String)
-                    drawable = new AsyncLoader().getBitmap(mContext, (String) value);
+                    drawable = AsyncLoader.INSTANCE.getDrawable(mContext.getContext(), imageLoader, (String) value);
                 else if (value instanceof Drawable) drawable = (Drawable) value;
                 else if (value instanceof Number)
                     drawable = ResourcesCompat.getDrawable(mRes, ((Number) value).intValue(), null);
-
                 img.setImageDrawable(drawable);
                 if (drawable instanceof BitmapDrawable) {
                     Bitmap bmp = ((BitmapDrawable) drawable).getBitmap();
@@ -222,44 +222,44 @@ public class LuaArrayAdapter extends BaseAdapter implements Filterable {
         }
     }
 
-    private final Handler mHandler =
-            new Handler(msg -> {
-                notifyDataSetChanged();
-                return false;
-            });
-    private final HashMap<String, Boolean> loaded = new HashMap<>();
-
-    private class AsyncLoader extends Thread {
-
-        private String mPath;
-
-        private LuaContext mContext;
-
-        public Drawable getBitmap(LuaContext context, String path) throws IOException {
-            // TODO: Implement this method
-            mContext = context;
-            mPath = path;
-            if (!path.toLowerCase().startsWith("http://") && !path.toLowerCase().startsWith("https://"))
-                return new LuaBitmapDrawable(context, path);
-            if (LuaBitmap.checkCache(context, path)) return new LuaBitmapDrawable(context, path);
-            if (!loaded.containsKey(mPath)) {
-                start();
-                loaded.put(mPath, true);
-            }
-
-            return new LoadingDrawable(mContext.getContext());
-        }
-
-        @Override
-        public void run() {
-            try {
-                LuaBitmap.getBitmap(mContext, mPath);
-                mHandler.sendEmptyMessage(0);
-            } catch (LuaError e) {
-                mContext.sendError("AsyncLoader error", e);
-            }
-        }
-    }
+//    private final Handler mHandler =
+//            new Handler(msg -> {
+//                notifyDataSetChanged();
+//                return false;
+//            });
+//    private final HashMap<String, Boolean> loaded = new HashMap<>();
+//
+//    private class AsyncLoader extends Thread {
+//
+//        private String mPath;
+//
+//        private LuaContext mContext;
+//
+//        public Drawable getBitmap(LuaContext context, String path) throws IOException {
+//            // TODO: Implement this method
+//            mContext = context;
+//            mPath = path;
+//            if (!path.toLowerCase().startsWith("http://") && !path.toLowerCase().startsWith("https://"))
+//                return new LuaBitmapDrawable(context, path);
+//            if (LuaBitmap.checkCache(context, path)) return new LuaBitmapDrawable(context, path);
+//            if (!loaded.containsKey(mPath)) {
+//                start();
+//                loaded.put(mPath, true);
+//            }
+//
+//            return new LoadingDrawable(mContext.getContext());
+//        }
+//
+//        @Override
+//        public void run() {
+//            try {
+//                LuaBitmap.getBitmap(mContext, mPath);
+//                mHandler.sendEmptyMessage(0);
+//            } catch (LuaError e) {
+//                mContext.sendError("AsyncLoader error", e);
+//            }
+//        }
+//    }
 
     /**
      * {@inheritDoc}
