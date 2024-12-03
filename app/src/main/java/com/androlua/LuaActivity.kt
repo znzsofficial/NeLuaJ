@@ -40,7 +40,6 @@ import android.view.MenuItem
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
-import android.view.WindowManager
 import android.webkit.MimeTypeMap
 import android.widget.ImageView
 import android.widget.ListView
@@ -54,7 +53,6 @@ import androidx.core.util.TypedValueCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.preference.PreferenceManager
-import androidx.window.layout.WindowMetrics
 import coil3.ImageLoader
 import coil3.imageLoader
 import coil3.load
@@ -132,11 +130,9 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     @CallLuaFunction
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val d = intent.data
-
         luaDir = filesDir.absolutePath
-        if (d != null) {
-            var p = d.path
+        intent.data?.let {
+            var p = it.path
             if (!p.isNullOrEmpty()) {
                 val f = File(p)
                 if (f.isFile()) {
@@ -273,7 +269,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
                     combinedString.append("\n") // 添加分隔
                 }
             }
-            val clipboard = ContextCompat.getSystemService<ClipboardManager?>(
+            val clipboard = ContextCompat.getSystemService(
                 this,
                 ClipboardManager::class.java
             )
@@ -424,8 +420,11 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
 
     override fun setTitle(title: CharSequence) {
         super.setTitle(title)
-        val tDesc = TaskDescription(title.toString())
-        setTaskDescription(tDesc)
+        setTaskDescription(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                TaskDescription.Builder().setLabel(title.toString()).build()
+            else TaskDescription(title.toString())
+        )
     }
 
     fun setContentView(view: LuaTable) {
@@ -704,8 +703,8 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         return window.decorView as ViewGroup
     }
 
-    fun getRootView(): ViewGroup? {
-        return window.decorView.rootView as ViewGroup?
+    fun getRootView(): ViewGroup {
+        return window.decorView.rootView as ViewGroup
     }
 
     override fun doFile(path: String?, vararg arg: Any?): Any? {
@@ -1228,11 +1227,8 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         return "application/octet-stream"
     }
 
-    fun openFile(path: String) {
-        openFile(path, null)
-    }
-
-    fun openFile(path: String, callback: LuaFunction?) {
+    @JvmOverloads
+    fun openFile(path: String, callback: LuaFunction? = null) {
         val file = File(path)
         // 创建Intent并设置相关标志和类型
         val intent = Intent(Intent.ACTION_VIEW).apply {
