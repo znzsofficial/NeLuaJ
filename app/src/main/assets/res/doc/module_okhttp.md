@@ -5,6 +5,8 @@ NeLuaJ+ 实现了基于 OkHttp3 的同步网络模块和异步网络模块
 
 headers 均为可选参数
 
+---
+
 ## 同步模式
 headers 和 body 类型为 LuaTable
 
@@ -39,6 +41,8 @@ okhttp.patch(url, body, headers)
 ```lua
 okhttp.head(url, headers)
 ```
+
+---
 
 ## 异步模式
 headers 类型为 Map
