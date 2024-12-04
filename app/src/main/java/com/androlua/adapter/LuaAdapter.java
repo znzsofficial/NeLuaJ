@@ -286,7 +286,7 @@ public class LuaAdapter extends BaseAdapter implements Filterable {
             } else if (view instanceof ImageView) {
                 if (value instanceof Bitmap) ((ImageView) view).setImageBitmap((Bitmap) value);
                 else if (value instanceof String) {
-                    AsyncLoader.INSTANCE.loadImage(mContext.getContext(), imageLoader, (String) value, (ImageView) view);
+                    AsyncLoader.INSTANCE.loadImage(mContext.getContext(), imageLoader, value, (ImageView) view);
                     //((ImageView) view).setImageDrawable(new LuaBitmapDrawable(mContext, (String) value));
                 } else if (value instanceof Drawable)
                     ((ImageView) view).setImageDrawable((Drawable) value);
