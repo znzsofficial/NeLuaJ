@@ -6858,6 +6858,7 @@ return {
     "com.androlua.adapter.LuaArrayAdapter",
     "com.androlua.adapter.LuaExpandableListAdapter",
     "com.androlua.adapter.LuaMultiAdapter",
+    "com.androlua.adapter.LuaRecyclerAdapter",
     "com.caverock.androidsvg.CSSParseException",
     "com.caverock.androidsvg.CSSParser",
     "com.caverock.androidsvg.CanvasLegacy",

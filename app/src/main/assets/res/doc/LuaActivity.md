@@ -38,6 +38,9 @@ onVersionChanged(new, old)
 onError(error, message)
 onNightModeChanged(mode)
 ```
+
+---
+
 ### 示例
 
 ```lua
