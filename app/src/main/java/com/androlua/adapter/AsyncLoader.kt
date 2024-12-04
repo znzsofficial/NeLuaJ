@@ -20,7 +20,7 @@ object AsyncLoader {
         ).image?.asDrawable(context.resources)
     }
 
-    fun loadImage(context: Context, loader: ImageLoader, src: String, view: ImageView) {
+    fun loadImage(context: Context, loader: ImageLoader, src: Any, view: ImageView) {
         loader.enqueue(
             ImageRequest.Builder(context)
                 .data(src)
