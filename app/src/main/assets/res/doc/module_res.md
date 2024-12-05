@@ -1,36 +1,67 @@
-## 介绍
+# NeLuaJ+ 的 `res` 模块介绍
 
-NeLuaJ+ 对 LuaJ++ 的 res模块 进行了一些修改并增强了多语言支持。
+`NeLuaJ+` 对 `LuaJ++` 的 `res` 模块进行了增强，特别是对多语言和资源管理的支持进行了优化。
 
-### res.string
+---
 
-1. 读取 init.lua 中的信息。
-2. 检查是否存在当前设备语言对应的文件。
-3. 若存在相应语言文件，读取该文件。
-4. 若不存在相应语言文件，则检查默认语言设置（设置在 default.lua 中）并加载。
+## 功能概览
 
-### res.bitmap / res.drawable
+### **1. res.string**
+- **主要功能**: 读取和管理字符串资源。
+- **实现逻辑**:
+    1. 从 `init.lua` 文件中读取信息。
+    2. 检查是否存在与当前设备语言对应的资源文件。
+    3. 如果存在对应语言文件，加载该文件。
+    4. 如果不存在对应语言文件，则加载默认语言配置（存储在 `default.lua` 中）。
 
-返回 drawable 文件夹内图片的Bitmap对象或Drawable对象
+---
 
-### res.font
+### **2. res.bitmap / res.drawable**
+- **主要功能**:
+    - 提供对 `drawable` 文件夹中图片资源的访问。
+- **返回值**:
+    - 图片的 `Bitmap` 对象或 `Drawable` 对象。
 
-返回 font 文件夹内 ttf/otf 字体文件的 Typeface 对象
+---
 
-### res.layout
+### **3. res.font**
+- **主要功能**: 处理字体资源。
+- **返回值**:
+    - `font` 文件夹中的 `ttf` 或 `otf` 字体文件对应的 `Typeface` 对象。
 
-返回 layout 文件夹内的布局表
+---
 
-### res.view
+### **4. res.layout**
+- **主要功能**: 获取布局文件。
+- **返回值**:
+    - `layout` 文件夹中的布局表。
 
-对 layout 文件夹内布局表进行加载后返回
+---
 
-### res.dimen
+### **5. res.view**
+- **主要功能**: 获取加载后的布局。
+- **返回值**:
+    - 加载后的布局视图对象。
 
-1. 读取 init.lua 中的信息
-2. 读取 land.lua(横屏时) 或 port.lua(竖屏时) 或 undefined.lua
+---
 
-### res.color
+### **6. res.dimen**
+- **主要功能**: 读取尺寸信息。
+- **实现逻辑**:
+    1. 从 `init.lua` 文件中读取配置信息。
+    2. 根据屏幕方向加载相应的文件：
+        - 横屏加载 `land.lua`。
+        - 竖屏加载 `port.lua`。
+        - 未定义方向时加载 `undefined.lua`。
 
-1. 读取 init.lua 中的信息
-2. 读取 day.lua 或 night.lua
+---
+
+### **7. res.color**
+- **主要功能**: 处理颜色资源。
+- **实现逻辑**:
+    1. 从 `init.lua` 文件中读取配置信息。
+    2. 根据系统模式加载颜色文件：
+        - 白天模式加载 `day.lua`。
+        - 夜间模式加载 `night.lua`。
+
+---
