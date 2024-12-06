@@ -325,7 +325,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         if (mOnKeyShortcut != null) {
             try {
                 val ret = mOnKeyShortcut!!.jcall(keyCode, event)
-                if (ret != null && ret.javaClass == Boolean::class.java && ret as Boolean) return true
+                if (ret != null && ret as Boolean) return ret
             } catch (e: LuaError) {
                 sendError("onKeyShortcut", e)
             }
@@ -338,7 +338,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         if (mOnKeyDown != null) {
             try {
                 val ret = mOnKeyDown!!.jcall(keyCode, event)
-                if (ret != null && ret.javaClass == Boolean::class.java && ret as Boolean) return true
+                if (ret != null && ret as Boolean) return ret
             } catch (e: LuaError) {
                 sendError("onKeyDown", e)
             }
@@ -351,7 +351,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         if (mOnKeyUp != null) {
             try {
                 val ret = mOnKeyUp!!.jcall(keyCode, event)
-                if (ret != null && ret.javaClass == Boolean::class.java && ret as Boolean) return true
+                if (ret != null && ret as Boolean) return ret
             } catch (e: LuaError) {
                 sendError("onKeyUp", e)
             }
@@ -364,7 +364,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         if (mOnKeyLongPress != null) {
             try {
                 val ret = mOnKeyLongPress!!.jcall(keyCode, event)
-                if (ret != null && ret.javaClass == Boolean::class.java && ret as Boolean) return true
+                if (ret != null && ret as Boolean) return ret
             } catch (e: LuaError) {
                 sendError("onKeyLongPress", e)
             }
@@ -377,7 +377,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         if (mOnTouchEvent != null) {
             try {
                 val ret = mOnTouchEvent!!.jcall(event)
-                if (ret != null && ret.javaClass == Boolean::class.java && ret as Boolean) return true
+                if (ret != null && ret as Boolean) return ret
             } catch (e: LuaError) {
                 sendError("onTouchEvent", e)
             }
