@@ -222,6 +222,7 @@ function _M.init()
            classes = {"LuaActivity","LuaServer","LuaService","List","ArrayList","HashSet","HashMap","Object","Map"}
         end
         local ms = {
+            "onKeyDown", "onKeyUp", "onKeyLongPress", "onKeyShortcut",
             "onCreate", "onStart", "onResume",
             "onPause", "onStop", "onDestroy", "onError", "onReceive",
             "onActivityResult", "onResult", "onNightModeChanged",
