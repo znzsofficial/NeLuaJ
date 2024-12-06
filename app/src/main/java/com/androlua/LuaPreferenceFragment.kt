@@ -40,10 +40,11 @@ class LuaPreferenceFragment(private var mPreferences: LuaTable) : PreferenceFrag
                 val preference = clazz.jcall(activity) as Preference
                 preference.onPreferenceChangeListener = this
                 preference.onPreferenceClickListener = this
+                val coerced = CoerceJavaToLua.coerce(preference)
                 for (et in p.keys()) {
                     if (et.isstring()) {
                         try {
-                            CoerceJavaToLua.coerce(preference).jset(et.tojstring(), p[et])
+                            coerced.jset(et.tojstring(), p[et])
                         } catch (e: LuaError) {
                             e.printStackTrace()
                         }
