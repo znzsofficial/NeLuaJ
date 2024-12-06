@@ -86,44 +86,44 @@ class LuaLayout(private val initialContext: Context) {
         return views[id]
     }
 
-    private fun toValue(s: String): Any? {
-        if (s == "nil") return 0
-        val len = s.length
+    private fun toValue(str: String): Any? {
+        if (str == "nil") return 0
+        val len = str.length
 
-        if (s.contains("|")) {
-            val ss = s.split("\\|".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
+        if (str.contains("|")) {
+            val ss = str.split("\\|".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
             var ret = 0
             for (s1 in ss) {
                 if (toint.containsKey(s1)) ret = ret or toint[s1]!!
             }
             return ret
         }
-        if (toint.containsKey(s)) return toint[s]
+        if (toint.containsKey(str)) return toint[str]
 
         if (len > 2) {
-            if (s[0] == '#') {
+            if (str[0] == '#') {
                 try {
-                    return Color.parseColor(s)
-                } catch (e: Exception) {
-                    val clr = s.substring(1).toInt(16)
-                    if (s.length < 6) return clr or -0x1000000
+                    return Color.parseColor(str)
+                } catch (_: Exception) {
+                    val clr = str.substring(1).toInt(16)
+                    if (str.length < 6) return clr or -0x1000000
                     return clr
                 }
             }
-            if (s[len - 1] == '%') {
-                val f = s.substring(0, len - 1).toFloat()
+            if (str[len - 1] == '%') {
+                val f = str.substring(0, len - 1).toFloat()
                 return f * luaContext.width / 100
             }
 
-            if (s[len - 2] == '%') {
-                val f = s.substring(0, len - 2).toFloat()
-                if (s[len - 1] == 'h') return f * luaContext.height / 100
-                if (s[len - 1] == 'w') return f * luaContext.width / 100
+            if (str[len - 2] == '%') {
+                val f = str.substring(0, len - 2).toFloat()
+                if (str[len - 1] == 'h') return f * luaContext.height / 100
+                if (str[len - 1] == 'w') return f * luaContext.width / 100
             }
-            val t = s.substring(len - 2)
+            val t = str.substring(len - 2)
             val i = types[t]
             if (i != null) {
-                val n = s.substring(0, len - 2)
+                val n = str.substring(0, len - 2)
                 return TypedValue.applyDimension(i, n.toInt().toFloat(), dm)
             }
         }
@@ -135,16 +135,16 @@ class LuaLayout(private val initialContext: Context) {
         }
     }*/
         try {
-            return s.toLong()
+            return str.toLong()
         } catch (e: Exception) {
             e.printStackTrace()
         }
         try {
-            return s.toDouble()
+            return str.toDouble()
         } catch (e: Exception) {
             e.printStackTrace()
         }
-        return s
+        return str
     }
 
     @JvmOverloads
