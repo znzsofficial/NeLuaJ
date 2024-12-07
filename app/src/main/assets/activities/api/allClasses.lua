@@ -16949,7 +16949,7 @@ return {
     "org.luaj.lib.jse.CoerceJavaToLua",
     "org.luaj.lib.jse.CoerceJavaToLua$ArrayCoercion",
     "org.luaj.lib.jse.CoerceJavaToLua$BoolCoercion",
-    "org.luaj.lib.jse.CoerceJavaToLua$BytesCoercion",
+    --"org.luaj.lib.jse.CoerceJavaToLua$BytesCoercion",
     "org.luaj.lib.jse.CoerceJavaToLua$CharCoercion",
     "org.luaj.lib.jse.CoerceJavaToLua$ClassCoercion",
     "org.luaj.lib.jse.CoerceJavaToLua$Coercion",
