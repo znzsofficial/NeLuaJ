@@ -234,10 +234,10 @@ a/=1
 #### ** 调用java优化 **
 - javaClass 拓展函数/属性
 ```lua
-Object.list{}
-Object.new()
-print(Object.class)
-Object.override{}
+Object.array{} -- 创建数组
+print(Object.new) -- 类的构造器
+print(Object.class) -- 获取类本身
+Object.override{} -- 覆盖方法
 ```
 
 - 直接()构建实例或实现接口,抽象类
@@ -245,11 +245,11 @@ Object.override{}
 b = ArrayList()
 m = HashMap()
 i = interface { 
-    methodname=function(arg)
+    methodName=function(arg)
     end
 }
-c = abstract { 
-    methodname=function(super, arg)
+c = abstract {
+    methodName=function(super, arg)
     end
 }
 ```
@@ -277,7 +277,7 @@ Button(this):print()
 
 - 支持批量设置属性
 ```lua
-Button(this){
+Button(this) {
   text="test",
   enabled=false
 }
