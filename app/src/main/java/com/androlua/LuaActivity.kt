@@ -13,6 +13,7 @@ import android.content.IntentFilter
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.content.res.Resources
 import android.content.res.XmlResourceParser
 import android.graphics.BitmapFactory
 import android.graphics.BlendMode
@@ -30,7 +31,6 @@ import android.os.IBinder
 import android.os.StrictMode
 import android.os.StrictMode.ThreadPolicy
 import android.provider.MediaStore
-import android.util.DisplayMetrics
 import android.util.Log
 import android.view.ContextMenu
 import android.view.ContextMenu.ContextMenuInfo
@@ -456,12 +456,12 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         debug = bool
     }
 
-    private fun initSize() {
-        val outMetrics = DisplayMetrics()
-        ContextCompat.getDisplayOrDefault(this).getMetrics(outMetrics)
-        mWidth = outMetrics.widthPixels
-        mHeight = outMetrics.heightPixels
-    }
+    private fun initSize() =
+        Resources.getSystem().displayMetrics.apply {
+            mWidth = widthPixels
+            mHeight = heightPixels
+        }
+
 
     fun checkAllPermissions(): Boolean {
         if (checkCallingOrSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
@@ -1309,7 +1309,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
                 .build()
         )
 
-    fun loadImage(data: Any?, view: ImageView) = view.load(data, imageLoader)
+    fun loadImage(data: Any?, view: ImageView) = view.load(data)
 
     fun dpToPx(dp: Float): Float {
         return TypedValueCompat.dpToPx(dp, resources.displayMetrics)
