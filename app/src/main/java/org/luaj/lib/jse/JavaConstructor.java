@@ -16,7 +16,7 @@ import org.luaj.Varargs;
 import org.luaj.lib.VarArgFunction;
 
 class JavaConstructor extends JavaMember {
-    static final Map h = Collections.synchronizedMap(new HashMap<>());
+    static final Map<Object, Object> h = Collections.synchronizedMap(new HashMap<>());
     final Constructor i;
 
     private JavaConstructor(Constructor var1) {
