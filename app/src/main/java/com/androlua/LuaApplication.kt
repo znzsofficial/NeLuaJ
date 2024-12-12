@@ -35,11 +35,11 @@ class LuaApplication : Application(), LuaContext {
     }
 
     override fun getLuaPath(): String {
-        return File(luaDir).absolutePath
+        return filesDir.absolutePath
     }
 
     override fun getLuaPath(s: String): String {
-        return File(luaDir, s).absolutePath
+        return File(filesDir, s).absolutePath
     }
 
     override fun getLuaPath(dir: String, name: String): String? {
