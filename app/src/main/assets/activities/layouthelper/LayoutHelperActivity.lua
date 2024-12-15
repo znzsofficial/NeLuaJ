@@ -208,18 +208,9 @@ local save_dialog = MaterialAlertDialogBuilder(activity)
 end)
 .setNegativeButton(android.R.string.cancel,finish)
 
-if bindClass "android.os.Build".VERSION.SDK_INT >= 33 then
 this.addOnBackPressedCallback(function()
   save_dialog.show()
 end)
-else
-function onKeyDown(code,event)
-    if string.find(tostring(event),"KEYCODE_BACK") ~= nil then
-        save_dialog.show()
-        return true
-    end
-end
-end
 
 function onOptionsItemSelected(m)
   switch m.getItemId() do
