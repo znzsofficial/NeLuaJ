@@ -19,6 +19,8 @@
 ### **2. res.bitmap / res.drawable**
 - **主要功能**:
     - 提供对 `drawable` 文件夹中图片资源的访问。
+- **支持文件类型**:
+    - `bmp`、`jpeg`、`jpg`、`png`、`gif`、`svg`、`webp`、`heif`、`heic`、`avif`
 - **返回值**:
     - 图片的 `Bitmap` 对象或 `Drawable` 对象。
 
@@ -41,7 +43,7 @@
 ### **5. res.view**
 - **主要功能**: 获取加载后的布局。
 - **返回值**:
-    - 加载后的布局视图对象。
+    - `layout` 文件夹中加载后的布局视图对象。
 
 ---
 
