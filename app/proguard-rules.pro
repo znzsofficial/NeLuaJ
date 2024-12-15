@@ -19,5 +19,17 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
--keep class com.baidu.bottom.** { *; }
--keep class com.baidu.mobstat.** { *; }
+-keep class android.** { *; }
+-keep class androidx.** { *; }
+-keep class coil3.** { *; }
+-keep class com.** { *; }
+-keep class github.** { *; }
+-keep class jp.** { *; }
+-keep class kotlin.** { *; }
+-keep class kotlinx.** { *; }
+-keep class me.** { *; }
+-keep class net.** { *; }
+-keep class okhttp3.** { *; }
+-keep class okio.** { *; }
+-keep class org.** { *; }
+-keep class vinx.** { *; }

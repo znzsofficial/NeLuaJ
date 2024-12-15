@@ -72,8 +72,8 @@ function onRequestPermissionsResult(r, p, g)
     local lastPath = this.getSharedData("lastFile")
     local lastSelect = this.getSharedData("lastSelect")
     if lastPath and File(lastPath).exists() then
-       EditorUtil.load(lastPath)
-       EditorUtil.setSelection(lastSelect or 0)
+        EditorUtil.load(lastPath)
+        EditorUtil.setSelection(lastSelect or 0)
     end
 end
 
@@ -151,7 +151,7 @@ function onCreateOptionsMenu(menu)
         MainActivity.Public.snack(res.string.save_success)
         default
         MainActivity.Public.snack(res.string.save_fail)
-        end
+    end
     end
     menu0.add(res.string.compile).onMenuItemClick = function(a)
         local path = Bean.Path.this_file
@@ -280,7 +280,7 @@ function onPause()
     end
 end
 
-local exit = function()
+this.addOnBackPressedCallback(function()
     if _exit + 2 > os.time() then
         activity.finish(true)
     else
@@ -308,16 +308,4 @@ local exit = function()
             _exit = os.time()
         end
     end
-end
-
-if bindClass "android.os.Build".VERSION.SDK_INT >= 33 then
-    this.addOnBackPressedCallback(exit)
-else
-    function onKeyDown(code, event)
-        if string.find(tostring(event), "KEYCODE_BACK") ~= nil then
-            exit()
-            return true
-        end
-    end
-
-end
+end)

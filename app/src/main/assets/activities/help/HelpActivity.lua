@@ -90,25 +90,12 @@ lv.onItemClick = function(l, v, p, i)
     webView.loadFromText(md)
 end
 
-if bindClass "android.os.Build".VERSION.SDK_INT >= 33 then
-    this.addOnBackPressedCallback(function()
-            if vpg.getCurrentItem() ~= 0 then
-                vpg.setCurrentItem(0)
-                activity.setTitle("NeLuaJ+" .. res.string.help)
-            else
-                activity.finish()
-            end
-        end)
-else
-    function onKeyDown(code, event)
-        if code == KeyEvent.KEYCODE_BACK then
-            if vpg.getCurrentItem() ~= 0 then
-                vpg.setCurrentItem(0)
-                activity.setTitle("NeLuaJ+" .. res.string.help)
-                return true
-            else
-                activity.finish()
-            end
-        end
+this.addOnBackPressedCallback(function()
+    if vpg.getCurrentItem() ~= 0 then
+        vpg.setCurrentItem(0)
+        activity.setTitle("NeLuaJ+" .. res.string.help)
+    else
+        activity.finish()
     end
-end
+end)
+
