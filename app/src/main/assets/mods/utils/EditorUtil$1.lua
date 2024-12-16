@@ -35,7 +35,7 @@ function _M.javaClassAnalyse(view,status)
     local text = view.getSelectedText() -- 获取到选中文本
     SelectMain.new(text,function(content)
       if type(content) == "table" then -- 不为表则是错误信息
-        for _,v in pairs(content[text])
+        for _,v in pairs(content[text]) do
           SelectMain.addView(v)
           --print(v)
         end
