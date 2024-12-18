@@ -1,6 +1,5 @@
 package com.androlua
 
-import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
@@ -14,6 +13,7 @@ import java.io.Writer
 import java.text.DateFormat
 import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.Locale
 
 /**
  * UncaughtException处理类,当程序发生Uncaught异常的时候,有该类来接管程序,并记录发送错误报告.
@@ -32,8 +32,8 @@ class CrashHandler : Thread.UncaughtExceptionHandler {
 
 
     //用于格式化日期,作为日志文件名的一部分
-    @SuppressLint("SimpleDateFormat")
-    private val formatter: DateFormat = SimpleDateFormat("yyyy-MM-dd-HH-mm-ss")
+    private val formatter: DateFormat =
+        SimpleDateFormat("yyyy-MM-dd-HH-mm-ss", Locale.getDefault(Locale.Category.FORMAT))
 
 
     /**
@@ -82,7 +82,7 @@ class CrashHandler : Thread.UncaughtExceptionHandler {
         //收集设备参数信息
         collectDeviceInfo(mContext)
         //保存日志文件
-        saveCrashInfo2File(exception)
+        saveCrashInfo(exception)
         return true
     }
 
@@ -92,17 +92,13 @@ class CrashHandler : Thread.UncaughtExceptionHandler {
      */
     private fun collectDeviceInfo(ctx: Context?) {
         try {
-            val pm = ctx!!.packageManager
-            val pi = pm.getPackageInfo(ctx.packageName, PackageManager.GET_ACTIVITIES)
-            if (pi != null) {
-                val versionName = if (pi.versionName == null) "null" else pi.versionName
-                val versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    pi.longVersionCode.toString()
+            ctx?.packageManager?.getPackageInfo(ctx.packageName, PackageManager.GET_ACTIVITIES)?.let { info ->
+                infos["versionName"] = if (info.versionName == null) "null" else info.versionName.toString()
+                infos["versionCode"] = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    info.longVersionCode
                 } else {
-                    pi.versionCode.toString()
-                }
-                infos["versionName"] = versionName as String
-                infos["versionCode"] = versionCode
+                    info.versionCode
+                }.toString()
             }
         } catch (e: PackageManager.NameNotFoundException) {
             Log.e(TAG, "an error occurred when collect package info", e)
@@ -145,12 +141,12 @@ class CrashHandler : Thread.UncaughtExceptionHandler {
      * @param ex
      * @return 返回文件名称,便于将文件传送到服务器
      */
-    private fun saveCrashInfo2File(ex: Throwable): String? {
+    private fun saveCrashInfo(ex: Throwable): String? {
         val sb = StringBuffer()
         for ((key, value) in infos) {
             sb.append("$key=$value\n")
         }
-        val writer: Writer = StringWriter()
+        val writer = StringWriter()
         val printWriter = PrintWriter(writer)
         ex.printStackTrace(printWriter)
         var cause = ex.cause
@@ -186,6 +182,5 @@ class CrashHandler : Thread.UncaughtExceptionHandler {
         const val TAG = "CrashHandler"
 
         val instance by lazy { CrashHandler() }
-
     }
 }
