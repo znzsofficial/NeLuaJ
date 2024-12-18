@@ -1,5 +1,4 @@
 local _M = {}
-local res = res
 local Bean = Bean
 import "androidx.core.view.GravityCompat"
 import "androidx.appcompat.app.ActionBarDrawerToggle"
@@ -21,6 +20,7 @@ _M.initView = function()
     mLuaEditor.setVisibility(4)
     mLuaEditor.post(function()
         EditorUtil.init()
+        bindClass "com.myopicmobile.textwarrior.common.PackageUtil".load(this)
     end)
     swipeRefresh.onRefresh = function()
         MainActivity.RecyclerView.update()
@@ -74,7 +74,7 @@ _M.initCheck = function()
     textView.onClick = function()
         textView.text = mLuaEditor.getError()
     end
-    local ticker = luajava.newInstance"com.androlua.Ticker"
+    local ticker = luajava.newInstance "com.androlua.Ticker"
     ticker.Period = 250
     ticker.onTick = function()
         local error = mLuaEditor.getError()
