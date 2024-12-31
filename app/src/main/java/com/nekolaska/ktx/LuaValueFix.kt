@@ -5,7 +5,6 @@ import org.luaj.LuaString
 import org.luaj.lib.BaseLib
 import org.luaj.lib.StringLib
 
-
 inline val LuaString.m_bytes get() = c
 inline val LuaString.m_offset get() = d
 inline val LuaString.m_length get() = e

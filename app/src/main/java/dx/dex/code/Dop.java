@@ -16,6 +16,8 @@
 
 package dx.dex.code;
 
+import androidx.annotation.NonNull;
+
 import dx.io.OpcodeInfo;
 import dx.io.Opcodes;
 
@@ -83,6 +85,7 @@ public final class Dop {
     }
 
     /** {@inheritDoc} */
+    @NonNull
     @Override
     public String toString() {
         return getName();
