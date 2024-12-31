@@ -16,6 +16,8 @@
 
 package dx.dex.code;
 
+import androidx.annotation.NonNull;
+
 import java.util.BitSet;
 
 import dx.rop.code.RegisterSpec;
@@ -112,9 +114,10 @@ public abstract class DalvInsn {
     }
 
     /** {@inheritDoc} */
+    @NonNull
     @Override
     public final String toString() {
-        StringBuffer sb = new StringBuffer(100);
+        StringBuilder sb = new StringBuilder(100);
 
         sb.append(identifierString());
         sb.append(' ');
