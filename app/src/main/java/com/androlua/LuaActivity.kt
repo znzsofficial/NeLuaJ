@@ -717,7 +717,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
             adapter.add(msg)
             logs.add(msg)
         }
-        Log.i("luaj", "sendMsg: $msg")
+        //Log.i("luaj", "sendMsg: $msg")
     }
 
     @CallLuaFunction
@@ -797,7 +797,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         try {
             super.unregisterReceiver(receiver)
         } catch (e: Exception) {
-            Log.i("lua", "unregisterReceiver: $receiver")
+            //Log.i("lua", "unregisterReceiver: $receiver")
             e.printStackTrace()
         }
     }
@@ -911,21 +911,19 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         mGc.add(obj!!)
     }
 
-    fun bindService(flag: Int): Boolean {
-        val conn: ServiceConnection =
-            object : ServiceConnection {
-                @CallLuaFunction
-                override fun onServiceConnected(comp: ComponentName?, binder: IBinder) {
-                    runFunc("onServiceConnected", comp, (binder as LuaBinder).service)
-                }
-
-                @CallLuaFunction
-                override fun onServiceDisconnected(comp: ComponentName?) {
-                    runFunc("onServiceDisconnected", comp)
-                }
+    fun bindService(flag: Int) =
+        bindService(object : ServiceConnection {
+            @CallLuaFunction
+            override fun onServiceConnected(comp: ComponentName?, binder: IBinder) {
+                runFunc("onServiceConnected", comp, (binder as LuaBinder).service)
             }
-        return bindService(conn, flag)
-    }
+
+            @CallLuaFunction
+            override fun onServiceDisconnected(comp: ComponentName?) {
+                runFunc("onServiceDisconnected", comp)
+            }
+        }, flag)
+
 
     fun bindService(conn: ServiceConnection, flag: Int): Boolean {
         val service = Intent(this, LuaService::class.java)
@@ -1174,13 +1172,10 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
      * @param finishTask 是否结束任务
      */
     fun finish(finishTask: Boolean) {
-        if (!finishTask) {
+        if (finishTask && (intent?.flags?.and(Intent.FLAG_ACTIVITY_NEW_DOCUMENT) != 0))
+            finishAndRemoveTask()
+        else
             super.finish()
-            return
-        }
-        val intent = getIntent()
-        if (intent != null && (intent.flags and Intent.FLAG_ACTIVITY_NEW_DOCUMENT) != 0) finishAndRemoveTask()
-        else super.finish()
     }
 
     fun getUriForPath(path: String): Uri? {
