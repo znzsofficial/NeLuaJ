@@ -1,30 +1,36 @@
 package com.androlua
 
-import android.app.Activity
 import android.graphics.drawable.Drawable
-import coil3.BitmapImage
 import coil3.Image
 import coil3.asDrawable
 import coil3.target.Target
 import org.luaj.LuaFunction
 
-class SimpleTarget(private val activity: Activity, private val function: LuaFunction) : Target {
+class SimpleTarget(private val activity: LuaActivity, private val function: LuaFunction) : Target {
     override fun onSuccess(result: Image) {
-        function.jcall(result.asDrawable(activity.resources))
+        runCatching {
+            function.jcall(result.asDrawable(activity.resources))
+        }.onFailure { activity.sendError("SimpleTarget", it as Exception) }
     }
 }
 
-class LuaTarget(private val activity: Activity, private val listener: Listener) : Target {
+class LuaTarget(private val activity: LuaActivity, private val listener: Listener) : Target {
     override fun onSuccess(result: Image) {
-        listener.onSuccess(result.asDrawable(activity.resources))
+        runCatching {
+            listener.onSuccess(result.asDrawable(activity.resources))
+        }.onFailure { activity.sendError("onSuccess", it as Exception) }
     }
 
     override fun onStart(placeholder: Image?) {
-        listener.onStart(placeholder)
+        runCatching {
+            listener.onStart(placeholder)
+        }.onFailure { activity.sendError("onStart", it as Exception) }
     }
 
     override fun onError(error: Image?) {
-        listener.onError(error)
+        runCatching {
+            listener.onError(error)
+        }.onFailure { activity.sendError("onError", it as Exception) }
     }
 
     interface Listener {
