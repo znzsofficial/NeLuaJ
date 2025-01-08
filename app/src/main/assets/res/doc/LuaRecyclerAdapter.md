@@ -133,10 +133,12 @@ public void setNotifyOnChange(boolean notifyOnChange)
 
 ### 自定义绑定示例
 ```lua
-adapter.dataBinder = function(views, item)
-    views.title.text = item.title
+adapter.dataBinder = function(views, data, holder, position)
+    views.title.text = data.title
 end
 ```
 - **参数**:
     - `views table`: 存放视图的表
-    - `item table`: 当前项的数据
+    - `data table`: 当前项的数据
+    - `holder userdata`: LuaViewHolder 对象
+    - `position int`: 当前项的位置
