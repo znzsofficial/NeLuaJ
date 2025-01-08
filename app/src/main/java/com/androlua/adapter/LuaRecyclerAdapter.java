@@ -70,7 +70,7 @@ public class LuaRecyclerAdapter extends RecyclerView.Adapter<LuaRecyclerAdapter.
     }
 
     public interface DataBinder {
-        void bind(LuaTable binding, LuaTable data);
+        void bind(LuaTable binding, LuaTable data, LuaViewHolder holder, int position);
     }
 
     private DataBinder dataBinder;
@@ -83,7 +83,7 @@ public class LuaRecyclerAdapter extends RecyclerView.Adapter<LuaRecyclerAdapter.
     @Override
     public void onBindViewHolder(@NonNull LuaViewHolder holder, int position) {
         if (dataBinder != null) {
-            dataBinder.bind(holder.binding, mData.get(position + 1).checktable());
+            dataBinder.bind(holder.binding, mData.get(position + 1).checktable(), holder, position);
         } else {
             // 默认绑定逻辑
             LuaValue item = mData.get(position + 1);
@@ -107,7 +107,7 @@ public class LuaRecyclerAdapter extends RecyclerView.Adapter<LuaRecyclerAdapter.
         return mData.length();
     }
 
-    public void setNotifyOnChange(boolean notifyOnChange){
+    public void setNotifyOnChange(boolean notifyOnChange) {
         mNotifyOnChange = notifyOnChange;
     }
 
