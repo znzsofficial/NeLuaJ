@@ -6,7 +6,7 @@
 ---  
 
 ## **Project Support**
-- **QQ Group**: [603327362](#)  
+- **QQ Group**: [603327362](https://qm.qq.com/cgi-bin/qm/qr?k=Y4DCrLhx2bie5LaLF4msQOHLVY1s7EeN&jump_from=webapi&authKey=KV3sOndkaiImC7LZB3Rt37sCOyRG3akbzURt+4GyQXps2x1EkyCQl7D3+16GQXyE)  
   The latest version updates will be released in the group. Suggestions and feedback are also welcome.
 
 ---
