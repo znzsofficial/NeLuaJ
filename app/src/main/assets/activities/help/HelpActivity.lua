@@ -61,7 +61,7 @@ local item = {
 }
 
 local data = {
-    { text = res.string.overview, file = "overview.md" },
+    { text = "init.lua", file = "init_lua_" .. res.language .. ".md" },
     { text = "LuaJ++", file = "LuaJ++.md" },
     { text = "LuaActivity", file = "LuaActivity.md" },
     { text = "LuaCustRecyclerAdapter", file = "LuaCustRecyclerAdapter.md" },
@@ -72,10 +72,10 @@ local data = {
     { text = "lazy", file = "lazy.md" },
     { text = "xTask", file = "xTask.md" },
     { text = "Coil", file = "Coil.md" },
-    { text = "res", file = "module_res.md" },
-    { text = "okhttp", file = "module_okhttp.md" },
+    { text = "res " .. res.string._module, file = "module_res.md" },
+    { text = "okhttp " .. res.string._module, file = "module_okhttp.md" },
     { text = "loadlayout", file = "module_loadlayout.md" },
-    { text = "file", file = "module_file.md" },
+    { text = "file " .. res.string._module, file = "module_file.md" },
     { text = "FileObserver", file = "other_FileObserver.md" },
     { text = res.string.global, file = "global_env.md" },
 }
