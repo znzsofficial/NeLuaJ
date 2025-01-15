@@ -1,7 +1,7 @@
 # Project Support and Preface
 
 ## **Other Languages**
-- **[简体中文文档](README_CN.md)**: Click here for the Simplified Chinese version of this document.
+- **[简体中文](README_CN.md)**: Click here for the Simplified Chinese version of this document.
 
 ---  
 
@@ -9,15 +9,7 @@
 - **QQ Group**: [603327362](#)  
   The latest version updates will be released in the group. Suggestions and feedback are also welcome.
 
----  
-
-## **Preface**
-This project is suitable for users with a basic understanding of Android development. If any of the following situations confuse you, please use it cautiously:
-- The editor does not include built-in Chinese support or templates.
-- Code copied from other editors cannot run.
-- You have only superficial programming experience (e.g., learning programming from QQ groups or small forums).
-
----  
+---
 
 # Feature Highlights and Update Notes
 
