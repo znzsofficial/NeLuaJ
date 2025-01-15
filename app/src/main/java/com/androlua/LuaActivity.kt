@@ -47,6 +47,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.view.ActionMode
+import androidx.core.app.ActivityManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.util.TypedValueCompat
@@ -101,6 +102,7 @@ import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
 import kotlin.system.measureTimeMillis
+import androidx.core.net.toUri
 
 open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnReceiveListener,
     LuaMetaTable {
@@ -140,11 +142,11 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
                     luaFile = f.absolutePath
                 }
                 luaDir = p
-                setTitle(File(luaDir).getName())
+                setTitle(File(luaDir!!).getName())
             }
         }
 
-        luaDir = checkProjectDir(File(luaDir)).absolutePath
+        luaDir = checkProjectDir(File(luaDir!!)).absolutePath
         initSize()
         pageName = File(luaFile).getName()
         val idx = pageName.lastIndexOf(".")
@@ -386,7 +388,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     }
 
     private fun checkProjectDir(dir: File?): File {
-        if (dir == null) return File(luaDir)
+        if (dir == null) return File(luaDir!!)
         if (File(dir, "main.lua").exists() && File(dir, "init.lua").exists()) return dir
         return checkProjectDir(dir.getParentFile())
     }
@@ -961,12 +963,12 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         val intent = Intent(this, LuaService::class.java)
         intent.putExtra(NAME, path)
         if (path?.get(0) != '/' && luaDir != null) path = "$luaDir/$path"
-        val f = File(path)
+        val f = File(path!!)
         if (f.isDirectory() && File("$path/service.lua").exists()) path += "/service.lua"
-        else if ((f.isDirectory() || !f.exists()) && !path?.endsWith(".lua")!!) path += ".lua"
+        else if ((f.isDirectory() || !f.exists()) && !path.endsWith(".lua")) path += ".lua"
         if (!File(path).exists()) throw LuaError(FileNotFoundException(path))
 
-        intent.setData(Uri.parse("file://$path"))
+        intent.setData("file://$path".toUri())
 
         if (arg != null) intent.putExtra(ARG, arg)
 
