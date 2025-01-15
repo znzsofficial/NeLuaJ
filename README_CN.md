@@ -1,7 +1,7 @@
 # 项目支持与前言
 
 ## **项目支持**
-- **QQ群组**: [603327362](#)  
+- **QQ群组**: [603327362](https://qm.qq.com/cgi-bin/qm/qr?k=Y4DCrLhx2bie5LaLF4msQOHLVY1s7EeN&jump_from=webapi&authKey=KV3sOndkaiImC7LZB3Rt37sCOyRG3akbzURt+4GyQXps2x1EkyCQl7D3+16GQXyE)  
   未来将在群组中发布最新版本更新，同时欢迎提交建议和反馈。
 
 ---
