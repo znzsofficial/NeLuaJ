@@ -1,63 +1,68 @@
-# 项目支持与前言
+# Project Support and Preface
 
-## **项目支持**
-- **QQ群组**: [603327362](#)  
-  未来将在群组中发布最新版本更新，同时欢迎提交建议和反馈。
+## **Other Languages**
+- **[简体中文文档](README_CN.md)**: Click here for the Simplified Chinese version of this document.
 
----
+---  
 
-## **前言**
-本项目适合具有一定 Android 开发基础的用户。如果以下情况让你感到困惑，建议谨慎使用：
-- 编辑器未自带中文或模板。
-- 从其他编辑器复制的代码无法运行。
-- 对编程仅有浅层次接触（如仅通过QQ群或小论坛了解编程）。
+## **Project Support**
+- **QQ Group**: [603327362](#)  
+  The latest version updates will be released in the group. Suggestions and feedback are also welcome.
 
----
+---  
 
-# 功能亮点与更新说明
+## **Preface**
+This project is suitable for users with a basic understanding of Android development. If any of the following situations confuse you, please use it cautiously:
+- The editor does not include built-in Chinese support or templates.
+- Code copied from other editors cannot run.
+- You have only superficial programming experience (e.g., learning programming from QQ groups or small forums).
 
-## **值得注意的更新**
-### **1. 配置与主题**
-- 新增 `init.lua` 中的 **NeLuaJ_Theme** 配置，允许直接设置编辑器内置主题。
+---  
 
-### **2. 布局支持**
-- `setContentView` 方法支持以下两种参数：
-    - 传入布局表。
-    - 加载过的视图对象。
+# Feature Highlights and Update Notes
 
-### **3. 新增功能与优化**
+## **Noteworthy Updates**
+### **1. Configuration and Themes**
+- Added **NeLuaJ_Theme** configuration in `init.lua`, allowing direct setup of built-in editor themes.
+
+### **2. Layout Support**
+- The `setContentView` method now supports two types of parameters:
+    - Passing a layout table.
+    - Using a preloaded view object.
+
+### **3. New Features and Optimizations**
 - **`LuaActivity`**:
-    - 完善 `AppCompatActivity` 的继承方法，支持更多新特性。
+    - Improved inheritance of `AppCompatActivity`, supporting more new features.
 - **`LuaFragment`**:
-    - 添加更多方法。
-    - 迁移至 **AndroidX** 框架。
+    - Added more methods.
+    - Migrated to the **AndroidX** framework.
 
----
+---  
 
-## **重要变更**
-1. **权限申请逻辑更新**：
-    - `Welcome` 不再自动申请全部权限，符合 Android 运行时权限设计要求。
-    - 请开发者自行实现权限申请及回调逻辑。
+## **Important Changes**
+1. **Permission Request Logic Update**:
+    - `Welcome` no longer automatically requests all permissions, aligning with Android runtime permission requirements.
+    - Developers are responsible for implementing permission requests and callback logic.
 
-2. **多线程优化**：
-    - `Welcome` 使用多线程解压，并在过程中将 `assets` 中的所有 `dex` 文件设置为只读。
+2. **Multithreading Optimization**:
+    - `Welcome` uses multithreading for decompression and sets all `dex` files in `assets` to read-only during the process.
 
-3. **功能移除**：
-    - 删除了内置的 `android.widget` 包。
-    - 移除了与 `PageView` 相关的适配器。
+3. **Feature Removal**:
+    - Removed the built-in `android.widget` package.
+    - Removed adapters related to `PageView`.
 
----
+---  
 
-# 新特性与扩展支持
+# New Features and Extended Support
 
-## **1. 图片加载功能**
-将部分适配器移动至 **`com.androlua.adapter`** 包，并引入 **Coil** 实现图片加载，提供更强大的图片处理能力。
+## **1. Image Loading**
+Moved some adapters to the **`com.androlua.adapter`** package and introduced **Coil** for image loading, providing enhanced image processing capabilities.
 
-## **2. 导入分析工具**
-实现类似 **FusionApp2** 的导入分析功能，支持更高效的资源管理。
-- **作者信息**: [QQ: 3070320289](#)。
+## **2. Import Analysis Tool**
+Implemented an import analysis feature similar to **FusionApp2**, enabling more efficient resource management.
+- **Author Info**: [QQ: 3070320289](#).
 
-## **3. 布局助手**
-- **作者信息**: [QQ: 2241056127](#)。
+## **3. Layout Assistant**
+- **Author Info**: [QQ: 2241056127](#).
 
----
+---  
