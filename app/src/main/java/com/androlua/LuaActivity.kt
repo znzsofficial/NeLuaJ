@@ -31,7 +31,6 @@ import android.os.IBinder
 import android.os.StrictMode
 import android.os.StrictMode.ThreadPolicy
 import android.provider.MediaStore
-import android.util.Log
 import android.view.ContextMenu
 import android.view.ContextMenu.ContextMenuInfo
 import android.view.KeyEvent
@@ -47,9 +46,9 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.view.ActionMode
-import androidx.core.app.ActivityManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import androidx.core.net.toUri
 import androidx.core.util.TypedValueCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
@@ -102,7 +101,6 @@ import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
 import kotlin.system.measureTimeMillis
-import androidx.core.net.toUri
 
 open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnReceiveListener,
     LuaMetaTable {
@@ -208,7 +206,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
                 var arg = intent.getSerializableExtra(ARG) as Array<Any?>?
                 if (arg == null) arg = arrayOfNulls<Any>(0)
                 doFile(luaFile, *arg)
-                runMainFunc(pageName, *arg)
+                //runMainFunc(pageName, *arg)
                 runFunc("onCreate")
                 if (!isSetViewed) showLogView(false)
                 it.get("onKeyShortcut").apply {
@@ -291,17 +289,17 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         StrictMode.setThreadPolicy(policy)
     }
 
-    fun runMainFunc(name: String?, vararg arg: Any?): Any? {
-        try {
-            var f = globals.get(name)
-            if (f.isfunction()) return f.jcall(*arg)
-            f = globals.get("main")
-            if (f.isfunction()) return f.jcall(*arg)
-        } catch (e: Exception) {
-            sendError(name, e)
-        }
-        return null
-    }
+//    fun runMainFunc(name: String?, vararg arg: Any?): Any? {
+//        try {
+//            var f = globals.get(name)
+//            if (f.isfunction()) return f.jcall(*arg)
+//            f = globals.get("main")
+//            if (f.isfunction()) return f.jcall(*arg)
+//        } catch (e: Exception) {
+//            sendError(name, e)
+//        }
+//        return null
+//    }
 //    fun runMainFunc(name: String?, arg: Array<Any?>): Any? {
 //        try {
 //            var f = globals.get(name)
@@ -937,7 +935,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         else if ((f.isDirectory() || !f.exists()) && !path.endsWith(".lua")) path += ".lua"
         if (!File(path).exists()) throw LuaError(FileNotFoundException(path))
 
-        service.setData(Uri.parse("file://$path"))
+        service.setData("file://$path".toUri())
 
         return super.bindService(service, conn, flag)
     }
@@ -1080,7 +1078,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
             intent.addFlags(Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
         }
 
-        intent.setData(Uri.parse("file://$path"))
+        intent.setData("file://$path".toUri())
 
         if (arg != null) intent.putExtra(ARG, arg)
         if (newDocument) startActivity(intent)
@@ -1155,7 +1153,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         else if ((f.isDirectory() || !f.exists()) && !path.endsWith(".lua")) path += ".lua"
         if (!File(path).exists()) throw FileNotFoundException(path)
 
-        intent.setData(Uri.parse("file://$path"))
+        intent.setData("file://$path".toUri())
 
         if (newDocument) {
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT)
