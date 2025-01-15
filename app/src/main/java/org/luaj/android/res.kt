@@ -31,12 +31,15 @@ class res(private val context: LuaContext) : TwoArgFunction() {
     override fun call(modName: LuaValue, env: LuaValue): LuaValue {
         val globals = env.checkglobals()
         val res = LuaTable().also {
-            it["string"] = string(context, globals)
+            val str = string(context, globals)
+            str.checktable()
+            it["string"] = str
             it["drawable"] = drawable(context, globals)
             it["bitmap"] = bitmap(context, globals)
             it["layout"] = layout(context, globals)
             it["view"] = view(context, globals)
             it["font"] = font(context)
+            it["language"] = str.language
         }
         if (context is Activity) {
             val configuration = context.resources.configuration
@@ -142,6 +145,7 @@ class res(private val context: LuaContext) : TwoArgFunction() {
     private class string(private val activity: LuaContext, private val globals: Globals) :
         LuaValue() {
         private var stringTable = LuaTable()
+        var language: String = Locale.getDefault().language
         private var inited = false
 
         override fun type(): Int {
@@ -157,12 +161,11 @@ class res(private val context: LuaContext) : TwoArgFunction() {
         }
 
         override fun checktable(): LuaTable {
-            val mLanguage = Locale.getDefault().language
             var p = activity.getLuaPath("res/string", "init.lua")
             if (File(p).exists()) globals.loadfile(p, stringTable).call()
 
             // 加载指定语言的字符串资源文件
-            p = activity.getLuaPath("res/string", "$mLanguage.lua")
+            p = activity.getLuaPath("res/string", "$language.lua")
             if (File(p).exists()) {
                 globals.loadfile(p, stringTable).call()
             } else {
@@ -171,8 +174,8 @@ class res(private val context: LuaContext) : TwoArgFunction() {
                 if (File(p).exists()) {
                     val defValue: LuaValue = globals.loadfile(p).call()
                     if (defValue.isstring()) {
-                        val defLanguage = defValue.tojstring()
-                        p = activity.getLuaPath("res/string", "$defLanguage.lua")
+                        language = defValue.tojstring()
+                        p = activity.getLuaPath("res/string", "$language.lua")
                         if (File(p).exists()) {
                             globals.loadfile(p, stringTable).call()
                         }
