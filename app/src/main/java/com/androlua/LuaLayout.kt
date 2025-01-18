@@ -2,7 +2,6 @@ package com.androlua
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.Drawable
 import android.text.TextUtils
@@ -13,6 +12,7 @@ import android.view.ViewGroup
 import android.widget.AdapterView
 import android.widget.ImageView.ScaleType
 import androidx.appcompat.view.ContextThemeWrapper
+import androidx.core.graphics.toColorInt
 import coil3.ImageLoader
 import coil3.asDrawable
 import coil3.imageLoader
@@ -103,7 +103,7 @@ class LuaLayout(private val initialContext: Context) {
         if (len > 2) {
             if (str[0] == '#') {
                 try {
-                    return Color.parseColor(str)
+                    return str.toColorInt()
                 } catch (_: Exception) {
                     val clr = str.substring(1).toInt(16)
                     if (str.length < 6) return clr or -0x1000000
@@ -127,23 +127,8 @@ class LuaLayout(private val initialContext: Context) {
                 return TypedValue.applyDimension(i, n.toInt().toFloat(), dm)
             }
         }
-        /*if (s.matches("^-?\\d+\\p{Alpha}+$")) {
-        String n = s.replaceAll("\\p{Alpha}+$", "");
-        String t = s.replaceAll("^-?\\d+", "");
-        if (types.containsKey(t)) {
-            return TypedValue.applyDimension(types.get(t), Integer.parseInt(n), dm);
-        }
-    }*/
-        try {
-            return str.toLong()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-        try {
-            return str.toDouble()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        str.toLongOrNull()?.let { return it }
+        str.toDoubleOrNull()?.let { return it }
         return str
     }
 
@@ -364,10 +349,8 @@ class LuaLayout(private val initialContext: Context) {
                                         )
                                     }
                                 }
-                                generateSequence(1) { it + 1 }
-                                    .takeWhile { it <= titles.length() }
-                                    .map { titles[it].asString() }
-                                    .toCollection(titleList)
+                                for (i in 1..titles.length())
+                                    titleList.add(titles[i].asString())
                                 view["setAdapter"].jcall(LuaPagerAdapter(viewList, titleList))
                                 continue
                             }
