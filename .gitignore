@@ -9,3 +9,4 @@
 .cxx
 *.log
 local.properties
+/app/release
