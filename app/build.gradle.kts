@@ -35,7 +35,12 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions { jvmTarget = "17" }
+    kotlinOptions {
+        jvmTarget = "17"
+        freeCompilerArgs += "-Xno-call-assertions"
+        freeCompilerArgs += "-Xno-receiver-assertions"
+        freeCompilerArgs += "-Xno-param-assertions"
+    }
     packagingOptions.resources.excludes.add("META-INF/androidx/emoji2/emoji2/LICENSE.txt")
     configurations.all {
         exclude(group = "androidx.asynclayoutinflater", module = "asynclayoutinflater")
