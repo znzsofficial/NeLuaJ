@@ -3,8 +3,8 @@ package com.androlua
 import android.app.Application
 import android.content.Context
 import android.os.Environment
+import androidx.core.content.edit
 import androidx.preference.PreferenceManager
-import com.google.android.material.color.DynamicColors
 import org.luaj.Globals
 import org.luaj.LuaTable
 import java.io.File
@@ -20,7 +20,7 @@ class LuaApplication : Application(), LuaContext {
         instance = this
         getExternalFilesDir("dexfiles")?.let { rmDir(it) }
         CrashHandler.instance.init(this)
-        DynamicColors.applyToActivitiesIfAvailable(this)
+        //DynamicColors.applyToActivitiesIfAvailable(this)
         //EmulatorSDK.init(this)
     }
 
@@ -125,26 +125,27 @@ class LuaApplication : Application(), LuaContext {
     }
 
     override fun setSharedData(key: String, value: Any?): Boolean {
-        val editor = PreferenceManager.getDefaultSharedPreferences(this).edit()
-        if (value == null) {
-            editor.remove(key)
-        } else {
-            when (value.javaClass.simpleName) {
-                "String" -> editor.putString(key, value as String)
-                "Long" -> editor.putLong(key, (value as Long))
-                "Integer" -> editor.putInt(key, (value as Int))
-                "Float" -> editor.putFloat(key, (value as Float))
-                "LuaTable" -> editor.putString(
-                    key,
-                    (value as LuaTable).values().toString()
-                )
+        PreferenceManager.getDefaultSharedPreferences(this).edit(commit = true) {
+            if (value == null) {
+                remove(key)
+            } else {
+                when (value.javaClass.simpleName) {
+                    "String" -> putString(key, value as String)
+                    "Long" -> putLong(key, (value as Long))
+                    "Integer" -> putInt(key, (value as Int))
+                    "Float" -> putFloat(key, (value as Float))
+                    "LuaTable" -> putString(
+                        key,
+                        (value as LuaTable).values().toString()
+                    )
 
-                "Set" -> editor.putStringSet(key, value as Set<String>)
-                "Boolean" -> editor.putBoolean(key, (value as Boolean))
-                else -> return false
+                    "Set" -> putStringSet(key, value as Set<String>)
+                    "Boolean" -> putBoolean(key, (value as Boolean))
+                    else -> return false
+                }
             }
         }
-        return editor.commit()
+        return true
     }
 
 
