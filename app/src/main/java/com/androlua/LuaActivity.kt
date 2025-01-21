@@ -61,6 +61,7 @@ import com.androlua.LuaBroadcastReceiver.OnReceiveListener
 import com.androlua.LuaService.LuaBinder
 import com.androlua.adapter.ArrayListAdapter
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.nekolaska.internal.commit
 import com.nekolaska.ktx.firstArg
 import com.nekolaska.ktx.toLuaInstance
 import dalvik.system.DexClassLoader
@@ -711,14 +712,14 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         return globals.loadfile(path).jcall(*arg)
     }
 
-    override fun sendMsg(msg: String?) {
+    override fun sendMsg(msg: String?) =
         runOnUiThread {
             showToast(msg)
             adapter.add(msg)
             logs.add(msg)
+            //Log.i("luaj", "sendMsg: $msg")
         }
-        //Log.i("luaj", "sendMsg: $msg")
-    }
+
 
     @CallLuaFunction
     override fun sendError(title: String?, exception: Exception) {
@@ -773,10 +774,9 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     }
 
     fun registerReceiver(ltr: OnReceiveListener?, filter: IntentFilter): Intent? {
-        val receiver = LuaBroadcastReceiver(ltr)
         return ContextCompat.registerReceiver(
             this,
-            receiver,
+            LuaBroadcastReceiver(ltr),
             filter,
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
@@ -891,24 +891,23 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     }
 
     override fun setSharedData(key: String?, value: Any?): Boolean {
-        val edit = PreferenceManager.getDefaultSharedPreferences(this).edit()
-        if (value == null) edit.remove(key)
-        else if (value is String) edit.putString(key, value.toString())
-        else if (value is Long) edit.putLong(key, value)
-        else if (value is Int) edit.putInt(key, value)
-        else if (value is Float) edit.putFloat(key, value)
-        else if (value is LuaTable) edit.putStringSet(
-            key,
-            value.values().toSet() as MutableSet<String?>
-        )
-        else if (value is MutableSet<*>) edit.putStringSet(key, value as MutableSet<String?>)
-        else if (value is Boolean) edit.putBoolean(key, value)
-        else return false
-        return edit.commit()
+        return PreferenceManager.getDefaultSharedPreferences(this).commit {
+            if (value == null) remove(key)
+            else when (value) {
+                is Boolean -> putBoolean(key, value)
+                is Int -> putInt(key, value)
+                is Long -> putLong(key, value)
+                is Float -> putFloat(key, value)
+                is String -> putString(key, value)
+                is LuaTable -> putStringSet(key, value.values().toSet() as MutableSet<String?>)
+                is MutableSet<*> -> putStringSet(key, value as MutableSet<String?>)
+                else -> return false
+            }
+        }
     }
 
-    override fun regGc(obj: LuaGcable?) {
-        mGc.add(obj!!)
+    override fun regGc(obj: LuaGcable) {
+        mGc.add(obj)
     }
 
     fun bindService(flag: Int) =
@@ -1242,10 +1241,8 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         } else startActivity(intent)
     }
 
-    fun startPackage(pkg: String) {
-        val intent = packageManager.getLaunchIntentForPackage(pkg)
-        if (intent != null) startActivity(intent)
-        else Toast.makeText(this, "未找到应用", Toast.LENGTH_SHORT).show()
+    fun startPackage(pkg: String): Boolean {
+        return packageManager.getLaunchIntentForPackage(pkg)?.let { startActivity(it); true } == true
     }
 
     fun installApk(path: String) {
@@ -1320,10 +1317,6 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     }
 
     fun measureTime(action: LuaValue) = measureTimeMillis {
-        action.call()
-    }
-
-    fun repeat(interval: Int, action: LuaValue) = repeat(interval) {
         action.call()
     }
 
