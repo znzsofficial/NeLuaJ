@@ -3,8 +3,8 @@ package com.androlua
 import android.app.Application
 import android.content.Context
 import android.os.Environment
-import androidx.core.content.edit
 import androidx.preference.PreferenceManager
+import com.nekolaska.internal.commit
 import org.luaj.Globals
 import org.luaj.LuaTable
 import java.io.File
@@ -39,11 +39,11 @@ class LuaApplication : Application(), LuaContext {
     }
 
     override fun getLuaPath(s: String): String {
-        return File(filesDir, s).absolutePath
+        return filesDir.resolve(s).absolutePath
     }
 
     override fun getLuaPath(dir: String, name: String): String? {
-        return null
+        return filesDir.resolve(dir).resolve(name).absolutePath
     }
 
     override fun getLuaDir(): String {
@@ -51,7 +51,7 @@ class LuaApplication : Application(), LuaContext {
     }
 
     override fun getLuaDir(dir: String): String? {
-        return null
+        return filesDir.resolve(dir).absolutePath
     }
 
     override fun getLuaExtDir(): String {
@@ -125,27 +125,24 @@ class LuaApplication : Application(), LuaContext {
     }
 
     override fun setSharedData(key: String, value: Any?): Boolean {
-        PreferenceManager.getDefaultSharedPreferences(this).edit(commit = true) {
-            if (value == null) {
+        return PreferenceManager.getDefaultSharedPreferences(this).commit {
+            if (value == null)
                 remove(key)
-            } else {
-                when (value.javaClass.simpleName) {
-                    "String" -> putString(key, value as String)
-                    "Long" -> putLong(key, (value as Long))
-                    "Integer" -> putInt(key, (value as Int))
-                    "Float" -> putFloat(key, (value as Float))
-                    "LuaTable" -> putString(
-                        key,
-                        (value as LuaTable).values().toString()
-                    )
+            else when (value.javaClass.simpleName) {
+                "String" -> putString(key, value as String)
+                "Long" -> putLong(key, (value as Long))
+                "Integer" -> putInt(key, (value as Int))
+                "Float" -> putFloat(key, (value as Float))
+                "LuaTable" -> putString(
+                    key,
+                    (value as LuaTable).values().toString()
+                )
 
-                    "Set" -> putStringSet(key, value as Set<String>)
-                    "Boolean" -> putBoolean(key, (value as Boolean))
-                    else -> return false
-                }
+                "Set" -> putStringSet(key, value as Set<String>)
+                "Boolean" -> putBoolean(key, (value as Boolean))
+                else -> return false
             }
         }
-        return true
     }
 
 
