@@ -80,7 +80,6 @@ end)
 this.loadImage(data, imageView)
 
 -- 直接设置 onBackPressedDispatcher 的 Callback
--- 监听返回键 (仅 API33 以上)
 this.addOnBackPressedCallback(function()
 end)
 
@@ -109,7 +108,6 @@ end)
 -- 加载编译后的 xml 布局，返回视图
 this.loadXmlView(File(this.getLuaDir("test.xml")))
 
--- 循环执行
-this.repeat(100, function()
-end)
+-- 启动其他应用，找不到返回布尔值 false
+this.startPackage("com.example.app")
 ```
