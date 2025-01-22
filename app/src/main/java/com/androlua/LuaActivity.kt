@@ -21,7 +21,6 @@ import android.graphics.BlendModeColorFilter
 import android.graphics.ColorFilter
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
-import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Build
@@ -48,6 +47,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.view.ActionMode
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import androidx.core.graphics.drawable.toDrawable
 import androidx.core.net.toUri
 import androidx.core.util.TypedValueCompat
 import androidx.fragment.app.Fragment
@@ -1242,7 +1242,8 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     }
 
     fun startPackage(pkg: String): Boolean {
-        return packageManager.getLaunchIntentForPackage(pkg)?.let { startActivity(it); true } == true
+        return packageManager.getLaunchIntentForPackage(pkg)
+            ?.let { startActivity(it); true } == true
     }
 
     fun installApk(path: String) {
@@ -1279,12 +1280,12 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
 
     fun getResDrawable(name: String?): Drawable {
         val path = "$luaDir/res/drawable/$name.png"
-        return BitmapDrawable(resources, BitmapFactory.decodeFile(path))
+        return BitmapFactory.decodeFile(path).toDrawable(resources)
     }
 
     fun getResDrawable(name: String?, color: Int): Drawable {
         val path = "$luaDir/res/drawable/$name.png"
-        val drawable = BitmapDrawable(resources, BitmapFactory.decodeFile(path))
+        val drawable = BitmapFactory.decodeFile(path).toDrawable(resources)
         drawable.colorFilter = getFilter(color)
         return drawable
     }

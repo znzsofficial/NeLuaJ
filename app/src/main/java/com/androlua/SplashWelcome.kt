@@ -18,6 +18,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
+import androidx.core.content.edit
 
 class SplashWelcome : ComponentActivity() {
     private var isUpdate = false
@@ -76,16 +77,16 @@ class SplashWelcome : ComponentActivity() {
             mVersionName = versionName
             mOldVersionName = oldVersionName
             if (versionName != oldVersionName) {
-                val edit = info.edit()
-                edit.putString("versionName", versionName)
-                edit.apply()
+                info.edit {
+                    putString("versionName", versionName)
+                }
                 isVersionChanged = true
             }
             val oldLastTime = info.getLong("lastUpdateTime", 0)
             if (oldLastTime != lastTime) {
-                val edit = info.edit()
-                edit.putLong("lastUpdateTime", lastTime)
-                edit.apply()
+                info.edit {
+                    putLong("lastUpdateTime", lastTime)
+                }
                 isUpdate = true
                 mLastTime = lastTime
                 mOldLastTime = oldLastTime
