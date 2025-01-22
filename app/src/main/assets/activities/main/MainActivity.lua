@@ -200,7 +200,9 @@ function onCreateOptionsMenu(menu)
     end
     local menu2 = menu.addSubMenu(res.string.project .. "…")
     menu2.add(res.string.build).onMenuItemClick = function(a)
-        this.startPackage("com.nekolaska.Builder")
+        if not this.startPackage("com.nekolaska.Builder") then
+            MainActivity.Public.snack(res.string.no_builder)
+        end
     end
     menu2.add(res.string.create_project).onMenuItemClick = function(a)
         MainActivity.Public.createProject()
@@ -262,7 +264,7 @@ function onCreateOptionsMenu(menu)
                 local url = "mqqapi://card/show_pslcard?src_type=internal&source=sharecard&version=1&uin=1071723770"
                 activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
             end, function()
-                MainActivity.Public.snack("请先安装QQ")
+                MainActivity.Public.snack(res.string.please_install_qq)
             end)
         end
     end
