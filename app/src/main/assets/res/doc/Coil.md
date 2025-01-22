@@ -38,8 +38,7 @@
 `ImageLoader`s 是执行  [`ImageRequest`](https://coil-kt.github.io/coil/image_requests/)s  [的服务对象](https://publicobject.com/2019/06/10/value-objects-service-objects-and-glue/)。它们处理缓存、数据获取、图像解码、请求管理、位图池、内存管理等。可以使用构建器创建和配置新实例：
 ```lua
 import "coil3.ImageLoader"
-imageLoader = ImageLoader.Builder(activity)
-.crossfade(true) 
+local imageLoader = ImageLoader.Builder(activity)
 .build()
 ```
 当您创建单个并在整个应用中使用它时，Coil 的性能最佳。这是因为每个都有自己的内存缓存、磁盘缓存和 `.ImageLoader` `ImageLoader` `OkHttpClient`
@@ -54,11 +53,16 @@ imageLoader = ImageLoader.Builder(activity)
 
 ```lua
 import "coil3.request.ImageRequest"
-local request = ImageRequest.Builder(activity)
+import "coil3.request.ImageRequestsKt"
+import "coil3.target.ImageViewTarget"
+
+local builder = ImageRequest.Builder(activity)
 .data("https://example.com/image.jpg")
-.crossfade(true)
-.target(imageView) -- 图片View ID (coi3 已不支持)
-.build()
+.target(ImageViewTarget(imageView))
+
+ImageRequestsKt.crossfade(builder, true)
+
+local request = builder.build()
 ```
 
 创建请求后，将其传递给`ImageLoader`排队/执行它：
@@ -74,6 +78,7 @@ imageLoader.enqueue(request)
 
 与 Glide 不同，默认情况下不支持 GIF。但是，NeLuaJ+ 已经导入该扩展库。
 在构建您的组件注册表时将解码器添加到您的组件注册表中：`ImageLoader`
+在 Coil3 中解码器会自动添加到您的组件注册表中。
 ```lua
 import "coil3.ComponentRegistry"
 local builder = ComponentRegistry.Builder()
@@ -87,10 +92,11 @@ if Build.VERSION.SDK_INT >= 28 then
   builder.add(GifDecoder.Factory())
 end
 
+import "coil3.request.ImageRequestsKt"
 import "coil3.ImageLoader"
-imageLoader = ImageLoader.Builder(activity)
-.crossfade(true) 
-.components(builder.build()) -- 使用 components 方法添加
+local loaderBuilder = ImageLoader.Builder(activity)
+ImageRequestsKt.crossfade(loaderBuilder, true)
+local imageLoader = loaderBuilder.components(builder.build()) -- 使用 components 方法添加
 .build()
 ```
 就是这样！它将使用其文件头自动检测任何 GIF 并正确解码它们。`ImageLoader`
@@ -113,7 +119,6 @@ builder.add(SvgDecoder.Factory())
 
 import "coil3.ImageLoader"
 imageLoader = ImageLoader.Builder(activity)
-.crossfade(true) 
 .components(builder.build()) -- 与 GIF 添加方法相同，别告诉我你不会两者结合。
 .build()
 ```
@@ -125,6 +130,7 @@ Coil 通过在文件的前 1 KB 中查找标记来检测 SVG，这应该涵盖�
 ### Non-View Targets[¶](https://coil-kt.github.io/coil/migrating/#non-view-targets "Permanent link")
 ```lua
 import "coil3.target.Target"
+import "coil3.request.ImageRequest"
 local target = Target{
   onStart=function(placeholder)
     -- 在加载开始时调用，处理 placeholder drawable
@@ -136,10 +142,18 @@ local target = Target{
     -- 在加载失败时调用，处理错误
   end
 }
-import "coil3.request.ImageRequest"
+-- LuaTarget
+local target2 = LuaTarget(this, LuaTarget.Listener {
+    onStart = function(placeholder)
+    end,
+    onError = function(error)
+    end,
+    onSuccess = function(drawable)
+    end
+})
+
 local request = ImageRequest.Builder(activity)
 .data("https://example.com/image.jpg")
-.crossfade(true)
 .target(target) --设置加载完成后的目标
 .build()
 
@@ -152,7 +166,7 @@ imageLoader.enqueue(request)
 
 ```lua
 import "coil3.request.ImageRequest"
-import "coil3.ImageLoaders"
+import "coil3.ImageLoaders_nonJsCommonKt"
 import "kotlinx.coroutines.Dispatchers"
 
 local request = ImageRequest.Builder(activity)
@@ -160,8 +174,9 @@ local request = ImageRequest.Builder(activity)
 .data(File/DrawableRes/Drawable/Bitmap/Uri/Byte) -- 请勿使用网络图片，否则会阻塞进程导致崩溃
 .build()
 
-local drawable = ImageLoaders.executeBlocking(
-ImageLoaders.create(activity), request).drawable
+
+local drawable = ImageLoaders_nonJsCommonKt.executeBlocking(
+imageLoader, request).getImage().asDrawable(activity.resources)
 
 -- print(drawable)
 ```
@@ -171,18 +186,21 @@ ImageLoaders.create(activity), request).drawable
 ```lua
 xTask(function()
     import "coil3.request.ImageRequest"
-    import "coil3.ImageLoaders"
+    import "coil3.ImageLoaders_nonJsCommonKt"
     local request = ImageRequest.Builder(activity)
     .data(url)
     --.size(300, 300)
     .build()
-    local drawable = ImageLoaders.executeBlocking(
-    ImageLoaders.create(activity), request).drawable
+    local drawable = ImageLoaders_nonJsCommonKt.executeBlocking(
+            imageLoader, request).getImage().asDrawable(activity.resources)
     return drawable
   end,
   function(drawable)
     print(drawable)
   end)
+
+activity.loadImage(url, function(drawable)
+end)
 ```
 ---
 ### Transformations[¶](https://coil-kt.github.io/coil/transformations/#transformations "Permanent link")
@@ -203,12 +221,12 @@ local transformationList = ArrayList()
 transformationList.add(CircleCropTransformation())
 -- 可以继续添加多个
 
+import "coil3.target.ImageViewTarget"
 import "coil3.request.ImageRequest"
 local request = ImageRequest.Builder(activity)
 .data("https://example.com/image.jpg")
-.crossfade(true)
 .transformations(transformationList) -- 当有多个转换器的时候可以直接添加,不需要List .transformations(transformation1, transformation2, ...)
-.target(imageView)
+.target(ImageViewTarget(imageView))
 
 imageLoader.enqueue(request)
 ```
@@ -239,6 +257,7 @@ imageLoader.enqueue(request)
 import "coil3.transition.Transition"
 import "coil3.transition.CrossfadeTransition"
 import "coil3.request.ImageRequest"
+import "coil3.target.ImageViewTarget"
 local request = ImageRequest.Builder(activity)
 .data("https://example.com/image.jpg")
 
@@ -250,7 +269,7 @@ local request = ImageRequest.Builder(activity)
 -- 当传入布尔值时是否启用动画，默认动画时间为100毫秒
 -- 传入int数值时，动画时间为传入的数值
 
-.target(imageView)
+.target(ImageViewTarget(imageView))
 
 imageLoader.enqueue(request)
 ```
