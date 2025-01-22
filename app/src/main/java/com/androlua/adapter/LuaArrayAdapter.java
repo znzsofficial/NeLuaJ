@@ -359,7 +359,6 @@ public class LuaArrayAdapter extends BaseAdapter implements Filterable {
 
         @Override
         protected void publishResults(CharSequence constraint, FilterResults results) {
-            //noinspection unchecked
             mData = (LuaTable) results.values;
             if (results.count > 0) {
                 notifyDataSetChanged();
