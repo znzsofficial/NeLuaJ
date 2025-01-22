@@ -51,9 +51,9 @@ return {
         style = MDC_R.style.Widget_Material3_ChipGroup,
         {
             Chip,
-            text = "MetaClass",
-            id = "module_class",
-            TooltipText = "NekoLaska",
+            text = "TimeMeter",
+            id = "module_time",
+            TooltipText = "vinx",
             Checkable = true,
             CheckedIconEnabled = true,
             style = MDC_R.style.Widget_Material3_Chip,

@@ -1,219 +1,53 @@
 about_this = [[
 还没有写完，不建议外传（]]
-code_class = [[-- 定义一个不变对象作为 null
-null = setmetatable({},{
-  __tostring = (lambda () -> "null"),
-  __type = (lambda () -> "null"),
-  __call = (lambda () -> nil),
-  __newindex = (lambda () -> nil),
-  __index = (lambda () -> nil),
-  __len = (lambda () -> nil),
-  __concat = (lambda () -> nil),
-  __metatable = false,
-})
+code_time = [[local System = luajava.bindClass "java.lang.System"
 
--- 定义一个函数，用于创建类
-function class(def)
-  -- 创建一个空的表，用于存储类
-  local cls = {}
-
-  -- 设置索引元方法，指向类本身
-  cls.__index = cls
-  -- 设置类名，如果没有提供，则默认为 Unnamed
-  cls.__name = type(def.name) == "string"
-  && def.name
-  || "Unnamed"
-  -- 设置初始化函数，如果没有提供，则默认为空
-  cls.__init = type(def.init) == "function"
-  && def.init
-  || null
-  -- 设置 open 修饰符，如果没有提供，则默认为 false
-  cls.__open = def.open
-  || false
-  -- 设置 static 修饰符，如果没有提供，则默认为 false
-  cls.__static = def.static
-  || false
-  -- 设置类型函数，用于返回字符串 "class"
-  cls.__type = lambda
-  () -> "class"
-  -- 设置 tostring 元方法，用于显示类名
-  cls.__tostring = lambda
-  (self) -> "class " .. self.__name
-  -- 设置相等性的比较函数，只比较类名是否相同
-  cls.__eq = function(self, other)
-    if not type(other) == "class" then
-      return false
-    end
-    return rawequal(self, other)
-    || (getmetatable(self).__name == getmetatable(other).__name)
+local _M = {
+  points = {System.nanoTime()},
+  callback = function(i)
+    print(tostring(i / 1000).." ms")
   end
-  -- 设置 call 元方法，用于创建实例
-  cls.__call = function(self, ...)
-    -- 如果是静态类，则报错
-    if self.__static then
-      error("InstantiationException : Attempt to instantiate a static class ".. self.__name)
-    end
-    return self:__constructor(...)
-  end
+}
 
-  -- 判断是否继承自另一个类
-  if type(def.extend) == "class" then
-    -- 判断是否使用 open 修饰符
-    if not def.extend.__open then
-      error("InvalidExtendException : Attempt to extend a final class " .. def.extend.__name)
-    end
-   elseif def.extend
-    && def.extend ~= null then
-    -- 如果父类为 Jvm 类，则报错
-    if luajava.instanceof(def.extend, luajava.bindClass"java.lang.Class") then
-      error("InvalidExtendException : Attempt to extend a Jvm class : " .. def.extend)
-    end
-    -- 如果父类不是一个 class，则报错
-    error("InvalidExtendException : Attempt to extend a " .. type(def.extend))
-  end
-
-  -- 设置元表，用于处理类的各种操作
-  setmetatable(cls, {
-    __index = def.extend,
-    __tostring = cls.__tostring,
-    __call = cls.__call,
-    __eq = cls.__eq,
-    __type = cls.__type,
-  })
-
-  -- 静态类和非静态类分别处理
-  if not cls.__static then
-
-    -- 给非静态类设置实例构造器
-    function cls:__constructor(...)
-      -- 设置实例对象的元表
-      local __mt = table.clone(self)
-      math.randomseed(tostring(os.time()):reverse():sub(1, 6))
-      __mt.__id = math.random(1, 1000000000)
-      __mt.__tostring = lambda
-      (self) -> self.__name.." @"..self.__id
-      __mt.__type = lambda
-      () -> "object"
-      __mt.__eq = function(self, other)
-        if not type(other) == "object" then
-          return false
-        end
-        return rawequal(self, other)
-        || (getmetatable(self).__name == getmetatable(other).__name)
-      end
-      __mt.__call = lambda
-      (self) -> error("ObjectCallException : Attempt to call a object " .. tostring(self))
-
-      -- 创建一个空表，作为实例对象
-      local instance = setmetatable({}, __mt)
-
-      -- 如果存在初始化函数，则调用
-      if type(self.__init) == "function" then
-        -- 处理父类初始化函数
-        local super = def.extend
-        && type(def.extend.__init) == "function"
-        && function(...)
-          return def.extend.__init(instance, ...)
-        end
-        -- 如果存在，则传递给子类
-        if super then
-          self.__init(instance, super, ...)
-         else
-          self.__init(instance, ...)
-        end
-      end
-
-      -- 返回实例
-      return instance
-    end
-
-    -- 使用 fields 表定义类的字段
-    if type(def.fields) == "table" then
-      for name, field in pairs(def.fields) do
-        if cls[name] and cls[name] ~= null then
-          error("RedefinedVariableException : Attempt to assign a defined value " .. name)
-        end
-        cls[name] = field
-      end
-    end
-
-    -- 使用 final 表定义final变量
-    if type(def.final) == "table" then
-      cls.__final = setmetatable({},{__newindex = function(table, key, value)
-          -- 拦截对不存在的索引的赋值操作
-          error("FinalTableModificationException : Attempt to modify the final table.")
-        end
-      })
-      for name, v in pairs(def.final) do
-        rawset(cls.__final, name, v)
-        cls["get"..name] = lambda
-        (self) -> self.__final[name]
-      end
-    end
-
-    -- 使用 methods 表定义类的方法
-    if type(def.methods) == "table" then
-      for name, fn in pairs(def.methods) do
-        if not type(fn) == "function" then
-          error("InvalidMethodException : Method must be a function or a lambda expression")
-         elseif cls[name] and cls[name] ~= null then
-          error("RedefinedVariableException : Attempt to assign a defined value " .. name)
-        end
-        cls[name] = fn
-      end
-    end
-
-    -- 使用 overrides 表重写父类方法
-    if type(def.overrides) == "table" and def.extend then
-      for name, fn in pairs(def.overrides) do
-        local super = rawget(def.extend, name)
-        if super then
-          -- 如果父类中也存在该方法，则将它包装起来，并传递给子类的函数
-          cls[name] = function(self, ...)
-            return fn(self, function(...)
-              return super(self, ...)
-            end, ...)
-          end
-         else
-          error("MethodNotFoundException : Can not find method " .. name .. " in base class")
-        end
-      end
-    end
-
-   else
-    -- 静态类
-
-    -- 使用 fields 表定义类的字段
-    if type(def.fields) == "table" then
-      for name, field in pairs(def.fields) do
-        if cls[name] and cls[name] ~= null then
-          error("RedefinedVariableException : Attempt to assign a defined value " .. name)
-        end
-        cls[name] = field
-      end
-    end
-    -- 使用 methods 表定义类的方法
-    if type(def.methods) == "table" then
-      for name, fn in pairs(def.methods) do
-        if not type(fn) == "function" then
-          error("InvalidMethodException : Method must be a function or a lambda expression")
-         elseif cls[name] and cls[name] ~= null then
-          error("RedefinedVariableException : Attempt to assign a defined value " .. name)
-        end
-        cls[name] = fn
-      end
-    end
-    -- 如果有初始化函数就执行一下
-    if type(def.init) == "function"
-      def.init(cls)
-    end
-
-  end
-  -- 返回创建的类
-  return cls
+_M.newInstance = function(self, callback)
+  local obj = table.clone(self)
+  if callback then obj.callback = callback end
+  return obj
 end
 
-return class]]
+_M.addPoint = function(self)
+  local time = System.nanoTime()
+  table.insert(self.points, time)
+  return time
+end
+
+_M.record = function(self)
+  local time = self:addPoint() -
+    (self.points[#self.points - 1])
+  self.callback(time)
+end
+
+_M.callAndCount = function(func)
+  assert(getmetatable(func) == _M,
+    "The static method cannot be called by an instance! ")
+  local start = System.nanoTime()
+  func()
+  local time = System.nanoTime() - start
+  self.callback(time)
+  return time
+end
+
+_M.getTotalTime = function(self)
+  return self.points[#self.points]
+    - self.points[1]
+end
+
+setmetatable(_M, {
+  __call = lambda v, callback
+    -> v:newInstance(callback)
+})
+
+return _M]]
 code_array=[[local Array = luajava.bindClass("java.lang.reflect.Array")
 
 _G.arrayOf = setmetatable({}, {
