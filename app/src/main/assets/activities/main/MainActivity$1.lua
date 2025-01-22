@@ -78,8 +78,8 @@ function _M.createProject(name)
                 .create(base_path .. "/res/color/day.lua", '')
                 .create(base_path .. "/res/color/night.lua", '')
                 .create(base_path .. "/res/layout/main.lua", res.string.lcode)
-        if binding.module_class.isChecked() then
-            LuaFileUtil.create(base_path .. "/mods/class.lua", res.string.code_class)
+        if binding.module_time.isChecked() then
+            LuaFileUtil.create(base_path .. "/mods/TimeMeter.lua", res.string.code_time)
         end
         if binding.module_array.isChecked() then
             LuaFileUtil.create(base_path .. "/mods/Array.lua", res.string.code_array)
