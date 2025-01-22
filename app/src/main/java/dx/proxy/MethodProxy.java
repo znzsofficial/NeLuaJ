@@ -21,7 +21,6 @@ public class MethodProxy {
         return methodName;
     }
 
-    @SuppressWarnings("unchecked")
     public Method getOriginalMethod() {
         try {
             return subClass.getMethod(methodName, argsType);
@@ -34,7 +33,6 @@ public class MethodProxy {
         }
     }
 
-    @SuppressWarnings("unchecked")
     public Method getSuperMethod() {
         try {
             return subClass.getSuperclass().getMethod(methodName, argsType);
@@ -47,7 +45,6 @@ public class MethodProxy {
         }
     }
 
-    @SuppressWarnings("unchecked")
     public Method getProxyMethod() {
         try {
             return subClass.getMethod(methodName + Const.SUBCLASS_INVOKE_SUPER_SUFFIX, argsType);
