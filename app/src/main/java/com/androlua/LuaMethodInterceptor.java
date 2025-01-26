@@ -82,8 +82,9 @@ public class LuaMethodInterceptor implements MethodInterceptor {
         public Varargs invoke(Varargs vargs) {
             int n = vargs.narg();
             Object[] args = new Object[n];
+            Class[] argsType = mMethodProxy.argsType;
             for (int i = 0; i < n; i++) {
-                args[i] = CoerceLuaToJava.coerce(vargs.arg(i + 1), Object.class);
+                args[i] = CoerceLuaToJava.coerce(vargs.arg(i + 1), argsType[i]);
             }
             return CoerceJavaToLua.coerce(mMethodProxy.invokeSuper(mObject, args));
         }
