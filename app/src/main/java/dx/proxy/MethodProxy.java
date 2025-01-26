@@ -8,7 +8,7 @@ public class MethodProxy {
 
     private final Class<?> subClass;
     private final String methodName;
-    private final Class<?>[] argsType;
+    public final Class<?>[] argsType;
 
     @SuppressWarnings("rawtypes")
     public MethodProxy(Class subClass, String methodName, Class[] argsType) {
