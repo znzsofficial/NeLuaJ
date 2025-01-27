@@ -105,7 +105,7 @@ class SplashWelcome : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             ZipPathValidator.clearCallback()
         }
-        val dirtest = ArrayList<String>()
+        val dirList = ArrayList<String>()
         val threadPool =
             Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors())
         val i = dir.length
@@ -121,7 +121,7 @@ class SplashWelcome : ComponentActivity() {
             val fp = extDir + File.separator + path
             if (!zipEntry.isDirectory) {
                 inzipfile.add(zipEntry)
-                dirtest.add(fp + File.separator)
+                dirList.add(fp + File.separator)
                 continue
             }
             val file = File(fp)
@@ -135,11 +135,11 @@ class SplashWelcome : ComponentActivity() {
             val name = zipEntry.name
             val path = name.substring(i)
             val fp = extDir + File.separator + path
-            val watchiter: Iterator<String> = dirtest.iterator()
+            val watchiter: Iterator<String> = dirList.iterator()
             var find = false
             while (watchiter.hasNext()) {
-                val dirtestwatchNext = watchiter.next()
-                if (fp.startsWith(dirtestwatchNext)) {
+                val dirListWatchNext = watchiter.next()
+                if (fp.startsWith(dirListWatchNext)) {
                     find = true
                     break
                 }
