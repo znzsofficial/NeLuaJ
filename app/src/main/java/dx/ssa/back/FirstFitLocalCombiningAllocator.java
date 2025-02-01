@@ -944,8 +944,8 @@ public class FirstFitLocalCombiningAllocator extends RegisterAllocator {
                     && !seen.get(ssaReg)) {
                 // This is a register that can be mapped appropriately.
                 fitWidth += category;
-            } else if (!mapper.areAnyPinned(liveOutSpecs, ropReg, category)
-                    && !mapper.areAnyPinned(sources, ropReg, category)) {
+            } else if (mapper.areNotAnyPinned(liveOutSpecs, ropReg, category)
+                    && mapper.areNotAnyPinned(sources, ropReg, category)) {
                 /*
                  * This is a source that can be moved. We can insert a
                  * move as long as:

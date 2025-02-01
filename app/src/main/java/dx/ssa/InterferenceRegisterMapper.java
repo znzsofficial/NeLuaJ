@@ -139,8 +139,8 @@ public class InterferenceRegisterMapper extends BasicRegisterMapper {
      * @return true if any of the old-namespace register have been mapped
      * to the new-namespace register + category
      */
-    public boolean areAnyPinned(RegisterSpecList oldSpecs,
-            int newReg, int targetCategory) {
+    public boolean areNotAnyPinned(RegisterSpecList oldSpecs,
+                                   int newReg, int targetCategory) {
         int sz = oldSpecs.size();
 
         for (int i = 0; i < sz; i++) {
@@ -154,10 +154,10 @@ public class InterferenceRegisterMapper extends BasicRegisterMapper {
             if (r == newReg
                 || (oldSpec.getCategory() == 2 && (r + 1) == newReg)
                 || (targetCategory == 2 && (r == newReg + 1))) {
-                return true;
+                return false;
             }
         }
 
-        return false;
+        return true;
     }
 }
