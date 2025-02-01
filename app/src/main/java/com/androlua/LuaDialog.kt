@@ -91,24 +91,16 @@ class LuaDialog : AlertDialog, DialogInterface.OnClickListener {
     }
 
     override fun setTitle(title: CharSequence?) {
-        // TODO: Implement this method
         mTitle = title.toString()
         super.setTitle(title)
     }
 
     override fun setMessage(message: CharSequence) {
-        // TODO: Implement this method
         this.message = message.toString()
         super.setMessage(message)
     }
 
-    override fun setIcon(icon: Drawable) {
-        // TODO: Implement this method
-        super.setIcon(icon)
-    }
-
     override fun setView(view: View) {
-        // TODO: Implement this method
         this.view = view
         super.setView(view)
     }
@@ -131,9 +123,9 @@ class LuaDialog : AlertDialog, DialogInterface.OnClickListener {
     }
 
     fun setSingleChoiceItems(items: Array<CharSequence?>, checkedItem: Int) {
-        val alist = ArrayList(listOf(*items))
+        val list = ArrayList(listOf(*items))
         val adp: ArrayListAdapter<*> = ArrayListAdapter(
-            mContext, android.R.layout.simple_list_item_single_choice, alist
+            mContext, android.R.layout.simple_list_item_single_choice, list
         )
         setAdapter(adp)
         mListView.choiceMode = ListView.CHOICE_MODE_SINGLE
@@ -145,9 +137,9 @@ class LuaDialog : AlertDialog, DialogInterface.OnClickListener {
     }
 
     fun setMultiChoiceItems(items: Array<CharSequence?>, checkedItems: IntArray) {
-        val alist = ArrayList(listOf(*items))
+        val list = ArrayList(listOf(*items))
         val adp: ArrayListAdapter<*> = ArrayListAdapter(
-            mContext, android.R.layout.simple_list_item_multiple_choice, alist
+            mContext, android.R.layout.simple_list_item_multiple_choice, list
         )
         setAdapter(adp)
         mListView.choiceMode = ListView.CHOICE_MODE_MULTIPLE
@@ -170,27 +162,6 @@ class LuaDialog : AlertDialog, DialogInterface.OnClickListener {
         mListView.onItemSelectedListener = listener
     }
 
-    override fun setOnCancelListener(listener: DialogInterface.OnCancelListener?) {
-        // TODO: Implement this method
-        super.setOnCancelListener(listener)
-    }
-
-    override fun setOnDismissListener(listener: DialogInterface.OnDismissListener?) {
-        // TODO: Implement this method
-        super.setOnDismissListener(listener)
-    }
-
-//    override fun show() {
-//        super.show()
-//    }
-//
-//    override fun hide() {
-//        super.hide()
-//    }
-//
-//    override fun isShowing(): Boolean {
-//        return super.isShowing()
-//    }
 
     override fun onClick(dialog: DialogInterface, which: Int) {
         if (mOnClickListener != null) mOnClickListener!!.onClick(this, getButton(which))
@@ -198,7 +169,8 @@ class LuaDialog : AlertDialog, DialogInterface.OnClickListener {
 
     interface OnClickListener {
         fun onClick(dlg: LuaDialog?, btn: Button?)
-    } /*
+    }
+    /*
   public void close()
   {
       super.dismiss();

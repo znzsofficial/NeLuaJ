@@ -54,7 +54,6 @@ public class LuaEnhancer {
             mEnhancer.setMethodFilter(filer);
             return mEnhancer.create();
         } catch (Exception e) {
-
             e.printStackTrace();
         }
         return null;

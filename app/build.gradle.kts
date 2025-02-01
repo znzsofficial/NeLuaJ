@@ -1,3 +1,4 @@
+import com.android.build.gradle.internal.api.BaseVariantOutputImpl
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -56,7 +57,7 @@ android {
             val ver = defaultConfig.versionName
             //val minSdk = project.extensions.getByType(BaseAppModuleExtension::class.java).defaultConfig.minSdk
             //val abi = filters.find { it.filterType == "ABI" }?.identifier ?: "all"
-            (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName =
+            (this as BaseVariantOutputImpl).outputFileName =
                 "${project.name}-$formattedDateTime-$ver.APK";
         }
     }
