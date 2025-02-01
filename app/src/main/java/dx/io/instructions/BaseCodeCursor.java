@@ -54,7 +54,7 @@ public abstract class BaseCodeCursor implements CodeCursor {
     /**
      * Advance the cursor by the indicated amount.
      */
-    protected final void advance(int amount) {
-        cursor += amount;
+    protected final void advance() {
+        cursor += 1;
     }
 }

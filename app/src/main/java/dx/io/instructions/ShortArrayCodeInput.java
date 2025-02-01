@@ -46,7 +46,7 @@ public final class ShortArrayCodeInput extends BaseCodeCursor
     public int read() throws EOFException {
         try {
             int value = array[cursor()];
-            advance(1);
+            advance();
             return value & 0xffff;
         } catch (ArrayIndexOutOfBoundsException ex) {
             throw new EOFException();
