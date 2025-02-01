@@ -557,13 +557,13 @@ public final class DebugInfoEncoder {
         }
 
         // Sort by ascending register.
-        Collections.sort(result, new Comparator<LocalList.Entry>() {
+        result.sort(new Comparator<LocalList.Entry>() {
             public int compare(LocalList.Entry a, LocalList.Entry b) {
                 return a.getRegister() - b.getRegister();
             }
 
             public boolean equals(Object obj) {
-               return obj == this;
+                return obj == this;
             }
         });
 
