@@ -125,7 +125,7 @@ public final class UniformListItem<T extends OffsettedItem>
     /** {@inheritDoc} */
     @Override
     public String toHuman() {
-        StringBuffer sb = new StringBuffer(100);
+        StringBuilder sb = new StringBuilder(100);
         boolean first = true;
 
         sb.append("{");

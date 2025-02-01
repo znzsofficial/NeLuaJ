@@ -341,7 +341,7 @@ public final class PhiInsn extends SsaInsn {
      * @return human-readable string for listing dumps
      */
     private String toHumanWithInline(String extra) {
-        StringBuffer sb = new StringBuffer(80);
+        StringBuilder sb = new StringBuilder(80);
 
         sb.append(SourcePosition.NO_INFO);
         sb.append(": phi");

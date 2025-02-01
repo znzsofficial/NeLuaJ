@@ -237,7 +237,7 @@ public final class StdTypeList
             return "<empty>";
         }
 
-        StringBuffer sb = new StringBuffer(100);
+        StringBuilder sb = new StringBuilder(100);
 
         for (int i = 0; i < size; i++) {
             if (i != 0) {
