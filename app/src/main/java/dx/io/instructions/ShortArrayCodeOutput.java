@@ -56,7 +56,7 @@ public final class ShortArrayCodeOutput extends BaseCodeCursor
     /** @inheritDoc */
     public void write(short codeUnit) {
         array[cursor()] = codeUnit;
-        advance(1);
+        advance();
     }
 
     /** @inheritDoc */
