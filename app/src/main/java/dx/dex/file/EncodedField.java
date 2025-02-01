@@ -16,6 +16,8 @@
 
 package dx.dex.file;
 
+import androidx.annotation.NonNull;
+
 import java.io.PrintWriter;
 
 import dx.rop.code.AccessFlags;
@@ -81,16 +83,15 @@ public final class EncodedField extends EncodedMember
     }
 
     /** {@inheritDoc} */
+    @NonNull
     @Override
     public String toString() {
-
-        String sb = getClass().getName() +
+        return getClass().getName() +
                 '{' +
                 Hex.u2(getAccessFlags()) +
                 ' ' +
                 field +
                 '}';
-        return sb;
     }
 
     /** {@inheritDoc} */

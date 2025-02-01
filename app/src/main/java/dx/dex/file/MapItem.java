@@ -16,6 +16,8 @@
 
 package dx.dex.file;
 
+import androidx.annotation.NonNull;
+
 import java.util.ArrayList;
 
 import dx.util.AnnotatedOutput;
@@ -179,17 +181,15 @@ public final class MapItem extends OffsettedItem {
     }
 
     /** {@inheritDoc} */
+    @NonNull
     @Override
     public String toString() {
-
-        String sb = getClass().getName() +
+        return getClass().getName() +
                 '{' +
                 section.toString() +
                 ' ' +
                 type.toHuman() +
                 '}';
-
-        return sb;
     }
 
     /** {@inheritDoc} */

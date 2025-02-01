@@ -16,6 +16,8 @@
 
 package dx.dex.file;
 
+import androidx.annotation.NonNull;
+
 import java.util.List;
 
 import dx.util.AnnotatedOutput;
@@ -105,13 +107,11 @@ public final class UniformListItem<T extends OffsettedItem>
     }
 
     /** {@inheritDoc} */
+    @NonNull
     @Override
     public String toString() {
-
-        String sb = getClass().getName() +
+        return getClass().getName() +
                 items;
-
-        return sb;
     }
 
     /** {@inheritDoc} */
