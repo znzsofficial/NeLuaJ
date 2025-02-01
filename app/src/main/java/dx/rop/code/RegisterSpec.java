@@ -563,7 +563,7 @@ public final class RegisterSpec
      * @return {@code non-null;} the string form
      */
     private String toString0(boolean human) {
-        StringBuffer sb = new StringBuffer(40);
+        StringBuilder sb = new StringBuilder(40);
 
         sb.append(regString());
         sb.append(":");

@@ -248,7 +248,7 @@ public class FixedSizeList
     private String toString0(String prefix, String separator, String suffix,
                              boolean human) {
         int len = arr.length;
-        StringBuffer sb = new StringBuffer(len * 10 + 10);
+        StringBuilder sb = new StringBuilder(len * 10 + 10);
 
         if (prefix != null) {
             sb.append(prefix);

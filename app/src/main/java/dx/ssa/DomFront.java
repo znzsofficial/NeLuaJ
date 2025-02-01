@@ -122,7 +122,7 @@ public class DomFront {
 
         for (int i = 0; i < szNodes; i++) {
             SsaBasicBlock node = nodes.get(i);
-            StringBuffer sb = new StringBuffer();
+            StringBuilder sb = new StringBuilder();
 
             sb.append('{');
             boolean comma = false;

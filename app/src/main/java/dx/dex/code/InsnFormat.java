@@ -181,7 +181,7 @@ public abstract class InsnFormat {
      */
     protected static String regListString(RegisterSpecList list) {
         int sz = list.size();
-        StringBuffer sb = new StringBuffer(sz * 5 + 2);
+        StringBuilder sb = new StringBuilder(sz * 5 + 2);
 
         sb.append('{');
 
@@ -247,7 +247,7 @@ public abstract class InsnFormat {
      * @return {@code non-null;} the string form
      */
     protected static String literalBitsString(CstLiteralBits value) {
-        StringBuffer sb = new StringBuffer(100);
+        StringBuilder sb = new StringBuilder(100);
 
         sb.append('#');
 
@@ -272,7 +272,7 @@ public abstract class InsnFormat {
      */
     protected static String literalBitsComment(CstLiteralBits value,
             int width) {
-        StringBuffer sb = new StringBuffer(20);
+        StringBuilder sb = new StringBuilder(20);
 
         sb.append("#");
 
