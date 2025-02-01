@@ -186,16 +186,17 @@ public class Enhancer {
         TypeId<?>[] argsTypeId = null;
         boolean hasParams = false;
         Class<?>[] argsClass = method.getParameterTypes();
-        hasParams = argsClass != null && argsClass.length > 0;
+        hasParams = argsClass.length > 0;
         if (hasParams) {
             argsTypeId = new TypeId[argsClass.length];
             for (int i = 0; i < argsClass.length; i++) {
                 argsTypeId[i] = TypeId.get(argsClass[i]);
             }
             //subMethodId = subType.getConstructor(argsTypeId);
-        } else {
-            //subMethodId = subType.getConstructor();
         }
+        //else {
+            //subMethodId = subType.getConstructor();
+        //}
 
 		/*Code code = dexMaker.declare(subMethodId, method.getModifiers());
 
@@ -288,7 +289,7 @@ public class Enhancer {
         isVoid = retClass.getSimpleName().equals("void");
         methodReturnType = TypeId.get(retClass);
         Class<?>[] argsClass = method.getParameterTypes();
-        hasParams = argsClass != null && argsClass.length > 0;
+        hasParams = argsClass.length > 0;
         if (hasParams) {
             argsTypeId = new TypeId[argsClass.length];
             for (int i = 0; i < argsClass.length; i++) {

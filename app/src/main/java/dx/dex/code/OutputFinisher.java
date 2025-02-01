@@ -390,7 +390,7 @@ public final class OutputFinisher {
      * opcode selections
      */
     private void reserveRegisters(Dop[] opcodes) {
-        int oldReservedCount = (reservedCount < 0) ? 0 : reservedCount;
+        int oldReservedCount = Math.max(reservedCount, 0);
 
         /*
          * Call calculateReservedCount() and then perform register

@@ -388,24 +388,11 @@ public class DebugInfoDecoder {
                     line += Leb128Utils.readSignedLeb128(bs);
                 break;
 
-                case DBG_SET_PROLOGUE_END:
-                    //TODO do something with this.
-                break;
-
-                case DBG_SET_EPILOGUE_BEGIN:
-                    //TODO do something with this.
-                break;
-
-                case DBG_SET_FILE:
+                case DBG_SET_PROLOGUE_END, DBG_SET_FILE, DBG_SET_EPILOGUE_BEGIN:
                     //TODO do something with this.
                 break;
 
                 default:
-                    if (opcode < DBG_FIRST_SPECIAL) {
-                        throw new RuntimeException(
-                                "Invalid extended opcode encountered "
-                                        + opcode);
-                    }
 
                     int adjopcode = opcode - DBG_FIRST_SPECIAL;
 
