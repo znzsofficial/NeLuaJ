@@ -369,12 +369,9 @@ public final class ValueEncoder {
         if (type == VALUE_NULL) {
             return "null";
         }
-
-        String sb = cst.typeName() +
+        return cst.typeName() +
                 ' ' +
                 cst.toHuman();
-
-        return sb;
     }
 
     /**
