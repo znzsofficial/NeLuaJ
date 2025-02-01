@@ -297,7 +297,7 @@ public final class MixedItemSection extends Section {
                 break;
             }
             case TYPE: {
-                Collections.sort(items, TYPE_SORTER);
+                items.sort(TYPE_SORTER);
                 break;
             }
         }
