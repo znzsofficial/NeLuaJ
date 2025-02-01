@@ -113,7 +113,7 @@ public final class CstArray extends Constant {
         public int compareTo(List other) {
             int thisSize = size();
             int otherSize = other.size();
-            int compareSize = (thisSize < otherSize) ? thisSize : otherSize;
+            int compareSize = Math.min(thisSize, otherSize);
 
             for (int i = 0; i < compareSize; i++) {
                 Constant thisItem = (Constant) get0(i);

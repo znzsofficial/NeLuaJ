@@ -376,13 +376,7 @@ public final class ByteArrayAnnotatedOutput
 
         int asz = annotations.size();
         int lastEnd = (asz == 0) ? 0 : annotations.get(asz - 1).getEnd();
-        int startAt;
-
-        if (lastEnd <= cursor) {
-            startAt = cursor;
-        } else {
-            startAt = lastEnd;
-        }
+        int startAt = Math.max(lastEnd, cursor);
 
         annotations.add(new Annotation(startAt, startAt + amt, msg));
     }

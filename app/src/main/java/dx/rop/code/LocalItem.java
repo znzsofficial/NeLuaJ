@@ -16,6 +16,8 @@
 
 package dx.rop.code;
 
+import androidx.annotation.NonNull;
+
 import dx.rop.cst.CstString;
 
 /**
@@ -109,6 +111,7 @@ public class LocalItem implements Comparable<LocalItem> {
     }
 
     /** {@inheritDoc} */
+    @NonNull
     @Override
     public String toString() {
         if (name != null && signature == null) {
@@ -118,7 +121,7 @@ public class LocalItem implements Comparable<LocalItem> {
         }
 
         return "[" + (name == null ? "" : name.toQuoted())
-                + "|" + (signature == null ? "" : signature.toQuoted());
+                + "|" + signature.toQuoted();
     }
 
     /**
