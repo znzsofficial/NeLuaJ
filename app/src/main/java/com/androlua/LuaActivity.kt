@@ -1321,7 +1321,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         action.call()
     }
 
-    fun getMediaDir() = externalMediaDirs[0]
+    fun getMediaDir() = externalMediaDirs[0]!!
 
     @SuppressLint("DiscouragedPrivateApi")
     @Suppress("PrivateApi")
