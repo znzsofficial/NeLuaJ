@@ -21,14 +21,14 @@ class JavaMethod extends JavaMember {
     private final Class<?> i;// return type
     final Method j;
 
-    private JavaMethod(Method var1) {
-        super(var1.getParameterTypes(), var1.getModifiers());
-        this.j = var1;
-        this.i = var1.getReturnType();
+    private JavaMethod(Method method) {
+        super(method.getParameterTypes(), method.getModifiers());
+        this.j = method;
+        this.i = method.getReturnType();
 
         try {
-            if (!var1.isAccessible()) {
-                var1.setAccessible(true);
+            if (!method.isAccessible()) {
+                method.setAccessible(true);
             }
         } catch (Exception ignored) {
         }
@@ -91,11 +91,11 @@ class JavaMethod extends JavaMember {
                     obj = CoerceJavaToLua.coerce(this.j.invoke(instance, var6));
                 }
                 return obj;
-            } catch (InvocationTargetException var4) {
-                var4.getTargetException().printStackTrace();
+            } catch (InvocationTargetException targetException) {
+                targetException.getTargetException().printStackTrace();
                 throw new LuaError(this.j +
                         " " +
-                        var4.getTargetException());
+                        targetException.getTargetException());
             } catch (Exception e) {
                 return LuaValue.error("coercion error " +
                         this.j +
