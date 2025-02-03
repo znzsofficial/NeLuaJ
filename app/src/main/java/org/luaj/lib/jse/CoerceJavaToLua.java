@@ -47,96 +47,52 @@ public class CoerceJavaToLua {
     public CoerceJavaToLua() {
     }
 
-    public static LuaValue coerce(Boolean var0) {
-        LuaValue var1;
-        if (var0 == null) {
-            var1 = LuaValue.NIL;
-        } else {
-            var1 = LuaValue.valueOf(var0);
-        }
-        return var1;
+    public static LuaValue coerce(Boolean value) {
+        return value == null ? LuaValue.NIL : LuaValue.valueOf(value);
     }
 
-    public static LuaValue coerce(Byte var0) {
-        LuaValue var1;
-        if (var0 == null) {
-            var1 = LuaValue.NIL;
-        } else {
-            var1 = LuaInteger.valueOf(var0);
-        }
-
-        return var1;
+    public static LuaValue coerce(Byte value) {
+        return value == null ? LuaValue.NIL : LuaInteger.valueOf(value);
     }
 
-    public static LuaValue coerce(Character var0) {
-        LuaValue var1;
-        if (var0 == null) {
-            var1 = LuaValue.NIL;
-        } else {
-            var1 = LuaInteger.valueOf(var0);
-        }
-
-        return var1;
+    public static LuaValue coerce(Character value) {
+        return value == null ? LuaValue.NIL : LuaInteger.valueOf(value);
     }
 
-    public static LuaValue coerce(Integer var0) {
-        LuaValue var1;
-        if (var0 == null) {
-            var1 = LuaValue.NIL;
-        } else {
-            var1 = LuaInteger.valueOf(var0);
-        }
-
-        return var1;
+    public static LuaValue coerce(Integer value) {
+        return value == null ? LuaValue.NIL : LuaInteger.valueOf(value);
     }
 
-    public static LuaValue coerce(Long var0) {
-        LuaValue var1;
-        if (var0 == null) {
-            var1 = LuaValue.NIL;
-        } else {
-            var1 = LuaInteger.valueOf(var0);
-        }
-
-        return var1;
+    public static LuaValue coerce(Long value) {
+        return value == null ? LuaValue.NIL : LuaInteger.valueOf(value);
     }
 
-    public static LuaValue coerce(Object var0) {
-        LuaValue var4;
-        if (var0 == null) {
-            var4 = LuaValue.NIL;
-        } else {
-            Class<?> var3 = var0.getClass();
-            Coercion var2 = a.get(var3);
-            Coercion var1 = var2;
-            if (var2 == null) {
-                if (var3.isArray()) {
-                    var1 = c;
-                } else if (var0 instanceof LuaValue) {
-                    var1 = d;
-                } else {
-                    var1 = b;
-                }
+    public static LuaValue coerce(Short shortValue) {
+        return shortValue == null ? LuaValue.NIL : LuaInteger.valueOf(shortValue);
+    }
 
-                a.put(var3, var1);
+    public static LuaValue coerce(Object inputObject) {
+        if (inputObject == null) {
+            return LuaValue.NIL;
+        }
+
+        Class<?> inputClass = inputObject.getClass();
+        Coercion coercion = a.get(inputClass);
+
+        if (coercion == null) {
+            if (inputClass.isArray()) {
+                coercion = c;
+            } else if (inputObject instanceof LuaValue) {
+                coercion = d;
+            } else {
+                coercion = b;
             }
-
-            var4 = var1.coerce(var0);
+            a.put(inputClass, coercion);
         }
 
-        return var4;
+        return coercion.coerce(inputObject);
     }
 
-    public static LuaValue coerce(Short var0) {
-        LuaValue var1;
-        if (var0 == null) {
-            var1 = LuaValue.NIL;
-        } else {
-            var1 = LuaInteger.valueOf(var0);
-        }
-
-        return var1;
-    }
 
     private static final class ArrayCoercion implements Coercion {
         private ArrayCoercion() {

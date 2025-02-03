@@ -47,11 +47,10 @@ class JavaConstructor extends JavaMember {
 
             try {
                 return new JavaInstance(this.i.newInstance(var5));
-            } catch (InvocationTargetException var3) {
-                String var6 = this.i +
+            } catch (InvocationTargetException e) {
+                throw new LuaError(this.i +
                         " " +
-                        var3.getTargetException();
-                throw new LuaError(var6);
+                        e.getTargetException());
             } catch (Exception var4) {
                 String var2 = "coercion error " +
                         this.i +
@@ -64,11 +63,9 @@ class JavaConstructor extends JavaMember {
     }
 
     public String tojstring() {
-        StringBuilder var1 = new StringBuilder();
-        var1.append("JavaConstructor{\n  ");
-        var1.append(this.i);
-        var1.append("\n}");
-        return var1.toString();
+        return "JavaConstructor{\n  " +
+                this.i +
+                "\n}";
     }
 
     static class Overload extends VarArgFunction {

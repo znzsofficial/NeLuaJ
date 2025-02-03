@@ -10,6 +10,7 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 
+//package_.require.call(v)
 @Suppress("NOTHING_TO_INLINE")
 inline fun Globals.require(value: LuaValue): LuaValue = this.p.y.call(value)
 
@@ -35,7 +36,7 @@ inline fun LuaValue.ifNotNil(): LuaValue? = takeIf { it.isNotNil() }
 inline fun LuaValue.ifIsFunction(): LuaValue? = takeIf { it.isfunction() }
 
 @Suppress("unused")
-suspend fun LuaValue.suspendInvoke(varargs: Varargs) = suspendCancellableCoroutine {
+suspend fun LuaValue.suspendInvoke(varargs: Varargs): Varargs = suspendCancellableCoroutine {
     try {
         it.resume(this.invoke(varargs))
     } catch (e: Exception) {
