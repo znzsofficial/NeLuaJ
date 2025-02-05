@@ -10,8 +10,8 @@ import "mods.utils.EditorUtil"
 
 _M.initView = function()
     local toggle = ActionBarDrawerToggle(activity, drawer, R.string.drawer_open, R.string.drawer_close)
-    drawer.setDrawerListener(toggle);
-    toggle.syncState();
+    drawer.setDrawerListener(toggle)
+    toggle.syncState()
     filetab.setPath(Bean.Path.this_dir)
     mSearch.setVisibility(8)
     mSearch.post(function()
@@ -29,10 +29,31 @@ _M.initView = function()
 end
 
 _M.initBar = function()
-    local loadlayout = loadlayout
     local LinearLayout = luajava.bindClass "android.widget.LinearLayout"
     local TextView = luajava.bindClass "android.widget.TextView"
     local rippleRes = activity.obtainStyledAttributes({ android.R.attr.selectableItemBackground }).getResourceId(0, 0)
+    local layout = {
+        LinearLayout,
+        layout_width = "40dp",
+        layout_height = "36dp",
+        {
+            TextView,
+            layout_width = "40dp",
+            layout_height = "36dp",
+            gravity = "center",
+            clickable = true,
+            focusable = true,
+            TextSize = "5sp",
+            BackgroundResource = rippleRes,
+            text = v,
+            onClick = function()
+                if v == "fun" then
+                    v = "function()"
+                end
+                mLuaEditor.paste(v)
+            end,
+        },
+    }
     local t = {
         "fun", "(", ")", "[", "]", "{", "}",
         "\"", "=", ":", ".", ",", ";", "_",
@@ -40,37 +61,16 @@ _M.initBar = function()
         "#", "^", "$", "?", "&", "|",
         "<", ">", "~", "'"
     }
+    local f = loadlayout
     for k, v in ipairs(t) do
-        local Item = loadlayout({
-            LinearLayout,
-            layout_width = "40dp",
-            layout_height = "36dp",
-            {
-                TextView,
-                layout_width = "40dp",
-                layout_height = "36dp",
-                gravity = "center",
-                clickable = true,
-                focusable = true,
-                TextSize = "5sp",
-                BackgroundResource = rippleRes,
-                text = v,
-                onClick = function()
-                    if v == "fun" then
-                        v = "function()"
-                    end
-                    mLuaEditor.paste(v)
-                end,
-            },
-        })
-        ps_bar.addView(Item)
+        ps_bar.addView(f(layout))
     end
     return _M
 end
 
 _M.initCheck = function()
-    local layout = error_Text.getParent()
     local textView = error_Text
+    local layout = textView.getParent()
     textView.onClick = function()
         textView.text = mLuaEditor.getError()
     end
