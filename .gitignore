@@ -1,12 +1,25 @@
+# IntelliJ IDEA / Android Studio
 *.iml
-.gradle
-/local.properties
-/.idea
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
-*.log
+/.idea/
+
+# Gradle files
+.gradle/
+
+# Local properties file
 local.properties
-/app/release
+
+# Build output directories
+/build/
+/captures/
+/.externalNativeBuild/
+/cxx/
+/.kotlin
+
+# Log files
+*.log
+
+# Release build
+/app/release/
+
+# macOS system files
+.DS_Store
