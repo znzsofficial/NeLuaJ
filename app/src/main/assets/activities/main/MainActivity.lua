@@ -69,12 +69,14 @@ function onRequestPermissionsResult(r, p, g)
     collectgarbage("collect")
 
     -- 恢复上次打开的文件
-    local lastPath = this.getSharedData("lastFile")
-    local lastSelect = this.getSharedData("lastSelect")
-    if lastPath and File(lastPath).exists() then
-        EditorUtil.load(lastPath)
-        EditorUtil.setSelection(lastSelect or 0)
-    end
+    mLuaEditor.post(function()
+        local lastPath = this.getSharedData("lastFile")
+        local lastSelect = this.getSharedData("lastSelect")
+        if lastPath and File(lastPath).exists() then
+            EditorUtil.load(lastPath)
+            EditorUtil.setSelection(lastSelect or 0)
+        end
+    end)
 end
 
 --使用home来添加menu按钮
