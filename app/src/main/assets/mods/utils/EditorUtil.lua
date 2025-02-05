@@ -61,7 +61,7 @@ local function getActionMode(view)
     }
 end
 
-local function changeTitle(path)
+local function setPageTitle(path)
   --print"改变标题"
   try
     local pattern = Bean.Path.app_root_pro_dir .. "(.*)/"
@@ -97,7 +97,7 @@ local function initTab()
                 -- 更新当前文件
                 PathManager.update_this_file(path)
                 -- 载入文件
-                changeTitle(path)
+                setPageTitle(path)
                 --print"第一次被选择的tab，editor读取"
                 mLuaEditor.setText(LuaFileUtil.read(path))
             end
@@ -272,13 +272,13 @@ function _M.load(path)
     PathManager.update_this_file(path)
     --判断Tab操作
     if TabUtil.Table[path] == nil then
-        --print"editor判断为添加tab"
+        -- 未打开的文件，添加tab，在onTabSelected里读取
         TabUtil.add(path)
     else
-        --print"已经存在的tab，editor读取"
+        -- 已经存在的tab，editor读取
         mLuaEditor.setText(LuaFileUtil.read(path))
-        changeTitle(path)
-        -- print("来自RecyclerView"..tostring(_M.fromRecy))
+        setPageTitle(path)
+        -- 来自RecyclerView
         -- 如果是来自RV的加载就选择 tab
         if _M.fromRecy then
             TabUtil.Table[path].obj.select()
@@ -300,8 +300,10 @@ function _M.load(path)
     _M.fromRecy = nil
 end
 
+--[[
 function _M.post(func)
     return mLuaEditor.post(func)
 end
+]]
 
 return _M
