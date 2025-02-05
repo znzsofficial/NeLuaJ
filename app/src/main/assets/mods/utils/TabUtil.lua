@@ -43,7 +43,7 @@ menu.add(res.string.close_file).onMenuItemClick = function(a)
             mTab.removeTab(_o)
         end
         if mTab.getTabCount() == 0 then
-            PathManager.update_this_file("")
+            PathManager.updateFile("")
             activity.setTitle("NeLuaJ+")
             activity.getSupportActionBar().setSubtitle(res.string.no_file)
             Bean.Project.this_project = ""
@@ -70,7 +70,7 @@ menu.add(res.string.close_all).onMenuItemClick = function(a)
         tabTable[i] = nil
         mTab.removeTab(_o)
     end
-    PathManager.update_this_file("")
+    PathManager.updateFile("")
     Bean.Project.this_project = ""
     activity.setTitle("NeLuaJ+")
     activity.getSupportActionBar().setSubtitle(res.string.no_file)

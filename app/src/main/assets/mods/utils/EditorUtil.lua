@@ -88,14 +88,14 @@ local function initTab()
                 _M.save()
                 local path = tab.tag.path
                 -- 更新当前文件
-                PathManager.update_this_file(path)
+                PathManager.updateFile(path)
                 -- 载入文件
                 _M.load(path)
             else
                 tab.tag.first = nil
                 local path = tab.tag.path
                 -- 更新当前文件
-                PathManager.update_this_file(path)
+                PathManager.updateFile(path)
                 -- 载入文件
                 setPageTitle(path)
                 --print"第一次被选择的tab，editor读取"
@@ -269,7 +269,7 @@ function _M.load(path)
         mLuaEditor.setVisibility(0)
     end
     --更新当前文件
-    PathManager.update_this_file(path)
+    PathManager.updateFile(path)
     --判断Tab操作
     if TabUtil.Table[path] == nil then
         -- 未打开的文件，添加tab，在onTabSelected里读取

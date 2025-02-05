@@ -54,7 +54,7 @@ function onCreate()
     else
         window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR)
     end
-    Bean.Path.this_dir = Bean.Path.app_root_pro_dir
+    --Bean.Path.this_dir = Bean.Path.app_root_pro_dir
     Init.initView().initBar().initCheck()
 end
 
@@ -81,7 +81,7 @@ end
 
 --使用home来添加menu按钮
 function onOptionsItemSelected(item)
-    local id = item.getItemId();
+    local id = item.getItemId()
     if id == android.R.id.home then
         if not drawer.isDrawerOpen(GravityCompat.START) then
             EditorUtil.save()
