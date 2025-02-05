@@ -39,10 +39,9 @@ public class JavaClass extends JavaInstance implements CoerceJavaToLua.Coercion 
     Map<LuaValue, JavaClass> u;
 
     static {
-        for (Method var3 : Class.class.getMethods()) {
-            i.put(LuaValue.valueOf(var3.getName()), JavaMethod.a(var3));
+        for (Method method : Class.class.getMethods()) {
+            i.put(LuaValue.valueOf(method.getName()), JavaMethod.a(method));
         }
-
     }
 
     JavaClass(Class<?> var1) {
@@ -51,14 +50,12 @@ public class JavaClass extends JavaInstance implements CoerceJavaToLua.Coercion 
     }
 
     static JavaClass a(Class<?> var0) {
-        JavaClass var2 = j.get(var0);
-        JavaClass var1 = var2;
-        if (var2 == null) {
-            var1 = new JavaClass(var0);
-            ((Map) j).put(var0, var1);
+        JavaClass javaClass = j.get(var0);
+        if (javaClass == null) {
+            javaClass = new JavaClass(var0);
+            ((Map) j).put(var0, javaClass);
         }
-
-        return var1;
+        return javaClass;
     }
 
     static JavaClass a(String var0, ClassLoader var1) throws ClassNotFoundException {
@@ -68,7 +65,6 @@ public class JavaClass extends JavaInstance implements CoerceJavaToLua.Coercion 
             var2 = a(Class.forName(var0, true, var1));
             ((Map) k).put(var0, var2);
         }
-
         return var2;
     }
 
@@ -304,10 +300,9 @@ public class JavaClass extends JavaInstance implements CoerceJavaToLua.Coercion 
                     return var1;
                 } else if ((var3.getModifiers() & 1024) != 0) {
                     try {
-                        var1 = LuajavaLib.override(var3, var2).call();
-                        return var1;
-                    } catch (Exception var6) {
-                        throw new LuaError(var6);
+                        return LuajavaLib.override(var3, var2).call();
+                    } catch (Exception e) {
+                        throw new LuaError(e);
                     }
                 } else if (Map.class.isAssignableFrom(var3)) {
                     var1 = CoerceJavaToLua.coerce((new CoerceLuaToJava.MapCoercion(var3)).coerce(var2));
