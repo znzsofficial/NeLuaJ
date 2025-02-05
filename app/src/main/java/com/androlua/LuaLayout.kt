@@ -146,12 +146,6 @@ class LuaLayout(private val initialContext: Context) {
                 at ${layout.checktable().dump()}
                 """.trimIndent()
         )
-        val isAdapterView =
-            viewClass.isuserdata() && AdapterView::class.java.isAssignableFrom(
-                viewClass.touserdata(
-                    Class::class.java
-                )
-            )
         val view = layout["style"].run {
             if (isNotNil()) viewClass.call(
                 ContextThemeWrapper(initialContext, toint()).toLuaInstance(),
@@ -171,8 +165,12 @@ class LuaLayout(private val initialContext: Context) {
                             var v = next.secondArg()
                             if (v.isstring()) v =
                                 luaContext.luaState.require(v)
-                            // v = mContext.touserdata(LuaContext.class).getLuaState().package_.require.call(v);
-                            if (isAdapterView) {
+                            if (viewClass.isuserdata() && AdapterView::class.java.isAssignableFrom(
+                                    viewClass.touserdata(
+                                        Class::class.java
+                                    )
+                                )
+                            ) {
                                 view.jset(
                                     "adapter",
                                     LuaAdapter(
@@ -292,9 +290,9 @@ class LuaLayout(private val initialContext: Context) {
                             }
 
                             "pages" -> {
+                                val luaContext = luaContext
                                 val views = tValue.checktable()
                                 val list = mutableListOf<View>()
-                                val luaContext = luaContext
                                 for (i in 1 until views.length() + 1) {  // 从1开始，避免i+1的使用
                                     val v = views[i]
                                     when {
@@ -321,13 +319,13 @@ class LuaLayout(private val initialContext: Context) {
                             }
 
                             "pagesWithTitle" -> {
+                                val luaContext = luaContext
                                 val (views, titles) = tValue.checktable().let {
                                     it[1].checktable() to it[2].checktable()
                                 }
 
                                 val viewList = mutableListOf<View>()
                                 val titleList = mutableListOf<String>()
-                                val luaContext = luaContext
 
                                 for (i in 1 until views.length() + 1) {
                                     val v = views[i]
