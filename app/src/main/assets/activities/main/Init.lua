@@ -32,28 +32,6 @@ _M.initBar = function()
     local LinearLayout = luajava.bindClass "android.widget.LinearLayout"
     local TextView = luajava.bindClass "android.widget.TextView"
     local rippleRes = activity.obtainStyledAttributes({ android.R.attr.selectableItemBackground }).getResourceId(0, 0)
-    local layout = {
-        LinearLayout,
-        layout_width = "40dp",
-        layout_height = "36dp",
-        {
-            TextView,
-            layout_width = "40dp",
-            layout_height = "36dp",
-            gravity = "center",
-            clickable = true,
-            focusable = true,
-            TextSize = "5sp",
-            BackgroundResource = rippleRes,
-            text = v,
-            onClick = function()
-                if v == "fun" then
-                    v = "function()"
-                end
-                mLuaEditor.paste(v)
-            end,
-        },
-    }
     local t = {
         "fun", "(", ")", "[", "]", "{", "}",
         "\"", "=", ":", ".", ",", ";", "_",
@@ -63,7 +41,28 @@ _M.initBar = function()
     }
     local f = loadlayout
     for k, v in ipairs(t) do
-        ps_bar.addView(f(layout))
+        ps_bar.addView(f({
+            LinearLayout,
+            layout_width = "40dp",
+            layout_height = "36dp",
+            {
+                TextView,
+                layout_width = "40dp",
+                layout_height = "36dp",
+                gravity = "center",
+                clickable = true,
+                focusable = true,
+                TextSize = "5sp",
+                BackgroundResource = rippleRes,
+                text = v,
+                onClick = function()
+                    if v == "fun" then
+                        v = "function()"
+                    end
+                    mLuaEditor.paste(v)
+                end,
+            },
+        }))
     end
     return _M
 end
