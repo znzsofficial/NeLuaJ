@@ -144,7 +144,6 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
                 setTitle(File(luaDir!!).getName())
             }
         }
-
         luaDir = checkProjectDir(File(luaDir!!)).absolutePath
         initSize()
         pageName = File(luaFile).getName()
@@ -1293,6 +1292,14 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     fun getImageLoader(): ImageLoader {
         return imageLoader
     }
+
+    fun loadBitmap(data: Any?, callback: LuaFunction) =
+        imageLoader.enqueue(
+            ImageRequest.Builder(this)
+                .data(data)
+                .target(BitmapTarget(this, callback))
+                .build()
+        )
 
     fun loadImage(data: Any?, callback: LuaFunction) =
         imageLoader.enqueue(

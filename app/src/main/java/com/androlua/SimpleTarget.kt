@@ -4,6 +4,7 @@ import android.graphics.drawable.Drawable
 import coil3.Image
 import coil3.asDrawable
 import coil3.target.Target
+import coil3.toBitmap
 import org.luaj.LuaFunction
 
 class SimpleTarget(private val activity: LuaActivity, private val function: LuaFunction) : Target {
@@ -11,6 +12,14 @@ class SimpleTarget(private val activity: LuaActivity, private val function: LuaF
         runCatching {
             function.jcall(result.asDrawable(activity.resources))
         }.onFailure { activity.sendError("SimpleTarget", it as Exception) }
+    }
+}
+
+class BitmapTarget(private val activity: LuaActivity, private val function: LuaFunction) : Target {
+    override fun onSuccess(result: Image) {
+        runCatching {
+            function.jcall(result.toBitmap())
+        }.onFailure { activity.sendError("onSuccess", it as Exception) }
     }
 }
 

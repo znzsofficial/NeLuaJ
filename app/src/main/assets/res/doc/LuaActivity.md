@@ -75,6 +75,8 @@ this.getImageLoader()
 
 --直接使用Coil异步加载图片
 --data 类型见 https://coil-kt.github.io/coil/getting_started/#supported-data-types
+this.loadBitmap(data, function(bitmap)
+end)
 this.loadImage(data, function(drawable)
 end)
 this.loadImage(data, imageView)

@@ -6804,6 +6804,7 @@ return {
     "com.android.service.ims.presence.SubscribePublisher",
     "com.android.telephony.Rlog",
     "com.androlua.AsyncTaskX",
+    "com.androlua.BitmapTarget",
     "com.androlua.CallLuaFunction",
     "com.androlua.CrashHandler",
     "com.androlua.GifDecoder",
