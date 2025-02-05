@@ -1,13 +1,11 @@
 import "java.io.File"
 import "com.androlua.LuaTarget"
+import "com.nekolaska.internal.FileItemHolder"
 import "androidx.core.view.GravityCompat"
 import "android.view.LayoutInflater"
+import "android.util.TypedValue"
 
 local ColorUtil = this.globalData.ColorUtil
--- Anime
-local AnimatorSet = bindClass "android.animation.AnimatorSet"
-local ObjectAnimator = bindClass "android.animation.ObjectAnimator"
-local DecelerateInterpolator = luajava.newInstance "android.view.animation.DecelerateInterpolator"
 
 -- RecyclerView
 import "androidx.recyclerview.widget.RecyclerView"
@@ -15,11 +13,12 @@ import "androidx.recyclerview.widget.LinearLayoutManager"
 -- RecyclerAdapter
 import "github.znzsofficial.adapter.PopupRecyclerAdapter"
 import "github.znzsofficial.adapter.LuaCustRecyclerHolder"
-import "com.nekolaska.internal.FileItemHolder"
-
-import "android.util.TypedValue"
-
 local ImageRequestBuilder = bindClass "coil3.request.ImageRequest$Builder"
+-- Anime
+local SpringAnimation = luajava.bindClass "androidx.dynamicanimation.animation.SpringAnimation"
+local SpringForce = luajava.bindClass "androidx.dynamicanimation.animation.SpringForce"
+local springAlpha
+local springTranslationY
 
 import "mods.utils.EditorUtil"
 import "mods.utils.ActivityUtil"
@@ -40,7 +39,6 @@ local R = R
 
 local _M = {}
 local FileList
-local Anim
 
 local suffix_image = setmetatable({
     lua = "file_code",
@@ -86,12 +84,19 @@ local suffix_image = setmetatable({
 _M.init = function()
     Bean_Path = Bean.Path
 
-    Anim = AnimatorSet()
-    local X = ObjectAnimator.ofFloat(mRecycler, "translationY", { 50, 0 })
-    local A = ObjectAnimator.ofFloat(mRecycler, "alpha", { 0, 1 })
-    Anim.play(A).with(X)
-    Anim.setDuration(400)
-        .setInterpolator(DecelerateInterpolator)
+    -- 创建SpringAnimation对象
+    springTranslationY = SpringAnimation(mRecycler, SpringAnimation.TRANSLATION_Y)
+    springAlpha = SpringAnimation(mRecycler, SpringAnimation.ALPHA)
+
+    -- 配置Spring的Damping和Stiffness，以控制动画的反弹和速度
+    local spring = SpringForce() {
+        dampingRatio = 0.3 , -- 阻尼比，控制反弹的效果
+        stiffness = 500  -- 刚度，控制动画的速度
+    }
+
+    -- 将配置应用于SpringAnimation
+    springTranslationY.spring = spring
+    springAlpha.spring = spring
 
     luajava.newInstance("me.zhanghai.android.fastscroll.FastScrollerBuilder", mRecycler)
            .useMd2Style()
@@ -146,8 +151,8 @@ _M.init = function()
                     if v.img == "Project" then
                         imageLoader.enqueue(
                                 ImageRequestBuilder(activity)
-                                            .data(v_path .. "/icon.png")
-                                            .target(LuaTarget(this, LuaTarget.Listener {
+                                             .data(v_path .. "/icon.png")
+                                             .target(LuaTarget(this, LuaTarget.Listener {
                                     onError = function()
                                         pcall(function()
                                             view.name.setCompoundDrawables(error_project, nil, nil, nil)
@@ -191,7 +196,7 @@ _M.init = function()
 
                         if v.isDirectory then
                             PathManager.update_this_dir(v_path)
-                            filetab.setPath(Bean_Path.this_dir)
+                            filetab.setPath(v_path)
                             _M.update()
                         elseif v.img == "file_img" then
                             ActivityUtil.new("photo", v_path)
@@ -221,8 +226,7 @@ _M.init = function()
             }))
     mRecycler.setAdapter(adapter_rv).setLayoutManager(layoutManager)
 
-    --[[
-    filetab.addFileTabListener{
+    --[[filetab.addFileTabListener{
       onSelected=function(path)
         PathManager.update_this_dir(path:gsub("/sdcard",Bean_Path.system_root))
         MainActivity.RecyclerView.update()
@@ -308,7 +312,12 @@ end
 
 local updateCallback = function()
     adapter_rv.notifyDataSetChanged()
-    Anim.start()
+    -- 设置初始值
+    springTranslationY.setStartValue(50) -- 起始位置
+    springAlpha.setStartValue(0) -- 初始透明度
+    -- 启动动画
+    springTranslationY.animateToFinalPosition(0) -- 目标位置
+    springAlpha.animateToFinalPosition(1) -- 目标透明度
     swipeRefresh.setRefreshing(false)
 end
 
