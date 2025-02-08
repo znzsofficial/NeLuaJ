@@ -196,13 +196,13 @@ class res(private val context: LuaContext) : TwoArgFunction() {
         LuaValue() {
         private val loader = activity.context.imageLoader
         private val extension = listOf(
-            "bmp",
-            "jpeg",
-            "jpg",
             "png",
+            "jpg",
             "gif",
-            "svg",
             "webp",
+            "jpeg",
+            "svg",
+            "bmp",
             "heif",
             "heic",
             "avif"
@@ -252,13 +252,13 @@ class res(private val context: LuaContext) : TwoArgFunction() {
         LuaValue() {
         private val loader = activity.context.imageLoader
         private val extension = listOf(
-            "bmp",
-            "jpeg",
-            "jpg",
             "png",
+            "jpg",
             "gif",
-            "svg",
             "webp",
+            "jpeg",
+            "svg",
+            "bmp",
             "heif",
             "heic",
             "avif"
