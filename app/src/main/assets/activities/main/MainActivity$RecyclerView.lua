@@ -149,15 +149,11 @@ _M.init = function()
                                              .data(v_path .. "/icon.png")
                                              .target(LuaTarget(this, LuaTarget.Listener {
                                     onError = function()
-                                        pcall(function()
-                                            view.name.setCompoundDrawables(error_project, nil, nil, nil)
-                                        end)
+                                        view.name.setCompoundDrawables(error_project, nil, nil, nil)
                                     end,
                                     onSuccess = function(drawable)
-                                        pcall(function()
-                                            drawable.setBounds(0, 0, size, size)
-                                            view.name.setCompoundDrawables(drawable, nil, nil, nil)
-                                        end)
+                                        drawable.setBounds(0, 0, size, size)
+                                        view.name.setCompoundDrawables(drawable, nil, nil, nil)
                                     end
                                 }))          .build()
                         )
