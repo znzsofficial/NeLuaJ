@@ -1230,7 +1230,6 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
                     Intent.FLAG_ACTIVITY_NEW_TASK
             setDataAndType(getUriForFile(file), getType(file))
         }
-        startActivity(intent)
         if (callback != null) {
             if (intent.resolveActivity(packageManager) != null) {
                 startActivity(intent)
