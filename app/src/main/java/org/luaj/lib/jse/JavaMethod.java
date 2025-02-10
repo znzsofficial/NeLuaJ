@@ -219,7 +219,7 @@ class JavaMethod extends JavaMember {
                 return bestMethod.invokeJavaMethod(var1, var2);
             } else {
                 // 如果没有找到匹配方法，抛出一个异常
-                String errorMessage = "No coercible public method found for args: " + var2;
+                String errorMessage = "no coercible public method\n" + this + "\n current args: " + var2;
                 LuaValue.error(errorMessage);  // 错误提示
                 throw new LuaError(errorMessage);  // 抛出 LuaError 异常
             }
@@ -227,17 +227,16 @@ class JavaMethod extends JavaMember {
 
 
         public String tojstring() {
-            StringBuilder var3 = new StringBuilder();
-            var3.append("JavaMethod{\n");
+            StringBuilder sb = new StringBuilder();
+            sb.append("JavaMethod{\n");
 
             for (JavaMethod var5 : this.b) {
-                var3.append("  ");
-                var3.append(var5.j);
-                var3.append("\n");
+                sb.append("  ");
+                sb.append(var5.j);
+                sb.append("\n");
             }
-
-            var3.append("}");
-            return var3.toString();
+            sb.append("}");
+            return sb.toString();
         }
     }
 }
