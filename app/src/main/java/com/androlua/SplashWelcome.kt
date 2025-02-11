@@ -51,6 +51,7 @@ class SplashWelcome : ComponentActivity() {
         }
     }
 
+    @Suppress("KotlinConstantConditions")
     private fun startActivity() {
         val intent = Intent(this@SplashWelcome, LuaActivity::class.java)
         if (isVersionChanged) {

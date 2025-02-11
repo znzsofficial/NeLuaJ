@@ -2,7 +2,6 @@ package com.androlua
 
 import android.content.Context
 import android.content.DialogInterface
-import android.graphics.drawable.Drawable
 import android.view.View
 import android.widget.AdapterView
 import android.widget.AdapterView.OnItemLongClickListener
