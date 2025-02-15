@@ -250,21 +250,21 @@ public class JavaClass extends JavaInstance implements CoerceJavaToLua.Coercion 
                     constructorMap.put(l, list.get(0));
                     break;
                 default:
-                    constructorMap.put(l, JavaConstructor.forConstructors((JavaConstructor[]) list.toArray(new JavaConstructor[list.size()])));
+                    constructorMap.put(l, JavaConstructor.forConstructors((JavaConstructor[]) list.toArray(new JavaConstructor[0])));
                     break;
             }
 
             constructorMap.putAll(i);
 
-            for (Map.Entry var13 : methodMap.entrySet()) {
-                String methodNameKey = (String) var13.getKey();
-                List methodList = (List) var13.getValue();
+            for (Map.Entry entry : methodMap.entrySet()) {
+                String methodNameKey = (String) entry.getKey();
+                List methodList = (List) entry.getValue();
                 LuaString luaMethodName = LuaValue.valueOf(methodNameKey);
                 Object methodValue;
                 if (methodList.size() == 1) {
                     methodValue = methodList.get(0);
                 } else {
-                    methodValue = JavaMethod.a((JavaMethod[]) methodList.toArray(new JavaMethod[methodList.size()]));
+                    methodValue = JavaMethod.a((JavaMethod[]) methodList.toArray(new JavaMethod[0]));
                 }
 
                 constructorMap.put(luaMethodName, methodValue);
@@ -298,8 +298,8 @@ public class JavaClass extends JavaInstance implements CoerceJavaToLua.Coercion 
                 } else if (arg.length() == 0 && arg.checktable().size() > 0) {
                     try {
                         return LuajavaLib.override(obj, arg);
-                    } catch (Exception var5) {
-                        throw new LuaError(var5);
+                    } catch (Exception e) {
+                        throw new LuaError(e);
                     }
                 } else {
                     try {
