@@ -485,7 +485,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
                     }
                 if (!permissions.isNullOrEmpty()) {
                     requestPermissions(
-                        permissions!!.toArray(arrayOfNulls<String>(permissions!!.size)),
+                        permissions!!.toArray(arrayOfNulls<String>(0)),
                         0
                     )
                     return false
