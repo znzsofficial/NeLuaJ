@@ -1,10 +1,13 @@
-# 项目支持与前言
+<div align="center">
 
-## **项目支持**
-- **QQ群组**: [603327362](https://qm.qq.com/cgi-bin/qm/qr?k=Y4DCrLhx2bie5LaLF4msQOHLVY1s7EeN&jump_from=webapi&authKey=KV3sOndkaiImC7LZB3Rt37sCOyRG3akbzURt+4GyQXps2x1EkyCQl7D3+16GQXyE)  
-  未来将在群组中发布最新版本更新，同时欢迎提交建议和反馈。
+----
+[![CI](https://github.com/znzsofficial/NeLuaJ/actions/workflows/android.yml/badge.svg?event=push)](https://github.com/znzsofficial/NeLuaJ/actions/workflows/gradle.yml)
+[![GitHub license](https://img.shields.io/github/license/znzsofficial/NeLuaJ)](https://github.com/znzsofficial/NeLuaJ/blob/main/LICENSE)
+[![QQ](https://img.shields.io/badge/Join-QQ_Group-ff69b4)](https://qm.qq.com/cgi-bin/qm/qr?k=Y4DCrLhx2bie5LaLF4msQOHLVY1s7EeN&jump_from=webapi&authKey=KV3sOndkaiImC7LZB3Rt37sCOyRG3akbzURt+4GyQXps2x1EkyCQl7D3+16GQXyE)
 
----
+NeLuaJ+是一款Android的LuaJ IDE
+
+</div>
 
 ## **前言**
 本项目适合具有一定 Android 开发基础的用户。如果以下情况让你感到困惑，建议谨慎使用：
@@ -12,7 +15,6 @@
 - 从其他编辑器复制的代码无法运行。
 - 对编程仅有浅层次接触（如仅通过QQ群或小论坛了解编程）。
 
----
 
 # 功能亮点与更新说明
 
