@@ -13,7 +13,7 @@ import dx.proxy.MethodInterceptor;
  * Created by nirenr on 2018/12/19.
  */
 
-public class LuaEnhancer {
+public final class LuaEnhancer {
 
     private final Enhancer mEnhancer;
 

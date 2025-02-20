@@ -189,7 +189,7 @@ class JavaMethod extends JavaMember {
             return this.invoke(LuaValue.varargsOf(var1));
         }
 
-        public LuaValue invokeJavaMethod(LuaValue var1, Varargs var2) {
+        public LuaValue invokeJavaMethod(LuaValue obj, Varargs args) {
             int bestMatchScore = CoerceLuaToJava.e;  // 初始匹配分数
             JavaMethod bestMethod = null;  // 最佳匹配方法
             int methodIndex = 0;  // 当前遍历的方法索引
@@ -199,7 +199,7 @@ class JavaMethod extends JavaMember {
             // 遍历所有的 Java 方法，找到最佳匹配方法
             while (methodIndex < methods.length) {
                 JavaMethod currentMethod = methods[methodIndex];  // 当前方法
-                int matchScore = currentMethod.b(var2);  // 获取与 var2 的匹配分数
+                int matchScore = currentMethod.b(args);  // 获取与 args 的匹配分数
 
                 // 如果当前方法的匹配分数更高，更新最佳方法
                 if (matchScore < bestMatchScore) {
@@ -216,10 +216,10 @@ class JavaMethod extends JavaMember {
 
             // 如果找到了最佳匹配方法，调用它
             if (bestMethod != null) {
-                return bestMethod.invokeJavaMethod(var1, var2);
+                return bestMethod.invokeJavaMethod(obj, args);
             } else {
                 // 如果没有找到匹配方法，抛出一个异常
-                String errorMessage = "no coercible public method\n" + this + "\n current args: " + var2;
+                String errorMessage = "no coercible public method\n" + this + "\n current args: " + args;
                 LuaValue.error(errorMessage);  // 错误提示
                 throw new LuaError(errorMessage);  // 抛出 LuaError 异常
             }
