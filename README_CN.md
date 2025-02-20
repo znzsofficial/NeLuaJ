@@ -1,6 +1,5 @@
 <div align="center">
 
-----
 [![CI](https://github.com/znzsofficial/NeLuaJ/actions/workflows/android.yml/badge.svg?event=push)](https://github.com/znzsofficial/NeLuaJ/actions/workflows/gradle.yml)
 [![GitHub license](https://img.shields.io/github/license/znzsofficial/NeLuaJ)](https://github.com/znzsofficial/NeLuaJ/blob/main/LICENSE)
 [![QQ](https://img.shields.io/badge/Join-QQ_Group-ff69b4)](https://qm.qq.com/cgi-bin/qm/qr?k=Y4DCrLhx2bie5LaLF4msQOHLVY1s7EeN&jump_from=webapi&authKey=KV3sOndkaiImC7LZB3Rt37sCOyRG3akbzURt+4GyQXps2x1EkyCQl7D3+16GQXyE)
