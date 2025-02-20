@@ -256,25 +256,23 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         else setTitle("Log")
         supportActionBar?.elevation = 0f
         setContentView(R.layout.log_view)
-        (findViewById<View?>(R.id.file_name) as TextView).text = File(luaFile).getName()
-        val list = findViewById<ListView>(R.id.log_list)
-        list.setAdapter(adapter)
-        findViewById<View?>(R.id.clear).setOnClickListener { v: View? -> adapter.clear() }
-        findViewById<View?>(R.id.copy).setOnClickListener { v: View? ->
-            // 合并所有字符串
-            val combinedString = StringBuilder()
-            for (i in 0 until adapter.count) {
-                combinedString.append(adapter.getItem(i))
-                if (i < adapter.count - 1) {
-                    combinedString.append("\n") // 添加分隔
-                }
-            }
+        findViewById<TextView>(R.id.file_name).text = File(luaFile).getName()
+        findViewById<ListView>(R.id.log_list).setAdapter(adapter)
+        findViewById<View>(R.id.clear).setOnClickListener { v: View -> adapter.clear() }
+        findViewById<View>(R.id.copy).setOnClickListener { v: View ->
             val clipboard = ContextCompat.getSystemService(
                 this,
                 ClipboardManager::class.java
             )
             // 创建 ClipData 对象
-            val clip = ClipData.newPlainText("log", combinedString)
+            val clip = ClipData.newPlainText("log", buildString {
+                for (i in 0 until adapter.count) {
+                    append(adapter.getItem(i))
+                    if (i < adapter.count - 1) {
+                        append("\n") // 添加分隔
+                    }
+                }
+            })
             // 将数据设置到剪贴板
             clipboard?.setPrimaryClip(clip)
         }
