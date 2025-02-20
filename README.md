@@ -1,15 +1,19 @@
+<div align="center">
+
 # NeLuaJ+
+
+[![CI](https://github.com/znzsofficial/NeLuaJ/actions/workflows/android.yml/badge.svg?event=push)](https://github.com/znzsofficial/NeLuaJ/actions/workflows/android.yml)
+[![GitHub license](https://img.shields.io/github/license/znzsofficial/NeLuaJ)](https://github.com/znzsofficial/NeLuaJ/blob/main/LICENSE)
+[![QQ](https://img.shields.io/badge/Join-QQ_Group-ff69b4)](https://qm.qq.com/cgi-bin/qm/qr?k=Y4DCrLhx2bie5LaLF4msQOHLVY1s7EeN&jump_from=webapi&authKey=KV3sOndkaiImC7LZB3Rt37sCOyRG3akbzURt+4GyQXps2x1EkyCQl7D3+16GQXyE)
+
+NeLuaJ+ is a LuaJ IDE for Android
+
+</div>
+
 
 ## **Other Languages**
 - **[简体中文](README_CN.md)**: Click here for the Simplified Chinese version of this document.
 
----  
-
-## **Project Support**
-- **QQ Group**: [603327362](https://qm.qq.com/cgi-bin/qm/qr?k=Y4DCrLhx2bie5LaLF4msQOHLVY1s7EeN&jump_from=webapi&authKey=KV3sOndkaiImC7LZB3Rt37sCOyRG3akbzURt+4GyQXps2x1EkyCQl7D3+16GQXyE)  
-  The latest version updates will be released in the group. Suggestions and feedback are also welcome.
-
----
 
 # Feature Highlights and Update Notes
 
