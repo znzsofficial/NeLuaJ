@@ -83,6 +83,7 @@ dependencies {
     implementation(libs.androidx.collection)
     implementation(libs.androidx.constraintlayout)
     implementation(libs.androidx.coordinatorlayout)
+    implementation(libs.androidx.core)
     implementation(libs.androidx.customview)
     implementation(libs.androidx.documentfile)
     implementation(libs.androidx.drawerlayout)

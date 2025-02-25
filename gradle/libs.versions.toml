@@ -1,6 +1,6 @@
 [versions]
 activity = "1.10.0"
-agp = "8.10.0-alpha03"
+agp = "8.10.0-alpha06"
 annotation = "1.9.1"
 appcompat = "1.7.0"
 coil = "3.1.0"
@@ -8,6 +8,7 @@ collapsingtoolbarlayout-subtitle = "1.5.0"
 collection = "1.4.5"
 constraintlayout = "2.2.0"
 coordinatorlayout = "1.3.0-rc01"
+core="1.16.0-alpha02"
 customview = "1.2.0-alpha02"
 documentfile = "1.1.0-alpha01"
 draganddrop = "1.0.0"
@@ -38,7 +39,7 @@ swiperefreshlayout = "1.2.0-beta01"
 transition = "1.5.1"
 viewpager = "1.1.0"
 viewpager2 = "1.1.0"
-window = "1.3.0"
+window = "1.4.0-beta02"
 zip4j = "2.11.5"
 
 [libraries]
@@ -47,6 +48,7 @@ androidx-annotation = { module = "androidx.annotation:annotation", version.ref =
 androidx-collection = { module = "androidx.collection:collection", version.ref = "collection" }
 androidx-constraintlayout = { module = "androidx.constraintlayout:constraintlayout", version.ref = "constraintlayout" }
 androidx-coordinatorlayout = { module = "androidx.coordinatorlayout:coordinatorlayout", version.ref = "coordinatorlayout" }
+androidx-core = { module = "androidx.core:core", version.ref = "core" }
 androidx-customview = { module = "androidx.customview:customview", version.ref = "customview" }
 androidx-documentfile = { module = "androidx.documentfile:documentfile", version.ref = "documentfile" }
 androidx-draganddrop = { module = "androidx.draganddrop:draganddrop", version.ref = "draganddrop" }
