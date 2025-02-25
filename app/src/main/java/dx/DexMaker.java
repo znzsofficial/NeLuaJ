@@ -412,6 +412,7 @@ public final class DexMaker {
         // Check that the file exists. If it does, return a DexClassLoader and skip all
         // the dex bytecode generation.
         if (result.exists()) {
+            //noinspection ResultOfMethodCallIgnored
             result.delete();
             //return generateClassLoader(result, dexCache, parent);
         }
@@ -435,6 +436,7 @@ public final class DexMaker {
         jarOut.closeEntry();
         jarOut.close();
         // 尝试适配 api 34
+        //noinspection ResultOfMethodCallIgnored
         result.setReadOnly();
         return generateClassLoader(result, dexCache, parent);
     }
