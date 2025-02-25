@@ -30,7 +30,7 @@ public class LuaRecyclerAdapter extends RecyclerView.Adapter<LuaRecyclerAdapter.
 
     private final LuaContext mContext;
     private LuaTable mLayout;
-    private LuaTable mData;
+    private final LuaTable mData;
     private final LuaTable mBaseData;
     private final LuaLayout loadlayout;
     private final ImageLoader imageLoader;

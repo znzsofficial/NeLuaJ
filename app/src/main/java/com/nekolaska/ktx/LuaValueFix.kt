@@ -1,3 +1,5 @@
+@file:Suppress("HasPlatformType")
+
 package com.nekolaska.ktx
 
 import org.luaj.Globals
