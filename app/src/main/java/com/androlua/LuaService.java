@@ -388,21 +388,19 @@ public class LuaService extends Service
     }
 
     public Intent registerReceiver(LuaBroadcastReceiver receiver, IntentFilter filter) {
-        // TODO: Implement this method
-        return super.registerReceiver(receiver, filter);
+        return ContextCompat.registerReceiver(this, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED);
     }
 
     public Intent registerReceiver(LuaBroadcastReceiver.OnReceiveListener ltr, IntentFilter filter) {
-        // TODO: Implement this method
         LuaBroadcastReceiver receiver = new LuaBroadcastReceiver(ltr);
-        return super.registerReceiver(receiver, filter);
+        return ContextCompat.registerReceiver(this, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED);
     }
 
     public Intent registerReceiver(IntentFilter filter) {
         // TODO: Implement this method
         if (mReceiver != null) unregisterReceiver(mReceiver);
         mReceiver = new LuaBroadcastReceiver(this);
-        return super.registerReceiver(mReceiver, filter);
+        return ContextCompat.registerReceiver(this, mReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED);
     }
 
     @Override
@@ -545,17 +543,14 @@ public class LuaService extends Service
         if (!new File(path).exists()) throw new FileNotFoundException(path);
 
         if (newDocument) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT);
-                intent.addFlags(Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
-            }
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT);
+            intent.addFlags(Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
         }
 
         intent.setData(Uri.parse("file://" + path));
 
         if (arg != null) intent.putExtra(ARG, arg);
-        if (newDocument) startActivity(intent);
-        else startActivity(intent);
+        startActivity(intent);
     }
 
     public void newActivity(String path, int in, int out, boolean newDocument)
@@ -604,15 +599,12 @@ public class LuaService extends Service
         intent.setData(Uri.parse("file://" + path));
 
         if (newDocument) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT);
-                intent.addFlags(Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
-            }
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT);
+            intent.addFlags(Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
         }
 
         if (arg != null) intent.putExtra(ARG, arg);
-        if (newDocument) startActivity(intent);
-        else startActivity(intent);
+        startActivity(intent);
     }
 
     @Override
