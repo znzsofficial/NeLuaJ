@@ -63,6 +63,7 @@ import com.androlua.adapter.ArrayListAdapter
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.nekolaska.internal.commit
 import com.nekolaska.ktx.firstArg
+import com.nekolaska.ktx.overridePendingTransition
 import com.nekolaska.ktx.toLuaInstance
 import dalvik.system.DexClassLoader
 import github.znzsofficial.neluaj.R
@@ -1159,7 +1160,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         if (arg != null) intent.putExtra(ARG, arg)
         if (newDocument) startActivity(intent)
         else startActivityForResult(intent, req)
-        overridePendingTransition(`in`, out)
+        overridePendingTransition(false, `in`, out)
     }
 
     /**
