@@ -1,4 +1,5 @@
 bindClass = luajava.bindClass;
+this.dynamicColor()
 
 ColorUtil = luajava.newInstance("github.daisukiKaffuChino.utils.LuaThemeUtil",activity)
 MDC_R = bindClass "com.google.android.material.R"

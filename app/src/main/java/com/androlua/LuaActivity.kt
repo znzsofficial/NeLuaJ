@@ -57,9 +57,11 @@ import coil3.ImageLoader
 import coil3.imageLoader
 import coil3.load
 import coil3.request.ImageRequest
+import coil3.request.crossfade
 import com.androlua.LuaBroadcastReceiver.OnReceiveListener
 import com.androlua.LuaService.LuaBinder
 import com.androlua.adapter.ArrayListAdapter
+import com.google.android.material.color.DynamicColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.nekolaska.internal.commit
 import com.nekolaska.ktx.firstArg
@@ -129,6 +131,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     private var mOnKeyLongPress: LuaValue? = null
     private var mOnTouchEvent: LuaValue? = null
 
+    @Suppress("UNCHECKED_CAST", "DEPRECATION")
     @CallLuaFunction
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -417,6 +420,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         }
     }
 
+    @Suppress("DEPRECATION")
     override fun setTitle(title: CharSequence) {
         super.setTitle(title)
         setTaskDescription(
@@ -826,6 +830,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         super.onDestroy()
     }
 
+    @Suppress("UNCHECKED_CAST")
     @CallLuaFunction
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (data != null) {
@@ -882,12 +887,13 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         return PreferenceManager.getDefaultSharedPreferences(this).all[key]
     }
 
-    override fun getSharedData(key: String?, def: Any?): Any? {
+    override fun getSharedData(key: String?, default: Any?): Any? {
         val ret: Any? = PreferenceManager.getDefaultSharedPreferences(this).all[key]
         if (ret != null) return ret
-        return def
+        return default
     }
 
+    @Suppress("UNCHECKED_CAST")
     override fun setSharedData(key: String?, value: Any?): Boolean {
         return PreferenceManager.getDefaultSharedPreferences(this).commit {
             if (value == null) remove(key)
@@ -1308,6 +1314,9 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         )
 
     fun loadImage(data: Any?, view: ImageView) = view.load(data)
+    fun loadImageWithCrossFade(data: Any?, view: ImageView) = view.load(data) {
+        crossfade(true)
+    }
 
     fun dpToPx(dp: Float): Float {
         return TypedValueCompat.dpToPx(dp, resources.displayMetrics)
@@ -1364,6 +1373,8 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
             sendError("dumpFile", e)
         }
     }
+
+    fun dynamicColor() = DynamicColors.applyToActivityIfAvailable(this)
 
     companion object {
         private const val ARG = "arg"
