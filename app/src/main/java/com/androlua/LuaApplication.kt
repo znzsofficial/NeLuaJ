@@ -124,6 +124,7 @@ class LuaApplication : Application(), LuaContext {
         return def
     }
 
+    @Suppress("UNCHECKED_CAST")
     override fun setSharedData(key: String, value: Any?): Boolean {
         return PreferenceManager.getDefaultSharedPreferences(this).commit {
             if (value == null)
@@ -152,13 +153,13 @@ class LuaApplication : Application(), LuaContext {
     override fun findResource(name: String): FileInputStream? {
         try {
             if (File(name).exists()) return FileInputStream(name)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             /*
       e.printStackTrace();*/
         }
         try {
             return FileInputStream(getLuaPath(name))
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             /*
       e.printStackTrace();*
         }
@@ -174,19 +175,17 @@ class LuaApplication : Application(), LuaContext {
     fun checkResource(name: String): Boolean {
         try {
             if (File(name).exists()) return true
-        } catch (ignored: Exception) {
+        } catch (_: Exception) {
         }
         try {
             return File(getLuaPath(name)).exists()
-        } catch (e: Exception) {
-            /*
-      e.printStackTrace();*/
+        } catch (_: Exception) {
         }
         try {
             val `in` = assets.open(name)
             `in`.close()
             return true
-        } catch (ignored: Exception) {
+        } catch (_: Exception) {
         }
         return false
     }

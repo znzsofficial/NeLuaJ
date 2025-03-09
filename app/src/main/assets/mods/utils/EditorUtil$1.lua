@@ -1,4 +1,5 @@
 local SelectMain = require "mods.PreSelection.SelectMain"
+local Color = bindClass "android.graphics.Color"
 local _M = {}
 
 --SelectMain.addView(text,view,list,id)
@@ -27,33 +28,35 @@ end)
 ]]
 
 function _M.init()
-  return SelectMain.init()
+    return SelectMain.init()
 end
 
-function _M.javaClassAnalyse(view,status)
-  if view.getSelectedText() and status then -- 判断内容不为空，并且选中状态
-    local text = view.getSelectedText() -- 获取到选中文本
-    SelectMain.new(text,function(content)
-      if type(content) == "table" then -- 不为表则是错误信息
-        for _,v in pairs(content[text]) do
-          SelectMain.addView(v)
-          --print(v)
-        end
-       else
-        print("error:"..content) --出现错误
-      end
-    end)
-   else
-    SelectMain.allMoveView() -- 移除所有新增的控件
-  end
+function _M.javaClassAnalyse(view, status)
+    if view.getSelectedText() and status then
+        -- 判断内容不为空，并且选中状态
+        local text = view.getSelectedText() -- 获取到选中文本
+        SelectMain.new(text, function(content)
+            if type(content) == "table" then
+                -- 不为表则是错误信息
+                for _, v in pairs(content[text]) do
+                    SelectMain.addView(v)
+                    --print(v)
+                end
+            else
+                print("error:" .. content) --出现错误
+            end
+        end)
+    else
+        SelectMain.allMoveView() -- 移除所有新增的控件
+    end
 end
 
 function _M.setHighLight(view)
-  view.basewordColor = 0xff4477e0
-  view.keywordColor = 0xffb4002d
-  view.stringColor = 0xffc2185b
-  view.userwordColor = 0xff5c6bc0
+    local data = this.sharedData
+    view.basewordColor = data["BaseWord"] and Color.parseColor(data["BaseWord"]) or 0xff4477e0
+    view.keywordColor = data["KeyWord"] and Color.parseColor(data["KeyWord"]) or 0xffb4002d
+    view.stringColor = data["String"] and Color.parseColor(data["String"]) or 0xffc2185b
+    view.userwordColor = data["UserWord"] and Color.parseColor(data["UserWord"]) or 0xff5c6bc0
 end
-
 
 return _M
