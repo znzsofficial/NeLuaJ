@@ -24,7 +24,6 @@ local res = res
 
 --[[
  ToDo：
- 保存上次打开的文件路径
  设置:(0%)
  高亮颜色
  放大镜开关
@@ -35,7 +34,7 @@ function onCreate()
     require "permissions"()
     --设置主题
     activity.setTheme(R.style.Theme_NeLuaJ_Material3_NoActionBar)
-    bindClass "com.google.android.material.color.DynamicColors".applyToActivityIfAvailable(this)
+    activity.dynamicColor()
     activity.setContentView(res.layout.main_layout)
             .setSupportActionBar(mToolBar)
             .getSupportActionBar() {

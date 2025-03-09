@@ -7,6 +7,7 @@ import "android.graphics.drawable.ColorDrawable"
 import "com.google.android.material.dialog.MaterialAlertDialogBuilder"
 import "android.view.View"
 import "android.view.WindowManager"
+this.dynamicColor()
 local res = res
 local ColorUtil = this.globalData.ColorUtil
 local table = table

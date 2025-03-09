@@ -2,7 +2,7 @@ require "environment"
 import "android.view.View"
 import "android.view.WindowManager"
 import "android.graphics.Color"
-local ImageRequestBuilder = bindClass "coil3.request.ImageRequest$Builder"
+this.dynamicColor()
 
 activity.getSupportActionBar().hide()
 
