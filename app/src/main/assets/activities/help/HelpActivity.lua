@@ -7,6 +7,7 @@ import "android.graphics.drawable.ColorDrawable"
 local LuaFileUtil = luajava.bindClass "com.nekolaska.io.LuaFileUtil".INSTANCE
 local ColorUtil = this.globalData.ColorUtil
 local res = res
+this.dynamicColor()
 activity.setTitle("NeLuaJ+" .. res.string.help)
         .setContentView(res.layout.help_layout)
         .getSupportActionBar() {

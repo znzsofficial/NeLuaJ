@@ -1,9 +1,10 @@
 require "environment"
+import "res"
 local ColorUtil = this.globalData.ColorUtil
 local LuaFileUtil = luajava.bindClass "com.nekolaska.io.LuaFileUtil".INSTANCE
-import "res"
 local File = bindClass "java.io.File"
 local path = tostring(...)
+this.dynamicColor()
 activity.setContentView(res.layout.java_layout)
 
 function onCreateOptionsMenu(menu)

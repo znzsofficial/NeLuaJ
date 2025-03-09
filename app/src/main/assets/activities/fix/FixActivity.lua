@@ -8,7 +8,7 @@ import "com.androlua.LuaTokenTypes"
 import "com.androlua.adapter.ArrayListAdapter"
 import "java.io.File"
 import "java.lang.String"
-import "res"
+this.dynamicColor()
 
 local clazzList
 local path = ...

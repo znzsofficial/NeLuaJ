@@ -80,6 +80,7 @@ end)
 this.loadImage(data, function(drawable)
 end)
 this.loadImage(data, imageView)
+this.loadImageWithCrossFade(data, imageView)
 
 -- 直接设置 onBackPressedDispatcher 的 Callback
 this.addOnBackPressedCallback(function()
@@ -112,4 +113,7 @@ this.loadXmlView(File(this.getLuaDir("test.xml")))
 
 -- 启动其他应用，找不到返回布尔值 false
 this.startPackage("com.example.app")
+
+-- 对当前 Activity 启用 DynamicColor
+this.dynamicColor()
 ```

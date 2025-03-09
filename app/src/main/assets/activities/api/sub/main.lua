@@ -21,6 +21,7 @@ import "android.text.method.LinkMovementMethod"
 import "com.google.android.material.card.MaterialCardView"
 import "com.google.android.material.textview.MaterialTextView"
 import "com.google.android.material.dialog.MaterialAlertDialogBuilder"
+this.dynamicColor()
 local DecelerateInterpolator = luajava.newInstance "android.view.animation.DecelerateInterpolator"
 
 local thisField
