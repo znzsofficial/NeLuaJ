@@ -1,10 +1,13 @@
 package com.nekolaska.io
 
 import com.androlua.LuaUtil
+import com.nekolaska.ktx.toLuaValue
 import net.lingala.zip4j.ZipFile
+import net.lingala.zip4j.progress.ProgressMonitor
 import okio.buffer
 import okio.sink
 import okio.source
+import org.luaj.LuaFunction
 import org.luaj.LuaTable
 import org.luaj.lib.jse.JsePlatform
 import java.io.File
@@ -49,6 +52,33 @@ object LuaFileUtil {
     fun extract(zipPath: String, outPath: String) {
         thread {
             ZipFile(zipPath).extractAll(outPath)
+        }
+    }
+
+    fun extract(inFile: File, targetDir: File, callback: LuaFunction) {
+        require(inFile.exists() && inFile.isFile) { "Invalid zip file: ${inFile.absolutePath}" }
+        if (!targetDir.exists() && !targetDir.mkdirs()) {
+            throw IllegalArgumentException("Failed to create target directory: ${targetDir.absolutePath}")
+        }
+
+        try {
+            val zipFile = ZipFile(inFile)
+            val totalSize = inFile.length() // ZIP 文件总大小
+            val monitor = zipFile.progressMonitor
+
+            zipFile.isRunInThread = true // 允许异步执行
+            zipFile.extractAll(targetDir.absolutePath)
+
+            thread {
+                while (monitor.state != ProgressMonitor.State.READY) {
+                    callback.call(monitor.workCompleted.toLuaValue(), totalSize.toLuaValue())
+                    Thread.sleep(100) // 避免 CPU 负担过重
+                }
+                // 解压完成，确保回调 100% 进度
+                callback.call(totalSize.toLuaValue(), totalSize.toLuaValue())
+            }
+        } catch (e: Exception) {
+            throw RuntimeException("Failed to unzip file: ${e.message}", e)
         }
     }
 
