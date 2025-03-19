@@ -53,4 +53,8 @@ return {
     colorItem("KeyWord"),
     colorItem("String"),
     colorItem("UserWord"),
+    colorItem("Comment"),
+    colorItem("Global"),
+    colorItem("Local"),
+    colorItem("Upval")
 }
