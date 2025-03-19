@@ -47,7 +47,11 @@ local defaultMap = {
     BaseWord = 0xff4477e0,
     KeyWord = 0xffb4002d,
     String = 0xffc2185b,
-    UserWord = 0xff5c6bc0
+    UserWord = 0xff5c6bc0,
+    Comment = 0xff71787E,
+    Global = 0xff689f38,
+    Local = 0xffb4b484,
+    Upval = 0xff8080c0,
 }
 
 local resetColor = function(tag)
@@ -86,8 +90,16 @@ BaseWordItem.setOnClickListener(click)
 KeyWordItem.setOnClickListener(click)
 StringItem.setOnClickListener(click)
 UserWordItem.setOnClickListener(click)
+CommentItem.setOnClickListener(click)
+GlobalItem.setOnClickListener(click)
+LocalItem.setOnClickListener(click)
+UpvalItem.setOnClickListener(click)
 
 resetColor("BaseWord")
 resetColor("KeyWord")
 resetColor("String")
 resetColor("UserWord")
+resetColor("Comment")
+resetColor("Global")
+resetColor("Local")
+resetColor("Upval")
