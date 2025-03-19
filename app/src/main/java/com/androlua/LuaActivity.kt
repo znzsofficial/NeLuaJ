@@ -67,9 +67,13 @@ import com.nekolaska.internal.commit
 import com.nekolaska.ktx.firstArg
 import com.nekolaska.ktx.overridePendingTransition
 import com.nekolaska.ktx.toLuaInstance
+import com.nekolaska.ktx.toLuaValue
 import dalvik.system.DexClassLoader
+import dalvik.system.DexFile
 import github.znzsofficial.neluaj.R
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.luaj.Globals
 import org.luaj.LuaClosure
 import org.luaj.LuaError
@@ -89,7 +93,7 @@ import org.luaj.android.print
 import org.luaj.android.printf
 import org.luaj.android.res
 import org.luaj.android.task
-import org.luaj.android.thread
+import org.luaj.android.thread as luajthread
 import org.luaj.android.timer
 import org.luaj.android.xTask
 import org.luaj.compiler.DumpState
@@ -104,6 +108,7 @@ import java.io.FileNotFoundException
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
+import java.util.zip.ZipFile as JZipFile
 import kotlin.system.measureTimeMillis
 
 open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnReceiveListener,
@@ -189,7 +194,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
                 it.set("printf", printf(this))
                 it.set("loadlayout", loadlayout(this))
                 it.set("task", task(this))
-                it.set("thread", thread(this))
+                it.set("thread", luajthread(this))
                 it.set("timer", timer(this))
                 it.set("call", call(this))
                 it.set("xTask", xTask(this))
@@ -1375,6 +1380,58 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     }
 
     fun dynamicColor() = DynamicColors.applyToActivityIfAvailable(this)
+
+//    fun getAppNames(): Array<String> {
+//        val ret = mutableListOf<String>()
+//        try {
+//            val dex = DexFile(packageCodePath)
+//            val cls = dex.entries()
+//            while (cls.hasMoreElements()) {
+//                ret.add(cls.nextElement())
+//            }
+//        } catch (_: IOException) {
+//        }
+//        return ret.toTypedArray()
+//    }
+//
+//    fun getAllName(path: String): Array<String> {
+//        val ret = mutableListOf<String>()
+//        try {
+//            if (path.endsWith(".dex", ignoreCase = true)) {
+//                val dex = DexFile(path)
+//                val cls = dex.entries()
+//                while (cls.hasMoreElements()) {
+//                    ret.add(cls.nextElement())
+//                }
+//            } else {
+//                val zip = JZipFile(path)
+//                val entries = zip.entries()
+//                while (entries.hasMoreElements()) {
+//                    val entryName = entries.nextElement().name
+//                    ret.add(entryName.replace("/", ".").replace(".class", ""))
+//                }
+//            }
+//        } catch (_: Exception) {
+//        }
+//        return ret.toTypedArray()
+//    }
+//
+//    fun getNames(path: String, callback: LuaFunction) =
+//        lifecycleScope.launch(Dispatchers.Main) {
+//            callback.call(withContext(Dispatchers.IO) {
+//                runCatching {
+//                    getAllName(path).map {
+//                        // 对每个类名进行处理
+//                        var cl = it
+//                        var d = cl.lastIndexOf("$")
+//                        if (d < 0) d = cl.lastIndexOf(".")
+//                        if (d > 0) cl = cl.substring(d)
+//                        cl
+//                    }.toTypedArray()
+//                }.onFailure { sendError("getNames", it as Exception) }
+//                    .getOrNull()
+//            }.toLuaValue())
+//        }
 
     companion object {
         private const val ARG = "arg"
