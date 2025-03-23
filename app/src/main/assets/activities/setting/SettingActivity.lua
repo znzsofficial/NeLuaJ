@@ -70,7 +70,7 @@ local click = View.OnClickListener {
                 .setView(loadlayout(input, views))
                 .setPositiveButton(android.R.string.ok, function()
             local inputColor = views.inputField.text
-            local bool, result = pcall(Color.parseColor, inputColor)
+            local bool, _ = pcall(Color.parseColor, inputColor)
             if not bool then
                 print "格式错误"
                 return
