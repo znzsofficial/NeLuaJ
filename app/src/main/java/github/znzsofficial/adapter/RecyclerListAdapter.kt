@@ -50,7 +50,7 @@ open class RecyclerListAdapter @JvmOverloads constructor(
 
     override fun getItemViewType(i: Int): Int {
         return try {
-            adapterCreator.getItemViewType(i).toInt()
+            adapterCreator.getItemViewType(i)
         } catch (e: Exception) {
             mContext?.sendError("RecyclerListAdapter: getItemViewType", e)
             -1
@@ -76,7 +76,7 @@ open class RecyclerListAdapter @JvmOverloads constructor(
 
     interface Creator {
        fun getItemCount(): Int
-        fun getItemViewType(i: Int): Long
+        fun getItemViewType(i: Int): Int
         fun onBindViewHolder(viewHolder: RecyclerView.ViewHolder?, i: Int)
         fun onCreateViewHolder(viewGroup: ViewGroup?, i: Int): LuaCustRecyclerHolder
         fun onViewRecycled(viewHolder: RecyclerView.ViewHolder?)
