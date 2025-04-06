@@ -10,7 +10,12 @@ class PopupRecyclerAdapter @JvmOverloads constructor(
 ) : LuaCustRecyclerAdapter(mContext, adapterCreator), PopupTextProvider {
 
     override fun getPopupText(view: View, position: Int): CharSequence {
-        return this.adapterCreator.getPopupText(view, position).toString()
+        return try {
+            this.adapterCreator.getPopupText(view, position)
+        }catch (e: Exception){
+            mContext?.sendError("PopupRecyclerAdapter: getPopupText", e)
+            ""
+        }
     }
 
     interface PopupCreator : Creator {
