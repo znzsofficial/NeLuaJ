@@ -1,3 +1,4 @@
+---@diagnostic disable: undefined-global
 require "environment"
 import "res"
 local ColorUtil = this.globalData.ColorUtil
