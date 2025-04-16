@@ -1,3 +1,4 @@
+---@diagnostic disable: undefined-global
 require "environment"
 import "java.io.File"
 import "android.view.View"
@@ -9,6 +10,10 @@ import "androidx.appcompat.widget.PopupMenu"
 -- Material
 import "com.google.android.material.snackbar.Snackbar"
 import "com.google.android.material.dialog.MaterialAlertDialogBuilder"
+
+local Uri = luajava.bindClass "android.net.Uri"
+local Intent = luajava.bindClass "android.content.Intent"
+local ComponentName = luajava.bindClass "android.content.ComponentName"
 
 -- private class
 local Init = require "activities.main.Init"
@@ -116,6 +121,15 @@ function onCreateOptionsMenu(menu)
             _menu.add(res.string.run_project)
                  .onMenuItemClick = function(a)
                 activity.newActivity(Bean.Path.app_root_pro_dir .. "/" .. Bean.Project.this_project .. "/main.lua")
+            end
+            if this.getSharedData("debug_app", nil) then
+                _menu.add(res.string.run_on_debug_app)
+                     .onMenuItemClick = function(a)
+                     local intent = Intent()
+                     intent.setComponent(ComponentName(this.getSharedData("debug_app", this.packageName), "com.androlua.LuaActivity"))
+                     intent.setData(Uri.parse("file://" .. Bean.Path.app_root_pro_dir .. "/" .. Bean.Project.this_project .. "/main.lua"))
+                     this.startActivity(intent)
+                end
             end
             pop.show()
         else
