@@ -56,5 +56,31 @@ return {
     colorItem("Comment"),
     colorItem("Global"),
     colorItem("Local"),
-    colorItem("Upval")
+    colorItem("Upval"),
+    {
+        TextView,
+        paddingLeft = "16dp",
+        paddingRight = "16dp",
+        paddingBottom = "8dp",
+        paddingTop = "8dp",
+        text = res.string.debug,
+        textSize = "16sp",
+        textColor = themeUtil.getColorPrimary(),
+    },
+    {
+        LinearLayout,
+        layout_width = "match",
+        layout_height = "wrap",
+        id = "CustomApp",
+        clickable = true,
+        focusable = true,
+        backgroundResource = rippleRes,
+        gravity = "center|start",
+        padding = "16dp",
+        {
+            TextView,
+            textSize = "20sp",
+            text = res.string.debug_app,
+        },
+    }
 }
