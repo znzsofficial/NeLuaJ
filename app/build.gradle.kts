@@ -9,7 +9,7 @@ plugins {
 
 android {
     namespace = "github.znzsofficial.neluaj"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "github.znzsofficial.neluaj"

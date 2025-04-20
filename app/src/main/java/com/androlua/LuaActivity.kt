@@ -288,7 +288,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     }
 
     fun setAllowThread(bool: Boolean) {
-        var policy = if (bool) {
+        val policy = if (bool) {
             ThreadPolicy.Builder().permitAll().build()
         } else {
             ThreadPolicy.Builder().detectAll().build()
@@ -1196,11 +1196,11 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
 
     fun getPathFromUri(uri: Uri?): String? {
         var path: String? = null
-        uri?.let {
+        uri?.let { u ->
             val p = arrayOf(MediaStore.Images.Media.DATA)
-            when (it.scheme) {
+            when (u.scheme) {
                 "content" -> {
-                    val cursor = contentResolver.query(it, p, null, null, null)
+                    val cursor = contentResolver.query(u, p, null, null, null)
                     cursor?.use {
                         val idx = it.getColumnIndexOrThrow(MediaStore.Images.Media.DATA)
                         if (idx >= 0) {
@@ -1211,7 +1211,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
                 }
 
                 "file" -> {
-                    path = it.path
+                    path = u.path
                 }
             }
         }

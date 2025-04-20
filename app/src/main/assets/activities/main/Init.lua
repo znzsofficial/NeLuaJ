@@ -70,7 +70,7 @@ _M.initFunctionTab = function()
         end
         local project_dir = Bean.Path.app_root_pro_dir .. "/" .. Bean.Project.this_project
         local init = LuaFileUtil.loadLua(project_dir .. "/init.lua")
-        LuaFileUtil.compress(project_dir, Bean.Path.app_root_dir .. "/Backup", init.app_name .. "-" .. os.date("%Y-%m-%d-%H-%M-%S") .. ".zip")
+        LuaFileUtil.compress(project_dir, Bean.Path.app_root_dir .. "/Backup", init.app_name or "Untitled" .. "-" .. os.date("%Y-%m-%d-%H-%M-%S") .. ".zip")
       end,
     },
     {
@@ -110,7 +110,7 @@ _M.initFunctionTab = function()
       end,
     },
   }
-  for k, v in ipairs(functions) do
+  for _, v in ipairs(functions) do
     mFunctionTab.addView(loadlayout{
       LinearLayout,
       {
@@ -122,7 +122,7 @@ _M.initFunctionTab = function()
         paddingRight="8dp",
         paddingTop="6dp",
         paddingBottom="6dp",
-        onClick=v[2]
+        onClick= v[2]
       },
     })
   end

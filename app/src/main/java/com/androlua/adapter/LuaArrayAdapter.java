@@ -169,9 +169,8 @@ public class LuaArrayAdapter extends BaseAdapter implements Filterable {
         if (view instanceof TextView) {
             if (value instanceof CharSequence) ((TextView) view).setText((CharSequence) value);
             else ((TextView) view).setText(value.toString());
-        } else if (view instanceof ImageView) {
+        } else if (view instanceof ImageView img) {
             try {
-                ImageView img = (ImageView) view;
                 Drawable drawable = null;
                 if (value instanceof Bitmap) drawable = new BitmapDrawable(mRes, (Bitmap) value);
                 else if (value instanceof String)
