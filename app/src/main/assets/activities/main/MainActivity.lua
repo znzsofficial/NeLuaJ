@@ -59,7 +59,7 @@ function onCreate()
         window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR)
     end
     --Bean.Path.this_dir = Bean.Path.app_root_pro_dir
-    Init.initView().initBar().initCheck()
+    Init.initView().initBar().initFunctionTab().initCheck()
 end
 
 function onRequestPermissionsResult(r, p, g)
