@@ -1,7 +1,10 @@
 ---@diagnostic disable: undefined-global
 local _M = {}
 local Bean = Bean
-import "androidx.core.view.GravityCompat"
+import "android.widget.LinearLayout"
+import "android.widget.TextView"
+import "android.animation.AnimatorSet"
+import "android.animation.ObjectAnimator"
 import "androidx.appcompat.app.ActionBarDrawerToggle"
 --Material
 import "com.google.android.material.snackbar.Snackbar"
@@ -10,8 +13,7 @@ import "mods.functions.SearchCode"
 import "mods.utils.EditorUtil"
 import "mods.utils.ActivityUtil"
 
-local LinearLayout = luajava.bindClass "android.widget.LinearLayout"
-local TextView = luajava.bindClass "android.widget.TextView"
+local DecelerateInterpolator = luajava.newInstance "android.view.animation.DecelerateInterpolator"
 local rippleRes = activity.obtainStyledAttributes({ android.R.attr.selectableItemBackground }).getResourceId(0, 0)
 
 local loadlayout = loadlayout
@@ -45,13 +47,11 @@ _M.initFunctionTab = function()
           MainActivity.Public.snack(res.string.no_file)
           return
         end
-        switch
-          EditorUtil.save()
+        switch EditorUtil.save()
           -- 目前只有使用okio保存时才能触发这个
          case "same"
           MainActivity.Public.snack(res.string.save_same)
-         case
-          true
+         case true
           MainActivity.Public.snack(res.string.save_success)
          default
           MainActivity.Public.snack(res.string.save_fail)
@@ -96,6 +96,17 @@ _M.initFunctionTab = function()
       end,
     },
     {
+      res.string.search,
+      function()
+        mSearch.setVisibility(0)
+        local searchAnim = AnimatorSet()
+        local Y = ObjectAnimator.ofFloat(mSearch, "translationY", { -50, 0 })
+        local A = ObjectAnimator.ofFloat(mSearch, "alpha", { 0, 1 })
+        searchAnim.play(A).with(Y)
+        searchAnim.setDuration(500).setInterpolator(DecelerateInterpolator).start()
+      end
+    },
+    {
       res.string.build,
       function()
         if not this.startPackage("com.nekolaska.Builder") then
@@ -137,7 +148,7 @@ _M.initBar = function()
     "#", "^", "$", "?", "&", "|",
     "<", ">", "~", "'"
   }
-  for k, v in ipairs(t) do
+  for _, v in ipairs(t) do
     ps_bar.addView(loadlayout{
       LinearLayout,
       layout_width = "40dp",

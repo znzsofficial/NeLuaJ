@@ -39,8 +39,6 @@ function onOptionsItemSelected(m)
     end
 end
 
---luajava.newInstance("me.zhanghai.android.fastscroll.FastScrollerBuilder", webView).useMd2Style().build()
-
 local MaterialTextView = luajava.bindClass "com.google.android.material.textview.MaterialTextView"
 local LinearLayout = luajava.bindClass "android.widget.LinearLayout"
 local item = {
@@ -63,22 +61,23 @@ local item = {
 
 local data = {
     { text = "init.lua", file = "init_lua_" .. res.language .. ".md" },
+    { text = res.string.global, file = "global_env.md" },
     { text = "LuaJ++", file = "LuaJ++.md" },
+    { text = "res " .. res.string._module, file = "module_res.md" },
+    { text = "okhttp " .. res.string._module, file = "module_okhttp.md" },
+    { text = "loadlayout", file = "module_loadlayout.md" },
+    { text = "file " .. res.string._module, file = "module_file.md" },
+    { text = "lazy", file = "lazy.md" },
+    { text = "xTask", file = "xTask.md" },
     { text = "LuaActivity", file = "LuaActivity.md" },
     { text = "LuaCustRecyclerAdapter", file = "LuaCustRecyclerAdapter.md" },
     { text = "LuaFragment", file = "LuaFragment.md" },
     { text = "LuaFragmentAdapter", file = "LuaFragmentAdapter.md" },
     { text = "LuaPreferenceFragment", file = "LuaPreferenceFragment.md" },
     { text = "LuaRecyclerAdapter", file = "LuaRecyclerAdapter.md" },
-    { text = "lazy", file = "lazy.md" },
-    { text = "xTask", file = "xTask.md" },
     { text = "Coil", file = "Coil.md" },
-    { text = "res " .. res.string._module, file = "module_res.md" },
-    { text = "okhttp " .. res.string._module, file = "module_okhttp.md" },
-    { text = "loadlayout", file = "module_loadlayout.md" },
-    { text = "file " .. res.string._module, file = "module_file.md" },
     { text = "FileObserver", file = "other_FileObserver.md" },
-    { text = res.string.global, file = "global_env.md" },
+    { text = "FastScrollerBuilder", file = "other_FastScrollerBuilder.md"}
 }
 
 local adp = LuaAdapter(activity, data, item)
