@@ -3,8 +3,8 @@ require "environment"
 import "java.io.File"
 import "android.view.View"
 import "android.view.WindowManager"
-import "android.animation.ObjectAnimator"
 import "android.animation.AnimatorSet"
+import "android.animation.ObjectAnimator"
 import "androidx.core.view.GravityCompat"
 import "androidx.appcompat.widget.PopupMenu"
 -- Material
@@ -29,9 +29,8 @@ local res = res
 
 --[[
  ToDo：
- 设置:(0%)
- 高亮颜色
- 放大镜开关
+ 设置:(10%)
+ 放大镜开关调节
 ]]
 
 function onCreate()
@@ -186,13 +185,11 @@ function onCreateOptionsMenu(menu)
     end
     menu1.add(res.string.search).onMenuItemClick = function(a)
         mSearch.setVisibility(0)
-        local Anim = AnimatorSet()
-        local Y = ObjectAnimator.ofFloat(mSearch, "translationY", { -50, 0 })
-        local A = ObjectAnimator.ofFloat(mSearch, "alpha", { 0, 1 })
-        Anim.play(A).with(Y)
-        Anim.setDuration(500)
-            .setInterpolator(DecelerateInterpolator)
-            .start()
+        local searchAnim = AnimatorSet()
+        searchAnim.play(ObjectAnimator.ofFloat(mSearch, "alpha", { 0, 1 }))
+        .with(ObjectAnimator.ofFloat(mSearch, "translationY", { -50, 0 }))
+        searchAnim.setDuration(500).setInterpolator(DecelerateInterpolator)
+        searchAnim.start()
     end
     menu1.add("Java" .. res.string.editor).onMenuItemClick = function(a)
         MaterialAlertDialogBuilder(this)
@@ -232,7 +229,7 @@ function onCreateOptionsMenu(menu)
         end
         local project_dir = Bean.Path.app_root_pro_dir .. "/" .. Bean.Project.this_project
         local init = LuaFileUtil.loadLua(project_dir .. "/init.lua")
-        LuaFileUtil.compress(project_dir, Bean.Path.app_root_dir .. "/Backup", init.app_name .. "-" .. os.date("%Y-%m-%d-%H-%M-%S") .. ".zip")
+        LuaFileUtil.compress(project_dir, Bean.Path.app_root_dir .. "/Backup", init.app_name or "Untitled" .. "-" .. os.date("%Y-%m-%d-%H-%M-%S") .. ".zip")
     end
     --[[
     menu2.add(res.string.migrate).onMenuItemClick = function(a)
@@ -305,13 +302,11 @@ this.addOnBackPressedCallback(function()
         if drawer.isDrawerOpen(GravityCompat.START) then
             drawer.closeDrawer(GravityCompat.START)
         elseif mSearch.getVisibility() == 0 then
-            local Anim = AnimatorSet()
-            local Y = ObjectAnimator.ofFloat(mSearch, "translationY", { 0, -50 })
-            local A = ObjectAnimator.ofFloat(mSearch, "alpha", { 1, 0 })
-            Anim.play(A).with(Y)
-            Anim.setDuration(500)
-                .setInterpolator(DecelerateInterpolator)
-                .start()
+            local dismissAnim = AnimatorSet()
+            dismissAnim.play(ObjectAnimator.ofFloat(mSearch, "translationY", { 0, -50 }))
+            .with(ObjectAnimator.ofFloat(mSearch, "alpha", { 1, 0 }))
+            dismissAnim.setDuration(500).setInterpolator(DecelerateInterpolator)
+            dismissAnim.start()
             this.delay(500, function()
                 mSearch.setVisibility(8)
             end)
