@@ -120,6 +120,12 @@ _M.initFunctionTab = function()
         MainActivity.Public.createProject()
       end,
     },
+    {
+      res.string.help,
+      function()
+        ActivityUtil.new("help")
+      end,
+    },
   }
   for _, v in ipairs(functions) do
     mFunctionTab.addView(loadlayout{

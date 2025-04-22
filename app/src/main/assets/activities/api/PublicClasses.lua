@@ -3506,6 +3506,7 @@ return {
     "android.widget.PopupWindow",
     "android.widget.ProgressBar",
     "android.widget.RadioButton",
+    "android.widget.RadioGroup",
     "android.widget.RatingBar",
     "android.widget.RelativeLayout",
     "android.widget.RemoteViews",
