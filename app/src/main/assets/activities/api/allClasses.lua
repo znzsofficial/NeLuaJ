@@ -7077,6 +7077,7 @@ return {
     "android.widget.ProgressBar$RefreshProgressRunnable",
     "android.widget.ProgressBar$SavedState",
     "android.widget.RadioButton",
+    "android.widget.RadioGroup",
     "android.widget.RadioGroup$OnCheckedChangeListener",
     "android.widget.RatingBar",
     "android.widget.RelativeLayout",

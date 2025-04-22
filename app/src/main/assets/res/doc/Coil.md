@@ -183,6 +183,7 @@ imageLoader, request).getImage().asDrawable(activity.resources)
 ---
 ### 异步请求
 > 感谢此方面代码提供者：QQ1362883587
+
 ```lua
 xTask(function()
     import "coil3.request.ImageRequest"

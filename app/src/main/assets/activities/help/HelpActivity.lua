@@ -75,6 +75,7 @@ local data = {
     { text = "LuaFragmentAdapter", file = "LuaFragmentAdapter.md" },
     { text = "LuaPreferenceFragment", file = "LuaPreferenceFragment.md" },
     { text = "LuaRecyclerAdapter", file = "LuaRecyclerAdapter.md" },
+    { text = "LuaThemeUtil", file = "LuaThemeUtil.md"},
     { text = "Coil", file = "Coil.md" },
     { text = "FileObserver", file = "other_FileObserver.md" },
     { text = "FastScrollerBuilder", file = "other_FastScrollerBuilder.md"}
