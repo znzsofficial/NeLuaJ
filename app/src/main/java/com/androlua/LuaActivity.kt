@@ -1381,6 +1381,14 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
 
     fun dynamicColor() = DynamicColors.applyToActivityIfAvailable(this)
 
+    fun getVersionName(default: String): String {
+        return try {
+            packageManager.getPackageInfo(packageName, 0).versionName ?: default
+        } catch (e: PackageManager.NameNotFoundException) {
+            default
+        }
+    }
+
 //    fun getAppNames(): Array<String> {
 //        val ret = mutableListOf<String>()
 //        try {

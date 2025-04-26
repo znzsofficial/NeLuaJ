@@ -1,6 +1,8 @@
 import com.android.build.gradle.internal.api.BaseVariantOutputImpl
+import java.io.FileInputStream
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.androidApplication)
@@ -10,14 +12,24 @@ plugins {
 android {
     namespace = "github.znzsofficial.neluaj"
     compileSdk = 36
+    val versionProps = Properties()
+    val versionPropsFile = file("version.properties")
+    versionProps.load(FileInputStream(versionPropsFile))
+    val verCode = Integer.parseInt(versionProps["VERSION_CODE"] as String)
+    if (":app:assembleRelease" in  gradle.startParameter.taskNames) {
+        versionProps["VERSION_CODE"] = (verCode + 1).toString()
+        versionProps.store(versionPropsFile.writer(), null)
+    }
 
     defaultConfig {
         applicationId = "github.znzsofficial.neluaj"
         minSdk = 26
         //noinspection OldTargetApi
         targetSdk = 33
-        versionCode = 1
-        versionName = "1.0"
+        val formatter = DateTimeFormatter.ofPattern("yyyyMMdd_HHmm")
+        val formattedDateTime = LocalDateTime.now().format(formatter)
+        versionCode = verCode
+        versionName = "${verCode}_$formattedDateTime"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildTypes {
@@ -54,11 +66,10 @@ android {
             val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH_mm_ss")
             // 格式化时间并打印输出
             val formattedDateTime = LocalDateTime.now().format(formatter)
-            val ver = defaultConfig.versionName
+            val apkName = "${project.name}-${defaultConfig.versionCode}-$formattedDateTime.APK"
             //val minSdk = project.extensions.getByType(BaseAppModuleExtension::class.java).defaultConfig.minSdk
             //val abi = filters.find { it.filterType == "ABI" }?.identifier ?: "all"
-            (this as BaseVariantOutputImpl).outputFileName =
-                "${project.name}-$formattedDateTime-$ver.APK";
+            (this as BaseVariantOutputImpl).outputFileName = apkName
         }
     }
 }
