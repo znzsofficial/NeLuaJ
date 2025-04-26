@@ -76,12 +76,12 @@ end)
 
 ### okHttp.postText
 ```lua
-okHttp.post(url, body, headers, function(code, body)
+okHttp.postText(url, body, headers, function(code, body)
 end)
 ```
 
 ### okHttp.postJson
 ```lua
-okHttp.post(url, body, headers, function(code, body)
+okHttp.postJson(url, body, headers, function(code, body)
 end)
 ```
