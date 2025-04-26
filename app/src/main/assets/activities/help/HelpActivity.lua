@@ -73,6 +73,7 @@ local data = {
     { text = "LuaCustRecyclerAdapter", file = "LuaCustRecyclerAdapter.md" },
     { text = "LuaFragment", file = "LuaFragment.md" },
     { text = "LuaFragmentAdapter", file = "LuaFragmentAdapter.md" },
+    { text = "LuaPagerAdapter", file = "LuaPagerAdapter.md" },
     { text = "LuaPreferenceFragment", file = "LuaPreferenceFragment.md" },
     { text = "LuaRecyclerAdapter", file = "LuaRecyclerAdapter.md" },
     { text = "LuaThemeUtil", file = "LuaThemeUtil.md"},

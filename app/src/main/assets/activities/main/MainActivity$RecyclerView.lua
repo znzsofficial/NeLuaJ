@@ -1,3 +1,4 @@
+---@diagnostic disable: undefined-global
 import "java.io.File"
 import "com.androlua.LuaTarget"
 import "androidx.core.view.GravityCompat"
@@ -162,13 +163,17 @@ _M.init = function()
                                 }))          .build()
                         )
                     elseif (v.isDirectory and (v.file_name == "mods" or v.file_name == "libs")) then
-                        local drawable = res_drawable["folder_mod"]
-                        drawable.setBounds(0, 0, size, size)
-                        view.name.setCompoundDrawables(drawable, nil, nil, nil)
+                        pcall(function()
+                            local drawable = res_drawable["folder_mod"]
+                            drawable.setBounds(0, 0, size, size)
+                            view.name.setCompoundDrawables(drawable, nil, nil, nil)
+                        end)
                     else
-                        local drawable = res_drawable[v.img]
-                        drawable.setBounds(0, 0, size, size)
-                        view.name.setCompoundDrawables(drawable, nil, nil, nil)
+                        pcall(function()
+                            local drawable = res_drawable[v.img]
+                            drawable.setBounds(0, 0, size, size)
+                            view.name.setCompoundDrawables(drawable, nil, nil, nil)
+                        end)
                     end
 
                     view.contents.onLongClick = function()
