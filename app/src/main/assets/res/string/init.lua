@@ -1,5 +1,4 @@
-about_this = [[
-还没有写完，不建议外传（]]
+about_this = [[QQ群：603327362]]
 code_time = [[local System = luajava.bindClass "java.lang.System"
 
 local _M = {
