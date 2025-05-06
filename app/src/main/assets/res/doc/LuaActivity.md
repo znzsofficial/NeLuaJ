@@ -1,7 +1,7 @@
 ### 介绍
-**LuaActivity**比较全面的迁移到了 AndroidX，新增了一些方法
+**LuaActivity** 比较全面的迁移到了 AndroidX，新增了一些方法
 
-全局环境中的 this 和 activity 都指向当前 LuaActivity
+全局环境中的 `this` 和 `activity` 都指向当前 `LuaActivity`
 
 ### 可能被调用的全局函数
 ```lua

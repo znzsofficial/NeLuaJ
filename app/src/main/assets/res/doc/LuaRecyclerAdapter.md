@@ -1,4 +1,4 @@
-## LuaRecyclerAdapter
+# LuaRecyclerAdapter
 仿照 LuaAdapter 实现的RecyclerView Adapter，支持动态绑定 LuaTable 数据和布局，通过灵活的接口和默认逻辑实现高效的绑定操作。
 
 使用时请手动导入 `com.androlua.adapter.LuaRecyclerAdapter`

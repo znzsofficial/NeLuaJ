@@ -1,4 +1,6 @@
-## LuaFragment 继承自 AndroidX Fragment
+# LuaFragment 
+继承自 AndroidX Fragment
+此外还提供了 `savedState` 属性用于保存 Bundle
 
 ### Creator支持的方法
 
