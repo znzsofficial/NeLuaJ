@@ -40,25 +40,26 @@ class AsyncOkHttp(
     private val client: OkHttpClient = OkHttpClient.Builder().setTimeout(30).build()
 ) {
     val unsafe by lazy {
-        val trustAllCerts = arrayOf<TrustManager>(@SuppressLint("CustomX509TrustManager")
-        object : X509TrustManager {
-            @SuppressLint("TrustAllX509TrustManager")
-            override fun checkClientTrusted(
-                chain: Array<out java.security.cert.X509Certificate>?,
-                authType: String?
-            ) {
-            }
+        val trustAllCerts = arrayOf<TrustManager>(
+            @SuppressLint("CustomX509TrustManager")
+            object : X509TrustManager {
+                @SuppressLint("TrustAllX509TrustManager")
+                override fun checkClientTrusted(
+                    chain: Array<out java.security.cert.X509Certificate>?,
+                    authType: String?
+                ) {
+                }
 
-            @SuppressLint("TrustAllX509TrustManager")
-            override fun checkServerTrusted(
-                chain: Array<out java.security.cert.X509Certificate>?,
-                authType: String?
-            ) {
-            }
+                @SuppressLint("TrustAllX509TrustManager")
+                override fun checkServerTrusted(
+                    chain: Array<out java.security.cert.X509Certificate>?,
+                    authType: String?
+                ) {
+                }
 
-            override fun getAcceptedIssuers(): Array<out java.security.cert.X509Certificate> =
-                arrayOf()
-        })
+                override fun getAcceptedIssuers(): Array<out java.security.cert.X509Certificate> =
+                    arrayOf()
+            })
 
         AsyncOkHttp(
             context,
@@ -171,7 +172,11 @@ class AsyncOkHttp(
                     val code = response.code
                     context.runOnUiThread {
                         runCatching {
-                            callback.call(code.toLuaValue(), body.toLuaValue())
+                            callback.call(
+                                code.toLuaValue(),
+                                body.toLuaValue(),
+                                response.toLuaInstance()
+                            )
                         }.onFailure { context.sendMsg("回调发生异常：${it.message}") }
                     }
                 } catch (e: Exception) {
