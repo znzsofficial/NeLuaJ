@@ -1,4 +1,4 @@
-# `LuaPagerAdapter` API 文档 
+# `LuaPagerAdapter` API
 
 提供一个自定义的 `PagerAdapter` 实现，方便在 LuaJ+ 中使用，用于轻松管理 Android `ViewPager` 中的页面 (View)。它简化了动态添加、移除和管理页面的过程。
 
