@@ -63,6 +63,7 @@ local data = {
     { text = "init.lua", file = "init_lua_" .. res.language .. ".md" },
     { text = res.string.global, file = "global_env.md" },
     { text = "LuaJ++", file = "LuaJ++.md" },
+    { text = res.string.backup_crash, file = "backup_crash.md" },
     { text = "res " .. res.string._module, file = "module_res.md" },
     { text = "okhttp " .. res.string._module, file = "module_okhttp.md" },
     { text = "loadlayout", file = "module_loadlayout.md" },

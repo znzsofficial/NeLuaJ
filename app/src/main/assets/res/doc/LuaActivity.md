@@ -116,4 +116,7 @@ this.startPackage("com.example.app")
 
 -- 对当前 Activity 启用 DynamicColor
 this.dynamicColor()
+
+-- 获取当前应用版本名
+this.getVersionName(default)
 ```
