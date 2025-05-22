@@ -76,7 +76,7 @@ android {
 
 dependencies {
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar"))))
-    implementation(libs.kotlin.reflect)
+    //implementation(libs.kotlin.reflect)
     //implementation("me.jahnen.libaums:core:0.10.0")
     //implementation("me.jahnen.libaums:httpserver:0.6.2")
     //implementation("io.github.beseting:NesEmulator:1.0.1")
