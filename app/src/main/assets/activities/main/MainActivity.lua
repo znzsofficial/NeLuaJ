@@ -37,7 +37,7 @@ function onCreate()
     --申请权限
     require "permissions"()
     --设置主题
-    activity.setTheme(R.style.Theme_NeLuaJ_Material3_NoActionBar)
+    activity.setTheme(R.style.Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay)
     activity.dynamicColor()
     activity.setContentView(res.layout.main_layout)
             .setSupportActionBar(mToolBar)

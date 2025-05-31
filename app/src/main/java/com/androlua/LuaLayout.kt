@@ -354,32 +354,28 @@ class LuaLayout(private val initialContext: Context) {
                             }
 
                             "src" -> {
-                                try {
-                                    if (tValue.isuserdata(Bitmap::class.java)) {
-                                        view.jset(
-                                            "ImageBitmap", tValue.touserdata(
-                                                Bitmap::class.java
-                                            )
+                                if (tValue.isuserdata(Bitmap::class.java)) {
+                                    view.jset(
+                                        "ImageBitmap", tValue.touserdata(
+                                            Bitmap::class.java
                                         )
-                                    } else if (tValue.isuserdata(Drawable::class.java)) {
-                                        view.jset(
-                                            "ImageDrawable", tValue.touserdata(
-                                                Drawable::class.java
-                                            )
+                                    )
+                                } else if (tValue.isuserdata(Drawable::class.java)) {
+                                    view.jset(
+                                        "ImageDrawable", tValue.touserdata(
+                                            Drawable::class.java
                                         )
-                                    } else {
-                                        imageLoader.enqueue(
-                                            ImageRequest.Builder(initialContext)
-                                                .data(tValue.asString()).target {
-                                                    view.jset(
-                                                        "ImageDrawable",
-                                                        it.asDrawable(initialContext.resources)
-                                                    )
-                                                }.build()
-                                        )
-                                    }
-                                } catch (e: Exception) {
-                                    e.printStackTrace()
+                                    )
+                                } else {
+                                    imageLoader.enqueue(
+                                        ImageRequest.Builder(initialContext)
+                                            .data(tValue.asString()).target {
+                                                view.jset(
+                                                    "ImageDrawable",
+                                                    it.asDrawable(initialContext.resources)
+                                                )
+                                            }.build()
+                                    )
                                 }
                                 continue
                             }

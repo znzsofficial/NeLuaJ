@@ -11,8 +11,6 @@ import android.widget.ListView
 import androidx.appcompat.app.AlertDialog
 import com.androlua.adapter.ArrayListAdapter
 
-// import android.app.AlertDialog;
-/** Created by Administrator on 2017/02/04 0004.  */
 class LuaDialog : AlertDialog, DialogInterface.OnClickListener {
     private var mContext: Context
     private var mListView: ListView
@@ -169,15 +167,4 @@ class LuaDialog : AlertDialog, DialogInterface.OnClickListener {
     interface OnClickListener {
         fun onClick(dlg: LuaDialog?, btn: Button?)
     }
-    /*
-  public void close()
-  {
-      super.dismiss();
-  }
-
-  @Override
-  public void dismiss()
-  {
-      super.hide();
-  }*/
 }

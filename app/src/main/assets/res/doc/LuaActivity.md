@@ -82,6 +82,9 @@ end)
 this.loadImage(data, imageView)
 this.loadImageWithCrossFade(data, imageView)
 
+-- 同步加载图片 Bitmap （非常不建议使用）
+this.syncLoadBitmap(data)
+
 -- 直接设置 onBackPressedDispatcher 的 Callback
 this.addOnBackPressedCallback(function()
 end)
