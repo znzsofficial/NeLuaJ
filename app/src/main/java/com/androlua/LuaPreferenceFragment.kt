@@ -7,9 +7,6 @@ import org.luaj.LuaError
 import org.luaj.LuaTable
 import org.luaj.lib.jse.CoerceJavaToLua
 
-/**
- * Created by Administrator on 2018/08/05 0005.
- */
 class LuaPreferenceFragment(private var mPreferences: LuaTable) : PreferenceFragmentCompat(),
     Preference.OnPreferenceChangeListener,
     Preference.OnPreferenceClickListener {

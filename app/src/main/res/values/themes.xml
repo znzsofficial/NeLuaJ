@@ -29,21 +29,27 @@
         <item name="colorPrimaryInverse">@color/md_theme_light_inversePrimary</item>
     </style>
 
-    <style name="Theme.NeLuaJ.Material3.NoActionBar" parent="Theme.Material3.DayNight.NoActionBar">
+    <style name="Theme.NeLuaJ.Material3.ActionOverlay" parent="Theme.NeLuaJ.Material3">
         <item name="windowActionModeOverlay">true</item>
     </style>
 
-    <style name="Theme.NeLuaJ.Material3.DynamicColors" parent="@style/Theme.Material3.DynamicColors.DayNight">
-        <item name="android:statusBarColor">?colorPrimary</item>
+    <style name="Theme.NeLuaJ.Material3.NoActionBar" parent="Theme.Material3.DayNight.NoActionBar" />
+
+    <style name="Theme.NeLuaJ.Material3.NoActionBar.ActionOverlay" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="windowActionModeOverlay">true</item>
     </style>
+
+    <style name="Theme.NeLuaJ.Material3.DynamicColors" parent="@style/Theme.Material3.DynamicColors.DayNight" />
+
+    <style name="Theme.NeLuaJ.Material3.DynamicColors.NoActionBar" parent="@style/Theme.Material3.DynamicColors.DayNight.NoActionBar" />
 
     <style name="ThemeOverlay.Catalog.SideSheet.Modal.Detached" parent="@style/ThemeOverlay.Material3.SideSheetDialog">
         <item name="sideSheetModalStyle">@style/Widget.Material3.SideSheet.Modal.Detached</item>
     </style>
 
-    <style name="Theme.NeLuaJ.Compat" parent="Theme.AppCompat.DayNight"/>
+    <style name="Theme.NeLuaJ.Compat" parent="Theme.AppCompat.DayNight" />
 
-    <style name="Theme.NeLuaJ.Compat.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar"/>
+    <style name="Theme.NeLuaJ.Compat.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar" />
 
     <style name="WelcomeTheme" parent="Theme.NeLuaJ.Material3">
         <item name="windowActionModeOverlay">true</item>
