@@ -1,24 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <root-path name="root" path="."></root-path>
+    <root-path
+        name="root"
+        path="." />
     <external-path name="luaj" path="LuaJ/" />
     <files-path
         name="file"
-        path="."></files-path>
+        path="." />
     <files-path
         name="files"
-        path="."></files-path>
+        path="." />
     <cache-path
         name="cache"
-        path="."></cache-path>
+        path="." />
     <external-path
         name="external"
-        path="."></external-path>
+        path="." />
     <external-cache-path
         name="external_cache"
-        path="."></external-cache-path>
+        path="." />
     <external-files-path
         name="external_file"
-        path="."></external-files-path>
+        path="." />
     <external-path name="external_files" path="."/>
 </resources>

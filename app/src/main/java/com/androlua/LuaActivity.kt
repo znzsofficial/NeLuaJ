@@ -15,6 +15,7 @@ import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.content.res.Resources
 import android.content.res.XmlResourceParser
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.BlendMode
 import android.graphics.BlendModeColorFilter
@@ -58,6 +59,7 @@ import coil3.imageLoader
 import coil3.load
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import coil3.toBitmap
 import com.androlua.LuaBroadcastReceiver.OnReceiveListener
 import com.androlua.LuaService.LuaBinder
 import com.androlua.adapter.ArrayListAdapter
@@ -73,6 +75,7 @@ import dalvik.system.DexFile
 import github.znzsofficial.neluaj.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.luaj.Globals
 import org.luaj.LuaClosure
@@ -1300,6 +1303,14 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
 
     fun getImageLoader(): ImageLoader {
         return imageLoader
+    }
+
+    fun syncLoadBitmap(data: Any?): Bitmap? = runBlocking {
+        val request = ImageRequest.Builder(this@LuaActivity)
+            .data(data)
+            .build()
+        val result = imageLoader.execute(request)
+        return@runBlocking result.image?.toBitmap()
     }
 
     fun loadBitmap(data: Any?, callback: LuaFunction) =
