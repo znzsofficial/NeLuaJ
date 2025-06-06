@@ -114,6 +114,7 @@ import java.io.InputStream
 import java.util.zip.ZipFile as JZipFile
 import kotlin.system.measureTimeMillis
 
+@Suppress("UNUSED")
 open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnReceiveListener,
     LuaMetaTable {
     private lateinit var globals: Globals
@@ -216,7 +217,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
                 it.jset("R", R::class.java)
                 it.set("android", JavaPackage("android"))
                 var arg = intent.getSerializableExtra(ARG) as Array<Any?>?
-                if (arg == null) arg = arrayOfNulls<Any>(0)
+                if (arg == null) arg = arrayOfNulls(0)
                 doFile(luaFile, *arg)
                 //runMainFunc(pageName, *arg)
                 runFunc("onCreate")
@@ -428,24 +429,19 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         }
     }
 
-    @Suppress("DEPRECATION")
     override fun setTitle(title: CharSequence) {
         super.setTitle(title)
-        setTaskDescription(
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-                TaskDescription.Builder().setLabel(title.toString()).build()
-            else TaskDescription(title.toString())
-        )
+        setTaskDescription(TaskDescription.Builder().setLabel(title.toString()).build())
     }
 
     fun setContentView(view: LuaTable) {
         isSetViewed = true
-        setContentView(LuaLayout(this).load(view, globals).touserdata<View?>(View::class.java))
+        setContentView(LuaLayout(this).load(view, globals).touserdata(View::class.java))
     }
 
     fun setContentView(view: LuaTable, env: LuaTable) {
         isSetViewed = true
-        setContentView(LuaLayout(this).load(view, env).touserdata<View?>(View::class.java))
+        setContentView(LuaLayout(this).load(view, env).touserdata(View::class.java))
     }
 
     fun setFragment(fragment: Fragment) {
@@ -479,7 +475,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
             != PackageManager.PERMISSION_GRANTED
         ) {
             try {
-                permissions = ArrayList<String?>()
+                permissions = ArrayList()
                 packageManager.getPackageInfo(packageName, PackageManager.GET_PERMISSIONS)
                     .requestedPermissions?.let {
                         for (p in it) {
@@ -1032,7 +1028,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
      */
     @Throws(FileNotFoundException::class)
     fun newActivity(path: String) {
-        newActivity(1, path, arrayOfNulls<Any>(0))
+        newActivity(1, path, arrayOfNulls(0))
     }
 
     /**
@@ -1057,7 +1053,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
      */
     @JvmOverloads
     @Throws(FileNotFoundException::class)
-    fun newActivity(req: Int, path: String, arg: Array<Any?>? = arrayOfNulls<Any>(0)) {
+    fun newActivity(req: Int, path: String, arg: Array<Any?>? = arrayOfNulls(0)) {
         newActivity(req, path, arg, false)
     }
 
@@ -1114,7 +1110,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
 
     @Throws(FileNotFoundException::class)
     fun newActivity(path: String, `in`: Int, out: Int) {
-        newActivity(1, path, `in`, out, arrayOfNulls<Any>(0))
+        newActivity(1, path, `in`, out, arrayOfNulls(0))
     }
 
     @Throws(FileNotFoundException::class)
@@ -1129,7 +1125,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         path: String,
         `in`: Int,
         out: Int,
-        arg: Array<Any?>? = arrayOfNulls<Any>(0)
+        arg: Array<Any?>? = arrayOfNulls(0)
     ) {
         newActivity(req, path, `in`, out, arg, false)
     }
@@ -1330,12 +1326,17 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         )
 
     fun loadImage(data: Any?, view: ImageView) = view.load(data)
+
     fun loadImageWithCrossFade(data: Any?, view: ImageView) = view.load(data) {
         crossfade(true)
     }
 
     fun dpToPx(dp: Float): Float {
         return TypedValueCompat.dpToPx(dp, resources.displayMetrics)
+    }
+
+    fun spToPx(sp: Float): Float {
+        return TypedValueCompat.spToPx(sp, resources.displayMetrics)
     }
 
     fun addOnBackPressedCallback(callback: LuaFunction) {
