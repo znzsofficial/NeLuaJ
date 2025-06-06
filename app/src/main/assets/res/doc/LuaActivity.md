@@ -96,7 +96,7 @@ this.getFilter(color)
 --获取 /Android/media 内的私有文件夹
 this.getMediaDir()
 
---不建议使用
+-- 设置线程策略
 this.setAllowThread(bool)
 
 -- 编译 Lua 文件
@@ -122,4 +122,10 @@ this.dynamicColor()
 
 -- 获取当前应用版本名
 this.getVersionName(default)
+
+-- dp 转 px
+this.dpToPx(dp)
+
+-- sp 转 px
+this.spToPx(sp)
 ```
