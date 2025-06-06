@@ -429,9 +429,14 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         }
     }
 
+    @Suppress("DEPRECATION")
     override fun setTitle(title: CharSequence) {
         super.setTitle(title)
-        setTaskDescription(TaskDescription.Builder().setLabel(title.toString()).build())
+        setTaskDescription(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                TaskDescription.Builder().setLabel(title.toString()).build()
+            else TaskDescription(title.toString())
+        )
     }
 
     fun setContentView(view: LuaTable) {
