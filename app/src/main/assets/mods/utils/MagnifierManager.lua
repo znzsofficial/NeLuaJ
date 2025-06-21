@@ -4,9 +4,7 @@ _M.Available=false
 
 _M.initMagnifier=function(view)
   try
-
     Magnifier = bindClass "android.widget.Magnifier"
-
     if Magnifier.Builder then
       _M.magnifier = Magnifier.Builder(view)
       .setSize(320, 128)
@@ -23,7 +21,6 @@ _M.initMagnifier=function(view)
     _M.magnifier = Magnifier(view)
     .setCornerRadius(24)
     .setDimensions(320,128)
-
   end
 end
 
