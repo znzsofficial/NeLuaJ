@@ -12,6 +12,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
+import android.content.pm.PermissionInfo
 import android.content.res.Configuration
 import android.content.res.Resources
 import android.content.res.XmlResourceParser
@@ -55,6 +56,8 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.preference.PreferenceManager
 import coil3.ImageLoader
+import coil3.asDrawable
+import coil3.executeBlocking
 import coil3.imageLoader
 import coil3.load
 import coil3.request.ImageRequest
@@ -71,12 +74,8 @@ import com.nekolaska.ktx.overridePendingTransition
 import com.nekolaska.ktx.toLuaInstance
 import com.nekolaska.ktx.toLuaValue
 import dalvik.system.DexClassLoader
-import dalvik.system.DexFile
 import github.znzsofficial.neluaj.R
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
 import org.luaj.Globals
 import org.luaj.LuaClosure
 import org.luaj.LuaError
@@ -476,36 +475,48 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
 
 
     fun checkAllPermissions(): Boolean {
-        if (checkCallingOrSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-            != PackageManager.PERMISSION_GRANTED
-        ) {
+        if (checkCallingOrSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
             try {
-                permissions = ArrayList()
-                packageManager.getPackageInfo(packageName, PackageManager.GET_PERMISSIONS)
-                    .requestedPermissions?.let {
-                        for (p in it) {
-                            try {
-                                if ((packageManager.getPermissionInfo(
-                                        p,
-                                        0
-                                    ).protectionLevel and 1) != 0
-                                ) checkPermission(p)
-                            } catch (e: Exception) {
-                                e.printStackTrace()
+                // 获取应用在 Manifest 中声明的所有权限
+                val requestedPermissions = packageManager.getPackageInfo(
+                    packageName,
+                    PackageManager.GET_PERMISSIONS
+                ).requestedPermissions
+
+                // 筛选出需要请求的危险权限
+                val permissionsToRequest = requestedPermissions?.mapNotNull { permissionName ->
+                    try {
+                        val pInfo = packageManager.getPermissionInfo(permissionName, 0)
+                        // 使用新的 API: getProtection() 来判断是否为危险权限
+                        if (pInfo.protection == PermissionInfo.PROTECTION_DANGEROUS) {
+                            // 确认该权限当前是否尚未被授予
+                            if (checkCallingOrSelfPermission(permissionName) != PackageManager.PERMISSION_GRANTED) {
+                                permissionName // 如果是需要请求的危险权限，则返回权限名
+                            } else {
+                                null // 如果已授予，则返回 null
                             }
+                        } else {
+                            null // 如果不是危险权限，则返回 null
                         }
+                    } catch (e: PackageManager.NameNotFoundException) {
+                        // 这个权限名在系统中找不到，忽略它
+                        e.printStackTrace()
+                        null
                     }
-                if (!permissions.isNullOrEmpty()) {
-                    requestPermissions(
-                        permissions!!.toArray(arrayOfNulls<String>(0)),
-                        0
-                    )
-                    return false
+                } ?: emptyList() // 如果 requestedPermissions 为 null, 则返回一个空列表
+
+                // 如果有需要请求的权限，则发起请求
+                if (permissionsToRequest.isNotEmpty()) {
+                    requestPermissions(permissionsToRequest.toTypedArray(), 0)
+                    return false // 返回 false，表示权限请求已发出，等待用户响应
                 }
+
             } catch (e: Exception) {
+                // 捕获 getPackageInfo 可能抛出的异常
                 e.printStackTrace()
             }
         }
+        // 如果所有权限都已满足，或没有需要请求的权限，返回 true
         return true
     }
 
@@ -839,13 +850,12 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         super.onDestroy()
     }
 
-    @Suppress("UNCHECKED_CAST")
     @CallLuaFunction
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (data != null) {
             val name = data.getStringExtra(NAME)
             if (name != null) {
-                val res = data.getSerializableExtra(DATA) as Array<Any?>?
+                val res = data.getSerializableExtra(DATA, Array<Any?>::class.java)
                 if (res == null) {
                     runFunc("onResult", name)
                 } else {
@@ -1306,12 +1316,20 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         return imageLoader
     }
 
-    fun syncLoadBitmap(data: Any?): Bitmap? = runBlocking {
+    fun syncLoadBitmap(data: Any?): Bitmap? {
         val request = ImageRequest.Builder(this@LuaActivity)
             .data(data)
             .build()
-        val result = imageLoader.execute(request)
-        return@runBlocking result.image?.toBitmap()
+        val result = imageLoader.executeBlocking(request)
+        return result.image?.toBitmap()
+    }
+
+    fun syncLoadDrawable(data: Any?): Drawable? {
+        val request = ImageRequest.Builder(this@LuaActivity)
+            .data(data)
+            .build()
+        val result = imageLoader.executeBlocking(request)
+        return result.image?.asDrawable(resources)
     }
 
     fun loadBitmap(data: Any?, callback: LuaFunction) =
