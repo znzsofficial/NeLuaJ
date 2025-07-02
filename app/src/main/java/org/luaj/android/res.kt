@@ -14,7 +14,6 @@ import com.androlua.LuaContext
 import com.androlua.LuaLayout
 import com.nekolaska.ktx.firstArg
 import com.nekolaska.ktx.toLuaValue
-import kotlinx.coroutines.Dispatchers
 import org.luaj.Globals
 import org.luaj.LuaError
 import org.luaj.LuaTable
@@ -245,7 +244,6 @@ class res(private val context: LuaContext) : TwoArgFunction() {
                 File("$p.$it").ifExists {
                     val imageResult = activity.context.imageLoader.executeBlocking(
                         ImageRequest.Builder(activity.context)
-                            .coroutineContext(Dispatchers.Main.immediate)
                             .data(this)
                             .build()
                     )
@@ -254,6 +252,7 @@ class res(private val context: LuaContext) : TwoArgFunction() {
                         image?.toBitmap().toLuaValue()
                     } else {
                         image?.asDrawable(activity.context.resources).toLuaValue()
+                        //(drawable as? Animatable)?.start()
                     }
                 }
             }
