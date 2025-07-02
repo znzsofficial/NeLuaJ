@@ -58,6 +58,7 @@ function _M.createProject(name)
         end
         File(base_path .. "/libs").mkdirs()
         File(base_path .. "/mods").mkdirs()
+        File(base_path .. "/res/raw").mkdirs()
         File(base_path .. "/res/font").mkdirs()
         File(base_path .. "/res/string").mkdirs()
         File(base_path .. "/res/dimen").mkdirs()
