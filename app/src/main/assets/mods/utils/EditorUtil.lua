@@ -61,7 +61,7 @@ local function getActionMode(view)
     }
 end
 
-local function setPageTitle(path)
+local function resetPageTitle(path)
   --print"改变标题"
   try
     local pattern = Bean.Path.app_root_pro_dir .. "(.*)/"
@@ -97,7 +97,7 @@ local function initTab()
                 -- 更新当前文件
                 PathManager.updateFile(path)
                 -- 载入文件
-                setPageTitle(path)
+                resetPageTitle(path)
                 --print"第一次被选择的tab，editor读取"
                 mLuaEditor.setText(LuaFileUtil.read(path))
             end
@@ -206,7 +206,7 @@ function _M.init()
         local LuaActivity = bindClass "com.androlua.LuaActivity"
         local act = {}
         local tmp = {}
-        for k, v in (LuaActivity.getMethods()) do
+        for _, v in (LuaActivity.getMethods()) do
             v = tostring(v.getName())
             if not tmp[v] then
                 tmp[v] = true
@@ -233,10 +233,9 @@ function _M.init()
             "onSupportActionModeStarted", "onSupportActionModeFinished",
             "onItemClick", "onItemLongClick", "onVersionChanged", "this", "android"
         }
-        local l = #ms
         local match = string.match
         for k, v in ipairs(classes) do
-            ms[l + k] = match(v, "%w+$")
+            ms[#ms + k] = match(v, "%w+$")
         end
         mLuaEditor.addNames(ms)
                   .addNames({ "byte", "boolean", "short", "int", "long", "float", "double", "char" })
@@ -255,7 +254,7 @@ function _M.init()
                   .addPackage("json", { "decode", "encode" })
                   .addPackage("okHttp", { "get", "unsafe", "post", "postText", "postJson" })
                   .addPackage("okhttp", { "delete", "get", "head", "post", "put" })
-                  .addPackage("res", { "bitmap", "color", "dimen", "drawable", "font", "layout", "language", "string", "view", })
+                  .addPackage("res", { "bitmap", "color", "dimen", "drawable", "font", "layout", "language", "raw", "string", "view", })
                   .addPackage("luajava", { "astable", "bindClass", "createProxy", "instanceof", "loadLib", "new", "newInstance" })
                   .addPackage("io", { "close", "flush", "input", "lines", "open", "output", "popen", "read", "tmpfile", "type", "write" })
     end, mLuaEditor, bindClass)
@@ -277,7 +276,7 @@ function _M.load(path)
     else
         -- 已经存在的tab，editor读取
         mLuaEditor.setText(LuaFileUtil.read(path))
-        setPageTitle(path)
+        resetPageTitle(path)
         -- 来自RecyclerView
         -- 如果是来自RV的加载就选择 tab
         if _M.fromRecy then
