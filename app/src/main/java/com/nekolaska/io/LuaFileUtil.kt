@@ -90,18 +90,15 @@ object LuaFileUtil {
         loadfile(path).call()
     } as LuaTable
 
-    fun moveDirectory(src: String, dest: String) {
-        if (File(src).isDirectory) {
-            File(dest).mkdirs()
-            File(src).listFiles()?.forEach {
-                moveDirectory(it.absolutePath, dest + File.separator + it.name)
-            }
-            if (File(src).listFiles()?.isEmpty() == true) {
-                File(src).delete()
-            }
-        } else {
-            File(dest).parentFile?.mkdirs()
-            File(src).renameTo(File(dest))
+    fun moveDirectory(src: String, dest: String): Boolean {
+        return try {
+            val srcFile = File(src)
+            val destFile = File(dest)
+            srcFile.copyRecursively(destFile, overwrite = true)
+            srcFile.deleteRecursively()
+            true
+        } catch (_: Exception) {
+            false
         }
     }
 
@@ -120,7 +117,7 @@ object LuaFileUtil {
         override fun read(path: String): String {
             return try {
                 String(Files.readAllBytes(Paths.get(path)), Charsets.UTF_8)
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 ""
             }
         }
@@ -129,7 +126,7 @@ object LuaFileUtil {
             return try {
                 Files.write(Paths.get(path), content.toByteArray(Charsets.UTF_8))
                 true
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 false
             }
         }
@@ -138,15 +135,16 @@ object LuaFileUtil {
             return try {
                 Files.delete(Paths.get(path))
                 true
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 false
             }
         }
 
         override fun checkDirectory(path: String) {
-            val tmpPath = Paths.get(path)
-            if (!Files.isDirectory(tmpPath)) {
-                Files.createDirectories(tmpPath)
+            Paths.get(path).let {
+                if (!Files.exists(it)) {
+                    Files.createDirectories(it)
+                }
             }
         }
 
@@ -154,7 +152,7 @@ object LuaFileUtil {
             return try {
                 Files.move(Paths.get(oldPath), Paths.get(newPath))
                 true
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 false
             }
         }
@@ -170,19 +168,18 @@ object LuaFileUtil {
         override fun read(path: String): String {
             return try {
                 File(path).source().buffer().readUtf8()
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 ""
             }
         }
 
         override fun write(path: String, content: String): Boolean {
             return try {
-                File(path).sink().buffer().apply {
-                    writeUtf8(content)
-                    close()
+                File(path).sink().buffer().use {
+                    it.writeUtf8(content)
                 }
                 true
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 false
             }
         }
