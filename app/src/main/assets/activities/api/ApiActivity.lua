@@ -16,7 +16,6 @@ local simpleList = ... or false
 local SpannableString = bindClass "android.text.SpannableString"
 local ForegroundColorSpan = bindClass "android.text.style.ForegroundColorSpan"
 
-local accentColor = ColorUtil.ColorAccent
 local errorColor = ColorUtil.ColorError
 local outlineColor = ColorUtil.ColorOutline
 local surfaceColor = ColorUtil.ColorSurface
@@ -77,18 +76,16 @@ end
 --沉浸栏背景色、标题背景色、主背景色
 --local co = { primaryColor, onbackgroundc, primaryOnColor }
 local ClassesLen
-local ta
+local cls
 
 if simpleList then
-    local cls = ClassesNames.classes
+    cls = ClassesNames.classes
     activity.setContentView(res.layout.api_main)
     ClassesLen = #cls
-    ta = cls
 else
-    local cls = ClassesNames.top_classes
+    cls = ClassesNames.top_classes
     activity.setContentView(res.layout.api_main)
     ClassesLen = #cls
-    ta = cls
 end
 
 function copyText(str)
@@ -122,7 +119,7 @@ function 列表(t, s)
         end
     else
         ar.clear()
-        for k, v in (t) do
+        for k, v in t do
             ar.add(v)
         end
     end
@@ -141,12 +138,12 @@ edit.addTextChangedListener {
         local t = {}
 
         if s:len() < 2 then
-            列表(ta)
+            列表(cls)
         else
             local executor = Executors.newSingleThreadExecutor()
             executor.execute(function()
                 for i = 0, ClassesLen-1 do
-                    local v = ta[i]
+                    local v = cls[i]
                     if v:lower():gsub([[%$]], [[.]]):find(s, 1, true) then
                         t[#t + 1] = v
                     end
@@ -161,14 +158,10 @@ edit.addTextChangedListener {
     end
 }
 
-function ChangeList(bool)
-    列表(ta)
+function ChangeList()
+    列表(cls)
     edit.Text = ""
     edit.Hint = ClassesLen .. " " .. res.string.classes
-    --[[
-    if bool then--初始化时不显示提示
-      print "ChangeList完成"
-    end]]
 end
 
 ChangeList()--初始化列表
@@ -177,13 +170,3 @@ function onResult(a, b)
     edit.Text = b
     edit.setSelection(b:len())
 end
-
-function 指令集(int)
-    int = tostring(int)
-    if int == 111 then
-        ChangeList(true)
-    end
-end
-
---by:执笔画妳
-

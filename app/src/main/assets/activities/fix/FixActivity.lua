@@ -61,13 +61,13 @@ local function fixImport()
         last=t
       end
       -- table.sort(buf)
-      for k,v in pairs(buf) do
-        k="[%.$]"..k.."$"
-        for a,b in ipairs(allClasses) do
-          if string.find(b,k) then
-            if cache[b]==nil then
-              ret[#ret+1]=b
-              cache[b]=true
+      for key,_ in pairs(buf) do
+        key="[%.$]"..key.."$"
+        for _,v in allClasses do
+          if v:find(key) and not v:find("^org.luaj.android") then
+            if cache[v]==nil then
+              ret[#ret+1]=v
+              cache[v]=true
             end
           end
         end
