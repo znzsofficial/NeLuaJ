@@ -45,10 +45,6 @@ import java.util.Locale
 @Suppress("NOTHING_TO_INLINE")
 private inline fun LuaValue.toView(): View = this.touserdata(View::class.java)
 
-//inline fun <T : View> T.onClick(crossinline onClick: (v: T) -> Unit) {
-//    setOnClickListener { onClick(it as T) }
-//}
-
 /**
  * Created by nirenr on 2019/11/18.
  */
@@ -86,49 +82,61 @@ class LuaLayout(private val initialContext: Context) {
         return views[id]
     }
 
+
     private fun toValue(str: String): Any? {
         if (str == "nil") return 0
-        val len = str.length
 
-        if (str.contains("|")) {
-            val ss = str.split("\\|".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
+        // 多个 flags，用 | 分隔
+        if (str.indexOf('|') >= 0) {
             var ret = 0
-            for (s1 in ss) {
-                if (toint.containsKey(s1)) ret = ret or toint[s1]!!
+            for (s in str.split(PIPE_REGEX)) {
+                toint[s]?.let { ret = ret or it }
             }
             return ret
         }
-        if (toint.containsKey(str)) return toint[str]
 
-        if (len > 2) {
-            if (str[0] == '#') {
-                try {
-                    return str.toColorInt()
-                } catch (_: Exception) {
-                    val clr = str.substring(1).toInt(16)
-                    if (str.length < 6) return clr or -0x1000000
-                    return clr
+        toint[str]?.let { return it }
+
+        // 颜色
+        if (str.startsWith("#")) {
+            return runCatching { str.toColorInt() }.getOrElse {
+                str.substring(1).toInt(16).let {
+                    if (str.length < 6) it or -0x1000000 else it
                 }
             }
-            if (str[len - 1] == '%') {
-                val f = str.substring(0, len - 1).toFloat()
-                return f * luaContext.width / 100
-            }
+        }
 
-            if (str[len - 2] == '%') {
-                val f = str.substring(0, len - 2).toFloat()
-                if (str[len - 1] == 'h') return f * luaContext.height / 100
-                if (str[len - 1] == 'w') return f * luaContext.width / 100
-            }
-            val t = str.substring(len - 2)
-            val i = types[t]
-            if (i != null) {
-                val n = str.substring(0, len - 2)
-                return TypedValue.applyDimension(i, n.toInt().toFloat(), dm)
+        val len = str.length
+
+        // 百分比
+        if (str.endsWith("%")) {
+            val f = str.dropLast(1).toFloatOrNull()
+            return f?.times(luaContext.width)?.div(100)
+        }
+
+        if (len >= 3 && str[len - 2] == '%') {
+            val f = str.dropLast(2).toFloatOrNull() ?: return str
+            return when (str.last()) {
+                'w' -> f * luaContext.width / 100
+                'h' -> f * luaContext.height / 100
+                else -> str
             }
         }
+
+        // dp/sp/px/in/pt/mm
+        if (len >= 3) {
+            val unit = str.takeLast(2)
+            types[unit]?.let { type ->
+                str.dropLast(2).toFloatOrNull()?.let { value ->
+                    return TypedValue.applyDimension(type, value, dm)
+                }
+            }
+        }
+
+        // Long or Double fallback
         str.toLongOrNull()?.let { return it }
         str.toDoubleOrNull()?.let { return it }
+
         return str
     }
 
@@ -767,5 +775,7 @@ class LuaLayout(private val initialContext: Context) {
             }
             return 0
         }
+
+        private val PIPE_REGEX = Regex("\\|")
     }
 }
