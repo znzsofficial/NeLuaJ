@@ -22,7 +22,7 @@ activity.setTitle('需要导入的类')
 
 local function fixImport()
   try
-    local allClasses = require "activities.api.PublicClasses"
+    local allClasses = ClassesNames.top_classes
     local cache = {}
     local function check(path, ret)
       if cache[path] then

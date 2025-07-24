@@ -215,12 +215,7 @@ function _M.init()
         end
         --补全
 
-        local classes
-        try
-           classes = require "activities.api.PublicClasses"
-          catch(e)
-           classes = {"LuaActivity","LuaServer","LuaService","List","ArrayList","HashSet","HashMap","Object","Map"}
-        end
+        local classes = ClassesNames.simple_top_classes
         local ms = {
             "onKeyDown", "onKeyUp", "onKeyLongPress", "onKeyShortcut",
             "onCreate", "onStart", "onResume",
@@ -233,10 +228,9 @@ function _M.init()
             "onSupportActionModeStarted", "onSupportActionModeFinished",
             "onItemClick", "onItemLongClick", "onVersionChanged", "this", "android"
         }
-        local match = string.match
         local l = #ms
-        for k, v in ipairs(classes) do
-            ms[l + k] = match(v, "%w+$")
+        for k, v in classes do
+            ms[l + k + 1] = v
         end
         mLuaEditor.addNames(ms)
                   .addNames({ "byte", "boolean", "short", "int", "long", "float", "double", "char" })

@@ -80,14 +80,12 @@ local ClassesLen
 local ta
 
 if simpleList then
-    local cls = require "activities.api.PublicClasses"
-    vl = activity.getLuaDir() .. "/activities/api/PublicClasses.lua"
+    local cls = ClassesNames.classes
     activity.setContentView(res.layout.api_main)
     ClassesLen = #cls
     ta = cls
 else
-    local cls = require "activities.api.allClasses"
-    vl = activity.getLuaDir() .. "/activities/api/allClasses.lua"
+    local cls = ClassesNames.top_classes
     activity.setContentView(res.layout.api_main)
     ClassesLen = #cls
     ta = cls
@@ -118,13 +116,13 @@ function 列表(t, s)
     local ar = ArrayAdapter(activity, R.layout.item_check)
     if s then
         ar.clear()
-        for k, v in ipairs(t) do
+        for k, v in (t) do
             local aa, bb = utf8.find(v:lower():gsub([[%$]], [[.]]), s, 1, true)
             ar.add(SpannableString(v).setSpan(ForegroundColorSpan(primaryColor), aa - 1, bb, 34))
         end
     else
         ar.clear()
-        for k, v in ipairs(t) do
+        for k, v in (t) do
             ar.add(v)
         end
     end
@@ -147,7 +145,7 @@ edit.addTextChangedListener {
         else
             local executor = Executors.newSingleThreadExecutor()
             executor.execute(function()
-                for i = 1, ClassesLen do
+                for i = 0, ClassesLen-1 do
                     local v = ta[i]
                     if v:lower():gsub([[%$]], [[.]]):find(s, 1, true) then
                         t[#t + 1] = v
@@ -180,52 +178,10 @@ function onResult(a, b)
     edit.setSelection(b:len())
 end
 
---[[
-        在搜索框输入数字指令以执行对应功能。
-        指令集:
-        111 > 显示内置类库列表
-        444 > 内置类库重复类清除
-        555 > 内置类库校验        
-        ]]
-
-function CheckList(t)
-    local int = 0
-    local iny = 0
-    local talen = #t
-
-    local ti = Ticker()
-    ti.Period = 0
-    ti.onTick = function()
-        int = int + 1
-
-        if int >= talen then
-            ti.stop()
-            if iny >= 1 then
-                print("已清除" .. iny .. "无效类")
-                io.open(vl, "w"):write(dump(ta)):close()
-            end
-        end
-
-        local ss = ta[int]
-        if ss then
-            if not pcall(function()
-                luajava.bindClass(ss)
-            end) then
-                table.remove(ta, int)
-                iny = iny + 1
-            end
-        end
-
-    end
-    ti.start()
-end
-
 function 指令集(int)
     int = tostring(int)
     if int == 111 then
         ChangeList(true)
-    else
-        CheckList(ta)
     end
 end
 

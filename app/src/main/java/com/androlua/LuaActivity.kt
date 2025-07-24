@@ -72,7 +72,6 @@ import com.nekolaska.internal.commit
 import com.nekolaska.ktx.firstArg
 import com.nekolaska.ktx.overridePendingTransition
 import com.nekolaska.ktx.toLuaInstance
-import com.nekolaska.ktx.toLuaValue
 import dalvik.system.DexClassLoader
 import github.znzsofficial.neluaj.R
 import kotlinx.coroutines.launch
@@ -110,7 +109,6 @@ import java.io.FileNotFoundException
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
-import java.util.zip.ZipFile as JZipFile
 import kotlin.system.measureTimeMillis
 
 @Suppress("UNUSED")
@@ -1423,58 +1421,6 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
             default
         }
     }
-
-//    fun getAppNames(): Array<String> {
-//        val ret = mutableListOf<String>()
-//        try {
-//            val dex = DexFile(packageCodePath)
-//            val cls = dex.entries()
-//            while (cls.hasMoreElements()) {
-//                ret.add(cls.nextElement())
-//            }
-//        } catch (_: IOException) {
-//        }
-//        return ret.toTypedArray()
-//    }
-//
-//    fun getAllName(path: String): Array<String> {
-//        val ret = mutableListOf<String>()
-//        try {
-//            if (path.endsWith(".dex", ignoreCase = true)) {
-//                val dex = DexFile(path)
-//                val cls = dex.entries()
-//                while (cls.hasMoreElements()) {
-//                    ret.add(cls.nextElement())
-//                }
-//            } else {
-//                val zip = JZipFile(path)
-//                val entries = zip.entries()
-//                while (entries.hasMoreElements()) {
-//                    val entryName = entries.nextElement().name
-//                    ret.add(entryName.replace("/", ".").replace(".class", ""))
-//                }
-//            }
-//        } catch (_: Exception) {
-//        }
-//        return ret.toTypedArray()
-//    }
-//
-//    fun getNames(path: String, callback: LuaFunction) =
-//        lifecycleScope.launch(Dispatchers.Main) {
-//            callback.call(withContext(Dispatchers.IO) {
-//                runCatching {
-//                    getAllName(path).map {
-//                        // 对每个类名进行处理
-//                        var cl = it
-//                        var d = cl.lastIndexOf("$")
-//                        if (d < 0) d = cl.lastIndexOf(".")
-//                        if (d > 0) cl = cl.substring(d)
-//                        cl
-//                    }.toTypedArray()
-//                }.onFailure { sendError("getNames", it as Exception) }
-//                    .getOrNull()
-//            }.toLuaValue())
-//        }
 
     companion object {
         private const val ARG = "arg"

@@ -51,7 +51,7 @@ function _M.init_Calendar(tab)
   local insertedClasses = {}
   local pattern2 = "^[%w]*[^%$]$"
   local pattern1 = "^[%w]*[%$]?[%w]*[^%d]*[%w]*[^%$]$"
-  for i = 1 ,#tab do
+  for i = 0 ,#tab-1 do
     local className = match(tab[i],".*%.(.*)$")
     if match(className,pattern2) or match(className,pattern1)
       local fastReadClassesSelf=allClasses[className]
@@ -79,7 +79,7 @@ function _M.init()
     try
       local init_table = map["PreSelection_init"]
       if not (init_table) then
-        local Classes = require "activities.api.PublicClasses"
+        local Classes = ClassesNames.classes
         init_table = {}
         for index,content in ipairs({Classes}) do -- 这里的循环设计原本想的是可能会有多个表
           init_table[index] = _M.init_Calendar(content)

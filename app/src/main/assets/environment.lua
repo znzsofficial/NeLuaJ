@@ -1,6 +1,12 @@
 bindClass = luajava.bindClass;
 
-this.globalData.ColorUtil = luajava.newInstance("github.daisukiKaffuChino.utils.LuaThemeUtil",activity)
+this.globalData.ColorUtil = luajava.newInstance("github.daisukiKaffuChino.utils.LuaThemeUtil", this)
+local reader = luajava.newInstance("com.nekolaska.internal.ClassNamesReader", this.applicationContext)
+ClassesNames = {}
+ClassesNames.classes = reader.getAllNames()
+ClassesNames.top_classes = reader.getAllTopNames()
+ClassesNames.simple_top_classes = reader.getAllTopSimpleNames()
+
 MDC_R = bindClass "com.google.android.material.R"
 Compat_R = bindClass "androidx.appcompat.R"
 
