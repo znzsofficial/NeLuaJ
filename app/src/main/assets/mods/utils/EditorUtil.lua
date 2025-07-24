@@ -204,13 +204,13 @@ function _M.init()
     thread(function(mLuaEditor, bindClass)
         --activity补全
         local LuaActivity = bindClass "com.androlua.LuaActivity"
-        local act = {}
+        local methods = {}
         local tmp = {}
         for _, v in (LuaActivity.getMethods()) do
             v = tostring(v.getName())
             if not tmp[v] then
                 tmp[v] = true
-                act[#act + 1] = v .. "()"
+                methods[#methods + 1] = v .. "()"
             end
         end
         --补全
@@ -234,14 +234,15 @@ function _M.init()
             "onItemClick", "onItemLongClick", "onVersionChanged", "this", "android"
         }
         local match = string.match
+        local l = #ms
         for k, v in ipairs(classes) do
-            ms[#ms + k] = match(v, "%w+$")
+            ms[l + k] = match(v, "%w+$")
         end
         mLuaEditor.addNames(ms)
                   .addNames({ "byte", "boolean", "short", "int", "long", "float", "double", "char" })
                   .addNames({ "R", "dump", "toutf8", "loadlayout", "printf", "thread", "xTask", "lazy" })
-                  .addPackage("activity", act)
-                  .addPackage("this", act)
+                  .addPackage("activity", methods)
+                  .addPackage("this", methods)
                   .addPackage("debug", { "debug", "gethook", "getinfo", "getlocal", "getmetatable", "getregistry", "getupvalue", "getuservalue", "sethook", "setlocal", "setmetatable", "setupvalue", "setuservalue", "traceback", "upvalueid", "upvaluejoin" })
                   .addPackage("coroutine", { "create", "resume", "running", "status", "wrap", "yield" })
                   .addPackage("math", { "abs", "acos", "asin", "atan", "atan2", "ceil", "cos", "cosh", "deg", "exp", "floor", "fmod", "frexp", "huge", "ldexp", "log", "max", "min", "modf", "pi", "pow", "rad", "random", "randomseed", "sin", "sinh", "sqrt", "tan", "tanh" })

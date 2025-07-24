@@ -168,7 +168,7 @@ class AsyncOkHttp(
 
             override fun onResponse(call: Call, response: Response) {
                 try {
-                    val body = response.body?.string()
+                    val body = response.body.string()
                     val code = response.code
                     context.runOnUiThread {
                         runCatching {
