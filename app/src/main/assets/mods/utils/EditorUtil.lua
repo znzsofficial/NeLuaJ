@@ -208,7 +208,7 @@ function _M.init()
         local tmp = {}
         for _, v in (LuaActivity.getMethods()) do
             v = tostring(v.getName())
-            if not tmp[v] then
+            if not v:find("%$") and not tmp[v] then
                 tmp[v] = true
                 methods[#methods + 1] = v .. "()"
             end
