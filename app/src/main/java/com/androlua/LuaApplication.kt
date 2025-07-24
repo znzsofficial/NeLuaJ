@@ -2,8 +2,13 @@ package com.androlua
 
 import android.app.Application
 import android.content.Context
+import android.os.Build.VERSION.SDK_INT
 import android.os.Environment
 import androidx.preference.PreferenceManager
+import coil3.ImageLoader
+import coil3.SingletonImageLoader
+import coil3.gif.AnimatedImageDecoder
+import coil3.svg.SvgDecoder
 import com.nekolaska.internal.commit
 import org.luaj.Globals
 import org.luaj.LuaTable
@@ -13,7 +18,7 @@ import java.io.FileInputStream
 /**
  * Created by nirenr on 2019/12/13.
  */
-class LuaApplication : Application(), LuaContext {
+class LuaApplication : Application(), LuaContext, SingletonImageLoader.Factory {
     private var mExtDir: String? = null
     override fun onCreate() {
         super.onCreate()
@@ -22,6 +27,19 @@ class LuaApplication : Application(), LuaContext {
         CrashHandler.instance.init(this)
         //DynamicColors.applyToActivitiesIfAvailable(this)
         //EmulatorSDK.init(this)
+    }
+
+    override fun newImageLoader(context: Context): ImageLoader {
+        return ImageLoader.Builder(context)
+            .components {
+                if (SDK_INT >= 28) {
+                    add(AnimatedImageDecoder.Factory())
+                } else {
+                    add(coil3.gif.GifDecoder.Factory())
+                }
+                add(SvgDecoder.Factory(scaleToDensity = true))
+            }
+            .build()
     }
 
     override fun getClassLoaders(): ArrayList<ClassLoader>? {
