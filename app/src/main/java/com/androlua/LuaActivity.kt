@@ -210,7 +210,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
                 it.load(file())
                 it.load(okhttp())
                 it.jset("Http", Http::class.java)
-                it.jset("http", http::class.java)
+                it.jset("http", http)
                 it.jset("R", R::class.java)
                 it.set("android", JavaPackage("android"))
                 var arg = intent.getSerializableExtra(ARG) as Array<Any?>?

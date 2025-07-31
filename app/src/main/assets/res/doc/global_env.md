@@ -8,13 +8,13 @@
 | activity | 当前 LuaActivity 对象 |
 | android  |    JavaPackage 对象 |
 | okHttp   |  AsyncOkHttp 模块对象 |
+| http     |          同步网络模块对象 |
 
 ### 类
 
 | 变量名  |       描述 |
 |:-----|---------:|
 | Http |   异步网络模块 |
-| http |   同步网络模块 |
 | R    | 编辑器的 R 类 |
 
 ### 表
