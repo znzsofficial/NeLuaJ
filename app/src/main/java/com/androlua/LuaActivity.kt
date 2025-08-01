@@ -55,6 +55,7 @@ import androidx.core.util.TypedValueCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.preference.PreferenceManager
+import androidx.window.layout.WindowMetricsCalculator
 import coil3.ImageLoader
 import coil3.asDrawable
 import coil3.executeBlocking
@@ -465,12 +466,11 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         debug = bool
     }
 
-    private fun initSize() =
-        Resources.getSystem().displayMetrics.apply {
-            mWidth = widthPixels
-            mHeight = heightPixels
-        }
-
+    private fun initSize() {
+        val windowMetrics = WindowMetricsCalculator.getOrCreate().computeCurrentWindowMetrics(this)
+        mWidth = windowMetrics.bounds.width()
+        mHeight = windowMetrics.bounds.height()
+    }
 
     fun checkAllPermissions(): Boolean {
         if (checkCallingOrSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
@@ -575,7 +575,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         super.onSupportActionModeFinished(mode)
     }
 
-    fun runFunc(name: String?, vararg arg: Any?): Any? {
+    fun runFunc(name: String, vararg arg: Any?): Any? {
         try {
             val func = globals.get(name)
             if (func.isfunction()) return func.jcall(*arg)
@@ -743,19 +743,11 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
 
     @CallLuaFunction
     override fun sendError(title: String?, exception: Exception) {
-        val ret = runFunc("onError", title, exception)
-        if (ret == null) {
-            sendMsg(title + ": " + exception.message)
-            return
-        }
-        when (ret.toString()) {
-            "trace" -> sendMsg(
-                title + ": " + exception.message + "\n" + exception.stackTraceToString()
-            )
-
-            "log" -> sendMsg(title + ": " + exception.message)
+        when (runFunc("onError", title, exception)?.toString()) {
+            "trace" -> sendMsg("$title: ${exception.message}\n${exception.stackTraceToString()}")
             "message" -> sendMsg(exception.message)
             "title" -> sendMsg(title)
+            "log", null -> sendMsg("$title: ${exception.message}")
         }
     }
 
@@ -813,14 +805,14 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         )
     }
 
-    override fun unregisterReceiver(receiver: BroadcastReceiver?) {
-        try {
-            super.unregisterReceiver(receiver)
-        } catch (e: Exception) {
-            //Log.i("lua", "unregisterReceiver: $receiver")
-            e.printStackTrace()
-        }
-    }
+//    override fun unregisterReceiver(receiver: BroadcastReceiver?) {
+//        try {
+//            super.unregisterReceiver(receiver)
+//        } catch (e: Exception) {
+//            //Log.i("lua", "unregisterReceiver: $receiver")
+//            e.printStackTrace()
+//        }
+//    }
 
     @CallLuaFunction
     override fun onReceive(context: Context?, intent: Intent?) {
@@ -905,9 +897,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     }
 
     override fun getSharedData(key: String?, default: Any?): Any? {
-        val ret: Any? = PreferenceManager.getDefaultSharedPreferences(this).all[key]
-        if (ret != null) return ret
-        return default
+        return PreferenceManager.getDefaultSharedPreferences(this).all[key] ?: default
     }
 
     @Suppress("UNCHECKED_CAST")

@@ -29,9 +29,21 @@ open class LuaCustRecyclerAdapter @JvmOverloads constructor(
         }
     }
 
-    override fun onBindViewHolder(holder: LuaCustRecyclerHolder, i: Int) {
+    override fun onBindViewHolder(holder: LuaCustRecyclerHolder, position: Int) {
         try {
-            adapterCreator.onBindViewHolder(holder, i)
+            adapterCreator.onBindViewHolder(holder, position, null)
+        } catch (e: Exception) {
+            mContext?.sendError("RecyclerAdapter: onBindViewHolder", e)
+        }
+    }
+
+    override fun onBindViewHolder(
+        holder: LuaCustRecyclerHolder,
+        position: Int,
+        payloads: List<Any>
+    ) {
+        try {
+            adapterCreator.onBindViewHolder(holder, position, payloads)
         } catch (e: Exception) {
             mContext?.sendError("RecyclerAdapter: onBindViewHolder", e)
         }
@@ -58,7 +70,7 @@ open class LuaCustRecyclerAdapter @JvmOverloads constructor(
     interface Creator {
         fun getItemCount(): Int
         fun getItemViewType(i: Int): Int
-        fun onBindViewHolder(viewHolder: LuaCustRecyclerHolder, i: Int)
+        fun onBindViewHolder(viewHolder: LuaCustRecyclerHolder, i: Int, payloads: List<Any>?)
         fun onCreateViewHolder(viewGroup: ViewGroup?, i: Int): LuaCustRecyclerHolder
         fun onViewRecycled(viewHolder: LuaCustRecyclerHolder)
     }
