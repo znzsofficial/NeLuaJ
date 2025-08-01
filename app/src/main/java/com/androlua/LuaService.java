@@ -11,7 +11,6 @@ import android.content.res.Configuration;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Binder;
-import android.os.Build;
 import android.os.Environment;
 import android.os.IBinder;
 import android.os.StrictMode;
@@ -172,7 +171,7 @@ public class LuaService extends Service
             runFunc("onCreate");
         } catch (final Exception e) {
             sendError("Error", e);
-            e.printStackTrace();
+            //e.printStackTrace();
             Intent res = new Intent();
             res.putExtra(DATA, e.toString());
         }
@@ -237,22 +236,16 @@ public class LuaService extends Service
     public InputStream findResource(String name) {
         try {
             if (new File(name).exists()) return new FileInputStream(name);
-        } catch (Exception e) {
-      /*if (BuildConfig.DEBUG)
-      e.printStackTrace();*/
+        } catch (Exception ignored) {
         }
         try {
             return new FileInputStream(getLuaPath(name));
-        } catch (Exception e) {
-      /*if (BuildConfig.DEBUG)
-      e.printStackTrace();*/
+        } catch (Exception ignored) {
         }
 
         try {
             return getAssets().open(name);
-        } catch (Exception ioe) {
-      /*if (BuildConfig.DEBUG)
-      e.printStackTrace();*/
+        } catch (Exception ignored) {
         }
         return null;
     }
@@ -397,7 +390,6 @@ public class LuaService extends Service
     }
 
     public Intent registerReceiver(IntentFilter filter) {
-        // TODO: Implement this method
         if (mReceiver != null) unregisterReceiver(mReceiver);
         mReceiver = new LuaBroadcastReceiver(this);
         return ContextCompat.registerReceiver(this, mReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED);
@@ -409,14 +401,13 @@ public class LuaService extends Service
             super.unregisterReceiver(receiver);
         } catch (Exception e) {
             Log.i("lua", "unregisterReceiver: " + receiver);
-            e.printStackTrace();
+            //e.printStackTrace();
         }
     }
 
     @CallLuaFunction
     @Override
     public void onReceive(Context context, Intent intent) {
-        // TODO: Implement this method
         runFunc("onReceive", context, intent);
     }
 
@@ -427,8 +418,7 @@ public class LuaService extends Service
         for (LuaGcable g : mGc) {
             try {
                 g.gc();
-            } catch (Exception e) {
-
+            } catch (Exception ignored) {
             }
         }
         mGc.clear();
@@ -636,7 +626,6 @@ public class LuaService extends Service
           } catch (IOException e) {
           	e.printStackTrace();
           }*/
-
                     Cursor cursor = getContentResolver().query(uri, p, null, null, null);
                     if (cursor != null) {
                         int idx = cursor.getColumnIndexOrThrow(getPackageName());

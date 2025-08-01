@@ -11,7 +11,7 @@ LuaCustRecyclerAdapter(
         -- 实现适配器的接口，接口类型可省略
         LuaCustRecyclerAdapter.Creator({
             getItemCount = function()
-                return #List
+                return #dataList
             end,
             getItemViewType = function()
                 return 0
@@ -22,25 +22,30 @@ LuaCustRecyclerAdapter(
                 holder.views = views
                 return holder
             end,
-            onBindViewHolder = function(holder, position)
+            onBindViewHolder = function(holder, position, payloads)
                 local view = holder.views
-                local v = List[position + 1]
+                local v = dataList[position + 1]
             end,
+            --[[onViewRecycled = function(holder)
+            end,]]
         }))
-
+        
+-- 或者
+LuaCustRecyclerAdapter(creator)
+        
 PopupRecyclerAdapter(
         -- 上下文可选，便于抛出异常
         activity,
         -- 实现适配器的接口，接口类型可省略
         PopupRecyclerAdapter.PopupCreator({
             getItemCount = function()
-                return #List
+                return #dataList
             end,
             getItemViewType = function()
                 return 0
             end,
             getPopupText = function(view, position)
-                return utf8.sub(List[position + 1].name, 1, 1)
+                return utf8.sub(dataList[position + 1].name, 1, 1)
             end,
             onCreateViewHolder = function(parent, viewType)
                 local views = {}
@@ -48,9 +53,9 @@ PopupRecyclerAdapter(
                 holder.views = views
                 return holder
             end,
-            onBindViewHolder = function(holder, position)
+            onBindViewHolder = function(holder, position, payloads)
                 local view = holder.views
-                local v = List[position + 1]
+                local v = dataList[position + 1]
             end,
         }))
 
