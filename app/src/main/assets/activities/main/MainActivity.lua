@@ -33,41 +33,14 @@ local res = res
  放大镜开关调节
 ]]
 
-function onCreate()
-    --申请权限
-    require "permissions"()
-    --设置主题
-    activity.setTheme(R.style.Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay)
-    activity.dynamicColor()
-    activity.setContentView(res.layout.main_layout)
-            .setSupportActionBar(mToolBar)
-            .getSupportActionBar() {
-        DisplayHomeAsUpEnabled = true,
-        Elevation = 0,
-        Subtitle = res.string.no_file
-    }
-    local window = activity.getWindow() {
-        SoftInputMode = 0x10,
-        StatusBarColor = ColorUtil.getColorBackground()
-    }
-            .addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
-            .clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
-    if this.isNightMode() then
-        window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE)
-    else
-        window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR)
-    end
-    --Bean.Path.this_dir = Bean.Path.app_root_pro_dir
-    Init.initView().initBar().initFunctionTab().initCheck()
-end
-
-function onRequestPermissionsResult(r, p, g)
+local function initFiles()
+    Init.initView2()
     LuaFileUtil.checkDirectory(Bean.Path.app_root_pro_dir)
     checkBackup()
     mRecycler.post(function()
         MainActivity.RecyclerView
-                    .init()
-                    .update();
+            .init()
+            .update();
     end)
     collectgarbage("collect")
 
@@ -80,6 +53,55 @@ function onRequestPermissionsResult(r, p, g)
             EditorUtil.setSelection(lastSelect or 0)
         end
     end)
+end
+
+function onCreate()
+    --设置主题
+    activity.setTheme(R.style.Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay)
+    activity.dynamicColor()
+    activity.setContentView(res.layout.main_layout)
+        .setSupportActionBar(mToolBar)
+        .getSupportActionBar() {
+        DisplayHomeAsUpEnabled = true,
+        Elevation = 0,
+        Subtitle = res.string.no_file
+    }
+    local window = activity.getWindow() {
+            SoftInputMode = 0x10,
+            StatusBarColor = ColorUtil.getColorBackground()
+        }
+        .addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
+        .clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
+    if this.isNightMode() then
+        window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE)
+    else
+        window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR)
+    end
+    --Bean.Path.this_dir = Bean.Path.app_root_pro_dir
+    Init.initView().initBar().initFunctionTab().initCheck()
+    if (this.checkStoragePermission()) then
+        initFiles()
+    else
+        MaterialAlertDialogBuilder(activity)
+            .setTitle(res.string.tip)
+            .setMessage(res.string.need_manage_permission)
+            .setPositiveButton(android.R.string.ok, function()
+                this.requestStoragePermission()
+            end)
+            .setNegativeButton(android.R.string.cancel, function()
+                this.finish()
+             end)
+            .setCancelable(false)
+            .show();
+    end
+end
+
+function onStorageRequestResult(isGranted)
+    if not isGranted then
+        MainActivity.Public.snack(res.string.need_manage_permission)
+        return
+    end
+    initFiles()
 end
 
 --使用home来添加menu按钮
@@ -100,9 +122,9 @@ function onCreateOptionsMenu(menu)
     local ColorTitle = ColorUtil.getColorOnBackground();
     local menu_show = 2; --MenuItem.SHOW_AS_ACTION_ALWAYS;
     menu.add(res.string.run_code)
-        .setShowAsAction(menu_show)
-        .setIcon(this.getResDrawable("play", ColorTitle))
-        .onMenuItemClick = function(a)
+    .setShowAsAction(menu_show)
+    .setIcon(this.getResDrawable("play", ColorTitle))
+    .onMenuItemClick = function(a)
         -- 如果Editor未显示
         if mLuaEditor.getVisibility() == 4 then
             MainActivity.Public.snack(res.string.no_file)
@@ -114,20 +136,22 @@ function onCreateOptionsMenu(menu)
             local pop = PopupMenu(activity, mToolBar.getChildAt(3))
             local _menu = pop.Menu
             _menu.add(res.string.run_code .. " " .. File(Bean.Path.this_file).getName())
-                 .onMenuItemClick = function(a)
+            .onMenuItemClick = function(a)
                 activity.newActivity(Bean.Path.this_file)
             end
             _menu.add(res.string.run_project)
-                 .onMenuItemClick = function(a)
+            .onMenuItemClick = function(a)
                 activity.newActivity(Bean.Path.app_root_pro_dir .. "/" .. Bean.Project.this_project .. "/main.lua")
             end
             if this.getSharedData("debug_app", nil) then
                 _menu.add(res.string.run_on_debug_app)
-                     .onMenuItemClick = function(a)
-                     local intent = Intent()
-                     intent.setComponent(ComponentName(this.getSharedData("debug_app", this.packageName), "com.androlua.LuaActivity"))
-                     intent.setData(Uri.parse("file://" .. Bean.Path.app_root_pro_dir .. "/" .. Bean.Project.this_project .. "/main.lua"))
-                     this.startActivity(intent)
+                .onMenuItemClick = function(a)
+                    local intent = Intent()
+                    intent.setComponent(ComponentName(this.getSharedData("debug_app", this.packageName),
+                        "com.androlua.LuaActivity"))
+                    intent.setData(Uri.parse("file://" ..
+                    Bean.Path.app_root_pro_dir .. "/" .. Bean.Project.this_project .. "/main.lua"))
+                    this.startActivity(intent)
                 end
             end
             pop.show()
@@ -137,15 +161,15 @@ function onCreateOptionsMenu(menu)
         end
     end
     menu.add(res.string.undo)
-        .setShowAsAction(menu_show)
-        .setIcon(this.getResDrawable("undo", ColorTitle))
-        .onMenuItemClick = function(a)
+    .setShowAsAction(menu_show)
+    .setIcon(this.getResDrawable("undo", ColorTitle))
+    .onMenuItemClick = function(a)
         mLuaEditor.undo()
     end
     menu.add(res.string.redo)
-        .setShowAsAction(menu_show)
-        .setIcon(this.getResDrawable("redo", ColorTitle))
-        .onMenuItemClick = function(a)
+    .setShowAsAction(menu_show)
+    .setIcon(this.getResDrawable("redo", ColorTitle))
+    .onMenuItemClick = function(a)
         mLuaEditor.redo()
     end
     -- 文件菜单
@@ -165,7 +189,7 @@ function onCreateOptionsMenu(menu)
         MainActivity.Public.snack(res.string.save_success)
         default
         MainActivity.Public.snack(res.string.save_fail)
-    end
+        end
     end
     menu0.add(res.string.compile).onMenuItemClick = function(a)
         local path = Bean.Path.this_file
@@ -187,19 +211,19 @@ function onCreateOptionsMenu(menu)
         mSearch.setVisibility(0)
         local searchAnim = AnimatorSet()
         searchAnim.play(ObjectAnimator.ofFloat(mSearch, "alpha", { 0, 1 }))
-        .with(ObjectAnimator.ofFloat(mSearch, "translationY", { -50, 0 }))
+            .with(ObjectAnimator.ofFloat(mSearch, "translationY", { -50, 0 }))
         searchAnim.setDuration(500).setInterpolator(DecelerateInterpolator)
         searchAnim.start()
     end
     menu1.add("Java" .. res.string.editor).onMenuItemClick = function(a)
         MaterialAlertDialogBuilder(this)
-                .setTitle(res.string.file_to_open)
-                .setView(loadlayout(res.layout.dialog_fileinput))
-                .setPositiveButton(android.R.string.ok, function()
-            ActivityUtil.new("java", file_name.getText())
-        end)
-                .setNegativeButton(android.R.string.cancel, nil)
-                .show();
+            .setTitle(res.string.file_to_open)
+            .setView(loadlayout(res.layout.dialog_fileinput))
+            .setPositiveButton(android.R.string.ok, function()
+                ActivityUtil.new("java", file_name.getText())
+            end)
+            .setNegativeButton(android.R.string.cancel, nil)
+            .show();
         file_name.setHint(res.string.path)
         file_name.setText(Bean.Path.this_file).setSingleLine(false)
     end
@@ -229,7 +253,8 @@ function onCreateOptionsMenu(menu)
         end
         local project_dir = Bean.Path.app_root_pro_dir .. "/" .. Bean.Project.this_project
         local init = LuaFileUtil.loadLua(project_dir .. "/init.lua")
-        LuaFileUtil.compress(project_dir, Bean.Path.app_root_dir .. "/Backup", init.app_name or "Untitled" .. "-" .. os.date("%Y-%m-%d-%H-%M-%S") .. ".zip")
+        LuaFileUtil.compress(project_dir, Bean.Path.app_root_dir .. "/Backup",
+            init.app_name or "Untitled" .. "-" .. os.date("%Y-%m-%d-%H-%M-%S") .. ".zip")
     end
     --[[
     menu2.add(res.string.migrate).onMenuItemClick = function(a)
@@ -244,8 +269,8 @@ function onCreateOptionsMenu(menu)
         ActivityUtil.new("api")
     end
     menu3.add(res.string.layout_helper)
-         .setShowAsAction(menu_show)
-         .onMenuItemClick = function(a)
+    .setShowAsAction(menu_show)
+    .onMenuItemClick = function(a)
         -- 如果Editor未显示
         if mLuaEditor.getVisibility() == 4 then
             MainActivity.Public.snack(res.string.no_file)
@@ -257,6 +282,26 @@ function onCreateOptionsMenu(menu)
             Bean.Path.app_root_pro_dir .. "/" .. mToolBar.getTitle()
         })
     end
+    menu3.add(res.string.request_permission).onMenuItemClick = function(a)
+        local permission = android.Manifest.permission
+        activity.requestPermissions({
+            permission.WRITE_EXTERNAL_STORAGE,
+            permission.READ_EXTERNAL_STORAGE,
+            permission.INTERNET,
+            permission.ACCESS_NETWORK_STATE,
+            permission.ACCESS_WIFI_STATE,
+            permission.READ_PHONE_STATE,
+            permission.CAMERA,
+            permission.RECORD_AUDIO,
+            permission.MODIFY_AUDIO_SETTINGS,
+            permission.WAKE_LOCK,
+            permission.VIBRATE,
+            permission.REQUEST_INSTALL_PACKAGES,
+            permission.BLUETOOTH_SCAN,
+            permission.BLUETOOTH_CONNECT,
+            permission.BLUETOOTH_ADVERTISE,
+        }, 0)
+    end
     local menu4 = menu.addSubMenu(res.string.more .. "…")
     menu4.add("NeLuaJ+ " .. res.string.help).onMenuItemClick = function(a)
         ActivityUtil.new("help")
@@ -264,11 +309,11 @@ function onCreateOptionsMenu(menu)
     menu4.add(res.string.about).onMenuItemClick = function(a)
         local t = {}
         MaterialAlertDialogBuilder(this)
-                .setTitle(res.string.about)
-                .setMessage(res.string.about_this)
-                .setView(loadlayout(res.layout.dialog_about, t))
-                .setPositiveButton(android.R.string.ok, nil)
-                .show()
+            .setTitle(res.string.about)
+            .setMessage(res.string.about_this)
+            .setView(loadlayout(res.layout.dialog_about, t))
+            .setPositiveButton(android.R.string.ok, nil)
+            .show()
         t.author.onClick = function()
             xpcall(function()
                 import "android.content.Intent"
@@ -304,7 +349,7 @@ this.addOnBackPressedCallback(function()
         elseif mSearch.getVisibility() == 0 then
             local dismissAnim = AnimatorSet()
             dismissAnim.play(ObjectAnimator.ofFloat(mSearch, "translationY", { 0, -50 }))
-            .with(ObjectAnimator.ofFloat(mSearch, "alpha", { 1, 0 }))
+                .with(ObjectAnimator.ofFloat(mSearch, "alpha", { 1, 0 }))
             dismissAnim.setDuration(500).setInterpolator(DecelerateInterpolator)
             dismissAnim.start()
             this.delay(500, function()
@@ -313,10 +358,10 @@ this.addOnBackPressedCallback(function()
         else
             EditorUtil.save()
             Snackbar.make(coordinatorLayout, res.string.confirm_exit, Snackbar.LENGTH_SHORT)
-                    .setAnchorView(ps_bar)
-                    .setAction(res.string.exit, function(v)
-                activity.finish(true)
-            end)    .show();
+                .setAnchorView(ps_bar)
+                .setAction(res.string.exit, function(v)
+                    activity.finish(true)
+                end).show();
             _exit = os.time()
         end
     end
