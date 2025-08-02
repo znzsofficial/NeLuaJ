@@ -22,20 +22,21 @@ _M.initView = function()
   local toggle = ActionBarDrawerToggle(activity, drawer, R.string.drawer_open, R.string.drawer_close)
   drawer.setDrawerListener(toggle)
   toggle.syncState()
-  filetab.setPath(Bean.Path.this_dir)
   mSearch.setVisibility(8)
   mSearch.post(function()
     SearchCode()
   end)
   mLuaEditor.setVisibility(4)
-  mLuaEditor.post(function()
-    EditorUtil.init()
-    bindClass "com.myopicmobile.textwarrior.common.PackageUtil".load(this)
-  end)
+  return _M
+end
+
+_M.initView2 = function()
+  filetab.setPath(Bean.Path.this_dir)
+  EditorUtil.init()
+  bindClass "com.myopicmobile.textwarrior.common.PackageUtil".load(this)
   swipeRefresh.onRefresh = function()
     MainActivity.RecyclerView.update()
   end
-  return _M
 end
 
 _M.initFunctionTab = function()

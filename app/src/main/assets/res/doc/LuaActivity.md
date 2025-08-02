@@ -60,6 +60,14 @@ function onNightModeChanged(mode)
     print(mode)
 end
 
+-- 检测文件权限
+this.checkStoragePermission()
+-- 请求文件权限
+this.requestStoragePermission()
+-- 请求文件权限回调
+function onStorageRequestResult(isGranted)
+end
+
 -- 等同于 setContentView(loadlayout(布局表))
 this.setContentView(布局表)
 

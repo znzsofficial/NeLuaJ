@@ -3,7 +3,6 @@ package com.androlua
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.ActivityManager.TaskDescription
-import android.content.BroadcastReceiver
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.ComponentName
@@ -14,7 +13,6 @@ import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.content.pm.PermissionInfo
 import android.content.res.Configuration
-import android.content.res.Resources
 import android.content.res.XmlResourceParser
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -32,6 +30,7 @@ import android.os.IBinder
 import android.os.StrictMode
 import android.os.StrictMode.ThreadPolicy
 import android.provider.MediaStore
+import android.provider.Settings
 import android.view.ContextMenu
 import android.view.ContextMenu.ContextMenuInfo
 import android.view.KeyEvent
@@ -45,6 +44,7 @@ import android.widget.ImageView
 import android.widget.ListView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.view.ActionMode
 import androidx.core.content.ContextCompat
@@ -954,33 +954,43 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         return stopService(Intent(this, LuaService::class.java))
     }
 
-    fun startService(): ComponentName? {
-        return startService(null, null)
-    }
+    @JvmOverloads
+    fun startService(
+        path: String? = null,
+        arg: Array<Any?>? = null
+    ): ComponentName? {
+        if (path == null) {
+            // 如果 path 为 null，直接创建不带文件路径的 Intent
+            val intent = Intent(this, LuaService::class.java)
+            arg?.let { intent.putExtra(ARG, it) } // 如果 arg 不为 null，则添加它
+            return super.startService(intent)
+        }
 
-    fun startService(arg: Array<Any?>?): ComponentName? {
-        return startService(null, arg)
-    }
-
-    fun startService(path: String): ComponentName? {
-        return startService(path, null)
-    }
-
-    fun startService(path: String?, arg: Array<Any?>?): ComponentName? {
-        var path = path
+        // path 不为 null 的情况，执行原始的文件逻辑
+        var finalPath = path
         val intent = Intent(this, LuaService::class.java)
-        intent.putExtra(NAME, path)
-        if (path?.get(0) != '/' && luaDir != null) path = "$luaDir/$path"
-        val f = File(path!!)
-        if (f.isDirectory() && File("$path/service.lua").exists()) path += "/service.lua"
-        else if ((f.isDirectory() || !f.exists()) && !path.endsWith(".lua")) path += ".lua"
-        if (!File(path).exists()) throw LuaError(FileNotFoundException(path))
+        intent.putExtra(NAME, finalPath) // 使用原始 path 作为 NAME
 
-        intent.setData("file://$path".toUri())
+        // 路径处理逻辑
+        if (finalPath[0] != '/' && luaDir != null) {
+            finalPath = "$luaDir/$finalPath"
+        }
 
-        if (arg != null) intent.putExtra(ARG, arg)
+        val f = File(finalPath)
+        if (f.isDirectory && File("$finalPath/service.lua").exists()) {
+            finalPath += "/service.lua"
+        } else if ((f.isDirectory || !f.exists()) && !finalPath.endsWith(".lua")) {
+            finalPath += ".lua"
+        }
 
-        if (arg != null) intent.putExtra(ARG, arg)
+        if (!File(finalPath).exists()) {
+            throw LuaError(FileNotFoundException("Service file not found: $finalPath"))
+        }
+
+        // 使用处理后的 finalPath 设置 URI
+        intent.data = "file://$finalPath".toUri()
+
+        arg?.let { intent.putExtra(ARG, it) }
 
         return super.startService(intent)
     }
@@ -1412,7 +1422,83 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         }
     }
 
+    // Launcher 用于处理从 MANAGE_EXTERNAL_STORAGE 设置页返回的事件
+    private val manageStoragePermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            // 当用户从设置页返回，我们检查权限的最终状态并回调Lua
+            val isGranted = checkStoragePermission()
+            runFunc(STORAGE_CALLBACK_FUNCTION, isGranted)
+        }
+
+    // Launcher 用于处理 READ/WRITE_EXTERNAL_STORAGE 权限申请的回调
+    private val requestLegacyPermissionsLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
+            // 检查所有请求的权限是否都已被授予
+            val isGranted = permissions.entries.all { it.value }
+            runFunc(STORAGE_CALLBACK_FUNCTION, isGranted)
+        }
+
+    /**
+     * 内部会自动判断Android版本，发起正确的权限申请流程。
+     * 结果将通过全局Lua函数 onPermissionResult(isGranted) 异步返回。
+     */
+    @CallLuaFunction
+    fun requestStoragePermission() {
+        if (checkStoragePermission()) {
+            // 如果已经有权限，直接同步回调成功
+            runFunc(STORAGE_CALLBACK_FUNCTION, true)
+            return
+        }
+
+        // 根据版本选择不同的申请策略
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // Android 11+，申请 MANAGE_EXTERNAL_STORAGE
+            requestManageStoragePermission()
+        } else {
+            // Android 6-10，申请 READ/WRITE_EXTERNAL_STORAGE
+            requestLegacyStoragePermissions()
+        }
+    }
+
+    fun checkStoragePermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // Android 11+
+            Environment.isExternalStorageManager()
+        } else {
+            // Android 10 及以下
+            val readPermission = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
+            val writePermission = ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            readPermission == PackageManager.PERMISSION_GRANTED && writePermission == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    /**
+     * 申请 Android 11+ 的 MANAGE_EXTERNAL_STORAGE 权限。
+     */
+    private fun requestManageStoragePermission() {
+        try {
+            val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+            intent.data = Uri.parse("package:$packageName")
+            manageStoragePermissionLauncher.launch(intent)
+        } catch (e: Exception) {
+            val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+            manageStoragePermissionLauncher.launch(intent)
+        }
+    }
+
+    /**
+     * 申请 Android 6-10 的 READ/WRITE 权限。
+     */
+    private fun requestLegacyStoragePermissions() {
+        val permissions = arrayOf(
+            Manifest.permission.READ_EXTERNAL_STORAGE,
+            Manifest.permission.WRITE_EXTERNAL_STORAGE
+        )
+        requestLegacyPermissionsLauncher.launch(permissions)
+    }
+
     companion object {
+        private const val STORAGE_CALLBACK_FUNCTION = "onStorageRequestResult"
         private const val ARG = "arg"
         private const val DATA = "data"
         private const val NAME = "name"
