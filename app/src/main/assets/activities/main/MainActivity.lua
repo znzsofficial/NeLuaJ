@@ -23,7 +23,7 @@ import "mods.utils.EditorUtil"
 -- local number
 local _exit = 0;
 
-local ColorUtil = this.globalData.ColorUtil
+local ColorUtil = this.themeUtil
 local DecelerateInterpolator = luajava.newInstance "android.view.animation.DecelerateInterpolator"
 local res = res
 
@@ -248,7 +248,7 @@ function onCreateOptionsMenu(menu)
         local project_dir = Bean.Path.app_root_pro_dir .. "/" .. Bean.Project.this_project
         local init = LuaFileUtil.loadLua(project_dir .. "/init.lua")
         LuaFileUtil.compress(project_dir, Bean.Path.app_root_dir .. "/Backup",
-            init.app_name or "Untitled" .. "-" .. os.date("%Y-%m-%d-%H-%M-%S") .. ".zip")
+            (init.app_name or "Untitled") .. "-" .. os.date("%Y-%m-%d-%H-%M-%S") .. ".zip")
     end
     --[[
     menu2.add(res.string.migrate).onMenuItemClick = function(a)

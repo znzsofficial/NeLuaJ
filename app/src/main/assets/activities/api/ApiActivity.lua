@@ -9,7 +9,7 @@ import "android.view.View"
 import "android.view.WindowManager"
 this.dynamicColor()
 local res = res
-local ColorUtil = this.globalData.ColorUtil
+local ColorUtil = this.themeUtil
 local table = table
 
 local simpleList = ... or false

@@ -5,7 +5,7 @@ import "android.view.WindowManager"
 import "android.view.View"
 import "android.graphics.drawable.ColorDrawable"
 local LuaFileUtil = luajava.bindClass "com.nekolaska.io.LuaFileUtil".INSTANCE
-local ColorUtil = this.globalData.ColorUtil
+local ColorUtil = this.themeUtil
 local res = res
 this.dynamicColor()
 activity.setTitle("NeLuaJ+" .. res.string.help)

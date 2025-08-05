@@ -2,7 +2,7 @@ import "android.widget.LinearLayout"
 import "vinx.material.textfield.MaterialTextField"
 import "com.google.android.material.checkbox.MaterialCheckBox"
 import "res"
-local ColorUtil = this.globalData.ColorUtil
+local ColorUtil = this.themeUtil
 local colorPrimary = ColorUtil.getColorPrimary()
 
 return {

@@ -22,7 +22,7 @@ local binding = {}
 activity.setContentView(loadlayout(res.layout.photo_layout, binding))
 
 this.loadImage(this.getLuaDir() .. "/res/drawable/sync.png", function(drawable)
-    drawable.setColorFilter(this.getFilter(this.globalData.ColorUtil.getColorOnPrimaryContainer()))
+    drawable.setColorFilter(this.getFilter(this.themeUtil.getColorOnPrimaryContainer()))
     binding.switchBg.setImageDrawable(drawable)
 end)
 

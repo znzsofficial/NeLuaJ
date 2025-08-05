@@ -1,7 +1,7 @@
 ---@diagnostic disable: undefined-global
 require "environment"
 import "res"
-local ColorUtil = this.globalData.ColorUtil
+local ColorUtil = this.themeUtil
 local LuaFileUtil = luajava.bindClass "com.nekolaska.io.LuaFileUtil".INSTANCE
 local File = bindClass "java.io.File"
 local path = tostring(...)

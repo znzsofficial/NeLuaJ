@@ -7,7 +7,7 @@ local View = luajava.bindClass "android.view.View"
 local MDC_R = luajava.bindClass "com.google.android.material.R"
 import "android.widget.LinearLayout"
 import "vinx.material.textfield.MaterialTextField"
-local ColorUtil = this.globalData.ColorUtil
+local ColorUtil = this.themeUtil
 this.dynamicColor()
 
 activity {

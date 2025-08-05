@@ -1,6 +1,5 @@
 bindClass = luajava.bindClass;
 
-this.globalData.ColorUtil = luajava.newInstance("github.daisukiKaffuChino.utils.LuaThemeUtil", this)
 local reader = luajava.newInstance("com.nekolaska.internal.ClassNamesReader", this.applicationContext)
 ClassesNames = {}
 ClassesNames.classes = reader.getAllNames()

@@ -4,7 +4,7 @@ import "com.androlua.LuaTarget"
 import "androidx.core.view.GravityCompat"
 import "android.view.LayoutInflater"
 
-local ColorUtil = this.globalData.ColorUtil
+local ColorUtil = this.themeUtil
 -- Anime
 local AnimatorSet = bindClass "android.animation.AnimatorSet"
 local ObjectAnimator = bindClass "android.animation.ObjectAnimator"

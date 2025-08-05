@@ -1,6 +1,6 @@
 import "android.widget.*"
 local View = luajava.bindClass "android.view.View"
-local themeUtil = this.globalData.ColorUtil
+local themeUtil = this.themeUtil
 local rippleRes = activity.obtainStyledAttributes({ android.R.attr.selectableItemBackground }).getResourceId(0, 0)
 
 local colorItem = function(name)

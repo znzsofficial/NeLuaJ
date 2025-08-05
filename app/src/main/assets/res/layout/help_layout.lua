@@ -5,7 +5,7 @@ import "androidx.viewpager2.widget.ViewPager2"
 --import "me.zhanghai.android.fastscroll.FastScrollWebView"
 local LuaFragmentAdapter = luajava.bindClass "github.znzsofficial.adapter.LuaFragmentAdapter"
 local LuaFragment = luajava.bindClass "com.androlua.LuaFragment"
-local ColorUtil = this.globalData.ColorUtil
+local ColorUtil = this.themeUtil
 
 local view = loadlayout {
     LinearLayout,

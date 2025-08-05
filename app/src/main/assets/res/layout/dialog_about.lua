@@ -1,7 +1,7 @@
 ---@diagnostic disable: undefined-global
 import "com.google.android.material.textview.MaterialTextView";
 import "android.widget.LinearLayout";
-local ColorUtil = this.globalData.ColorUtil
+local ColorUtil = this.themeUtil
 
 return {
     LinearLayout,

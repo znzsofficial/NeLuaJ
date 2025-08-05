@@ -4,7 +4,7 @@ local MaterialButton = bindClass "com.google.android.material.button.MaterialBut
 local MaterialDivider = bindClass "com.google.android.material.divider.MaterialDivider"
 local LinearLayout = bindClass "android.widget.LinearLayout"
 
-local ColorUtil = this.globalData.ColorUtil
+local ColorUtil = this.themeUtil
 --local ColorBackground = ColorUtil.getColorSurfaceVariant();
 local ColorPrimary = ColorUtil.getColorPrimary();
 local ColorText = ColorUtil.getColorOnSurfaceVariant();
