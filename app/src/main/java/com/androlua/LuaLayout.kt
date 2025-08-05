@@ -21,8 +21,12 @@ import com.androlua.adapter.ArrayListAdapter
 import com.androlua.adapter.LuaAdapter
 import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.behavior.HideBottomViewOnScrollBehavior
+import com.google.android.material.behavior.HideViewOnScrollBehavior
 import com.google.android.material.bottomsheet.BottomSheetBehavior
+import com.google.android.material.search.SearchBar
 import com.google.android.material.sidesheet.SideSheetBehavior
+import com.google.android.material.transformation.FabTransformationScrimBehavior
+import com.google.android.material.transformation.FabTransformationSheetBehavior
 import com.nekolaska.ktx.asString
 import com.nekolaska.ktx.firstArg
 import com.nekolaska.ktx.ifNotNil
@@ -41,6 +45,7 @@ import org.luaj.Varargs
 import org.luaj.lib.VarArgFunction
 import org.luaj.lib.jse.CoerceLuaToJava
 import java.util.Locale
+import kotlin.to
 
 @Suppress("NOTHING_TO_INLINE")
 private inline fun LuaValue.toView(): View = this.touserdata(View::class.java)
@@ -138,6 +143,21 @@ class LuaLayout(private val initialContext: Context) {
         str.toDoubleOrNull()?.let { return it }
 
         return str
+    }
+
+    @Suppress("DEPRECATION")
+    private fun createBehaviorFromString(behaviorString: String): Any? {
+        return when (behaviorString) {
+            "@string/appbar_scrolling_view_behavior" -> AppBarLayout.ScrollingViewBehavior()
+            "@string/bottom_sheet_behavior" -> BottomSheetBehavior()
+            "@string/side_sheet_behavior" -> SideSheetBehavior()
+            "@string/hide_bottom_view_on_scroll_behavior" -> HideBottomViewOnScrollBehavior()
+            "@string/hide_view_on_scroll_behavior" -> HideViewOnScrollBehavior()
+            "@string/searchbar_scrolling_view_behavior" -> SearchBar.ScrollingViewBehavior()
+            "@string/fab_transformation_scrim_behavior" -> FabTransformationScrimBehavior()
+            "@string/fab_transformation_sheet_behavior" -> FabTransformationSheetBehavior()
+            else -> null
+        }
     }
 
     @JvmOverloads
@@ -442,29 +462,9 @@ class LuaLayout(private val initialContext: Context) {
                                     ids[tValue.asString()]
                                 )
                             } else if (keyString == "layout_behavior") {
-                                when (tValue.asString()) {
-                                    "@string/appbar_scrolling_view_behavior" -> {
-                                        params["setBehavior"].jcall(AppBarLayout.ScrollingViewBehavior())
-                                    }
-
-                                    "@string/bottom_sheet_behavior" -> {
-                                        params["setBehavior"].jcall(BottomSheetBehavior<View>())
-                                    }
-
-                                    "@string/side_sheet_behavior" -> {
-                                        params["setBehavior"].jcall(SideSheetBehavior<View>())
-                                    }
-
-                                    "@string/hide_bottom_view_on_scroll_behavior" -> {
-                                        params["setBehavior"].jcall(
-                                            HideBottomViewOnScrollBehavior<View>()
-                                        )
-                                    }
-
-                                    else -> {
-                                        params["setBehavior"].jcall(tValue)
-                                    }
-                                }
+                                params["setBehavior"].jcall(
+                                    createBehaviorFromString(tValue.asString()) ?: tValue
+                                )
                             } else if (keyString == "layout_anchor") {
                                 params["setAnchorId"].jcall(ids[tValue.asString()])
                             } else if (keyString == "layout_collapseParallaxMultiplier") {

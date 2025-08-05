@@ -74,7 +74,7 @@ class ClassNamesReader(private val context: Context) {
         return suffix.all { it.isDigit() }
     }
 
-    val allNames by lazy {
+    val allNames by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         (preloadedClasses + appClasses)
             .distinct()
             .filterNot { it.contains("ExternalSyntheticLambda") }

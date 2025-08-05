@@ -117,7 +117,7 @@ function _M.save(path, str, editor)
     path = path or Bean.Path.this_file
     -- 如果没有传入文本
     if not str then
-        str = tostring(mLuaEditor.getText())
+        str = tostring(editor.getText())
         -- 如果编辑器文本为空
         if #str == 0 then
             local originTitle = this.supportActionBar.subtitle
@@ -165,6 +165,7 @@ function _M.setHighLight(view)
     view.localColor = data["Local"] and Color.parseColor(data["Local"]) or 0xffb4b484
     view.upvalColor = data["Upval"] and Color.parseColor(data["Upval"]) or 0xff8080c0
 end
+
 function _M.init()
     -- 初始化放大镜
     MagnifierManager.initMagnifier(mLuaEditor);
