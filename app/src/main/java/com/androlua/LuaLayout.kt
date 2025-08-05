@@ -45,7 +45,6 @@ import org.luaj.Varargs
 import org.luaj.lib.VarArgFunction
 import org.luaj.lib.jse.CoerceLuaToJava
 import java.util.Locale
-import kotlin.to
 
 @Suppress("NOTHING_TO_INLINE")
 private inline fun LuaValue.toView(): View = this.touserdata(View::class.java)

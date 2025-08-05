@@ -9,8 +9,8 @@ local ColorUtil = this.globalData.ColorUtil
 local res = res
 this.dynamicColor()
 activity.setTitle("NeLuaJ+" .. res.string.help)
-        .setContentView(res.layout.help_layout)
-        .getSupportActionBar() {
+    .setContentView(res.layout.help_layout)
+    .getSupportActionBar() {
     Elevation = 0,
     BackgroundDrawable = ColorDrawable(ColorUtil.getColorBackground()),
     DisplayShowTitleEnabled = true,
@@ -18,10 +18,10 @@ activity.setTitle("NeLuaJ+" .. res.string.help)
 }
 
 local window = activity.getWindow()
-                       .setNavigationBarColor(0)
-                       .setStatusBarColor(ColorUtil.getColorBackground())
-                       .addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
-                       .clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
+    .setNavigationBarColor(0)
+    .setStatusBarColor(ColorUtil.getColorBackground())
+    .addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
+    .clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
 if this.isNightMode() then
     window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE)
 else
@@ -59,28 +59,29 @@ local item = {
     },
 }
 
+local docLanguage = res.language:find("zh") and "zh" or "en"
 local data = {
-    { text = "init.lua", file = "init_lua_" .. res.language .. ".md" },
-    { text = res.string.global, file = "global_env.md" },
-    { text = "LuaJ++", file = "LuaJ++.md" },
-    { text = res.string.backup_crash, file = "backup_crash.md" },
-    { text = "res " .. res.string._module, file = "module_res.md" },
+    { text = "init.lua",                      file = "init_lua_" .. docLanguage .. ".md" },
+    { text = res.string.global,               file = "global_env.md" },
+    { text = "LuaJ++",                        file = "LuaJ++.md" },
+    { text = res.string.backup_crash,         file = "backup_crash.md" },
+    { text = "res " .. res.string._module,    file = "module_res.md" },
     { text = "okhttp " .. res.string._module, file = "module_okhttp.md" },
-    { text = "loadlayout", file = "module_loadlayout.md" },
-    { text = "file " .. res.string._module, file = "module_file.md" },
-    { text = "lazy", file = "lazy.md" },
-    { text = "xTask", file = "xTask.md" },
-    { text = "LuaActivity", file = "LuaActivity.md" },
-    { text = "LuaCustRecyclerAdapter", file = "LuaCustRecyclerAdapter.md" },
-    { text = "LuaFragment", file = "LuaFragment.md" },
-    { text = "LuaFragmentAdapter", file = "LuaFragmentAdapter.md" },
-    { text = "LuaPagerAdapter", file = "LuaPagerAdapter.md" },
-    { text = "LuaPreferenceFragment", file = "LuaPreferenceFragment.md" },
-    { text = "LuaRecyclerAdapter", file = "LuaRecyclerAdapter.md" },
-    { text = "LuaThemeUtil", file = "LuaThemeUtil.md"},
-    { text = "Coil", file = "Coil.md" },
-    { text = "FileObserver", file = "other_FileObserver.md" },
-    { text = "FastScrollerBuilder", file = "other_FastScrollerBuilder.md"}
+    { text = "loadlayout",                    file = "module_loadlayout.md" },
+    { text = "file " .. res.string._module,   file = "module_file.md" },
+    { text = "lazy",                          file = "lazy.md" },
+    { text = "xTask",                         file = "xTask.md" },
+    { text = "LuaActivity",                   file = "LuaActivity.md" },
+    { text = "LuaCustRecyclerAdapter",        file = "LuaCustRecyclerAdapter.md" },
+    { text = "LuaFragment",                   file = "LuaFragment.md" },
+    { text = "LuaFragmentAdapter",            file = "LuaFragmentAdapter.md" },
+    { text = "LuaPagerAdapter",               file = "LuaPagerAdapter.md" },
+    { text = "LuaPreferenceFragment",         file = "LuaPreferenceFragment.md" },
+    { text = "LuaRecyclerAdapter",            file = "LuaRecyclerAdapter.md" },
+    { text = "LuaThemeUtil",                  file = "LuaThemeUtil.md" },
+    { text = "Coil",                          file = "Coil.md" },
+    { text = "FileObserver",                  file = "other_FileObserver.md" },
+    { text = "FastScrollerBuilder",           file = "other_FastScrollerBuilder.md" }
 }
 
 local adp = LuaAdapter(activity, data, item)
@@ -101,4 +102,3 @@ this.addOnBackPressedCallback(function()
         activity.finish()
     end
 end)
-

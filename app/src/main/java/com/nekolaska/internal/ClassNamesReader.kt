@@ -80,6 +80,7 @@ class ClassNamesReader(private val context: Context) {
             .filterNot { it.contains("ExternalSyntheticLambda") }
             .filterNot { endsWithDollarNumber(it) }
             .filterNot { it.startsWith('[') }
+            .filterNot { it.endsWith("-IA") }
             .sorted()
     }
 
