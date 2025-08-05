@@ -303,43 +303,4 @@ function _M.InstallApk(filePath)
     activity.startActivity(intent)
 end
 
---[[
-function _M.openFile(path, FileName)
-    try
-    local ExtensionName = FileName:match("%.(.+)")
-    local Mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ExtensionName)
-    local intent = Intent();
-    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-    intent.setAction(Intent.ACTION_VIEW);
-    local uri = activity.getUriForPath(path)
-    if Mime then
-        intent.setDataAndType(uri, Mime);
-    else
-        intent.setDataAndType(uri, "text/*");
-    end
-    activity.startActivity(intent);
-    catch(e)
-    _M.snack("暂不支持打开此文件")
-end
-end
-
-
-function _M.signApk()
-MaterialAlertDialogBuilder(activity)
-.setTitle("目标文件")
-.setView(loadlayout(res.layout.dialog_fileinput))
-.setPositiveButton(android.R.string.ok, function ()
-import "apksigner.Signer"
-local oldpath = tostring(file_name.getText())
-local new = oldpath:gsub(".apk", "").."_signed.apk"
-os.remove(new)
-Signer.sign(oldpath, new)
-os.remove(oldpath)
-end )
-.setNegativeButton(android.R.string.cancel, nil)
-.show();
-file_name.setText(Bean.Path.app_root_dir.."/bin/").setSingleLine(false)
-end
-]]
-
 return _M

@@ -1,8 +1,7 @@
 local res = res
 local table = table
-local ColorUtil = this.globalData.ColorUtil
-import "mods.utils.TabUtil"
-import "mods.utils.MagnifierManager"
+local TabUtil = require "mods.utils.TabUtil"
+local MagnifierManager = require "mods.utils.MagnifierManager"
 local _M1 = require "mods.utils.EditorUtil$1"
 local ActionMode = bindClass "androidx.appcompat.view.ActionMode"
 local MotionEvent = bindClass "android.view.MotionEvent"
@@ -155,6 +154,17 @@ function _M.save(path, str, editor)
     return LuaFileUtil.write(path, str)
 end
 
+function _M.setHighLight(view)
+    local data = this.sharedData
+    view.basewordColor = data["BaseWord"] and Color.parseColor(data["BaseWord"]) or 0xff4477e0
+    view.keywordColor = data["KeyWord"] and Color.parseColor(data["KeyWord"]) or 0xffb4002d
+    view.stringColor = data["String"] and Color.parseColor(data["String"]) or 0xffc2185b
+    view.userwordColor = data["UserWord"] and Color.parseColor(data["UserWord"]) or 0xff5c6bc0
+    view.commentColor = data["Comment"] and Color.parseColor(data["Comment"]) or 0xff71787E
+    view.globalColor = data["Global"] and Color.parseColor(data["Global"]) or 0xff689f38
+    view.localColor = data["Local"] and Color.parseColor(data["Local"]) or 0xffb4b484
+    view.upvalColor = data["Upval"] and Color.parseColor(data["Upval"]) or 0xff8080c0
+end
 function _M.init()
     -- 初始化放大镜
     MagnifierManager.initMagnifier(mLuaEditor);
@@ -163,7 +173,7 @@ function _M.init()
     initTab();
 
     -- 设置高亮
-    _M1.setHighLight(mLuaEditor)
+    _M.setHighLight(mLuaEditor)
 
     --设置字体
     mLuaEditor.setTypeface(res.font.code)
@@ -182,7 +192,7 @@ function _M.init()
         end
     end
 
-    mLuaEditor.onTouch = function(view, event)
+    mLuaEditor.setOnTouchListener(function(view, event)
         if MagnifierManager.Available == true then
             local action = event.action
             if action == MotionEvent.ACTION_DOWN or action == MotionEvent.ACTION_MOVE then
@@ -199,7 +209,7 @@ function _M.init()
                 MagnifierManager.hide()
             end
         end
-    end
+    end)
 
     thread(function(mLuaEditor, bindClass)
         --activity补全

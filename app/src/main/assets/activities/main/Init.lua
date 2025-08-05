@@ -8,6 +8,7 @@ import "android.animation.ObjectAnimator"
 import "androidx.appcompat.app.ActionBarDrawerToggle"
 --Material
 import "com.google.android.material.snackbar.Snackbar"
+import "com.google.android.material.dialog.MaterialAlertDialogBuilder"
 
 import "mods.functions.SearchCode"
 import "mods.utils.EditorUtil"
@@ -19,24 +20,32 @@ local rippleRes = activity.obtainStyledAttributes({ android.R.attr.selectableIte
 local loadlayout = loadlayout
 
 _M.initView = function()
-  local toggle = ActionBarDrawerToggle(activity, drawer, R.string.drawer_open, R.string.drawer_close)
-  drawer.setDrawerListener(toggle)
-  toggle.syncState()
   mSearch.setVisibility(8)
   mSearch.post(function()
     SearchCode()
   end)
+  local toggle = ActionBarDrawerToggle(activity, drawer, R.string.drawer_open, R.string.drawer_close)
+  drawer.setDrawerListener(toggle)
+  toggle.syncState()
   mLuaEditor.setVisibility(4)
+  filetab.setPath(Bean.Path.this_dir)
   return _M
 end
 
 _M.initView2 = function()
-  filetab.setPath(Bean.Path.this_dir)
-  EditorUtil.init()
-  bindClass "com.myopicmobile.textwarrior.common.PackageUtil".load(this)
+  mLuaEditor.post(function()
+    EditorUtil.init()
+    bindClass "com.myopicmobile.textwarrior.common.PackageUtil".load(this)
+    mRecycler.post(function()
+      MainActivity.RecyclerView
+            .init()
+            .update();
+    end)
+  end)
   swipeRefresh.onRefresh = function()
     MainActivity.RecyclerView.update()
   end
+  return _M
 end
 
 _M.initFunctionTab = function()
@@ -172,7 +181,8 @@ _M.initBar = function()
         text = v,
         onClick = function()
           if v == "fun" then
-            v = "function()"
+            mLuaEditor.paste("function()")
+            return
           end
           mLuaEditor.paste(v)
         end,
@@ -186,7 +196,10 @@ _M.initCheck = function()
   local textView = error_Text
   local layout = textView.getParent()
   textView.onClick = function()
-    textView.text = mLuaEditor.getError()
+    MaterialAlertDialogBuilder(activity)
+      .setTitle(res.string.check_error)
+      .setMessage(textView.text)
+      .show()
   end
   local ticker = luajava.newInstance "com.androlua.Ticker"
   ticker.Period = 250

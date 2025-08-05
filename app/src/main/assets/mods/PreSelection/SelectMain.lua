@@ -1,3 +1,4 @@
+---@diagnostic disable: undefined-global
 local _M = {}
 
 _M.ViewId = {}
@@ -53,7 +54,7 @@ function _M.init_Calendar(tab)
   local pattern1 = "^[%w]*[%$]?[%w]*[^%d]*[%w]*[^%$]$"
   for i = 0 ,#tab-1 do
     local className = match(tab[i],".*%.(.*)$")
-    if match(className,pattern2) or match(className,pattern1)
+    if match(className,pattern2) or match(className,pattern1) then
       local fastReadClassesSelf=allClasses[className]
       if not(fastReadClassesSelf) then
         fastReadClassesSelf={}
@@ -68,15 +69,13 @@ function _M.init_Calendar(tab)
     end
   end
 
-  insertedClasses = nil
   return allClasses
 end
 
 
 -- 初始化，会将表进行保存，{[1]={...},[2]={...}} 2是系统的类，1是软件的
 function _M.init()
-  thread(function(_M,map)
-    try
+  xTask(function()
       local init_table = map["PreSelection_init"]
       if not (init_table) then
         local Classes = ClassesNames.classes
@@ -87,10 +86,7 @@ function _M.init()
         map["PreSelection_init"] = init_table
         --print(map["PreSelection_init"][1])
       end
-      catch(e)
-      print(e)
-    end
-  end,_M,map)
+  end)
 end
 
 function _M.AnalysisImport(code,callBack)
@@ -104,7 +100,7 @@ function _M.AnalysisImport(code,callBack)
         _M.init() -- 初始化
         print("正在初始化，请稍后再试")
        else
-        for advance,text,column in LuaLexerIteratorBuilder(code)
+        for advance,text,column in LuaLexerIteratorBuilder(code) do
           if last~=LuaTokenTypes.DOT and advance==LuaTokenTypes.NAME then
             if not(buf[text]) then
               buf[text]=true
@@ -112,10 +108,7 @@ function _M.AnalysisImport(code,callBack)
                 local fastReadClassesSelf=v[text]
                 if fastReadClassesSelf then
                   for i2,v2 in pairs(fastReadClassesSelf) do
-                    -- print(v2)
-                    -- table.insert(importClassList,v2)
-                    if not (match(v2,"org%.luaj%.android%..*")) then
-                      --table.insert(importClassList,v2)
+                    if not v2:find("^org.luaj.android") then
                       importClassList[#importClassList+1] = v2
                     end
                   end

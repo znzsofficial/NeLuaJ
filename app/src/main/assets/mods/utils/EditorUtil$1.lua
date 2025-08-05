@@ -51,16 +51,4 @@ function _M.javaClassAnalyse(view, status)
     end
 end
 
-function _M.setHighLight(view)
-    local data = this.sharedData
-    view.basewordColor = data["BaseWord"] and Color.parseColor(data["BaseWord"]) or 0xff4477e0
-    view.keywordColor = data["KeyWord"] and Color.parseColor(data["KeyWord"]) or 0xffb4002d
-    view.stringColor = data["String"] and Color.parseColor(data["String"]) or 0xffc2185b
-    view.userwordColor = data["UserWord"] and Color.parseColor(data["UserWord"]) or 0xff5c6bc0
-    view.commentColor = data["Comment"] and Color.parseColor(data["Comment"]) or 0xff71787E
-    view.globalColor = data["Global"] and Color.parseColor(data["Global"]) or 0xff689f38
-    view.localColor = data["Local"] and Color.parseColor(data["Local"]) or 0xffb4b484
-    view.upvalColor = data["Upval"] and Color.parseColor(data["Upval"]) or 0xff8080c0
-end
-
 return _M
