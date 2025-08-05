@@ -25,17 +25,11 @@ local ImageRequestBuilder = bindClass "coil3.request.ImageRequest$Builder"
 import "mods.utils.EditorUtil"
 import "mods.utils.ActivityUtil"
 
-local Executors = bindClass "java.util.concurrent.Executors"
-local Handler = bindClass "android.os.Handler"
-local Looper = bindClass "android.os.Looper"
-local mainLooper = Looper.getMainLooper()
-local handler = Handler(mainLooper)
-local executor = Executors.newCachedThreadPool()
-
 local Bean_Path
 local res = res
 local table = table
 local utf8 = utf8
+local string = string
 local rawget = rawget
 local R = R
 
@@ -239,6 +233,7 @@ end
 local getList = function()
     local path = Bean_Path.this_dir
     local table_sort = table.sort
+    local match = string.match
 
     local DirList = {}
     local _FileList = {}
@@ -274,8 +269,6 @@ local getList = function()
     for _, v in ipairs(_FileList) do
         DirList[#DirList + 1] = v
     end
-
-    local match = string.match
 
     local isRoot
     local isProjectDir
@@ -318,10 +311,7 @@ local updateCallback = function()
 end
 
 _M.update = function()
-    executor.execute(function()
-        getList()
-        handler.post(updateCallback)
-    end)
+    xTask(getList, updateCallback)
     return _M
 end
 

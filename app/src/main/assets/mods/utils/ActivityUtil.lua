@@ -49,7 +49,7 @@ function _M.showLog(context)
     MainActivity.Public.snack("日志已清空")
   end)
   .show()
-  dialog.listView.setSelection(adapter.getCount() - 1)
+  dialog.getListView().setSelection(adapter.getCount() - 1)
 end
 
 return _M

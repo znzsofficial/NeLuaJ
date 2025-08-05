@@ -34,15 +34,9 @@ local res = res
 ]]
 
 local function initFiles()
-    Init.initView2()
     LuaFileUtil.checkDirectory(Bean.Path.app_root_pro_dir)
     checkBackup()
-    mRecycler.post(function()
-        MainActivity.RecyclerView
-            .init()
-            .update();
-    end)
-    collectgarbage("collect")
+    Init.initView2().initBar().initFunctionTab().initCheck()
 
     -- 恢复上次打开的文件
     mLuaEditor.post(function()
@@ -77,8 +71,8 @@ function onCreate()
     else
         window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR)
     end
+    Init.initView()
     --Bean.Path.this_dir = Bean.Path.app_root_pro_dir
-    Init.initView().initBar().initFunctionTab().initCheck()
     if (this.checkStoragePermission()) then
         initFiles()
     else
