@@ -74,6 +74,7 @@ import com.nekolaska.ktx.firstArg
 import com.nekolaska.ktx.overridePendingTransition
 import com.nekolaska.ktx.toLuaInstance
 import dalvik.system.DexClassLoader
+import github.daisukiKaffuChino.utils.LuaThemeUtil
 import github.znzsofficial.neluaj.R
 import kotlinx.coroutines.launch
 import org.luaj.Globals
@@ -137,6 +138,8 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     private var mOnKeyUp: LuaValue? = null
     private var mOnKeyLongPress: LuaValue? = null
     private var mOnTouchEvent: LuaValue? = null
+
+    val themeUtil = LuaThemeUtil(this)
 
     @Suppress("UNCHECKED_CAST", "DEPRECATION")
     @CallLuaFunction
@@ -1466,8 +1469,10 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
             Environment.isExternalStorageManager()
         } else {
             // Android 10 及以下
-            val readPermission = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
-            val writePermission = ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            val readPermission =
+                ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
+            val writePermission =
+                ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
             readPermission == PackageManager.PERMISSION_GRANTED && writePermission == PackageManager.PERMISSION_GRANTED
         }
     }

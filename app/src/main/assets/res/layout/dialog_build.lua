@@ -2,7 +2,7 @@ import "android.widget.LinearLayout"
 import "com.google.android.material.textview.MaterialTextView";
 import "vinx.material.textfield.MaterialTextField"
 import "res"
-local ColorUtil = this.globalData.ColorUtil
+local ColorUtil = this.themeUtil
 
 return {
   LinearLayout,

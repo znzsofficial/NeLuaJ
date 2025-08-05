@@ -7,7 +7,7 @@ import "com.google.android.material.textview.MaterialTextView";
 import "vinx.material.textfield.MaterialTextField"
 import "android.graphics.drawable.GradientDrawable"
 import "android.util.TypedValue"
-local ColorUtil = this.globalData.ColorUtil
+local ColorUtil = this.themeUtil
 local getDp = lambda i : TypedValue.applyDimension(1,i,activity.getResources().getDisplayMetrics())
 
 local surfaceColorVar=ColorUtil.ColorSurfaceVariant

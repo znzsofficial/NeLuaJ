@@ -26,7 +26,7 @@ local DecelerateInterpolator = luajava.newInstance "android.view.animation.Decel
 
 local thisField
 
-local ColorUtil = this.globalData.ColorUtil
+local ColorUtil = this.themeUtil
 local accentColor=ColorUtil.ColorAccent
 local errorColor=ColorUtil.ColorError
 local outlineColor=ColorUtil.ColorOutline

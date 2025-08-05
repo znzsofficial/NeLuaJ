@@ -18,7 +18,7 @@ import "com.nekolaska.internal.MyFullDraggableContainer"
 import "com.nekolaska.internal.MyFileTabView"
 --import "vinx.material.textfield.MaterialTextField"
 
-local ColorUtil = this.globalData.ColorUtil
+local ColorUtil = this.themeUtil
 
 local rippleRes = activity.obtainStyledAttributes({ android.R.attr.selectableItemBackgroundBorderless }).getResourceId(0, 0)
 
