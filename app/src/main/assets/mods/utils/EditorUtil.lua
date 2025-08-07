@@ -6,6 +6,7 @@ local _M1 = require "mods.utils.EditorUtil$1"
 local ActionMode = bindClass "androidx.appcompat.view.ActionMode"
 local MotionEvent = bindClass "android.view.MotionEvent"
 local File = bindClass "java.io.File"
+local Color = bindClass "android.graphics.Color"
 local _M = {}
 _M.last_history = {}
 _M.fromRecy = false

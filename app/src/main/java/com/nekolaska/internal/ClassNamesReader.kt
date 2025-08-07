@@ -13,7 +13,6 @@ class ClassNamesReader(private val context: Context) {
      * 解析系统预加载类列表文件 (/system/etc/preloaded-classes)
      */
     val preloadedClasses: MutableList<String> by lazy {
-
         val preloadedClasses = mutableListOf<String>()
         val preloadedClassesFile = File("/system/etc/preloaded-classes")
 

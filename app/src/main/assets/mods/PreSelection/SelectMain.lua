@@ -79,10 +79,10 @@ function _M.init()
       local init_table = map["PreSelection_init"]
       if not (init_table) then
         local Classes = ClassesNames.classes
-        init_table = {}
-        for index,content in ipairs({Classes}) do -- 这里的循环设计原本想的是可能会有多个表
+        init_table = {_M.init_Calendar(Classes)}
+        --[[for index,content in ipairs({Classes}) do -- 这里的循环设计原本想的是可能会有多个表
           init_table[index] = _M.init_Calendar(content)
-        end
+        end]]
         map["PreSelection_init"] = init_table
         --print(map["PreSelection_init"][1])
       end

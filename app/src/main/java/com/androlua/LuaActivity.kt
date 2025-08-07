@@ -1292,25 +1292,12 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     fun isNightMode() =
         (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
 
-
     fun getFilter(color: Int): ColorFilter {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             BlendModeColorFilter(color, BlendMode.SRC_ATOP)
         } else {
             PorterDuffColorFilter(color, PorterDuff.Mode.SRC_ATOP)
         }
-    }
-
-    fun getResDrawable(name: String?): Drawable {
-        val path = "$luaDir/res/drawable/$name.png"
-        return BitmapFactory.decodeFile(path).toDrawable(resources)
-    }
-
-    fun getResDrawable(name: String?, color: Int): Drawable {
-        val path = "$luaDir/res/drawable/$name.png"
-        val drawable = BitmapFactory.decodeFile(path).toDrawable(resources)
-        drawable.colorFilter = getFilter(color)
-        return drawable
     }
 
     fun getImageLoader(): ImageLoader {

@@ -5,6 +5,8 @@ import android.app.Activity
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Typeface
+import androidx.core.graphics.BlendModeColorFilterCompat
+import androidx.core.graphics.BlendModeCompat
 import coil3.asDrawable
 import coil3.executeBlocking
 import coil3.imageLoader
@@ -12,13 +14,12 @@ import coil3.request.ImageRequest
 import coil3.toBitmap
 import com.androlua.LuaContext
 import com.androlua.LuaLayout
-import com.nekolaska.ktx.firstArg
+import com.nekolaska.ktx.ifNotNil
 import com.nekolaska.ktx.toLuaValue
 import org.luaj.Globals
 import org.luaj.LuaError
 import org.luaj.LuaTable
 import org.luaj.LuaValue
-import org.luaj.Varargs
 import org.luaj.lib.TwoArgFunction
 import org.luaj.lib.jse.CoerceJavaToLua
 import java.io.File
@@ -263,7 +264,7 @@ class res(private val context: LuaContext) : TwoArgFunction() {
     }
 
     private class drawable(private val activity: LuaContext, private val globals: Globals) :
-        LuaValue() {
+        TwoArgFunction() {
         private val cache = LuaTable()
         override fun type() = TTABLE
         override fun typename() = "table"
@@ -275,6 +276,26 @@ class res(private val context: LuaContext) : TwoArgFunction() {
             cache.set(arg, result)
             return result
         }
+
+        override fun call(arg1: LuaValue, arg2: LuaValue): LuaValue {
+            if (arg1.isnil()) return NIL
+            val drawable = get(arg1)
+            if (drawable.isnil()) return NIL
+            arg2.ifNotNil()?.let {
+                if (it.isfunction()) {
+                    it.call(drawable)
+                } else if (it.isint()) {
+                    drawable["setColorFilter"].jcall(
+                        BlendModeColorFilterCompat.createBlendModeColorFilterCompat(
+                            it.toint(),
+                            BlendModeCompat.SRC_ATOP
+                        )
+                    )
+                }
+            }
+            return drawable
+        }
+
     }
 
     private class bitmap(private val activity: LuaContext, private val globals: Globals) :
@@ -398,7 +419,7 @@ class res(private val context: LuaContext) : TwoArgFunction() {
         }
     }
 
-    private class raw(private val context: LuaContext) : LuaValue() {
+    private class raw(private val context: LuaContext) : TwoArgFunction() {
         private val cache = LuaTable()
         override fun type(): Int = TTABLE
         override fun typename(): String = "table"
@@ -444,9 +465,9 @@ class res(private val context: LuaContext) : TwoArgFunction() {
             return t
         }
 
-        override fun invoke(args: Varargs): Varargs {
-            val key = args.firstArg()
-            val encoding = args.optjstring(2, "UTF-8")
+        override fun call(key: LuaValue, charset: LuaValue): LuaValue {
+            val encoding = if (charset.isnil()) "UTF-8"
+            else charset.tojstring()
             val luaFile = get(key) // 使用我们增强的 get 方法
             if (luaFile.isnil()) {
                 return NIL
@@ -454,5 +475,6 @@ class res(private val context: LuaContext) : TwoArgFunction() {
             val file = luaFile.touserdata(File::class.java)
             return valueOf(file.readText(charset(encoding)))
         }
+
     }
 }
