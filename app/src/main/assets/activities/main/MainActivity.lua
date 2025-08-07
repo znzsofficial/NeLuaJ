@@ -117,7 +117,7 @@ function onCreateOptionsMenu(menu)
     local menu_show = 2; --MenuItem.SHOW_AS_ACTION_ALWAYS;
     menu.add(res.string.run_code)
     .setShowAsAction(menu_show)
-    .setIcon(this.getResDrawable("play", ColorTitle))
+    .setIcon(res.drawable("play", ColorTitle))
     .onMenuItemClick = function(a)
         -- 如果Editor未显示
         if mLuaEditor.getVisibility() == 4 then
@@ -156,13 +156,13 @@ function onCreateOptionsMenu(menu)
     end
     menu.add(res.string.undo)
     .setShowAsAction(menu_show)
-    .setIcon(this.getResDrawable("undo", ColorTitle))
+    .setIcon(res.drawable("undo", ColorTitle))
     .onMenuItemClick = function(a)
         mLuaEditor.undo()
     end
     menu.add(res.string.redo)
     .setShowAsAction(menu_show)
-    .setIcon(this.getResDrawable("redo", ColorTitle))
+    .setIcon(res.drawable("redo", ColorTitle))
     .onMenuItemClick = function(a)
         mLuaEditor.redo()
     end

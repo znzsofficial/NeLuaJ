@@ -1,5 +1,4 @@
 local SelectMain = require "mods.PreSelection.SelectMain"
-local Color = bindClass "android.graphics.Color"
 local _M = {}
 
 --SelectMain.addView(text,view,list,id)

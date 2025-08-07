@@ -37,6 +37,7 @@ onVersionChanged(new, old)
 
 onError(error, message)
 onNightModeChanged(mode)
+onStorageRequestResult(isGranted)
 ```
 
 ---
@@ -67,6 +68,9 @@ this.requestStoragePermission()
 -- 请求文件权限回调
 function onStorageRequestResult(isGranted)
 end
+
+-- 直接使用当前活动的主题色工具
+this.themeUtil.getColorPrimary()
 
 -- 等同于 setContentView(loadlayout(布局表))
 this.setContentView(布局表)

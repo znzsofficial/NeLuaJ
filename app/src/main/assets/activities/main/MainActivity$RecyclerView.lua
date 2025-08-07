@@ -96,7 +96,7 @@ _M.init = function()
     local res_drawable = res.drawable
 
     local imageLoader = this.getImageLoader()
-    local error_project = this.getResDrawable("android_studio", ColorUtil.getColorSecondary())
+    local error_project = res_drawable("android_studio", ColorUtil.getColorSecondary())
 
     local size = this.dpToPx(28)
     error_project.setBounds(0, 0, size, size)
