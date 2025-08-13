@@ -225,6 +225,7 @@ function _M.init()
                 methods[#methods + 1] = v .. "()"
             end
         end
+         methods[#methods + 1] = "themeUtil"
         --补全
 
         local classes = ClassesNames.simple_top_classes
