@@ -2,7 +2,7 @@ local insert = table.insert
 local string_format = string.format
 local table_foreach = table.foreach
 
-function aas(str)
+function assignClass(str)
     local eee = {
         aa = {}, --父类继承
         bb = {}, --构建方法
@@ -326,13 +326,6 @@ function tabMerge(tab1, tab2)
         insert(tab, v)
     end)
     return tab
-end
-
-function 弹窗(title, message)
-    local dialog = MaterialAlertDialogBuilder(this)
-            .setTitle(title or "")
-            .setMessage(message or "")
-            .show()
 end
 
 function table.unique(t, bArray)

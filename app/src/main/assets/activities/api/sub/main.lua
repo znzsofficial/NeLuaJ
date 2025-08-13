@@ -21,24 +21,9 @@ import "android.text.method.LinkMovementMethod"
 import "com.google.android.material.card.MaterialCardView"
 import "com.google.android.material.textview.MaterialTextView"
 import "com.google.android.material.dialog.MaterialAlertDialogBuilder"
-this.dynamicColor()
 local DecelerateInterpolator = luajava.newInstance "android.view.animation.DecelerateInterpolator"
-
 local thisField
 
-local ColorUtil = this.themeUtil
-local accentColor=ColorUtil.ColorAccent
-local errorColor=ColorUtil.ColorError
-local outlineColor=ColorUtil.ColorOutline
-local surfaceColor=ColorUtil.ColorSurface
-local surfaceColorVar=ColorUtil.ColorSurfaceVariant
-local backgroundc=ColorUtil.ColorBackground
-local onbackgroundc=ColorUtil.ColorOnBackground
-local primaryColor=ColorUtil.ColorPrimary
-local primaryOnColor=ColorUtil.ColorOnPrimary
-local secondaryColor=ColorUtil.ColorSecondary
-local tertiaryc=ColorUtil.ColorTertiary
-local textc=ColorUtil.TextColor
 local table = table
 local insert = table.insert
 local utf8 = utf8
@@ -46,13 +31,23 @@ local string = string
 
 local clazz=...
 import "activities.api.sub.util"
-activity.setContentView(loadlayout(res.layout.api_sub))
+
+this.setTheme(R.style.Theme_NeLuaJ_Material3_DynamicColors)
+
+local ColorUtil = this.themeUtil
+local primaryColor=ColorUtil.ColorPrimary
+local secondaryColor=ColorUtil.ColorSecondary
+local tertiaryc=ColorUtil.ColorTertiary
+
+this.setContentView(loadlayout(res.layout.api_sub))
 .setTitle(clazz)
 .getSupportActionBar()
 .setElevation(0)
 .setBackgroundDrawable(ColorDrawable(ColorUtil.getColorBackground()))
 .setDisplayShowHomeEnabled(true)
 .setDisplayHomeAsUpEnabled(true)
+
+
 
 local window = activity.getWindow()
 .setNavigationBarColor(0)
@@ -65,7 +60,7 @@ if this.isNightMode() then
   window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR)
 end
 
-eee,class = aas(clazz)
+eee,class = assignClass(clazz)
 
 local function copyText(content)
   activity.getSystemService(Context.CLIPBOARD_SERVICE).setText(tostring(content))
@@ -89,10 +84,10 @@ function vvv(a,tag)
     end
 
     --[[
-    bb=bb:gsub("java.lang.Object","Object")
-    bb=bb:gsub("java.lang.String","String")
-    bb=bb:gsub("android.view.","")
-    bb=bb:gsub("android.","")
+bb=bb:gsub("java.lang.Object","Object")
+bb=bb:gsub("java.lang.String","String")
+bb=bb:gsub("android.view.","")
+bb=bb:gsub("android.","")
 ]]
     --字段简化---
    elseif tag=="ee" then
@@ -106,7 +101,7 @@ end
 CAdapter = (function(item)
   local tab = {}
   local tab2 = {{text="全部"}}
-  for k,v in ipairs(eee.cc) do
+  for _,v in ipairs(eee.cc) do
     local aa = vvv(v,"cc")
     local bb = aa:gsub("public ","")
     if not table.find(tab,bb) then
@@ -240,7 +235,7 @@ end
 local function 切换R类(a,b)
   eee.hh={}
   local R=load("return android.R."..b..".getFields()")()
-  for k,v in pairs(luajava.astable(R)) do
+  for k,v in R do
     local RR="android.R."..b.."."..v.Name
     insert(eee.hh,RR)
   end
@@ -314,7 +309,6 @@ function 列表(a,s)
       id="ez",
       singleLine=false;
       layout_margin="2dp",
-      textColor=textc;
       layout_marginLeft="6dp";
     },
   }
@@ -339,22 +333,22 @@ function 列表(a,s)
       adp.add({ep=aa,ez=bb,js=k})
       --判断类库是否存在该子类
       --[[
-      if tag=="aa" and not cl.containsValue(bb) then
-        cl.put(cl.size()+1,bb)
-        tabadd=true
-        count=count+1
-      end]]
+if tag=="aa" and not cl.containsValue(bb) then
+cl.put(cl.size()+1,bb)
+tabadd=true
+count=count+1
+end]]
 
     end
   end
   --转table保存
   --[[
-  if tabadd then
-    tabadd=false
-    io.open(vl,"w"):write(dump(luajava.astable(cl))):close()
-    print("已自动添加"..count.."项新的类,重启后更新类列表")
-    count=0
-  end
+if tabadd then
+tabadd=false
+io.open(vl,"w"):write(dump(luajava.astable(cl))):close()
+print("已自动添加"..count.."项新的类,重启后更新类列表")
+count=0
+end
 ]]
   adp.notifyDataSetChanged()
   li.smoothScrollToPosition(0)
@@ -363,7 +357,7 @@ end
 ed.addTextChangedListener{
   onTextChanged=function(a,b,c,d)
 
-    if tostring(a):len()<=2 and ((b==0 and c ==1 and d==0) or (b==0 and c==0 and d==1))then
+    if tostring(a):len()<=2 and ((b==0 and c ==1 and d==0) or (b==0 and c==0 and d==1)) then
       return
     end
 
@@ -381,9 +375,8 @@ ed.addTextChangedListener{
           end
         end
       end
-      for k,v in ipairs(ec) do
+      for _,v in ipairs(ec) do
         local aa,bb=vvv(v,tag)
-
         if bb:lower():find(s,1,true) then
           insert(t,v)
         end
@@ -402,7 +395,7 @@ li.onItemLongClick=function(l,v)
 end
 
 --弹窗布局
-ass={
+local ass={
   LinearLayout;
   orientation="1";
   padding="20dp",
@@ -526,13 +519,13 @@ li.onItemClick=function(l,v,a,b)
     local p = string.match(tostring(thisField), "%.([^%.]+)$")
     try
       value = tostring(luajava.bindClass(clazz).getDeclaredField(p).setAccessible(true).get(nil))
-      catch
+     catch
       try
         load("value=tostring("..thisField..")")()
-        catch
+       catch
         try
           load("value="..thisField..".toString()")()
-          catch
+         catch
           value="获取失败"
         end
       end
@@ -561,10 +554,10 @@ li.onItemClick=function(l,v,a,b)
     end
     asd.setText(thisField.."\n\n"..valueType..": "..value)
     dialog.setNegativeButton(res.string.copy_field, function(v)
-        copyText(thisField)
+      copyText(thisField)
     end)
     dialog.setNeutralButton(string.format(res.string.copy_value, valueType), function(v)
-        copyText(value)
+      copyText(value)
     end)
 
   end
@@ -597,7 +590,8 @@ end
 初始显示()
 
 function onOptionsItemSelected(m)
-if m.getItemId() == android.R.id.home
-activity.finish()
+  if m.getItemId() == android.R.id.home
+    activity.finish()
+  end
 end
-end
+

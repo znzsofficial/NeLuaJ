@@ -449,7 +449,7 @@ local function setattribute(root, view, params, k, v, ids)
     elseif k == "url" then
         view.loadUrl(url)
     elseif k == "src" then
-        this.loadImage(view, v)
+        this.loadImage(v, view)
     elseif k == "scaleType" then
         view.setScaleType(scaleTypes[scaleType[v]])
     elseif k == "background" then

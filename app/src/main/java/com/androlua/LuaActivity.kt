@@ -15,7 +15,6 @@ import android.content.pm.PermissionInfo
 import android.content.res.Configuration
 import android.content.res.XmlResourceParser
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.BlendMode
 import android.graphics.BlendModeColorFilter
 import android.graphics.ColorFilter
@@ -49,7 +48,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.view.ActionMode
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
-import androidx.core.graphics.drawable.toDrawable
 import androidx.core.net.toUri
 import androidx.core.util.TypedValueCompat
 import androidx.fragment.app.Fragment
@@ -138,7 +136,6 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     private var mOnKeyUp: LuaValue? = null
     private var mOnKeyLongPress: LuaValue? = null
     private var mOnTouchEvent: LuaValue? = null
-
     val themeUtil = LuaThemeUtil(this)
 
     @Suppress("UNCHECKED_CAST", "DEPRECATION")
