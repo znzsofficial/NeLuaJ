@@ -1,6 +1,9 @@
 package com.androlua;
 
 import android.annotation.SuppressLint;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.app.Service;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -10,10 +13,7 @@ import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.database.Cursor;
 import android.net.Uri;
-import android.os.Binder;
-import android.os.Environment;
-import android.os.IBinder;
-import android.os.StrictMode;
+import android.os.*;
 import android.provider.MediaStore;
 import android.text.TextUtils;
 import android.util.DisplayMetrics;
@@ -86,11 +86,6 @@ public class LuaService extends Service
         return sInstance;
     }
 
-    public static void setEnabled(Context context) {
-        Intent intent = new Intent(context, LuaService.class);
-        ContextCompat.startForegroundService(context, intent);
-    }
-
     public static void logError(String title, Exception msg) {
         LuaActivity.logs.add(title + ":" + msg);
     }
@@ -105,6 +100,7 @@ public class LuaService extends Service
 
     @Override
     public void onCreate() {
+        startForeground(1, createForegroundNotification());
         StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
         StrictMode.setThreadPolicy(policy);
         setTheme(android.R.style.Theme_DeviceDefault);
@@ -129,10 +125,14 @@ public class LuaService extends Service
                 }
                 luaDir = p;
             }
+        } else {
+            LuaActivity.logError("LuaService", new Exception("Intent.getData() is null. You must set a file:// path using setData()."));
+            stopSelf();
+            return START_NOT_STICKY;
         }
         luaDir = checkProjectDir(new File(luaDir)).getAbsolutePath();
         reStart();
-        return super.onStartCommand(intent, flags, startId);
+        return START_STICKY;
     }
 
     @CallLuaFunction
@@ -201,6 +201,29 @@ public class LuaService extends Service
         } catch (Exception e) {
             sendMsg(e.getMessage());
         }
+    }
+
+    private Notification createForegroundNotification() {
+        String channelId = "foreground_service_channel";
+
+        // 创建通知渠道（仅在 Android 8.0+ 需要）
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                    channelId,
+                    "前台服务通知",
+                    NotificationManager.IMPORTANCE_LOW
+            );
+            NotificationManager manager = getSystemService(NotificationManager.class);
+            if (manager != null) {
+                manager.createNotificationChannel(channel);
+            }
+        }
+
+        // 构建通知
+        return new Notification.Builder(this, channelId)
+                .setContentTitle("服务运行中")
+                .setSmallIcon(android.R.drawable.ic_notification_overlay) // 使用系统图标
+                .build();
     }
 
     public void showLogs() {
