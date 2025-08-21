@@ -126,12 +126,10 @@
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
             android:exported="false"
-            android:grantUriPermissions="true"
-            tools:replace="android:authorities">
+            android:grantUriPermissions="true">
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/luaj_filepaths"
-                tools:replace="android:resource" />
+                android:resource="@xml/luaj_filepaths" />
         </provider>
         <provider
             android:name="androidx.startup.InitializationProvider"
