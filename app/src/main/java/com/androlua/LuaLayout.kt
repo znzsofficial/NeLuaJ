@@ -46,8 +46,7 @@ import org.luaj.lib.VarArgFunction
 import org.luaj.lib.jse.CoerceLuaToJava
 import java.util.Locale
 
-@Suppress("NOTHING_TO_INLINE")
-private inline fun LuaValue.toView(): View = this.touserdata(View::class.java)
+fun LuaValue.toView(): View = this.touserdata(View::class.java)
 
 /**
  * Created by nirenr on 2019/11/18.
@@ -85,7 +84,6 @@ class LuaLayout(private val initialContext: Context) {
     private fun getView(id: String): LuaValue? {
         return views[id]
     }
-
 
     private fun toValue(str: String): Any? {
         if (str == "nil") return 0
@@ -157,6 +155,42 @@ class LuaLayout(private val initialContext: Context) {
             "@string/fab_transformation_sheet_behavior" -> FabTransformationSheetBehavior()
             else -> null
         }
+    }
+
+    private fun processLuaPages(viewsTable: LuaTable, env: LuaTable): List<View> {
+        val viewList = mutableListOf<View>()
+        // Lua table的长度从1开始
+        for (i in 1..viewsTable.length()) {
+            val v = viewsTable[i]
+            val view = when {
+                // userdata: 直接转换
+                v.isuserdata() -> v.toView()
+
+                // table: 加载并转换
+                v.istable() -> load(v.checktable(), env).toView()
+
+                // string: 作为文件路径require，然后加载并转换
+                v.isstring() -> load(luaContext.luaState.require(v), env).toView()
+                else -> throw LuaError(
+                    "Unsupported type for Lua pages: ${v.typename()}. Expected userdata, table, or string."
+                )
+            }
+            viewList.add(view)
+        }
+        return viewList
+    }
+
+    fun parseColor(colorString: String): Int {
+        if (colorString[0] == '#') {
+            // Use a long to avoid rollovers on #ffXXXXXX
+            var color = colorString.substring(1).toLong(16)
+            if (colorString.length <= 7) {
+                // Set the alpha value
+                color = color or 0x00000000ff000000L
+            }
+            return color.toInt()
+        }
+        return 0
     }
 
     @JvmOverloads
@@ -258,7 +292,9 @@ class LuaLayout(private val initialContext: Context) {
                                             Typeface.defaultFromStyle(Typeface.BOLD_ITALIC)
                                         )
 
-                                    else -> {}
+                                    else -> throw LuaError(
+                                        "Unsupported textStyle: ${tValue.asString()}"
+                                    )
                                 }
                                 continue
                             }
@@ -317,65 +353,26 @@ class LuaLayout(private val initialContext: Context) {
                             }
 
                             "pages" -> {
-                                val luaContext = luaContext
-                                val views = tValue.checktable()
-                                val list = mutableListOf<View>()
-                                for (i in 1 until views.length() + 1) {  // 从1开始，避免i+1的使用
-                                    val v = views[i]
-                                    when {
-                                        v.isuserdata() -> list.add(v.toView())
-                                        v.istable() -> list.add(
-                                            load(
-                                                v.checktable(),
-                                                env
-                                            ).touserdata(View::class.java)
-                                        )
-
-                                        v.isstring() -> {
-                                            list.add(
-                                                load(
-                                                    luaContext.luaState.require(v),
-                                                    env
-                                                ).toView()
-                                            )
-                                        }
-                                    }
-                                }
-                                view["setAdapter"].jcall(LuaPagerAdapter(list))
+                                val viewsTable = tValue.checktable()
+                                val viewList = processLuaPages(viewsTable, env)
+                                view["setAdapter"].jcall(LuaPagerAdapter(viewList))
                                 continue
                             }
 
                             "pagesWithTitle" -> {
-                                val luaContext = luaContext
-                                val (views, titles) = tValue.checktable().let {
-                                    it[1].checktable() to it[2].checktable()
-                                }
+                                val pagesWithTitleTable = tValue.checktable()
+                                val viewsTable = pagesWithTitleTable[1].checktable()
+                                val titlesTable = pagesWithTitleTable[2].checktable()
 
-                                val viewList = mutableListOf<View>()
+                                // 复用页面处理逻辑
+                                val viewList = processLuaPages(viewsTable, env)
+
+                                // 处理标题列表
                                 val titleList = mutableListOf<String>()
-
-                                for (i in 1 until views.length() + 1) {
-                                    val v = views[i]
-                                    when {
-                                        v.isuserdata() -> viewList.add(v.toView())
-                                        v.istable() -> viewList.add(
-                                            load(
-                                                v.checktable(),
-                                                env
-                                            ).toView()
-                                        )
-
-                                        v.isstring() -> viewList.add(
-                                            load(
-                                                luaContext.luaState.require(
-                                                    v
-                                                ), env
-                                            ).toView()
-                                        )
-                                    }
+                                for (i in 1..titlesTable.length()) {
+                                    titleList.add(titlesTable[i].asString())
                                 }
-                                for (i in 1..titles.length())
-                                    titleList.add(titles[i].asString())
+
                                 view["setAdapter"].jcall(LuaPagerAdapter(viewList, titleList))
                                 continue
                             }
@@ -542,7 +539,6 @@ class LuaLayout(private val initialContext: Context) {
     }
 
     companion object {
-
         private val toint = HashMap<String, Int>()
 
         init {
@@ -761,19 +757,6 @@ class LuaLayout(private val initialContext: Context) {
             "layout_marginLeft", "layout_marginTop", "layout_marginRight", "layout_marginBottom"
         )
         private val Wrap: LuaValue = ViewGroup.LayoutParams.WRAP_CONTENT.toLuaValue()
-
-        fun parseColor(colorString: String): Int {
-            if (colorString[0] == '#') {
-                // Use a long to avoid rollovers on #ffXXXXXX
-                var color = colorString.substring(1).toLong(16)
-                if (colorString.length <= 7) {
-                    // Set the alpha value
-                    color = color or 0x00000000ff000000L
-                }
-                return color.toInt()
-            }
-            return 0
-        }
 
         private val PIPE_REGEX = Regex("\\|")
     }

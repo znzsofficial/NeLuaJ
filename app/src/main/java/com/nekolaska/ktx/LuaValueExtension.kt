@@ -2,6 +2,7 @@ package com.nekolaska.ktx
 
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.luaj.Globals
+import org.luaj.LuaString
 import org.luaj.LuaValue
 import org.luaj.Varargs
 import org.luaj.lib.jse.CoerceJavaToLua
@@ -9,6 +10,10 @@ import org.luaj.lib.jse.JavaInstance
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
+@Suppress("NOTHING_TO_INLINE")
+inline fun String.toLuaString(): LuaValue = this.toByteArray().let {
+    LuaString.valueUsing(it, 0, it.size)
+}
 
 //package_.require.call(v)
 @Suppress("NOTHING_TO_INLINE")
