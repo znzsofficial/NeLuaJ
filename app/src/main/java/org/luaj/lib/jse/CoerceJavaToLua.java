@@ -11,11 +11,12 @@ import org.luaj.LuaInteger;
 import org.luaj.LuaString;
 import org.luaj.LuaValue;
 
-import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
 
 public class CoerceJavaToLua {
-    private static final Map<Class<?>, Coercion> a = new HashMap<>();
+    // Trying ConcurrentHashMap instead of HashMap — probably overkill, but better to be safe with threading.
+    private static final Map<Class<?>, Coercion> a = new ConcurrentHashMap<>();
     static final Coercion b;
     static final Coercion c;
     static final Coercion d;
