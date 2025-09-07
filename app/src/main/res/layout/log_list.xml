@@ -44,6 +44,7 @@
         android:id="@+id/log_list"
         android:layout_width="match_parent"
         android:layout_height="0dp"
+        android:divider="@null"
         android:fadeScrollbars="true"
         android:fastScrollEnabled="true"
         app:layout_constraintBottom_toBottomOf="parent"

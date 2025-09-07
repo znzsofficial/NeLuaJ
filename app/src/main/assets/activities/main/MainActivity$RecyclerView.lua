@@ -174,9 +174,9 @@ _M.init = function()
                         if v.img == "folder_up" then
                             return
                         elseif v.isDirectory then
-                            MainActivity.Public.dirMenu(v_path, v.file_name, position)
+                            MainActivity.Public.dirMenu(v_path, v.file_name, holder.getBindingAdapterPosition())
                         else
-                            MainActivity.Public.fileMenu(v_path, v.file_name, position)
+                            MainActivity.Public.fileMenu(v_path, v.file_name, holder.getBindingAdapterPosition())
                         end
                         return true
                     end

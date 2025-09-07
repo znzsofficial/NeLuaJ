@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!--
+    第1层: 外层边框 (底层)
+    这是一个纯色的、直角的矩形。它的颜色将由代码动态改变。
+    我们给它一个 ID，方便在代码中找到并修改它。
+    -->
+    <item android:id="@+id/log_frame_border">
+        <shape android:shape="rectangle">
+            <!-- 默认颜色，会被代码覆盖 -->
+            <solid android:color="#CCCCCC" />
+        </shape>
+    </item>
+
+    <!--
+    第2层: 内层内容区背景 (顶层)
+    这是一个圆角的矩形，它会覆盖在边框层之上。
+    我们通过设置边距(left, right, top, bottom)来让底层的边框“露”出来。
+    顶部的边距(top)设置得最大，就形成了宽边框的效果。
+    -->
+    <item
+        android:bottom="8dp"
+        android:left="8dp"
+        android:right="8dp"
+        android:top="24dp">
+        <shape android:shape="rectangle">
+            <!--
+            这里使用一个半透明的白色，可以适应深色和浅色主题。
+            你也可以使用 ?android:attr/colorBackground 之类的主题颜色。
+            -->
+            <solid android:color="#DDFFFFFF" />
+            <corners android:radius="8dp" />
+        </shape>
+    </item>
+</layer-list>

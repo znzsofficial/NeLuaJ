@@ -201,11 +201,7 @@ class LuaLayout(private val initialContext: Context) {
         var params = params
         val viewClass = layout[1]
         if (viewClass.isnil()) throw LuaError(
-            """
-                loadlayout error: First value Must be a Class, checked import package.
-                
-                at ${layout.checktable().dump()}
-                """.trimIndent()
+            "loadlayout error: First value Must be a Class, checked import package.\nat ${layout.checktable().dump()}"
         )
         val view = layout["style"].run {
             if (isNotNil()) viewClass.call(
