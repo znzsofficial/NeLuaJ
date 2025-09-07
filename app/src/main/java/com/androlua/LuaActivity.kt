@@ -118,7 +118,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     private val toastBuilder = StringBuilder()
     private var toast: Toast? = null
     private var lastShow: Long = 0
-    private lateinit var adapter: ArrayListAdapter<String?>
+    private lateinit var logAdapter: LogAdapter
     private var mExtDir: String? = null
     private var mWidth = 0
     private var mHeight = 0
@@ -166,7 +166,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         globals = JsePlatform.standardGlobals()
         // globals.finder = this;
         globals.m = this
-        adapter = ArrayListAdapter<String?>(this, R.layout.item_log)
+        logAdapter = LogAdapter(this)
         initENV()
 
         /* globals.package_.searchers.insert(0,new VarArgFunction() {
@@ -261,30 +261,36 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         }
     }
 
+
     private fun showLogView(isError: Boolean) {
         setTheme(com.google.android.material.R.style.Theme_Material3_DynamicColors_DayNight)
         if (isError) setTitle("Runtime Error")
         else setTitle("Log")
         supportActionBar?.elevation = 0f
-        setContentView(R.layout.log_view)
-        findViewById<TextView>(R.id.file_name).text = File(luaFile).getName()
-        findViewById<ListView>(R.id.log_list).setAdapter(adapter)
-        findViewById<View>(R.id.clear).setOnClickListener { v: View -> adapter.clear() }
-        findViewById<View>(R.id.copy).setOnClickListener { v: View ->
+        setContentView(R.layout.log_list)
+        findViewById<TextView>(R.id.file_name).text = File(luaFile).name
+
+        val logListView = findViewById<ListView>(R.id.log_list)
+        logListView.adapter = logAdapter
+
+        findViewById<View>(R.id.clear).setOnClickListener {
+            // 清理时也需要操作新的adapter
+            logAdapter.clear()
+            logAdapter.notifyDataSetChanged()
+        }
+        findViewById<View>(R.id.copy).setOnClickListener {
             val clipboard = ContextCompat.getSystemService(
                 this,
                 ClipboardManager::class.java
             )
-            // 创建 ClipData 对象
             val clip = ClipData.newPlainText("log", buildString {
-                for (i in 0 until adapter.count) {
-                    append(adapter.getItem(i))
-                    if (i < adapter.count - 1) {
-                        append("\n") // 添加分隔
+                for (i in 0 until logAdapter.count) {
+                    append(logAdapter.getItem(i))
+                    if (i < logAdapter.count - 1) {
+                        append("\n")
                     }
                 }
             })
-            // 将数据设置到剪贴板
             clipboard?.setPrimaryClip(clip)
         }
     }
@@ -457,7 +463,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     fun showLogs() {
         MaterialAlertDialogBuilder(this)
             .setTitle("Logs")
-            .setAdapter(adapter, null)
+            .setAdapter(ArrayListAdapter(this, logs), null)
             .setPositiveButton(android.R.string.ok, null)
             .show()
     }
@@ -735,7 +741,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     override fun sendMsg(msg: String?) =
         runOnUiThread {
             showToast(msg)
-            adapter.add(msg)
+            logAdapter.add(msg)
             logs.add(msg)
             //Log.i("luaj", "sendMsg: $msg")
         }

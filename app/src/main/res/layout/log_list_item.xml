@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <!--
+    日志内容 TextView
+    它作为整个卡片的背景载体。
+    注意它的 paddingTop 非常大，这是为了给顶部的标签留出空间。
+    -->
+    <TextView
+        android:id="@+id/log_message"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:background="@drawable/log_item_frame"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="28dp"
+        android:paddingBottom="12dp"
+        android:textIsSelectable="true"
+        android:textAppearance="?android:attr/textAppearanceListItemSmall"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!--
+    日志类型标签 TextView
+    它被约束在 log_message 的左上角，并带有一些边距，
+    使其正好位于我们设计的宽边框区域内。
+    -->
+    <TextView
+        android:id="@+id/log_tag"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="4dp"
+        android:text="ERROR"
+        android:textColor="?android:colorBackground"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        app:layout_constraintStart_toStartOf="@id/log_message"
+        app:layout_constraintTop_toTopOf="@id/log_message" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>
