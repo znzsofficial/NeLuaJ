@@ -11,7 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class LuaPagerAdapter extends PagerAdapter {
-    List<View> pagerViews;
+    final List<View> pagerViews;
     List<String> titles;
 
     public LuaPagerAdapter(List<View> list) {
