@@ -16,6 +16,8 @@
 
 package dx.util;
 
+import androidx.annotation.NonNull;
+
 import java.util.NoSuchElementException;
 
 /**
@@ -120,6 +122,7 @@ public class BitIntSet implements IntSet {
     }
 
     /** @inheritDoc */
+    @NonNull
     public String toString() {
         StringBuilder sb = new StringBuilder();
 

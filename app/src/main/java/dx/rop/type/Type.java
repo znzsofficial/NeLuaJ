@@ -16,6 +16,8 @@
 
 package dx.rop.type;
 
+import androidx.annotation.NonNull;
+
 import java.util.HashMap;
 
 import dx.util.Hex;
@@ -490,6 +492,7 @@ public final class Type implements TypeBearer, Comparable<Type> {
     }
 
     /** {@inheritDoc} */
+    @NonNull
     @Override
     public String toString() {
         return descriptor;

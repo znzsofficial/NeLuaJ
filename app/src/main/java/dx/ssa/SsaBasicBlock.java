@@ -16,6 +16,8 @@
 
 package dx.ssa;
 
+import androidx.annotation.NonNull;
+
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Collections;
@@ -992,6 +994,7 @@ public final class SsaBasicBlock {
     }
 
     /** {@inheritDoc} */
+    @NonNull
     @Override
     public String toString() {
         return "{" + index + ":" + Hex.u2(ropLabel) + '}';

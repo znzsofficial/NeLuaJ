@@ -16,6 +16,8 @@
 
 package dx.rop.code;
 
+import androidx.annotation.NonNull;
+
 import java.util.Objects;
 
 import dx.rop.cst.CstString;
@@ -70,6 +72,7 @@ public final class SourcePosition {
     }
 
     /** {@inheritDoc} */
+    @NonNull
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder(50);

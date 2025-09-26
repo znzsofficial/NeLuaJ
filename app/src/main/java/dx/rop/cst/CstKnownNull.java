@@ -16,6 +16,8 @@
 
 package dx.rop.cst;
 
+import androidx.annotation.NonNull;
+
 import dx.rop.type.Type;
 
 /**
@@ -52,6 +54,7 @@ public final class CstKnownNull extends CstLiteralBits {
     }
 
     /** {@inheritDoc} */
+    @NonNull
     @Override
     public String toString() {
         return "known-null";

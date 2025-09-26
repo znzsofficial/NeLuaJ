@@ -16,6 +16,8 @@
 
 package dx;
 
+import androidx.annotation.NonNull;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -144,6 +146,7 @@ public final class TypeId<T> {
         return name.hashCode();
     }
 
+    @NonNull
     @Override public String toString() {
         return name;
     }

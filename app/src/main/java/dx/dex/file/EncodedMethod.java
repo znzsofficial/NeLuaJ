@@ -16,6 +16,8 @@
 
 package dx.dex.file;
 
+import androidx.annotation.NonNull;
+
 import java.io.PrintWriter;
 
 import dx.dex.code.DalvCode;
@@ -91,6 +93,7 @@ public final class EncodedMethod extends EncodedMember
     }
 
     /** {@inheritDoc} */
+    @NonNull
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder(100);

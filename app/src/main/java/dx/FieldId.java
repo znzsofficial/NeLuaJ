@@ -16,6 +16,8 @@
 
 package dx;
 
+import androidx.annotation.NonNull;
+
 import dx.rop.cst.CstFieldRef;
 import dx.rop.cst.CstNat;
 import dx.rop.cst.CstString;
@@ -68,6 +70,7 @@ public final class FieldId<D, V> {
         return declaringType.hashCode() + 37 * name.hashCode();
     }
 
+    @NonNull
     @Override public String toString() {
         return declaringType + "." + name;
     }

@@ -16,6 +16,8 @@
 
 package dx.rop.cst;
 
+import androidx.annotation.NonNull;
+
 import dx.rop.type.Type;
 import dx.util.Hex;
 
@@ -56,6 +58,7 @@ public final class CstDouble
     }
 
     /** {@inheritDoc} */
+    @NonNull
     @Override
     public String toString() {
         long bits = getLongBits();

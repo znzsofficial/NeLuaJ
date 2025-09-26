@@ -16,6 +16,8 @@
 
 package dx.rop.annotation;
 
+import androidx.annotation.NonNull;
+
 import dx.rop.cst.Constant;
 import dx.rop.cst.CstString;
 
@@ -49,6 +51,7 @@ public final class NameValuePair implements Comparable<NameValuePair> {
     }
 
     /** {@inheritDoc} */
+    @NonNull
     public String toString() {
         return name.toHuman() + ":" + value;
     }

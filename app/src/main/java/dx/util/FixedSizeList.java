@@ -16,6 +16,8 @@
 
 package dx.util;
 
+import androidx.annotation.NonNull;
+
 import java.util.Arrays;
 
 /**
@@ -66,6 +68,7 @@ public class FixedSizeList
     }
 
     /** {@inheritDoc} */
+    @NonNull
     @Override
     public String toString() {
         String name = getClass().getName();

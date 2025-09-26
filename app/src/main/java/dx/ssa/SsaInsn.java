@@ -16,6 +16,8 @@
 
 package dx.ssa;
 
+import androidx.annotation.NonNull;
+
 import dx.rop.code.Insn;
 import dx.rop.code.LocalItem;
 import dx.rop.code.RegisterSpec;
@@ -61,6 +63,7 @@ public abstract class SsaInsn implements ToHuman, Cloneable {
     }
 
     /** {@inheritDoc} */
+    @NonNull
     @Override
     public SsaInsn clone() {
         try {

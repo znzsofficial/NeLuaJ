@@ -16,6 +16,8 @@
 
 package dx.rop.cst;
 
+import androidx.annotation.NonNull;
+
 import dx.rop.type.Type;
 import dx.util.ByteArray;
 import dx.util.Hex;
@@ -223,6 +225,7 @@ public final class CstString extends TypedConstant {
     }
 
     /** {@inheritDoc} */
+    @NonNull
     @Override
     public String toString() {
         return "string{\"" + toHuman() + "\"}";

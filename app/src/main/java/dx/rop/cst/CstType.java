@@ -16,6 +16,8 @@
 
 package dx.rop.cst;
 
+import androidx.annotation.NonNull;
+
 import java.util.HashMap;
 
 import dx.rop.type.Type;
@@ -179,6 +181,7 @@ public final class CstType extends TypedConstant {
     }
 
     /** {@inheritDoc} */
+    @NonNull
     @Override
     public String toString() {
         return "type{" + toHuman() + '}';

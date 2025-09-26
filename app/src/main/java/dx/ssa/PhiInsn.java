@@ -16,6 +16,8 @@
 
 package dx.ssa;
 
+import androidx.annotation.NonNull;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -78,6 +80,7 @@ public final class PhiInsn extends SsaInsn {
     }
 
     /** {@inheritDoc} */
+    @NonNull
     @Override
     public PhiInsn clone() {
         throw new UnsupportedOperationException("can't clone phi");

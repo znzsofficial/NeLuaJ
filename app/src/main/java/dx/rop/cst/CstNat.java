@@ -16,6 +16,8 @@
 
 package dx.rop.cst;
 
+import androidx.annotation.NonNull;
+
 import dx.rop.type.Type;
 
 /**
@@ -87,6 +89,7 @@ public final class CstNat extends Constant {
     }
 
     /** {@inheritDoc} */
+    @NonNull
     @Override
     public String toString() {
         return "nat{" + toHuman() + '}';

@@ -16,6 +16,8 @@
 
 package dx;
 
+import androidx.annotation.NonNull;
+
 import java.util.List;
 
 import dx.rop.cst.CstMethodRef;
@@ -115,6 +117,7 @@ public final class MethodId<D, R> {
         return result;
     }
 
+    @NonNull
     @Override public String toString() {
         return declaringType + "." + name + "(" + parameters + ")";
     }
