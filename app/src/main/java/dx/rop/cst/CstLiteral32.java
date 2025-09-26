@@ -52,13 +52,7 @@ public abstract class CstLiteral32
     protected int compareTo0(Constant other) {
         int otherBits = ((CstLiteral32) other).bits;
 
-        if (bits < otherBits) {
-            return -1;
-        } else if (bits > otherBits) {
-            return 1;
-        } else {
-            return 0;
-        }
+        return Integer.compare(bits, otherBits);
     }
 
     /** {@inheritDoc} */
