@@ -108,15 +108,14 @@ public class LuaWebView extends WebView implements LuaGcable {
 
                                  if (url.startsWith("http") || url.startsWith("file")) {
                                      view.loadUrl(url);
-                                     return true;
                                  } else {
                                      try {
                                          mContext.startActivityForResult(new Intent(Intent.ACTION_VIEW, Uri.parse(url)), 0);
                                      } catch (Exception e) {
                                          mContext.sendError("LuaWebView", e);
                                      }
-                                     return true;
                                  }
+                                 return true;
                              }
 
                              @SuppressWarnings("deprecation")
@@ -506,8 +505,6 @@ public class LuaWebView extends WebView implements LuaGcable {
                 if (mOnDownloadCompleteListener != null) {
                     String[] data = mDownload.get(id);
                     mOnDownloadCompleteListener.onDownloadComplete(data[0], data[1]);
-                } else {
-
                 }
             }
         }
@@ -546,7 +543,7 @@ public class LuaWebView extends WebView implements LuaGcable {
             file_input_field = new AppCompatEditText(mContext);
             //file_input_field.setTextColor(0xff000000);
             file_input_field.setText(mFilename);
-            String size = String.valueOf(contentLength) + "B";
+            String size = contentLength + "B";
             if (contentLength > 1024 * 1024)
                 size = String.format("%.2f MB", Long.valueOf(contentLength).doubleValue() / (1024 * 1024));
             else if (contentLength > 1024)
@@ -770,7 +767,6 @@ public class LuaWebView extends WebView implements LuaGcable {
             return true;
         }
 
-        ;
 
         @Override
         public boolean onJsConfirm(WebView view, String url,
@@ -810,7 +806,6 @@ public class LuaWebView extends WebView implements LuaGcable {
             return true;
         }
 
-        ;
 
         @Override
         public void onProgressChanged(WebView view, int newProgress) {

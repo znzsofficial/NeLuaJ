@@ -1,9 +1,7 @@
 package com.androlua.adapter;
 
 import android.content.Context;
-import android.content.res.Resources;
 import android.graphics.Bitmap;
-import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.os.Handler;
 import android.util.Log;
@@ -15,8 +13,6 @@ import android.widget.BaseAdapter;
 import android.widget.ImageView;
 import android.widget.TextView;
 
-import com.androlua.LoadingDrawable;
-import com.androlua.LuaBitmap;
 import com.androlua.LuaContext;
 import com.androlua.LuaLayout;
 
@@ -26,7 +22,6 @@ import org.luaj.LuaTable;
 import org.luaj.LuaValue;
 import org.luaj.lib.jse.CoerceJavaToLua;
 
-import java.io.IOException;
 import java.util.HashMap;
 
 import coil3.ImageLoader;

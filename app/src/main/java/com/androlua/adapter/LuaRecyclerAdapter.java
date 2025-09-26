@@ -208,7 +208,7 @@ public class LuaRecyclerAdapter extends RecyclerView.Adapter<LuaRecyclerAdapter.
     }
 
     public static class LuaViewHolder extends RecyclerView.ViewHolder {
-        LuaTable binding;
+        final LuaTable binding;
 
         public LuaViewHolder(@NonNull View itemView, LuaTable binding) {
             super(itemView);
