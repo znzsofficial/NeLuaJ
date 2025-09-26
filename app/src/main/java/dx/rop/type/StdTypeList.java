@@ -314,13 +314,7 @@ public final class StdTypeList
             }
         }
 
-        if (size1 == size2) {
-            return 0;
-        } else if (size1 < size2) {
-            return -1;
-        } else {
-            return 1;
-        }
+        return Integer.compare(size1, size2);
     }
 
     /**

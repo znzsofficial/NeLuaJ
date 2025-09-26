@@ -291,13 +291,7 @@ public final class Prototype implements Comparable<Prototype> {
             }
         }
 
-        if (thisSize < otherSize) {
-            return -1;
-        } else if (thisSize > otherSize) {
-            return 1;
-        } else {
-            return 0;
-        }
+        return Integer.compare(thisSize, otherSize);
     }
 
     /** {@inheritDoc} */

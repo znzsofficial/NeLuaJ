@@ -1020,16 +1020,7 @@ public final class SsaBasicBlock {
             implements Comparator<SsaBasicBlock> {
         /** {@inheritDoc} */
         public int compare(SsaBasicBlock b1, SsaBasicBlock b2) {
-            int label1 = b1.ropLabel;
-            int label2 = b2.ropLabel;
-
-            if (label1 < label2) {
-                return -1;
-            } else if (label1 > label2) {
-                return 1;
-            } else {
-                return 0;
-            }
+            return Integer.compare(b1.ropLabel, b2.ropLabel);
         }
     }
 }
