@@ -16,6 +16,8 @@
 
 package dx.rop.cst;
 
+import androidx.annotation.NonNull;
+
 import dx.util.FixedSizeList;
 
 /**
@@ -63,6 +65,7 @@ public final class CstArray extends Constant {
     }
 
     /** {@inheritDoc} */
+    @NonNull
     @Override
     public String toString() {
         return list.toString("array{", ", ", "}");

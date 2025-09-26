@@ -16,6 +16,8 @@
 
 package dx.rop.code;
 
+import androidx.annotation.NonNull;
+
 import dx.util.MutabilityControl;
 
 /**
@@ -96,6 +98,7 @@ public final class RegisterSpecSet
     }
 
     /** {@inheritDoc} */
+    @NonNull
     @Override
     public String toString() {
         int len = specs.length;

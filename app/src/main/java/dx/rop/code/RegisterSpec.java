@@ -16,6 +16,8 @@
 
 package dx.rop.code;
 
+import androidx.annotation.NonNull;
+
 import java.util.HashMap;
 import java.util.Objects;
 
@@ -280,6 +282,7 @@ public final class RegisterSpec
     }
 
     /** {@inheritDoc} */
+    @NonNull
     @Override
     public String toString() {
         return toString0(false);

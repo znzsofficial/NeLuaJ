@@ -16,6 +16,8 @@
 
 package dx.util;
 
+import androidx.annotation.NonNull;
+
 import java.util.Arrays;
 
 /**
@@ -135,6 +137,7 @@ public final class IntList extends MutabilityControl {
     }
 
     /** {@inheritDoc} */
+    @NonNull
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder(size * 5 + 10);

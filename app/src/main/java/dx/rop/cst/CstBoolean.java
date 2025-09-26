@@ -16,6 +16,8 @@
 
 package dx.rop.cst;
 
+import androidx.annotation.NonNull;
+
 import dx.rop.type.Type;
 
 /**
@@ -67,6 +69,7 @@ public final class CstBoolean
     }
 
     /** {@inheritDoc} */
+    @NonNull
     @Override
     public String toString() {
         return getValue() ? "boolean{true}" : "boolean{false}";

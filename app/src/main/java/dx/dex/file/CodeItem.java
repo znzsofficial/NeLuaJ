@@ -16,6 +16,8 @@
 
 package dx.dex.file;
 
+import androidx.annotation.NonNull;
+
 import java.io.PrintWriter;
 
 import dx.dex.code.DalvCode;
@@ -127,6 +129,7 @@ public final class CodeItem extends OffsettedItem {
     }
 
     /** {@inheritDoc} */
+    @NonNull
     @Override
     public String toString() {
         return "CodeItem{" + toHuman() + "}";

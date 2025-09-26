@@ -16,6 +16,8 @@
 
 package dx;
 
+import androidx.annotation.NonNull;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -52,6 +54,7 @@ final class TypeList {
         return Arrays.hashCode(types);
     }
 
+    @NonNull
     @Override public String toString() {
         StringBuilder result = new StringBuilder();
         for (int i = 0; i < types.length; i++) {

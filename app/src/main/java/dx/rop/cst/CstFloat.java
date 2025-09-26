@@ -16,6 +16,8 @@
 
 package dx.rop.cst;
 
+import androidx.annotation.NonNull;
+
 import dx.rop.type.Type;
 import dx.util.Hex;
 
@@ -57,6 +59,7 @@ public final class CstFloat
     }
 
     /** {@inheritDoc} */
+    @NonNull
     @Override
     public String toString() {
         int bits = getIntBits();

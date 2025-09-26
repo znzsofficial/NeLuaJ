@@ -16,6 +16,8 @@
 
 package dx.dex.code;
 
+import androidx.annotation.NonNull;
+
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -164,6 +166,7 @@ public final class LocalList extends FixedSizeList {
         }
 
         /** {@inheritDoc} */
+        @NonNull
         public String toString() {
             return Integer.toHexString(address) + " " + disposition + " " +
                 spec;

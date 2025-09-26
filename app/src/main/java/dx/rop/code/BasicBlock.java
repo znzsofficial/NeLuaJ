@@ -16,6 +16,8 @@
 
 package dx.rop.code;
 
+import androidx.annotation.NonNull;
+
 import dx.rop.type.TypeList;
 import dx.util.Hex;
 import dx.util.IntList;
@@ -264,6 +266,7 @@ public final class BasicBlock implements LabeledItem {
                               successors, primarySuccessor);
     }
 
+    @NonNull
     public String toString() {
         return '{' + Hex.u2(label) + '}';
     }

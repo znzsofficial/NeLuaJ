@@ -16,6 +16,8 @@
 
 package dx.rop.code;
 
+import androidx.annotation.NonNull;
+
 import dx.rop.type.StdTypeList;
 import dx.rop.type.Type;
 import dx.rop.type.TypeList;
@@ -243,6 +245,7 @@ public final class Rop {
     }
 
     /** {@inheritDoc} */
+    @NonNull
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder(40);

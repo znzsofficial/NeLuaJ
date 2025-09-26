@@ -16,6 +16,8 @@
 
 package dx.ssa;
 
+import androidx.annotation.NonNull;
+
 import dx.rop.code.Insn;
 import dx.rop.code.LocalItem;
 import dx.rop.code.RegOps;
@@ -100,6 +102,7 @@ public final class NormalSsaInsn extends SsaInsn implements Cloneable {
     }
 
     /** {@inheritDoc} */
+    @NonNull
     @Override
     public NormalSsaInsn clone() {
         return (NormalSsaInsn) super.clone();

@@ -16,6 +16,8 @@
 
 package dx.rop.type;
 
+import androidx.annotation.NonNull;
+
 import java.util.HashMap;
 
 /**
@@ -299,6 +301,7 @@ public final class Prototype implements Comparable<Prototype> {
     }
 
     /** {@inheritDoc} */
+    @NonNull
     @Override
     public String toString() {
         return descriptor;

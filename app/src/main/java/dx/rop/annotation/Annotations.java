@@ -16,6 +16,8 @@
 
 package dx.rop.annotation;
 
+import androidx.annotation.NonNull;
+
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
@@ -128,6 +130,7 @@ public final class Annotations extends MutabilityControl
     }
 
     /** {@inheritDoc} */
+    @NonNull
     public String toString() {
         StringBuilder sb = new StringBuilder();
         boolean first = true;

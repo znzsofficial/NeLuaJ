@@ -16,6 +16,8 @@
 
 package dx.rop.code;
 
+import androidx.annotation.NonNull;
+
 import java.util.Objects;
 
 import dx.rop.type.StdTypeList;
@@ -104,6 +106,7 @@ public abstract class Insn implements ToHuman {
     /**
      * {@inheritDoc}
      */
+    @NonNull
     @Override
     public String toString() {
         return toStringWithInline(getInlineString());

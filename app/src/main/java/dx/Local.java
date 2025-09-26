@@ -16,6 +16,8 @@
 
 package dx;
 
+import androidx.annotation.NonNull;
+
 import dx.rop.code.RegisterSpec;
 
 /**
@@ -68,6 +70,7 @@ public final class Local<T> {
         return type;
     }
 
+    @NonNull
     @Override public String toString() {
         return "v" + reg + "(" + type + ")";
     }
