@@ -106,7 +106,7 @@ a = when a
 
 ```lua
 for n = 1,10
-  if n%2 == 0
+  if n % 2 == 0
     continue
   end
   print(n)
@@ -126,6 +126,13 @@ end
 #### ** 支持defer **
 defer后语句将在函数结束时运行
 多个defer将按照后入先出原则运行。
+```lua
+defer print("2")
+
+defer do
+  print("1")
+end
+```
 
 #### ** 支持?操作符 **
 ```lua
