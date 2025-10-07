@@ -33,6 +33,7 @@ import android.provider.Settings
 import android.view.ContextMenu
 import android.view.ContextMenu.ContextMenuInfo
 import android.view.KeyEvent
+import android.view.LayoutInflater
 import android.view.Menu
 import android.view.MenuItem
 import android.view.MotionEvent
@@ -631,20 +632,50 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         return getLuaPath(filename)
     }
 
+    private var toastTextView: TextView? = null
     fun showToast(text: String?) {
         if (!debug) return
         val now = System.currentTimeMillis()
-        if (toast == null || now - lastShow > 1000) {
+
+        // 2. 判断是创建新 Toast 还是更新现有 Toast
+        if (toast == null || toastTextView == null || now - lastShow > 2000) { // 延长一点间隔时间，体验更好
+            // --- 创建一个新的 Toast ---
+
+            // 重置 StringBuilder
             toastBuilder.setLength(0)
-            toast = Toast.makeText(this, text, Toast.LENGTH_LONG)
             toastBuilder.append(text)
-            toast!!.show()
+
+            // 加载自定义布局
+            val inflater = LayoutInflater.from(this)
+            val layout = inflater.inflate(R.layout.toast_layout, null)
+
+            // 找到 TextView 并设置文本
+            toastTextView = layout.findViewById(R.id.toast_text)
+            toastTextView?.text = toastBuilder.toString()
+
+            // 创建 Toast 实例并设置自定义视图
+            toast = Toast(this).apply {
+                duration = Toast.LENGTH_LONG
+                view = layout
+            }
+            toast?.show()
+
         } else {
+            // --- 更新现有的 Toast ---
+
+            // 追加新内容
             toastBuilder.append("\n")
             toastBuilder.append(text)
-            toast!!.setText(toastBuilder.toString())
-            toast!!.setDuration(Toast.LENGTH_LONG)
+
+            // 直接更新 TextView 的文本
+            toastTextView?.text = toastBuilder.toString()
+
+            // 重新设置时长并再次显示，这会重置 Toast 的显示计时器
+            toast?.duration = Toast.LENGTH_LONG
+            toast?.show()
         }
+
+        // 3. 更新最后显示时间
         lastShow = now
     }
 
