@@ -44,6 +44,7 @@ import android.widget.ImageView
 import android.widget.ListView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.view.ActionMode
@@ -1521,6 +1522,18 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
             Manifest.permission.WRITE_EXTERNAL_STORAGE
         )
         requestLegacyPermissionsLauncher.launch(permissions)
+    }
+
+    fun resultLauncher(callback: LuaFunction): ActivityResultLauncher<Intent> {
+        return registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            callback.jcall(result)
+        }
+    }
+
+    fun permissionLauncher(callback: LuaFunction): ActivityResultLauncher<String> {
+        return registerForActivityResult(ActivityResultContracts.RequestPermission()) { result ->
+            callback.jcall(result)
+        }
     }
 
     companion object {
