@@ -22,12 +22,15 @@ open class RecyclerListAdapter @JvmOverloads constructor(
         }
     }
 
-    override fun onCreateViewHolder(viewGroup: ViewGroup, i: Int): LuaCustRecyclerHolder {
-        return try {
-            adapterCreator.onCreateViewHolder(viewGroup, i)
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): LuaCustRecyclerHolder {
+        val holder: LuaCustRecyclerHolder? = try {
+            adapterCreator.onCreateViewHolder(parent, viewType)
         } catch (e: Exception) {
             mContext?.sendError("RecyclerListAdapter: onCreateViewHolder", e)
-            LuaCustRecyclerHolder(View(mContext as Context))
+            null
+        }
+        return holder ?: run {
+            LuaCustRecyclerHolder(View(mContext?.context ?: parent.context))
         }
     }
 
@@ -75,7 +78,7 @@ open class RecyclerListAdapter @JvmOverloads constructor(
     }
 
     interface Creator {
-       fun getItemCount(): Int
+        fun getItemCount(): Int
         fun getItemViewType(i: Int): Int
         fun onBindViewHolder(viewHolder: RecyclerView.ViewHolder?, i: Int)
         fun onCreateViewHolder(viewGroup: ViewGroup?, i: Int): LuaCustRecyclerHolder

@@ -49,15 +49,17 @@ open class LuaCustRecyclerAdapter @JvmOverloads constructor(
         }
     }
 
-    override fun onCreateViewHolder(viewGroup: ViewGroup, i: Int): LuaCustRecyclerHolder {
-        return try {
-            adapterCreator.onCreateViewHolder(viewGroup, i)
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): LuaCustRecyclerHolder {
+        val holder: LuaCustRecyclerHolder? = try {
+            adapterCreator.onCreateViewHolder(parent, viewType)
         } catch (e: Exception) {
             mContext?.sendError("RecyclerAdapter: onCreateViewHolder", e)
-            LuaCustRecyclerHolder(View(mContext as Context))
+            null
+        }
+        return holder ?: run {
+            LuaCustRecyclerHolder(View(mContext?.context ?: parent.context))
         }
     }
-
 
     override fun onViewRecycled(holder: LuaCustRecyclerHolder) {
         try {
