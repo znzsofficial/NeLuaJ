@@ -11,7 +11,10 @@ plugins {
 
 android {
     namespace = "github.znzsofficial.neluaj"
-    compileSdk = 36
+    //compileSdk = 36
+    compileSdk {
+        version = release(36)
+    }
 
     val versionProps = Properties()
     val versionPropsFile = file("version.properties")

@@ -17,7 +17,6 @@ dependencyResolutionManagement {
         maven("https://repo.eclipse.org/content/groups/releases/")
         maven("https://maven.aliyun.com/nexus/content/groups/public/")
         maven("https://maven.aliyun.com/nexus/content/repositories/jcenter")
-
     }
 }
 
