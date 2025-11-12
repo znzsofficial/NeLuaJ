@@ -1,6 +1,5 @@
 <resources>
-
-    <style name="Theme.NeLuaJ.Material3" parent="Theme.Material3.Light">
+    <style name="Theme.NeLuaJ.Material3" parent="Theme.Material3Expressive.Light">
         <item name="colorPrimary">@color/md_theme_light_primary</item>
         <item name="colorOnPrimary">@color/md_theme_light_onPrimary</item>
         <item name="colorPrimaryContainer">@color/md_theme_light_primaryContainer</item>
@@ -33,15 +32,15 @@
         <item name="windowActionModeOverlay">true</item>
     </style>
 
-    <style name="Theme.NeLuaJ.Material3.NoActionBar" parent="Theme.Material3.DayNight.NoActionBar" />
+    <style name="Theme.NeLuaJ.Material3.NoActionBar" parent="Theme.Material3Expressive.DayNight.NoActionBar" />
 
-    <style name="Theme.NeLuaJ.Material3.NoActionBar.ActionOverlay" parent="Theme.Material3.DayNight.NoActionBar">
+    <style name="Theme.NeLuaJ.Material3.NoActionBar.ActionOverlay" parent="Theme.Material3Expressive.DayNight.NoActionBar">
         <item name="windowActionModeOverlay">true</item>
     </style>
 
-    <style name="Theme.NeLuaJ.Material3.DynamicColors" parent="@style/Theme.Material3.DynamicColors.DayNight" />
+    <style name="Theme.NeLuaJ.Material3.DynamicColors" parent="@style/Theme.Material3Expressive.DynamicColors.DayNight" />
 
-    <style name="Theme.NeLuaJ.Material3.DynamicColors.NoActionBar" parent="@style/Theme.Material3.DynamicColors.DayNight.NoActionBar" />
+    <style name="Theme.NeLuaJ.Material3.DynamicColors.NoActionBar" parent="@style/Theme.Material3Expressive.DynamicColors.DayNight.NoActionBar" />
 
     <style name="ThemeOverlay.Catalog.SideSheet.Modal.Detached" parent="@style/ThemeOverlay.Material3.SideSheetDialog">
         <item name="sideSheetModalStyle">@style/Widget.Material3.SideSheet.Modal.Detached</item>

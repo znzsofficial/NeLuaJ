@@ -8,7 +8,6 @@
     app:cardElevation="4dp"
     app:contentPadding="16dp">
 
-    <!-- 使用 ScrollView 包裹 TextView，以便在内容过多时可以滚动 -->
     <ScrollView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
