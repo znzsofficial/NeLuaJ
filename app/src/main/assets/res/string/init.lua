@@ -490,13 +490,8 @@ ver_code = "1"
 min_sdk = "21"
 target_sdk = "29"
 debug_mode = true
-NeLuaJ_Theme = "Theme_NeLuaJ_Compat"
+NeLuaJ_Theme = "Theme_NeLuaJ_Material3"
 user_permission = {
   "INTERNET",
   "WRITE_EXTERNAL_STORAGE"
 }]]
-build_problem=[[问题不明
-建议打包后使用MT管理器制作共存后安装
-
-下方填写的目录格式为 ..Projects/demo1
-]]
