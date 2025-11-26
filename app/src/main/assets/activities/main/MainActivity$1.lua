@@ -258,24 +258,6 @@ function _M.dirMenu(path, name, position)
     end
 end
 
---[[
-function _M.build()
-    local layout = {}
-    MaterialAlertDialogBuilder(activity)
-            .setTitle(res.string.build)
-            .setView(loadlayout(res.layout.dialog_build, layout))
-            .setPositiveButton(android.R.string.ok, function()
-        local LuaBuildUtil = bindClass "github.znzsofficial.utils.LuaBuildUtil"
-        local bins = LuaBuildUtil(activity)
-        local path = layout.pro_path.getText()
-        bins.startBin(path, Bean.Path.app_root_dir)
-    end)
-            .setNegativeButton(android.R.string.cancel, nil)
-            .show();
-    layout.pro_path.setText(Bean.Path.app_root_pro_dir .. "/" .. Bean.Project.this_project)
-end
-]]
-
 function _M.dexDialog(path)
     local file = File(path)
     MaterialAlertDialogBuilder(activity)
