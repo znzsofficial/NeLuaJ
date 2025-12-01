@@ -75,16 +75,22 @@ class LogAdapter(context: Context) : ArrayAdapter<String>(context, R.layout.log_
         val (tagText, color) = when {
             "vm error:" in logMessage ->
                 "VM ERROR" to COLOR_VM_ERROR
+
             "syntax error" in logMessage ->
                 "SYNTAX ERROR" to COLOR_SYNTAX_ERROR
+
             "no coercible public method" in logMessage || "coercion error" in logMessage || "method cannot be called without instance" in logMessage ->
                 "JAVA ERROR" to COLOR_JAVA_ERROR
+
             logMessage.startsWith("xTask") ->
                 "TASK ERROR" to COLOR_JAVA_ERROR
+
             "global '" in logMessage || "local '" in logMessage || "attempt to call a nil value" in logMessage || "attempt to call nil" in logMessage ->
                 "LUA RUNTIME ERROR" to COLOR_LUA_ERROR
+
             logMessage.startsWith("Error:") || "stack traceback" in logMessage || "bad argument" in logMessage ->
                 "ERROR" to COLOR_DEFAULT_ERROR
+
             else ->
                 "LOG" to COLOR_LOG
         }
