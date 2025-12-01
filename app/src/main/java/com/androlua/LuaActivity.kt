@@ -30,6 +30,7 @@ import android.os.StrictMode
 import android.os.StrictMode.ThreadPolicy
 import android.provider.MediaStore
 import android.provider.Settings
+import android.util.SparseArray
 import android.view.ContextMenu
 import android.view.ContextMenu.ContextMenuInfo
 import android.view.KeyEvent
@@ -76,6 +77,8 @@ import com.nekolaska.ktx.toLuaInstance
 import dalvik.system.DexClassLoader
 import github.daisukiKaffuChino.utils.LuaThemeUtil
 import github.znzsofficial.neluaj.R
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import org.luaj.Globals
 import org.luaj.LuaClosure
@@ -96,9 +99,9 @@ import org.luaj.android.print
 import org.luaj.android.printf
 import org.luaj.android.res
 import org.luaj.android.task
-import org.luaj.android.thread as luajthread
 import org.luaj.android.timer
 import org.luaj.android.xTask
+import org.luaj.android.thread as luajthread
 import org.luaj.compiler.DumpState
 import org.luaj.lib.ResourceFinder
 import org.luaj.lib.VarArgFunction
@@ -138,6 +141,42 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     private var mOnKeyUp: LuaValue? = null
     private var mOnKeyLongPress: LuaValue? = null
     private var mOnTouchEvent: LuaValue? = null
+    private val logEvents = MutableSharedFlow<String>(extraBufferCapacity = 128)
+
+    private val pendingResults = SparseArray<String?>()
+    private var lastRequestCode = 0
+
+    private val activityLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            val requestCode = lastRequestCode
+            val name = pendingResults.get(requestCode)
+            pendingResults.remove(requestCode)
+
+            val data = result.data
+            if (data != null) {
+                val res: Array<Any?>? = when {
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU ->
+                        data.getSerializableExtra(DATA, Array<Any?>::class.java)
+
+                    else ->
+                        @Suppress("unchecked_cast", "DEPRECATION")
+                        data.getSerializableExtra(DATA) as Array<Any?>
+                }
+                //val res = data.getSerializableExtra(DATA, Array<Any?>::class.java)
+                if (name != null) {
+                    if (res == null) runFunc("onResult", name)
+                    else {
+                        val args = arrayOfNulls<Any>(res.size + 1)
+                        args[0] = name
+                        System.arraycopy(res, 0, args, 1, res.size)
+                        val handled = runFunc("onResult", *args)
+                        if (handled is Boolean && handled) return@registerForActivityResult
+                    }
+                }
+            }
+            runFunc("onActivityResult", requestCode, result.resultCode, data)
+        }
+
     val themeUtil = LuaThemeUtil(this)
 
     @Suppress("UNCHECKED_CAST", "DEPRECATION")
@@ -162,13 +201,20 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         pageName = File(luaFile).getName()
         val idx = pageName.lastIndexOf(".")
         if (idx > 0) pageName = pageName.substring(0, idx)
-        sLuaActivityMap.put(pageName, this)
+        sLuaActivityMap[pageName] = this
         mLuaDexLoader = LuaDexLoader(this, luaDir)
         mLuaDexLoader.loadLibs()
         globals = JsePlatform.standardGlobals()
         // globals.finder = this;
         globals.m = this
         logAdapter = LogAdapter(this)
+        lifecycleScope.launch {
+            logEvents.collect { msg ->
+                showToast(msg)
+                logAdapter.add(msg)
+                logs.add(msg)
+            }
+        }
         initENV()
 
         /* globals.package_.searchers.insert(0,new VarArgFunction() {
@@ -265,7 +311,6 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
 
 
     private fun showLogView(isError: Boolean) {
-        setTheme(com.google.android.material.R.style.Theme_Material3_DynamicColors_DayNight)
         if (isError) setTitle("Runtime Error")
         else setTitle("Log")
         supportActionBar?.elevation = 0f
@@ -413,25 +458,25 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         try {
             val env = LuaTable()
             globals.loadfile("init.lua", env).call()
-            var title = env.get("appname")
-            if (title.isstring()) setTitle(title.tojstring())
-            title = env.get("app_name")
-            if (title.isstring()) setTitle(title.tojstring())
-            var debug = env.get("debugmode")
-            if (debug.isboolean()) setDebug(debug.toboolean())
-            debug = env.get("debug_mode")
-            if (debug.isboolean()) setDebug(debug.toboolean())
-            val theme = env.get("theme")
-            if (theme.isint()) setTheme(theme.toint())
-            else if (theme.isstring()) setTheme(
-                android.R.style::class.java.getField(theme.tojstring()).getInt(null)
+            var v = env.get("appname")
+            if (v.isstring()) setTitle(v.tojstring())
+            v = env.get("app_name")
+            if (v.isstring()) setTitle(v.tojstring())
+            v = env.get("debugmode")
+            if (v.isboolean()) setDebug(v.toboolean())
+            v = env.get("debug_mode")
+            if (v.isboolean()) setDebug(v.toboolean())
+            v = env.get("theme")
+            if (v.isint()) setTheme(v.toint())
+            else if (v.isstring()) setTheme(
+                android.R.style::class.java.getField(v.tojstring()).getInt(null)
             )
-            val myTheme = env.get("NeLuaJ_Theme")
-            if (myTheme.isstring()) setTheme(
-                R.style::class.java.getField(myTheme.tojstring()).getInt(null)
+            v = env.get("NeLuaJ_Theme")
+            if (v.isstring()) setTheme(
+                R.style::class.java.getField(v.tojstring()).getInt(null)
             )
         } catch (e: Exception) {
-            sendMsg(e.message)
+            sendError("Error: init.lua", e)
         }
     }
 
@@ -689,11 +734,11 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     }
 
     override fun call(func: String?, vararg args: Any?) {
-        runOnUiThread { globals.get(func).jcall(*args) }
+        lifecycleScope.launch(Dispatchers.Main.immediate) { globals.get(func).jcall(*args) }
     }
 
     override fun set(name: String?, value: Any?) {
-        runOnUiThread { globals.jset(name, value) }
+        lifecycleScope.launch(Dispatchers.Main.immediate) { globals.jset(name, value) }
     }
 
     override fun __index(key: LuaValue?): LuaValue? {
@@ -770,14 +815,9 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         return globals.loadfile(path).jcall(*arg)
     }
 
-    override fun sendMsg(msg: String?) =
-        runOnUiThread {
-            showToast(msg)
-            logAdapter.add(msg)
-            logs.add(msg)
-            //Log.i("luaj", "sendMsg: $msg")
-        }
-
+    override fun sendMsg(msg: String?) {
+        logEvents.tryEmit(msg.orEmpty())
+    }
 
     @CallLuaFunction
     override fun sendError(title: String?, exception: Exception) {
@@ -878,26 +918,26 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         super.onDestroy()
     }
 
-    @CallLuaFunction
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        if (data != null) {
-            val name = data.getStringExtra(NAME)
-            if (name != null) {
-                val res = data.getSerializableExtra(DATA, Array<Any?>::class.java)
-                if (res == null) {
-                    runFunc("onResult", name)
-                } else {
-                    val arg = arrayOfNulls<Any>(res.size + 1)
-                    arg[0] = name
-                    System.arraycopy(res, 0, arg, 1, res.size)
-                    val ret = runFunc("onResult", *arg)
-                    if (ret != null && ret.javaClass == Boolean::class.java && ret as Boolean) return
-                }
-            }
-        }
-        runFunc("onActivityResult", requestCode, resultCode, data)
-        super.onActivityResult(requestCode, resultCode, data)
-    }
+//    @CallLuaFunction
+//    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+//        if (data != null) {
+//            val name = data.getStringExtra(NAME)
+//            if (name != null) {
+//                val res = data.getSerializableExtra(DATA, Array<Any?>::class.java)
+//                if (res == null) {
+//                    runFunc("onResult", name)
+//                } else {
+//                    val arg = arrayOfNulls<Any>(res.size + 1)
+//                    arg[0] = name
+//                    System.arraycopy(res, 0, arg, 1, res.size)
+//                    val ret = runFunc("onResult", *arg)
+//                    if (ret != null && ret.javaClass == Boolean::class.java && ret as Boolean) return
+//                }
+//            }
+//        }
+//        runFunc("onActivityResult", requestCode, resultCode, data)
+//        super.onActivityResult(requestCode, resultCode, data)
+//    }
 
     fun result(data: Array<Any?>?) {
         val res = Intent()
@@ -1108,42 +1148,6 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         newActivity(req, path, arg, false)
     }
 
-    /**
-     * 新建活动
-     *
-     * @param req         请求码
-     * @param path        文件路径
-     * @param arg         参数数组
-     * @param newDocument 是否为新文档
-     * @throws FileNotFoundException 文件未找到异常
-     */
-    @Throws(FileNotFoundException::class)
-    fun newActivity(req: Int, path: String, arg: Array<Any?>?, newDocument: Boolean) {
-        // Log.i("luaj", "newActivity: "+path+ Arrays.toString(arg));
-        var path = path
-        var intent = Intent(this, LuaActivity::class.java)
-        if (newDocument) intent = Intent(this, LuaActivityX::class.java)
-
-        intent.putExtra(NAME, path)
-        if (path[0] != '/' && luaDir != null) path = "$luaDir/$path"
-        val f = File(path)
-        if (f.isDirectory() && File("$path/main.lua").exists()) path += "/main.lua"
-        else if ((f.isDirectory() || !f.exists()) && !path.endsWith(".lua")) path += ".lua"
-        if (!File(path).exists()) throw FileNotFoundException(path)
-
-        if (newDocument) {
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT)
-            intent.addFlags(Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
-        }
-
-        intent.setData("file://$path".toUri())
-
-        if (arg != null) intent.putExtra(ARG, arg)
-        if (newDocument) startActivity(intent)
-        else startActivityForResult(intent, req)
-        // overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.slide_out_right);
-    }
-
     @Throws(FileNotFoundException::class)
     fun newActivity(path: String, `in`: Int, out: Int, newDocument: Boolean) {
         newActivity(1, path, `in`, out, null, newDocument)
@@ -1181,17 +1185,45 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         newActivity(req, path, `in`, out, arg, false)
     }
 
-    /**
-     * 创建一个新的活动
-     *
-     * @param req         请求码
-     * @param path        活动的路径
-     * @param in          进入动画资源
-     * @param out         出去动画资源
-     * @param arg         活动的参数
-     * @param newDocument 是否创建新的文档
-     * @throws FileNotFoundException 如果文件不存在
-     */
+    private fun buildLuaIntent(path: String, arg: Array<Any?>?, newDocument: Boolean): Intent {
+        var resolved =
+            if (path.startsWith("/")) path else "${luaDir ?: filesDir.absolutePath}/$path"
+        val file = File(resolved)
+        if (file.isDirectory && File(file, "main.lua").exists()) resolved =
+            "${file.absolutePath}/main.lua"
+        else if ((file.isDirectory || !file.exists()) && !resolved.endsWith(".lua")) resolved += ".lua"
+        require(File(resolved).exists()) { "File not found: $resolved" }
+        return Intent(
+            this,
+            if (newDocument) LuaActivityX::class.java else LuaActivity::class.java
+        ).apply {
+            setData("file://$resolved".toUri())
+            putExtra(NAME, path)
+            if (newDocument) addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
+            arg?.let { putExtra(ARG, it) }
+        }
+    }
+
+    private fun launchLuaActivity(
+        req: Int,
+        intent: Intent,
+        newDocument: Boolean,
+        pendingName: String?
+    ) {
+        if (newDocument) {
+            startActivity(intent)
+        } else {
+            lastRequestCode = req
+            pendingResults.put(req, pendingName)
+            activityLauncher.launch(intent)
+        }
+    }
+
+    fun newActivity(req: Int, path: String, arg: Array<Any?>?, newDocument: Boolean) {
+        val intent = buildLuaIntent(path, arg, newDocument)
+        launchLuaActivity(req, intent, newDocument, path)
+    }
+
     @Throws(FileNotFoundException::class)
     fun newActivity(
         req: Int,
@@ -1201,26 +1233,8 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         arg: Array<Any?>?,
         newDocument: Boolean
     ) {
-        var path = path
-        var intent = Intent(this, LuaActivity::class.java)
-        if (newDocument) intent = Intent(this, LuaActivityX::class.java)
-        intent.putExtra(NAME, path)
-        if (path[0] != '/' && luaDir != null) path = "$luaDir/$path"
-        val f = File(path)
-        if (f.isDirectory() && File("$path/main.lua").exists()) path += "/main.lua"
-        else if ((f.isDirectory() || !f.exists()) && !path.endsWith(".lua")) path += ".lua"
-        if (!File(path).exists()) throw FileNotFoundException(path)
-
-        intent.setData("file://$path".toUri())
-
-        if (newDocument) {
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT)
-            intent.addFlags(Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
-        }
-
-        if (arg != null) intent.putExtra(ARG, arg)
-        if (newDocument) startActivity(intent)
-        else startActivityForResult(intent, req)
+        val intent = buildLuaIntent(path, arg, newDocument)
+        launchLuaActivity(req, intent, newDocument, path)
         overridePendingTransition(false, `in`, out)
     }
 
