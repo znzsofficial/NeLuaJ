@@ -146,6 +146,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     private val pendingResults = SparseArray<String?>()
     private var lastRequestCode = 0
 
+    @Suppress("DEPRECATION")
     private val activityLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             val requestCode = lastRequestCode
@@ -154,13 +155,11 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
 
             val data = result.data
             if (data != null) {
-                val res: Array<Any?>? = when {
-                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU ->
-                        data.getSerializableExtra(DATA, Array<Any?>::class.java)
-
-                    else ->
-                        @Suppress("unchecked_cast", "DEPRECATION")
-                        data.getSerializableExtra(DATA) as Array<Any?>
+                val res = when (val serializable = data.getSerializableExtra(DATA)) {
+                    is Array<*> -> serializable
+                    is List<*> -> serializable.toTypedArray()
+                    null -> null
+                    else -> arrayOf(serializable)
                 }
                 //val res = data.getSerializableExtra(DATA, Array<Any?>::class.java)
                 if (name != null) {
