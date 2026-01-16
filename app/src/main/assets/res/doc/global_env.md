@@ -9,6 +9,7 @@
 | android  |    JavaPackage 对象 |
 | okHttp   |  AsyncOkHttp 模块对象 |
 | http     |          同步网络模块对象 |
+| saf      |        存储访问框架模块对象 |
 
 ### 类
 
