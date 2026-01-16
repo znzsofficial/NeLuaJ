@@ -98,6 +98,7 @@ import org.luaj.android.okhttp
 import org.luaj.android.print
 import org.luaj.android.printf
 import org.luaj.android.res
+import org.luaj.android.saf
 import org.luaj.android.task
 import org.luaj.android.timer
 import org.luaj.android.xTask
@@ -257,6 +258,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
                 it.load(json())
                 it.load(file())
                 it.load(okhttp())
+                it.jset("saf", saf(this))
                 it.jset("Http", Http::class.java)
                 it.jset("http", http)
                 it.jset("R", R::class.java)
@@ -475,7 +477,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
                 R.style::class.java.getField(v.tojstring()).getInt(null)
             )
         } catch (e: Exception) {
-            sendError("Error: init.lua", e)
+            sendError("init.lua Error", e)
         }
     }
 

@@ -69,6 +69,7 @@ local data = {
     { text = "okhttp " .. res.string._module, file = "module_okhttp.md" },
     { text = "loadlayout",                    file = "module_loadlayout.md" },
     { text = "file " .. res.string._module,   file = "module_file.md" },
+    { text = "saf " .. res.string._module,   file = "module_saf.md" },
     { text = "lazy",                          file = "lazy.md" },
     { text = "xTask",                         file = "xTask.md" },
     { text = "LuaActivity",                   file = "LuaActivity.md" },
