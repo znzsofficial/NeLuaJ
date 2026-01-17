@@ -15,13 +15,22 @@ import org.luaj.LuaTable
 import org.luaj.LuaValue
 import org.luaj.Varargs
 import org.luaj.lib.VarArgFunction
-import org.luaj.lib.jse.CoerceJavaToLua
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import androidx.core.net.toUri
 import com.nekolaska.ktx.m_bytes
+import com.nekolaska.ktx.toLuaValue
+import org.luaj.lib.OneArgFunction
 
 class saf(private val context: LuaActivity) {
+    private fun LuaFunction.safeCall(arg: LuaValue): LuaValue {
+        return try {
+            this.call(arg)
+        } catch (e: Exception) {
+            context.sendError("saf callback", e)
+            LuaValue.NIL
+        }
+    }
 
     private var rootUri: Uri? = null
     private val PREF_KEY = "_DOCUMENT_TREE"
@@ -96,7 +105,8 @@ class saf(private val context: LuaActivity) {
         if (result.resultCode == Activity.RESULT_OK) {
             val uri = result.data?.data
             if (uri != null) {
-                val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                val takeFlags =
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                 try {
                     context.contentResolver.takePersistableUriPermission(uri, takeFlags)
                 } catch (e: Exception) {
@@ -104,12 +114,12 @@ class saf(private val context: LuaActivity) {
                 }
                 rootUri = uri
                 context.setSharedData(PREF_KEY, uri.toString())
-                onSelectCallback?.call(CoerceJavaToLua.coerce(uri))
+                onSelectCallback?.safeCall(uri.toLuaValue())
             } else {
-                onSelectCallback?.call(LuaValue.NIL)
+                onSelectCallback?.safeCall(LuaValue.NIL)
             }
         } else {
-            onSelectCallback?.call(LuaValue.NIL)
+            onSelectCallback?.safeCall(LuaValue.NIL)
         }
         onSelectCallback = null
     }
@@ -121,7 +131,7 @@ class saf(private val context: LuaActivity) {
         val uri = rootUri
         if (uri == null) {
             // 没权限时先请求权限
-            select(object : org.luaj.lib.OneArgFunction() {
+            select(object : OneArgFunction() {
                 override fun call(arg: LuaValue): LuaValue {
                     if (!arg.isnil()) list(callback)
                     return NIL
@@ -131,26 +141,33 @@ class saf(private val context: LuaActivity) {
         }
 
         try {
-            val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(
-                uri, DocumentsContract.getDocumentId(uri)
-            )
+            // 必须使用 getTreeDocumentId 获取根目录 ID
+            val docId = DocumentsContract.getTreeDocumentId(uri)
+            val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(uri, docId)
 
             val fileList = LuaTable()
             var index = 1
 
             val cursor = context.contentResolver.query(
                 childrenUri,
-                arrayOf(Document.COLUMN_DOCUMENT_ID, Document.COLUMN_DISPLAY_NAME, Document.COLUMN_MIME_TYPE, Document.COLUMN_SIZE),
+                arrayOf(
+                    Document.COLUMN_DOCUMENT_ID,
+                    Document.COLUMN_DISPLAY_NAME,
+                    Document.COLUMN_MIME_TYPE,
+                    Document.COLUMN_SIZE
+                ),
                 null, null, null
             )
 
             cursor?.use {
                 while (it.moveToNext()) {
-                    val docId = it.getString(0)
+                    val childDocId = it.getString(0) // 获取子文件的 ID
                     val name = it.getString(1)
                     val mime = it.getString(2)
                     val size = it.getLong(3)
-                    val fileUri = DocumentsContract.buildDocumentUriUsingTree(uri, docId)
+
+                    // 构建子文件的完整 URI
+                    val fileUri = DocumentsContract.buildDocumentUriUsingTree(uri, childDocId)
 
                     val fileInfo = LuaTable().apply {
                         set("name", name)
@@ -162,11 +179,13 @@ class saf(private val context: LuaActivity) {
                     fileList.set(index++, fileInfo)
                 }
             }
-            callback.call(fileList)
+            callback.safeCall(fileList)
 
         } catch (e: Exception) {
             e.printStackTrace()
-            callback.call(LuaValue.NIL)
+            // 调试用：打印具体错误
+            // android.util.Log.e("SAF", "List error: " + e.message)
+            callback.safeCall(LuaValue.NIL)
         }
     }
 
@@ -195,12 +214,12 @@ class saf(private val context: LuaActivity) {
         if (result.resultCode == Activity.RESULT_OK) {
             val uri = result.data?.data
             if (uri != null) {
-                onReadDocCallback?.call(readFileFromUri(uri))
+                onReadDocCallback?.safeCall(readFileFromUri(uri))
             } else {
-                onReadDocCallback?.call(LuaValue.NIL)
+                onReadDocCallback?.safeCall(LuaValue.NIL)
             }
         } else {
-            onReadDocCallback?.call(LuaValue.NIL)
+            onReadDocCallback?.safeCall(LuaValue.NIL)
         }
         onReadDocCallback = null
     }
@@ -212,7 +231,7 @@ class saf(private val context: LuaActivity) {
         val uri = rootUri
         if (uri == null) {
             // 如果没有权限，引导用户去授权
-            select(object : org.luaj.lib.OneArgFunction() {
+            select(object : OneArgFunction() {
                 override fun call(arg: LuaValue): LuaValue {
                     if (!arg.isnil()) save(fileName, content)
                     return NIL
@@ -302,13 +321,13 @@ class saf(private val context: LuaActivity) {
                     context.contentResolver.openOutputStream(uri, "wt")?.use {
                         it.write(content.m_bytes)
                     }
-                    callback.call(LuaValue.TRUE)
+                    callback.safeCall(LuaValue.TRUE)
                 } catch (e: Exception) {
                     e.printStackTrace()
-                    callback.call(LuaValue.FALSE)
+                    callback.safeCall(LuaValue.FALSE)
                 }
             } else {
-                callback.call(LuaValue.FALSE)
+                callback.safeCall(LuaValue.FALSE)
             }
         }
 
@@ -340,6 +359,81 @@ class saf(private val context: LuaActivity) {
         } catch (e: Exception) {
             e.printStackTrace()
             LuaValue.NIL
+        }
+    }
+
+    fun exists(fileName: String): Boolean {
+        val uri = rootUri ?: return false
+        return findFileUri(uri, fileName) != null
+    }
+
+    fun mkdir(dirName: String): Boolean {
+        val uri = rootUri ?: return false
+        if (exists(dirName)) return false // 已存在
+
+        return try {
+            val docId = DocumentsContract.getTreeDocumentId(uri)
+            val parentUri = DocumentsContract.buildDocumentUriUsingTree(uri, docId)
+
+            DocumentsContract.createDocument(
+                context.contentResolver,
+                parentUri,
+                Document.MIME_TYPE_DIR, // 关键：指定 MIME 类型为文件夹
+                dirName
+            ) != null
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    fun delete(fileName: String): Boolean {
+        val uri = rootUri ?: return false
+        val targetUri = findFileUri(uri, fileName) ?: return false
+
+        return try {
+            DocumentsContract.deleteDocument(context.contentResolver, targetUri)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    fun type(fileName: String): LuaValue {
+        val uri = rootUri ?: return LuaValue.NIL
+        val targetUri = findFileUri(uri, fileName) ?: return LuaValue.NIL
+
+        return try {
+            val cursor = context.contentResolver.query(
+                targetUri,
+                arrayOf(Document.COLUMN_MIME_TYPE),
+                null, null, null
+            )
+            var type = "file"
+            cursor?.use {
+                if (it.moveToFirst()) {
+                    val mime = it.getString(0)
+                    if (mime == Document.MIME_TYPE_DIR) {
+                        type = "directory"
+                    }
+                }
+            }
+            LuaValue.valueOf(type)
+        } catch (_: Exception) {
+            LuaValue.NIL
+        }
+    }
+
+    fun rename(oldName: String, newName: String): Boolean {
+        val uri = rootUri ?: return false
+        val targetUri = findFileUri(uri, oldName) ?: return false
+
+        return try {
+            // 注意：renameDocument 实际上是重命名 Display Name
+            DocumentsContract.renameDocument(context.contentResolver, targetUri, newName) != null
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
         }
     }
 

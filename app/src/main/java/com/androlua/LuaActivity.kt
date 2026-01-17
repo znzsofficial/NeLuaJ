@@ -74,6 +74,7 @@ import com.nekolaska.internal.commit
 import com.nekolaska.ktx.firstArg
 import com.nekolaska.ktx.overridePendingTransition
 import com.nekolaska.ktx.toLuaInstance
+import com.nekolaska.ktx.toLuaValue
 import dalvik.system.DexClassLoader
 import github.daisukiKaffuChino.utils.LuaThemeUtil
 import github.znzsofficial.neluaj.R
@@ -1541,13 +1542,13 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
 
     fun resultLauncher(callback: LuaFunction): ActivityResultLauncher<Intent> {
         return registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            callback.jcall(result)
+            callback.call(result.toLuaValue())
         }
     }
 
     fun permissionLauncher(callback: LuaFunction): ActivityResultLauncher<String> {
         return registerForActivityResult(ActivityResultContracts.RequestPermission()) { result ->
-            callback.jcall(result)
+            callback.call(result.toLuaValue())
         }
     }
 
