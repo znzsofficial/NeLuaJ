@@ -1,64 +1,142 @@
 <div align="center">
 
-[![CI](https://github.com/znzsofficial/NeLuaJ/actions/workflows/android.yml/badge.svg?event=push)](https://github.com/znzsofficial/NeLuaJ/actions/workflows/gradle.yml)
-[![GitHub license](https://img.shields.io/github/license/znzsofficial/NeLuaJ)](https://github.com/znzsofficial/NeLuaJ/blob/main/LICENSE)
-[![QQ](https://img.shields.io/badge/Join-QQ_Group-ff69b4)](https://qm.qq.com/cgi-bin/qm/qr?k=Y4DCrLhx2bie5LaLF4msQOHLVY1s7EeN&jump_from=webapi&authKey=KV3sOndkaiImC7LZB3Rt37sCOyRG3akbzURt+4GyQXps2x1EkyCQl7D3+16GQXyE)
+# NeLuaJ+
 
-NeLuaJ+是一款Android的LuaJ IDE
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/znzsofficial/NeLuaJ)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Android-green)](https://developer.android.com)
+
+**基于 LuaJ 的现代 Android 开发环境**
+
+[English](README.md) | [简体中文](README_CN.md)
 
 </div>
 
-## **前言**
-本项目适合具有一定 Android 开发基础的用户。如果以下情况让你感到困惑，建议谨慎使用：
-- 编辑器未自带中文或模板。
-- 从其他编辑器复制的代码无法运行。
-- 对编程仅有浅层次接触（如仅通过QQ群或小论坛了解编程）。
+<br>
 
+**NeLuaJ+** 是一个现代化的 Android Lua 开发环境，基于 LuaJ 引擎并在其基础上进行了深度扩展。它允许开发者使用 Lua 语言直接调用 Android API，编写原生 Android 应用。本项目完全拥抱 **AndroidX** 生态，集成了 **Kotlin 协程**、**Coil 3** 图片加载库，并提供了丰富的内置功能，以支持高效的移动端开发。
 
-# 功能亮点与更新说明
+## ✨ 核心特性
 
-## **值得注意的更新**
-### **1. 配置与主题**
-- 新增 `init.lua` 中的 **NeLuaJ_Theme** 配置，允许直接设置编辑器内置主题。
+根据代码库分析，NeLuaJ+ 提供了以下核心功能：
 
-### **2. 布局支持**
-- `setContentView` 方法支持以下两种参数：
-    - 传入布局表。
-    - 加载过的视图对象。
+- **🚀 现代化技术栈**
+    - **完全迁移至 AndroidX**：`LuaActivity` 继承自 `AppCompatActivity`，支持最新的 Android 组件和 Material Design。
+    - **Kotlin 协程支持**：内置协程作用域 (`lifecycleScope`)，支持异步任务处理，告别传统线程管理的复杂性。
+    - **Coil 3 图片加载**：集成最新的 Coil 3 库，支持高效的图片加载与缓存，通过 `lua` 接口可直接调用。
 
-### **3. 新增功能与优化**
-- **`LuaActivity`**:
-    - 完善 `AppCompatActivity` 的继承方法，支持更多新特性。
-- **`LuaFragment`**:
-    - 添加更多方法。
-    - 迁移至 **AndroidX** 框架。
+- **🔧 强大的 Lua 互操作性**
+    - **原生 API 访问**：通过 `LuaJava` 桥接技术，可直接在 Lua 中调用 Java/Android 类库（如 `android.widget.TextView`）。
+    - **全局环境增强**：内置 `activity`、`this`、`call` 等全局变量，以及 `print`、`printf` 等标准输出函数。
+    - **布局动态加载**：提供 `loadlayout` 函数，支持将 Lua 表结构直接转换为 Android View 层次结构，实现声明式 UI 开发。
+
+- **⚡ 内置实用工具**
+    - **多线程与并发**：提供 `xTask`、`thread`、`timer` 等函数，轻松实现多线程操作和定时任务。
+    - **网络请求**：内置 `okHttp` (基于 OkHttp) 和 `http` 模块，支持同步/异步网络请求。
+    - **文件与数据**：集成 `json` 解析库和 `file` 操作模块，方便数据处理与本地存储。
+    - **Dex 动态加载**：支持 `LuaDexLoader`，可在运行时加载外部 `.dex` 或 `.jar` 文件，实现插件化扩展。
+
+## 🛠️ 快速开始
+
+### 环境要求
+- Android Studio Ladybug 或更高版本
+- JDK 17+
+- Android SDK 33+
+
+### 构建项目
+1.  **克隆仓库**
+    ```bash
+    git clone https://github.com/znzsofficial/NeLuaJ.git
+    cd NeLuaJ
+    ```
+
+2.  **编译 APK**
+    ```bash
+    ./gradlew assembleRelease
+    ```
+    编译产物位于 `app/build/outputs/apk/release/` 目录下。
+
+## 📝 使用指南
+
+### 1. Hello World
+在 `main.lua` 中编写如下代码即可显示一个简单的界面：
+
+```lua
+require "import"
+import "android.widget.*"
+import "android.view.*"
+
+-- 定义布局
+layout = {
+  LinearLayout,
+  orientation="vertical",
+  layout_width="match_parent",
+  layout_height="match_parent",
+  gravity="center",
+  {
+    TextView,
+    text="Hello, NeLuaJ+!",
+    textSize="24sp",
+    textColor="#333333"
+  },
+  {
+    Button,
+    text="点击我",
+    onClick=function(v)
+      print("按钮被点击了！")
+      Toast.makeText(activity, "欢迎使用 NeLuaJ+", Toast.LENGTH_SHORT).show()
+    end
+  }
+}
+
+-- 加载布局
+activity.setContentView(loadlayout(layout))
+```
+
+### 2. 异步网络请求 (OkHttp)
+NeLuaJ+ 提供了强大的 `okHttp` 模块用于处理异步网络请求。
+
+```lua
+-- GET 请求
+okHttp.get("https://www.baidu.com", nil, function(code, body, response)
+  print("响应代码: " .. code)
+  print("内容长度: " .. #body)
+end)
+
+-- POST JSON 请求
+local jsonData = '{"key": "value"}'
+local headers = {["Content-Type"] = "application/json"}
+
+okHttp.postJson("https://api.example.com/data", jsonData, headers, function(code, body, response)
+  if code == 200 then
+    print("成功: " .. body)
+  else
+    print("错误: " .. code)
+  end
+end)
+```
+
+## 📚 API 参考
+
+以下是 `LuaActivity` 注入到 Lua 全局环境中的主要变量和函数：
+
+| 变量/函数 | 描述 |
+| :--- | :--- |
+| `activity` / `this` | 当前的 `LuaActivity` 实例 (继承自 `AppCompatActivity`) |
+| `print(msg)` | 在控制台或日志视图中输出信息 |
+| `printf(fmt, ...)` | 格式化输出 |
+| `loadlayout(table)` | 将 Lua 表解析为 Android View |
+| `task(func, callback)` | 在后台线程执行函数，并在主线程回调结果 |
+| `thread(func)` | 启动一个新的线程 |
+| `timer(func, delay, period)` | 启动定时器 |
+| `okHttp` | 异步 OkHttp 客户端实例 |
+| `json` | JSON 解析库 |
+| `import` | 导入 Java 类 (需要 `require "import"`) |
+
+## 📄 许可证
+
+本项目基于 [Apache License 2.0](LICENSE) 开源。
 
 ---
+**注意**：本项目处于活跃开发中，API 可能会随版本更新而变化。建议查阅源码 (`LuaActivity.kt`) 获取最新信息。
 
-## **重要变更**
-1. **权限申请逻辑更新**：
-    - `Welcome` 不再自动申请全部权限，符合 Android 运行时权限设计要求。
-    - 请开发者自行实现权限申请及回调逻辑。
-
-2. **多线程优化**：
-    - `Welcome` 使用多线程解压，并在过程中将 `assets` 中的所有 `dex` 文件设置为只读。
-
-3. **功能移除**：
-    - 删除了内置的 `android.widget` 包。
-    - 移除了与 `PageView` 相关的适配器。
-
----
-
-# 新特性与扩展支持
-
-## **1. 图片加载功能**
-将部分适配器移动至 **`com.androlua.adapter`** 包，并引入 **Coil** 实现图片加载，提供更强大的图片处理能力。
-
-## **2. 导入分析工具**
-实现类似 **FusionApp2** 的导入分析功能，支持更高效的资源管理。
-- **作者信息**: [QQ: 3070320289](#)。
-
-## **3. 布局助手**
-- **作者信息**: [QQ: 2241056127](#)。
-
----
