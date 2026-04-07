@@ -6,16 +6,19 @@ import android.graphics.Typeface
 import android.graphics.drawable.Drawable
 import android.text.TextUtils
 import android.util.DisplayMetrics
+import android.util.LruCache
 import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
 import android.widget.AdapterView
+import android.widget.ImageView
 import android.widget.ImageView.ScaleType
 import androidx.appcompat.view.ContextThemeWrapper
 import androidx.core.graphics.toColorInt
 import coil3.ImageLoader
 import coil3.asDrawable
 import coil3.imageLoader
+import coil3.load
 import coil3.request.ImageRequest
 import com.androlua.adapter.ArrayListAdapter
 import com.androlua.adapter.LuaAdapter
@@ -59,6 +62,14 @@ class LuaLayout(private val initialContext: Context) {
     private val imageLoader: ImageLoader = initialContext.imageLoader
     private val scaleTypeValues: Array<ScaleType> = ScaleType.entries.toTypedArray()
 
+    private val ids = HashMap<String, Int>()
+
+    private val ps = arrayOf("paddingLeft", "paddingTop", "paddingRight", "paddingBottom")
+    private val ms = arrayOf(
+        "layout_marginLeft", "layout_marginTop", "layout_marginRight", "layout_marginBottom"
+    )
+    private val Wrap: LuaValue = ViewGroup.LayoutParams.WRAP_CONTENT.toLuaValue()
+
     val id: HashMap<*, *>
         get() = ids
 
@@ -85,14 +96,27 @@ class LuaLayout(private val initialContext: Context) {
         return views[id]
     }
 
+    private val valueCache = LruCache<String, Any>(256)
+
     private fun toValue(str: String): Any? {
+        valueCache.get(str)?.let { return it }
+
+        val parsed = parseValue(str)
+        if (parsed != null) {
+            valueCache.put(str, parsed)
+        }
+        return parsed
+    }
+
+    private fun parseValue(str: String): Any? {
         if (str == "nil") return 0
 
         // 多个 flags，用 | 分隔
         if (str.indexOf('|') >= 0) {
             var ret = 0
-            for (s in str.split(PIPE_REGEX)) {
-                toint[s]?.let { ret = ret or it }
+            val parts = str.split('|')
+            for (i in parts.indices) {
+                toint[parts[i]]?.let { ret = ret or it }
             }
             return ret
         }
@@ -160,7 +184,8 @@ class LuaLayout(private val initialContext: Context) {
     private fun processLuaPages(viewsTable: LuaTable, env: LuaTable): List<View> {
         val viewList = mutableListOf<View>()
         // Lua table的长度从1开始
-        for (i in 1..viewsTable.length()) {
+        val len = viewsTable.length()
+        for (i in 1..len) {
             val v = viewsTable[i]
             val view = when {
                 // userdata: 直接转换
@@ -191,6 +216,246 @@ class LuaLayout(private val initialContext: Context) {
             return color.toInt()
         }
         return 0
+    }
+
+    private fun handleProperty(view: LuaValue, params: LuaValue, key: LuaValue, keyString: String, tValueOriginal: LuaValue, env: LuaTable): Boolean {
+        var keyString = keyString
+        var tValue = tValueOriginal
+
+        when (keyString) {
+            "padding" -> return true
+            "id" -> {
+                val generatedId = getOrGenerateId(tValue.asString())
+                view["id"] = generatedId
+                views[tValue.asString()] = view
+                ids[tValue.asString()] = generatedId
+                env[tValue] = view
+                return true
+            }
+
+            "text" -> {
+                view["text"] = tValue.tostring()
+                return true
+            }
+
+            "textSize" -> {
+                view["setTextSize"].jcall(0, toValue(tValue.asString()))
+                return true
+            }
+
+            "textStyle" -> {
+                when (tValue.asString()) {
+                    "bold" ->
+                        view["setTypeface"].jcall(
+                            Typeface.defaultFromStyle(Typeface.BOLD)
+                        )
+
+                    "normal" ->
+                        view["setTypeface"]
+                            .jcall(Typeface.defaultFromStyle(Typeface.NORMAL))
+
+                    "italic" ->
+                        view["setTypeface"].jcall(
+                            Typeface.defaultFromStyle(Typeface.ITALIC)
+                        )
+
+                    "italic|bold", "bold|italic" ->
+                        view["setTypeface"].jcall(
+                            Typeface.defaultFromStyle(Typeface.BOLD_ITALIC)
+                        )
+
+                    else -> throw LuaError(
+                        "Unsupported textStyle: ${tValue.asString()}"
+                    )
+                }
+                return true
+            }
+
+            "scaleType" -> {
+                view["setScaleType"]
+                    .jcall(scaleTypeValues[scaleType[tValue.asString()]!!])
+                return true
+            }
+
+            "ellipsize" -> {
+                view["setEllipsize"]
+                    .jcall(
+                        TextUtils.TruncateAt.valueOf(
+                            tValue.asString().uppercase(Locale.getDefault())
+                        )
+                    )
+                return true
+            }
+
+            "hint" -> {
+                view["hint"] = tValue.tostring()
+                return true
+            }
+
+            "items" -> {
+                val adapter = view["adapter"]
+                if (adapter.isNotNil()) {
+                    adapter["addAll"].call(tValue)
+                } else {
+                    view["setAdapter"]
+                        .jcall(
+                            ArrayListAdapter(
+                                initialContext,
+                                android.R.layout.simple_list_item_1,
+                                CoerceLuaToJava.arrayCoerce(
+                                    tValue,
+                                    String::class.java
+                                ) as Array<*>
+                            )
+                        )
+                }
+                return true
+            }
+
+            "minHeight" -> {
+                view["MinimumHeight"] = tValue.tostring()
+                return true
+            }
+
+            "minWidth" -> {
+                view["MinimumWidth"] = tValue.tostring()
+                return true
+            }
+
+            "pages" -> {
+                val viewsTable = tValue.checktable()
+                val viewList = processLuaPages(viewsTable, env)
+                view["setAdapter"].jcall(LuaPagerAdapter(viewList))
+                return true
+            }
+
+            "pagesWithTitle" -> {
+                val pagesWithTitleTable = tValue.checktable()
+                val viewsTable = pagesWithTitleTable[1].checktable()
+                val titlesTable = pagesWithTitleTable[2].checktable()
+
+                val viewList = processLuaPages(viewsTable, env)
+
+                val titleList = mutableListOf<String>()
+                for (i in 1..titlesTable.length()) {
+                    titleList.add(titlesTable[i].asString())
+                }
+
+                view["setAdapter"].jcall(LuaPagerAdapter(viewList, titleList))
+                return true
+            }
+
+            "src" -> {
+                val imageView = try {
+                    view.touserdata(ImageView::class.java)
+                } catch (_: Exception) {
+                    null
+                }
+
+                if (imageView != null) {
+                    if (tValue.isuserdata(Bitmap::class.java)) {
+                        imageView.setImageBitmap(tValue.touserdata(Bitmap::class.java))
+                    } else if (tValue.isuserdata(Drawable::class.java)) {
+                        imageView.setImageDrawable(tValue.touserdata(Drawable::class.java))
+                    } else {
+                        imageView.load(tValue.asString(), imageLoader)
+                    }
+                } else {
+                    if (tValue.isuserdata(Bitmap::class.java)) {
+                        view.jset(
+                            "ImageBitmap", tValue.touserdata(Bitmap::class.java)
+                        )
+                    } else if (tValue.isuserdata(Drawable::class.java)) {
+                        view.jset(
+                            "ImageDrawable", tValue.touserdata(Drawable::class.java)
+                        )
+                    } else {
+                        imageLoader.enqueue(
+                            ImageRequest.Builder(initialContext)
+                                .data(tValue.asString()).target {
+                                    view.jset(
+                                        "ImageDrawable",
+                                        it.asDrawable(initialContext.resources)
+                                    )
+                                }.build()
+                        )
+                    }
+                }
+                return true
+            }
+
+            "background" -> {
+                if (tValue.isuserdata()) {
+                    view.jset(
+                        "background", tValue.touserdata(Drawable::class.java)
+                    )
+                } else if (tValue.isnumber()) {
+                    view.jset("backgroundColor", tValue.toint())
+                } else if (tValue.isstring()) {
+                    val str = tValue.asString()
+                    if (str.startsWith("#")) {
+                        view.jset("backgroundColor", parseColor(str))
+                    } else {
+                        view.jset(
+                            "background",
+                            LuaBitmapDrawable(luaContext, str)
+                        )
+                    }
+                }
+                return true
+            }
+
+            else -> if (keyString.startsWith("on")) {
+                if (tValue.isstring()) {
+                    val finalVal = tValue
+                    tValue = object : VarArgFunction() {
+                        override fun invoke(args: Varargs): Varargs {
+                            return env[finalVal].invoke(args)
+                        }
+                    }
+                }
+                view[key] = tValue
+            }
+        }
+        if (tValue.type() == LuaValue.TSTRING) {
+            tValue = toValue(tValue.asString()).toLuaValue()
+        }
+        if (keyString.startsWith("layout")) {
+            if (rules.containsKey(keyString)) {
+                if (tValue.isboolean() && tValue.toboolean()) params["addRule"].jcall(
+                    rules[keyString]
+                )
+                else if (tValue.asString() == "true") params["addRule"].jcall(
+                    rules[keyString]
+                )
+                else params["addRule"].jcall(
+                    rules[keyString],
+                    getOrGenerateId(tValue.asString())
+                )
+            } else if (keyString == "layout_behavior") {
+                params["setBehavior"].jcall(
+                    createBehaviorFromString(tValue.asString()) ?: tValue
+                )
+            } else if (keyString == "layout_anchor") {
+                params["setAnchorId"].jcall(getOrGenerateId(tValue.asString()))
+            } else if (keyString == "layout_collapseParallaxMultiplier") {
+                params["setParallaxMultiplier"].jcall(tValue)
+            } else if (keyString == "layout_marginEnd") {
+                params["setMarginEnd"].jcall(tValue)
+            } else if (keyString == "layout_marginStart") {
+                params["setMarginStart"].jcall(tValue)
+            } else if (keyString == "layout_collapseMode") {
+                params["setCollapseMode"].jcall(tValue)
+            } else if (keyString == "layout_scrollFlags") {
+                params["setScrollFlags"].jcall(tValue)
+            } else {
+                keyString = keyString.substring(7)
+                params[keyString] = tValue
+            }
+        } else {
+            view[key] = tValue
+        }
+        return false
     }
 
     @JvmOverloads
@@ -241,241 +506,11 @@ class LuaLayout(private val initialContext: Context) {
                             }
                         }
                     } else if (key.isstring()) {
-                        var keyString = key.asString()
-                        var tValue = next.secondArg()
+                        val keyString = key.asString()
+                        val tValue = next.secondArg()
 
-                        when (keyString) {
-                            "padding" -> continue
-                            "id" -> {
-                                view["id"] = idx
-                                views[tValue.asString()] = view
-                                ids[tValue.asString()] = idx
-                                env[tValue] = view
-                                idx++
-                                continue
-                            }
-
-                            "text" -> {
-                                view["text"] = tValue.tostring()
-                                continue
-                            }
-
-                            "textSize" -> {
-                                view["setTextSize"].jcall(0, toValue(tValue.asString()))
-                                continue
-                            }
-
-                            "textStyle" -> {
-                                when (tValue.asString()) {
-                                    "bold" ->
-                                        view["setTypeface"].jcall(
-                                            Typeface.defaultFromStyle(
-                                                Typeface.BOLD
-                                            )
-                                        )
-
-                                    "normal" ->
-                                        view["setTypeface"]
-                                            .jcall(Typeface.defaultFromStyle(Typeface.NORMAL))
-
-                                    "italic" ->
-                                        view["setTypeface"].jcall(
-                                            Typeface.defaultFromStyle(Typeface.ITALIC)
-                                        )
-
-                                    "italic|bold", "bold|italic" ->
-                                        view["setTypeface"].jcall(
-                                            Typeface.defaultFromStyle(Typeface.BOLD_ITALIC)
-                                        )
-
-                                    else -> throw LuaError(
-                                        "Unsupported textStyle: ${tValue.asString()}"
-                                    )
-                                }
-                                continue
-                            }
-
-                            "scaleType" -> {
-                                view["setScaleType"]
-                                    .jcall(scaleTypeValues[scaleType[tValue.asString()]!!])
-                                continue
-                            }
-
-                            "ellipsize" -> {
-                                view["setEllipsize"]
-                                    .jcall(
-                                        TextUtils.TruncateAt.valueOf(
-                                            tValue.asString().uppercase(
-                                                Locale.getDefault()
-                                            )
-                                        )
-                                    )
-                                continue
-                            }
-
-                            "hint" -> {
-                                view["hint"] = tValue.tostring()
-                                continue
-                            }
-
-                            "items" -> {
-                                val adapter = view["adapter"]
-                                if (adapter.isNotNil()) {
-                                    adapter["addAll"].call(tValue)
-                                } else {
-                                    view["setAdapter"]
-                                        .jcall(
-                                            ArrayListAdapter(
-                                                initialContext,
-                                                android.R.layout.simple_list_item_1,
-                                                CoerceLuaToJava.arrayCoerce(
-                                                    tValue,
-                                                    String::class.java
-                                                ) as Array<*>
-                                            )
-                                        )
-                                }
-                                continue
-                            }
-
-                            "minHeight" -> {
-                                view["MinimumHeight"] = tValue.tostring()
-                                continue
-                            }
-
-                            "minWidth" -> {
-                                view["MinimumWidth"] = tValue.tostring()
-                                continue
-                            }
-
-                            "pages" -> {
-                                val viewsTable = tValue.checktable()
-                                val viewList = processLuaPages(viewsTable, env)
-                                view["setAdapter"].jcall(LuaPagerAdapter(viewList))
-                                continue
-                            }
-
-                            "pagesWithTitle" -> {
-                                val pagesWithTitleTable = tValue.checktable()
-                                val viewsTable = pagesWithTitleTable[1].checktable()
-                                val titlesTable = pagesWithTitleTable[2].checktable()
-
-                                // 复用页面处理逻辑
-                                val viewList = processLuaPages(viewsTable, env)
-
-                                // 处理标题列表
-                                val titleList = mutableListOf<String>()
-                                for (i in 1..titlesTable.length()) {
-                                    titleList.add(titlesTable[i].asString())
-                                }
-
-                                view["setAdapter"].jcall(LuaPagerAdapter(viewList, titleList))
-                                continue
-                            }
-
-                            "src" -> {
-                                if (tValue.isuserdata(Bitmap::class.java)) {
-                                    view.jset(
-                                        "ImageBitmap", tValue.touserdata(
-                                            Bitmap::class.java
-                                        )
-                                    )
-                                } else if (tValue.isuserdata(Drawable::class.java)) {
-                                    view.jset(
-                                        "ImageDrawable", tValue.touserdata(
-                                            Drawable::class.java
-                                        )
-                                    )
-                                } else {
-                                    imageLoader.enqueue(
-                                        ImageRequest.Builder(initialContext)
-                                            .data(tValue.asString()).target {
-                                                view.jset(
-                                                    "ImageDrawable",
-                                                    it.asDrawable(initialContext.resources)
-                                                )
-                                            }.build()
-                                    )
-                                }
-                                continue
-                            }
-
-                            "background" -> {
-                                if (tValue.isuserdata()) {
-                                    view.jset(
-                                        "background", tValue.touserdata(
-                                            Drawable::class.java
-                                        )
-                                    )
-                                } else if (tValue.isnumber()) {
-                                    view.jset("backgroundColor", tValue.toint())
-                                } else if (tValue.isstring()) {
-                                    val str = tValue.asString()
-                                    if (str.startsWith("#")) {
-                                        view.jset("backgroundColor", parseColor(str))
-                                    } else {
-                                        view.jset(
-                                            "background",
-                                            LuaBitmapDrawable(
-                                                luaContext,
-                                                str
-                                            )
-                                        )
-                                    }
-                                }
-                                continue
-                            }
-
-                            else -> if (keyString.startsWith("on")) {
-                                if (tValue.isstring()) {
-                                    val finalVal = tValue
-                                    tValue = object : VarArgFunction() {
-                                        override fun invoke(args: Varargs): Varargs {
-                                            return env[finalVal].invoke(args)
-                                        }
-                                    }
-                                }
-                                view[key] = tValue
-                            }
-                        }
-                        if (tValue.type() == LuaValue.TSTRING) {
-                            tValue = toValue(tValue.asString()).toLuaValue()
-                        }
-                        if (keyString.startsWith("layout")) {
-                            if (rules.containsKey(keyString)) {
-                                if (tValue.isboolean() && tValue.toboolean()) params["addRule"].jcall(
-                                    rules[keyString]
-                                )
-                                else if (tValue.asString() == "true") params["addRule"].jcall(
-                                    rules[keyString]
-                                )
-                                else params["addRule"].jcall(
-                                    rules[keyString],
-                                    ids[tValue.asString()]
-                                )
-                            } else if (keyString == "layout_behavior") {
-                                params["setBehavior"].jcall(
-                                    createBehaviorFromString(tValue.asString()) ?: tValue
-                                )
-                            } else if (keyString == "layout_anchor") {
-                                params["setAnchorId"].jcall(ids[tValue.asString()])
-                            } else if (keyString == "layout_collapseParallaxMultiplier") {
-                                params["setParallaxMultiplier"].jcall(tValue)
-                            } else if (keyString == "layout_marginEnd") {
-                                params["setMarginEnd"].jcall(tValue)
-                            } else if (keyString == "layout_marginStart") {
-                                params["setMarginStart"].jcall(tValue)
-                            } else if (keyString == "layout_collapseMode") {
-                                params["setCollapseMode"].jcall(tValue)
-                            } else if (keyString == "layout_scrollFlags") {
-                                params["setScrollFlags"].jcall(tValue)
-                            } else {
-                                keyString = keyString.substring(7)
-                                params[keyString] = tValue
-                            }
-                        } else {
-                            view[key] = tValue
-                            //view.jset(key.asString(), tValue)
+                        if (handleProperty(view, params, key, keyString, tValue, env)) {
+                            continue
                         }
                     }
                 } catch (e: Exception) {
@@ -489,7 +524,7 @@ class LuaLayout(private val initialContext: Context) {
             }
 
             runCatching {
-                val mss = arrayOfNulls<LuaValue>(4)
+                val ptValues = arrayOfNulls<LuaValue>(4)
                 var sp = false
                 for (i in ms.indices) {
                     var pt = layout[ms[i]]
@@ -500,14 +535,20 @@ class LuaLayout(private val initialContext: Context) {
                     } else {
                         sp = true
                     }
-                    mss[i] = toValue(pt.asString()).toLuaValue()
+                    ptValues[i] = pt
                 }
-                if (sp) params["setMargins"]?.ifNotNil()?.invoke(mss.toVarargs())
+                if (sp) {
+                    val mss = arrayOfNulls<LuaValue>(4)
+                    for (i in ptValues.indices) {
+                        mss[i] = toValue(ptValues[i]!!.asString()).toLuaValue()
+                    }
+                    params["setMargins"]?.ifNotNil()?.invoke(mss.toVarargs())
+                }
             }.onFailure { it.printStackTrace() }
 
             view["LayoutParams"] = params
             runCatching {
-                val pds = arrayOfNulls<LuaValue>(4)
+                val ptValues = arrayOfNulls<LuaValue>(4)
                 var sp = false
                 for (i in ps.indices) {
                     var pt = layout[ps[i]]
@@ -518,9 +559,15 @@ class LuaLayout(private val initialContext: Context) {
                     } else {
                         sp = true
                     }
-                    pds[i] = toValue(pt.asString()).toLuaValue()
+                    ptValues[i] = pt
                 }
-                if (sp) view["setPadding"].invoke(pds.toVarargs())
+                if (sp) {
+                    val pds = arrayOfNulls<LuaValue>(4)
+                    for (i in ptValues.indices) {
+                        pds[i] = toValue(ptValues[i]!!.asString()).toLuaValue()
+                    }
+                    view["setPadding"].invoke(pds.toVarargs())
+                }
             }.onFailure {
                 luaContext
                     .sendError("loadlayout " + layout.checktable().dump(), it as Exception)
@@ -536,6 +583,13 @@ class LuaLayout(private val initialContext: Context) {
 
     companion object {
         private val toint = HashMap<String, Int>()
+        private val stringIdMap = HashMap<String, Int>()
+        private var globalIdx = 0x7f000000
+
+        @Synchronized
+        fun getOrGenerateId(idString: String): Int {
+            return stringIdMap.getOrPut(idString) { globalIdx++ }
+        }
 
         init {
             // android:drawingCacheQuality
@@ -744,16 +798,5 @@ class LuaLayout(private val initialContext: Context) {
             types["in"] = 4
             types["mm"] = 5
         }
-
-        private val ids = HashMap<String, Int>()
-        private var idx = 0x7f000000
-
-        private val ps = arrayOf("paddingLeft", "paddingTop", "paddingRight", "paddingBottom")
-        private val ms = arrayOf(
-            "layout_marginLeft", "layout_marginTop", "layout_marginRight", "layout_marginBottom"
-        )
-        private val Wrap: LuaValue = ViewGroup.LayoutParams.WRAP_CONTENT.toLuaValue()
-
-        private val PIPE_REGEX = Regex("\\|")
     }
 }

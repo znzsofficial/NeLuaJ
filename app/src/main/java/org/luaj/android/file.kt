@@ -22,8 +22,9 @@ class file : TwoArgFunction() {
 
     override fun call(modname: LuaValue?, env: LuaValue): LuaValue? {
         mGlobals = env.checkglobals()
-        if (!env.get("package").isnil()) env.get("package").get("loaded")
-            .set("file", LuaTable().apply {
+        val pkg = env.get("package")
+        if (!pkg.isnil()) {
+            pkg.get("loaded").set("file", LuaTable().apply {
                 set("readall", readall())
                 set("list", list())
                 set("exists", exists())
@@ -33,6 +34,7 @@ class file : TwoArgFunction() {
                 set("mkdir", mkdir())
                 env.set("file", this@apply)
             })
+        }
         return NIL
     }
 
@@ -40,7 +42,7 @@ class file : TwoArgFunction() {
         override fun call(arg: LuaValue): LuaValue? {
             return try {
                 LuaString.valueOf(readAll(mGlobals.finder.findFile(arg.tojstring())))
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 NIL
             }
         }
@@ -54,24 +56,27 @@ class file : TwoArgFunction() {
 
     private inner class _type : OneArgFunction() {
         override fun call(arg: LuaValue): LuaValue? {
-            return valueOf(
-                if (File(mGlobals.finder.findFile(arg.tojstring()))
-                        .isDirectory()
-                ) "dir" else "file"
-            )
+            val path = mGlobals.finder.findFile(arg.tojstring()) ?: arg.tojstring()
+            return valueOf(if (File(path).isDirectory) "dir" else "file")
         }
     }
 
     private inner class info : OneArgFunction() {
         override fun call(arg: LuaValue): LuaValue {
+            val pathStr = arg.tojstring()
+            val resolvedPath = mGlobals.finder.findFile(pathStr) ?: pathStr
+            val f = File(resolvedPath)
+            
             val ret = LuaTable()
-            val f = File(mGlobals.finder.findFile(arg.tojstring()))
-            ret.jset("type", if (f.isDirectory()) "dir" else "file")
-            if (!f.exists()) ret.jset("type", "")
+            if (!f.exists()) {
+                ret.jset("type", "")
+            } else {
+                ret.jset("type", if (f.isDirectory) "dir" else "file")
+            }
             ret.jset("path", f.absolutePath)
             ret.jset("size", f.length())
             ret.jset("name", f.name)
-            ret.jset("parent", (f))
+            ret.jset("parent", f.parent)
             ret.jset("read", f.canRead())
             ret.jset("write", f.canWrite())
             return ret
@@ -80,7 +85,8 @@ class file : TwoArgFunction() {
 
     private inner class mkdir : OneArgFunction() {
         override fun call(arg: LuaValue): LuaValue? {
-            return valueOf(File(arg.tojstring()).mkdirs())
+            val path = mGlobals.finder.findFile(arg.tojstring()) ?: arg.tojstring()
+            return valueOf(File(path).mkdirs())
         }
     }
 
@@ -88,7 +94,7 @@ class file : TwoArgFunction() {
         override fun call(arg: LuaValue): LuaValue? {
             return try {
                 valueOf(exists(mGlobals.finder.findFile(arg.tojstring())))
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 NIL
             }
         }
@@ -120,16 +126,17 @@ class file : TwoArgFunction() {
         }
 
         fun save(path: String?, text: LuaString): Boolean {
-            try {
-                //BufferedWriter buf = new BufferedWriter(new FileWriter(path));
-                val buf = FileOutputStream(path)
-                buf.write(text.m_bytes, text.m_offset, text.m_length)
-                buf.close()
-                return true
+            if (path == null) return false
+            return try {
+                File(path).parentFile?.mkdirs()
+                FileOutputStream(path).use { fos ->
+                    fos.write(text.m_bytes, text.m_offset, text.m_length)
+                }
+                true
             } catch (e: Exception) {
                 e.printStackTrace()
+                false
             }
-            return false
         }
     }
 }
