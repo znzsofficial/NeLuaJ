@@ -44,6 +44,8 @@
 - Android SDK 33+
 
 ### 构建项目
+如果你想使用打包器生成发布版本，可前往：[NeLuaJ-Builder](https://github.com/znzsofficial/NeLuaJ-Builder)
+
 1.  **克隆仓库**
     ```bash
     git clone https://github.com/znzsofficial/NeLuaJ.git

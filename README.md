@@ -44,6 +44,8 @@ Based on code analysis, NeLuaJ+ offers these core capabilities:
 - Android SDK 33+
 
 ### Building the Project
+If you want to package releases with the builder, visit: [NeLuaJ-Builder](https://github.com/znzsofficial/NeLuaJ-Builder)
+
 1.  **Clone Repository**
     ```bash
     git clone https://github.com/znzsofficial/NeLuaJ.git
