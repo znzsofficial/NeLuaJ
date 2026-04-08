@@ -17,6 +17,7 @@ local.properties
 
 # Log files
 *.log
+*.bak
 
 # Release build
 /app/release/
