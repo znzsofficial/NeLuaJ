@@ -463,35 +463,67 @@ end
 setmetatable(_M, _M)
 
 return _M]]
-mcode = [[import "java.lang.*","java.util.*"
-import "android.os.*","android.app.*"
+mcode = [[require "environment"
 
-activity {
+local ColorUtil = this.themeUtil
+
+-- 主题已在 init.lua 中配置，启用动态取色
+activity.dynamicColor()
+activity.setContentView(res.layout.main)
+  .setSupportActionBar(toolbar)
+  .getSupportActionBar() {
   Title = res.string.app_title,
-  ContentView = res.layout.main
+  Elevation = 0,
 }
 ]]
-lcode = [[import "android.widget.*", "androidx.appcompat.widget.*";
+lcode = [[import "com.google.android.material.appbar.MaterialToolbar"
+import "com.google.android.material.textview.MaterialTextView"
+import "com.google.android.material.button.MaterialButton"
+import "android.widget.LinearLayout"
+
+local ColorUtil = this.themeUtil
 
 return {
   LinearLayout,
-  orientation="vertical",
-  layout_width="match",
-  layout_height="match",
-  gravity="center",
+  orientation = "vertical",
+  layout_width = "match",
+  layout_height = "match",
   {
-    AppCompatTextView,
-    text="Hello NeLuaJ+",
+    MaterialToolbar,
+    id = "toolbar",
+    layout_width = "match",
+    layout_height = "?attr/actionBarSize",
+    BackgroundColor = ColorUtil.getColorBackground(),
+  },
+  {
+    LinearLayout,
+    orientation = "vertical",
+    layout_width = "match",
+    layout_height = "match",
+    gravity = "center",
+    {
+      MaterialTextView,
+      text = "Hello NeLuaJ+",
+      textSize = "24sp",
+      textColor = ColorUtil.getColorPrimary(),
+    },
+    {
+      MaterialButton,
+      text = "Click Me",
+      layout_marginTop = "16dp",
+      onClick = function()
+        print("Hello World!")
+      end,
+    },
   },
 }]]
 icode = [[
 ver_name = "1.0"
 ver_code = "1"
-min_sdk = "21"
-target_sdk = "29"
+min_sdk = "26"
+target_sdk = "33"
 debug_mode = true
-NeLuaJ_Theme = "Theme_NeLuaJ_Material3"
+NeLuaJ_Theme = "Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay"
 user_permission = {
   "INTERNET",
-  "WRITE_EXTERNAL_STORAGE"
 }]]

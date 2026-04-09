@@ -9,14 +9,14 @@ import android.widget.TextView;
 import com.google.android.material.tabs.TabLayout;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-
 import github.znzsofficial.neluaj.R;
 
 public class LuaFileTabView extends TabLayout {
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private final ArrayList<String> pathSegments = new ArrayList<>();
     private String nowPath = "";
     private FileTabInterface fileTabInterface;
-    private final Looper looper = Looper.getMainLooper();
+    private boolean updating;
 
     public LuaFileTabView(Context context, AttributeSet attrs) {
         super(context, attrs);
@@ -37,7 +37,9 @@ public class LuaFileTabView extends TabLayout {
     }
 
     public void setDirectPath(String path) {
-        nowPath = path;
+        nowPath = path == null ? "" : path;
+        pathSegments.clear();
+        pathSegments.addAll(splitPath(nowPath));
     }
 
     public void setPath(String path) {
@@ -45,44 +47,58 @@ public class LuaFileTabView extends TabLayout {
     }
 
     public void setPath(String path, final boolean selectable) {
-        ArrayList<String> array = new ArrayList<>(Arrays.asList(path.split("/")));
-        array.remove(0);
-        ArrayList<String> lastArray = new ArrayList<>(Arrays.asList(nowPath.split("/")));
-        lastArray.remove(0);
+        final String safePath = path == null ? "" : path;
+        if (safePath.equals(nowPath) && getTabCount() == pathSegments.size()) {
+            return;
+        }
 
-        if (array.size() <= lastArray.size()) {
-            for (int i = 0; i < lastArray.size() - array.size(); i++) {
+        final ArrayList<String> newSegments = splitPath(safePath);
+        int commonPrefix = 0;
+        int maxCommon = Math.min(pathSegments.size(), newSegments.size());
+        while (commonPrefix < maxCommon && pathSegments.get(commonPrefix).equals(newSegments.get(commonPrefix))) {
+            commonPrefix++;
+        }
+
+        updating = true;
+        try {
+            while (getTabCount() > commonPrefix) {
                 removeTabAt(getTabCount() - 1);
             }
-        }
-
-        for (int i = 0; i < array.size(); i++) {
-            Tab tab = getTabAt(i);
-            if (tab != null) {
-                tab.setText(array.get(i));
-                TextView textView = (TextView) tab.view.getChildAt(1);
-                textView.setAllCaps(false);
-            } else {
-                tab = newTab().setIcon(R.drawable.ic_round_chevron_left_24);
-                addTab(tab);
-                tab.setText(array.get(i));
-                TextView textView = (TextView) tab.view.getChildAt(1);
-                textView.setAllCaps(false);
+            while (pathSegments.size() > commonPrefix) {
+                pathSegments.remove(pathSegments.size() - 1);
             }
-            if (i == array.size() - 1) {
-                final Tab finalTab = tab;
-                new Handler(looper)
-                        .postDelayed(
-                                () -> {
-                                    if (selectable) finalTab.select();
-                                    final float toX = finalTab.view.getX();
-                                    if (toX > 0) smoothScrollTo((int) toX, 0);
-                                },
-                                10);
-            }
-        }
 
-        nowPath = path;
+            for (int i = 0; i < newSegments.size(); i++) {
+                final String segment = newSegments.get(i);
+                Tab tab = getTabAt(i);
+                if (tab == null) {
+                    tab = newTab().setIcon(R.drawable.ic_round_chevron_left_24);
+                    addTab(tab, false);
+                }
+                tab.setText(segment);
+                TextView textView = (TextView) tab.view.getChildAt(1);
+                if (textView != null) {
+                    textView.setAllCaps(false);
+                }
+            }
+
+            pathSegments.clear();
+            pathSegments.addAll(newSegments);
+            nowPath = safePath;
+
+            if (selectable && getTabCount() > 0) {
+                final Tab finalTab = getTabAt(getTabCount() - 1);
+                if (finalTab != null) {
+                    finalTab.select();
+                    mainHandler.postDelayed(() -> {
+                        final float toX = finalTab.view.getX();
+                        if (toX > 0) smoothScrollTo((int) toX, 0);
+                    }, 10);
+                }
+            }
+        } finally {
+            updating = false;
+        }
     }
 
     private void addListener() {
@@ -91,35 +107,43 @@ public class LuaFileTabView extends TabLayout {
 
                     @Override
                     public void onTabSelected(Tab tab) {
+                        if (updating) {
+                            return;
+                        }
                         int mTabCount = getTabCount();
                         int mPosition = tab.getPosition();
-                        ArrayList<String> nowPaths = new ArrayList<>(Arrays.asList(nowPath.split("/")));
-                        nowPaths.remove(0);
-
                         if (mPosition < mTabCount) {
-                            for (int i = 0; i < mTabCount - mPosition - 1; i++) {
-                                removeTabAt(getTabCount() - 1);
-                                nowPaths.remove(nowPaths.size() - 1);
+                            int targetSize = mPosition + 1;
+                            StringBuilder path = new StringBuilder();
+                            for (int i = 0; i < targetSize && i < pathSegments.size(); i++) {
+                                path.append('/').append(pathSegments.get(i));
                             }
 
-                            StringBuilder path = new StringBuilder();
-                            for (int i = 0; i < nowPaths.size(); i++)
-                                path.append("/").append(nowPaths.get(i));
+                            updating = true;
+                            try {
+                                while (getTabCount() > targetSize) {
+                                    removeTabAt(getTabCount() - 1);
+                                }
+                                while (pathSegments.size() > targetSize) {
+                                    pathSegments.remove(pathSegments.size() - 1);
+                                }
 
-                            if (fileTabInterface != null)
-                                fileTabInterface.onSelected(path.toString());
+                                nowPath = path.toString();
+                            } finally {
+                                updating = false;
+                            }
 
-                            new Handler(looper)
-                                    .postDelayed(
-                                            () -> {
-                                                Tab finalTab = getTabAt(getTabCount() - 1);
-                                                assert finalTab != null;
-                                                final float toX = finalTab.view.getX();
-                                                if (toX > 0) smoothScrollTo((int) toX, 0);
-                                            },
-                                            1);
-                            setDirectPath(path.toString());
-                            // selectListener(path);
+                            if (fileTabInterface != null) {
+                                fileTabInterface.onSelected(nowPath);
+                            }
+
+                            mainHandler.postDelayed(() -> {
+                                Tab finalTab = getTabAt(getTabCount() - 1);
+                                if (finalTab != null) {
+                                    final float toX = finalTab.view.getX();
+                                    if (toX > 0) smoothScrollTo((int) toX, 0);
+                                }
+                            }, 1);
                         }
                     }
 
@@ -131,6 +155,19 @@ public class LuaFileTabView extends TabLayout {
                     public void onTabReselected(Tab tab) {
                     }
                 });
+    }
+
+    private ArrayList<String> splitPath(String path) {
+        ArrayList<String> segments = new ArrayList<>();
+        if (path == null || path.isEmpty()) {
+            return segments;
+        }
+        for (String part : path.split("/")) {
+            if (part != null && !part.isEmpty()) {
+                segments.add(part);
+            }
+        }
+        return segments;
     }
 
     public interface FileTabInterface {

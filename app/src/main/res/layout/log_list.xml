@@ -1,53 +1,34 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:orientation="vertical">
 
-    <TextView
-        android:id="@+id/file_name"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="8dp"
-        android:gravity="center_vertical"
-        android:textStyle="bold"
-        app:layout_constraintBottom_toTopOf="@id/log_list"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+    <!-- 顶部工具栏：文件名 + 操作按钮 -->
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/log_toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="?attr/colorSurface"
+        app:navigationIconTint="?attr/colorOnSurface"
+        app:titleTextAppearance="?attr/textAppearanceTitleMedium"
+        app:titleTextColor="?attr/colorOnSurface"
+        app:subtitleTextColor="?attr/colorOnSurfaceVariant"
+        app:menu="@menu/log_menu" />
 
-    <Button
-        android:id="@+id/copy"
-        style="@style/Widget.Material3Expressive.Button.TextButton"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:layout_marginEnd="8dp"
-        android:text="@string/copy_all"
-        app:layout_constraintBottom_toTopOf="@id/log_list"
-        app:layout_constraintEnd_toStartOf="@id/clear"
-        app:layout_constraintTop_toTopOf="parent" />
-
-    <Button
-        android:id="@+id/clear"
-        style="@style/Widget.Material3Expressive.Button.TextButton"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:layout_marginEnd="8dp"
-        android:text="@string/clear"
-        app:layout_constraintBottom_toTopOf="@id/log_list"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
-
-    <ListView
+    <!-- 日志列表 -->
+    <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/log_list"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:divider="@null"
-        android:fadeScrollbars="true"
-        android:fastScrollEnabled="true"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/file_name" />
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:paddingStart="8dp"
+        android:paddingTop="4dp"
+        android:paddingEnd="8dp"
+        android:paddingBottom="8dp"
+        android:scrollbarStyle="outsideOverlay"
+        android:scrollbars="vertical" />
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+</LinearLayout>

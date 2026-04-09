@@ -15,7 +15,7 @@ WallpaperService wallpaper.lua
 服务可以使用setLuaDir(dir)设置运行目录，setEnabled(context)打开启动服务设置界面，getInstance()获取服务实例。
 
 
-#### ** 可省略非必要关键字 **
+#### **可省略非必要关键字**
 - 省略then
 
 ```lua
@@ -113,7 +113,7 @@ for n = 1,10
 end
 ```
 
-#### ** 支持foreach**
+#### **支持 foreach**
 ```lua
 for k,v : t
 end
@@ -123,9 +123,9 @@ end
 
 ```
 
-#### ** 支持defer **
-defer后语句将在函数结束时运行
-多个defer将按照后入先出原则运行。
+#### **支持 defer**
+
+defer 后语句将在函数结束时运行，多个 defer 将按照后入先出原则运行。
 ```lua
 defer print("2")
 
@@ -134,19 +134,19 @@ defer do
 end
 ```
 
-#### ** 支持?操作符 **
+#### **支持 ? 操作符**
 ```lua
 ?a print(1)`print(2)
 a = ?a print(1)`print(2)
 ```
 
-#### ** 支持三目 if **
+#### **支持三目 if**
 ```lua
 b = if a 1 else 2
 print(b)
 ```
 
-#### ** 支持try-catch-finally **
+#### **支持 try-catch-finally**
 
 ```lua
 try
@@ -158,7 +158,9 @@ finally
 end
 ```
 
-** 支持lambda，可以使用反斜杠代替lambda关键字 **
+#### **支持 lambda**
+
+可以使用反斜杠代替 lambda 关键字。
 ```lua
 lambda a,b->a+b
 
@@ -168,36 +170,33 @@ lambda a,b:print(a+b)
 
 lambda () -> print("lambda")
 ```
-#### ** 支持import **
+#### **支持 import**
 
-import 将导入包并设置为局部变量
+import 将导入包并设置为局部变量。
 
-import "java.lang.String"
-返回值为 javaClass
+- `import "java.lang.String"` — 返回值为 javaClass
+- `import "java.lang.*"` — 返回值为 javaPackage
+- `import str "java.lang.String"` — 设置别名
+- `import "java.lang.*", "java.io.*"` — 一次性导入多个包或类
 
-import "java.lang.*"
-返回值为 javaPackage
+#### **支持 module**
 
-import str "java.lang.String"
-设置别名
+module 自带环境，默认设置环境表的 metatable 为自己。
 
-import "java.lang.*", "java.io.*"
-一次性导入多个包或类
-
-** 支持module **
-
-module自带环境，默认设置环境表的metatable为自己
-
+```lua
 module "name"
+```
 
 
-** 支持自赋值local **
+#### **支持自赋值 local**
 
+```lua
 local:print
+```
 
-将全局print设置为局部print
+将全局 `print` 设置为局部 `print`。
 
-** 运算符优化 **
+#### **运算符优化**
 ```lua
 != 可代替 ~=
 ！ 可代替 not
@@ -205,32 +204,31 @@ local:print
 || 可代替 or
 ```
 
-#### ** 支持位运算 **
+#### **支持位运算**
 
-- 按位与
-a=1&2
+```lua
+-- 按位与
+a = 1 & 2
+-- 按位或
+a = 1 | 2
+-- 按位异或
+a = 1 ~ 2
+-- 右移
+a = 1 >> 8
+-- 左移
+a = 8 << 2
+-- 按位非
+a = ~2
+```
 
-- 按位或
-a=1|2
-
-- 按位异或
-a=1~2
-
-- 右移
-a=1>>8
-
-- 左移
-a=8<<2
-
-- 按位非
-a=~2
-
-#### ** 支持64位整数 **
+#### **支持 64 位整数**
 ```lua
 i=0xffffffffff
 ```
 
-** 支持+= -= *= /= %= ^= //= &= |= ~= <<= >>= ..=运算 **
+#### **支持复合赋值运算**
+
+支持 `+=` `-=` `*=` `/=` `%=` `^=` `//=` `&=` `|=` `~=` `<<=` `>>=` `..=` 运算。
 ```lua
 a+=1
 a-=1
@@ -238,7 +236,7 @@ a*=1
 a/=1
 ```
 
-#### ** 调用java优化 **
+#### **调用 Java 优化**
 - javaClass 拓展函数/属性
 ```lua
 Object.array{} -- 创建数组
@@ -347,10 +345,7 @@ t=m.abc
 ```
 
 - 数组操作
-```lua
-使用#获取Java常见数据类型的长度
-使用 ["索引"] 或 .索引 直接访问数组
-```
+使用 `#` 获取 Java 常见数据类型的长度，使用 `["索引"]` 或 `.索引` 直接访问数组。
 
 - 索引优化
 ```lua
@@ -388,34 +383,22 @@ obj.run(function()
 end)
 ```
 
-** 支持增强型字符串格式化 **
+#### **支持增强型字符串格式化**
 
-a/A 有符号十六进制浮点数，
-
-b 布尔值，
-
-B 无符号byte类型，
-
-c char类型，数字转文字，
-
-i/d 有符号整数类型，字符串转十进制，
-
-I 无符号int整数，
-
-e/E/f/g/G 有符号浮点数，
-
-o 八进制有符号整数，
-
-L 无符号长整数，
-
-u/U 字符串转u码，
-
-x/X 十六进制有符号整数，字符串转hex，
-
-r 解析字符串转义，
-
-q 格式化为合法字符串形式，
-
-s 转字符串，
-
-l url编码，
+| 格式符 | 说明 |
+|--------|------|
+| `a/A` | 有符号十六进制浮点数 |
+| `b` | 布尔值 |
+| `B` | 无符号 byte 类型 |
+| `c` | char 类型，数字转文字 |
+| `i/d` | 有符号整数类型，字符串转十进制 |
+| `I` | 无符号 int 整数 |
+| `e/E/f/g/G` | 有符号浮点数 |
+| `o` | 八进制有符号整数 |
+| `L` | 无符号长整数 |
+| `u/U` | 字符串转 Unicode |
+| `x/X` | 十六进制有符号整数，字符串转 hex |
+| `r` | 解析字符串转义 |
+| `q` | 格式化为合法字符串形式 |
+| `s` | 转字符串 |
+| `l` | URL 编码 |

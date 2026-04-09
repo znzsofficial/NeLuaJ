@@ -53,12 +53,8 @@ function assignClass(str)
             str = str:sub(1, a)
         end
 
-        if ex == "java.lang.Object" then
+        if not str:find("Object%.") then
             insert(eee.cc, str)
-        else
-            if not str:find("Object%.") then
-                insert(eee.cc, str)
-            end
         end
 
         local e1 = str:match("%.setOn(%a+)Listener")

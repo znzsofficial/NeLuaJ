@@ -87,11 +87,20 @@ min_sdk = 24
 
 ## **8. `NeLuaJ_Theme`**
 - **类型**: `string`
-- **描述**: 定义应用程序的主题名称，该主题应为 `R.style` 类中已定义的主题字段。
+- **描述**: 定义应用程序的主题名称，该主题应为 `R.style` 类中已定义的主题字段。Activity 启动时会自动应用此主题，无需在 `main.lua` 中手动调用 `activity.setTheme()`。
+
+### 可用值：
+
+| 值 | 说明 |
+|----|------|
+| `Theme_NeLuaJ_Material3` | 带 ActionBar（默认） |
+| `Theme_NeLuaJ_Material3_ActionOverlay` | 带 ActionBar + ActionMode 覆盖 |
+| `Theme_NeLuaJ_Material3_NoActionBar` | 无 ActionBar |
+| `Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay` | 无 ActionBar + ActionMode 覆盖（推荐） |
 
 ### 示例：
 ```lua
-NeLuaJ_Theme = "Theme_NeLuaJ_Material3"
+NeLuaJ_Theme = "Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay"
 ```
 
 ---

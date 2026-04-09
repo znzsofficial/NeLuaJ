@@ -25,6 +25,8 @@ function _M.new(para, path)
     activity.newActivity(_M.lua_path.."/activities/java/JavaEditorActivity.lua", {path})
    case "layouthelper"
     activity.newActivity(_M.lua_path.."/activities/layouthelper/LayoutHelperActivity.lua", {path})
+   case "resource"
+    activity.newActivity(_M.lua_path.."/activities/resource/ResourceBrowserActivity.lua")
   end
 end
 

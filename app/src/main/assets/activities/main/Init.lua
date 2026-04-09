@@ -33,14 +33,19 @@ _M.initView = function()
 end
 
 _M.initView2 = function()
+  -- 编辑器初始化（等布局完成后执行）
   mLuaEditor.post(function()
     EditorUtil.init()
-    bindClass "com.myopicmobile.textwarrior.common.PackageUtil".load(this)
-    mRecycler.post(function()
-      MainActivity.RecyclerView
-            .init()
-            .update();
+    -- 包名补全加载放到后台线程，不阻塞编辑器
+    thread(function(bindClass)
+      luajava.bindClass "com.myopicmobile.textwarrior.common.PackageUtil".load(this)
     end)
+  end)
+  -- 文件列表初始化（独立于编辑器）
+  mRecycler.post(function()
+    MainActivity.RecyclerView
+          .init()
+          .update()
   end)
   swipeRefresh.onRefresh = function()
     MainActivity.RecyclerView.update()
@@ -103,6 +108,12 @@ _M.initFunctionTab = function()
       res.string.api_title,
       function()
         ActivityUtil.new("api")
+      end,
+    },
+    {
+      res.string.resource_browser,
+      function()
+        ActivityUtil.new("resource")
       end,
     },
     {

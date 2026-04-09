@@ -1,5 +1,4 @@
 require "environment"
-import "com.androlua.Ticker"
 import "android.widget.ArrayAdapter"
 import "android.widget.Toast"
 import "android.content.Context"
@@ -16,18 +15,10 @@ local simpleList = ... or false
 local SpannableString = bindClass "android.text.SpannableString"
 local ForegroundColorSpan = bindClass "android.text.style.ForegroundColorSpan"
 
-local errorColor = ColorUtil.ColorError
-local outlineColor = ColorUtil.ColorOutline
-local surfaceColor = ColorUtil.ColorSurface
-local surfaceColorVar = ColorUtil.ColorSurfaceVariant
-local backgroundc = ColorUtil.ColorBackground
-local onbackgroundc = ColorUtil.ColorOnBackground
 local primaryColor = ColorUtil.ColorPrimary
-local primaryOnColor = ColorUtil.ColorOnPrimary
-local secondaryColor = ColorUtil.ColorSecondary
-local tertiaryc = ColorUtil.ColorTertiary
 
 luadir = activity.getLuaDir()
+local isDexMode = false
 
 activity
 .setTitle(res.string.api_title)
@@ -49,7 +40,9 @@ if this.isNightMode() then
 end
 
 function onCreateOptionsMenu(menu)
-  menu.add(res.string._switch).setShowAsAction(1)
+  if not isDexMode then
+    menu.add(res.string._switch).setShowAsAction(1)
+  end
   menu.add(res.string.open).setShowAsAction(1)
 end
 
@@ -73,92 +66,123 @@ function onOptionsItemSelected(m)
   end
 end
 
---沉浸栏背景色、标题背景色、主背景色
---local co = { primaryColor, onbackgroundc, primaryOnColor }
-local ClassesLen
-local cls
+local classList
+local classCount
 
-if simpleList then
-  cls = ClassesNames.classes
+-- 检查是否是 dex 文件分析模式
+if type(simpleList) == "string" and simpleList:sub(1, 4) == "dex:" then
+  isDexMode = true
+  local dexPath = simpleList:sub(5)
+  local reader = luajava.newInstance("com.nekolaska.internal.ClassNamesReader", activity.applicationContext)
+  classList = luajava.astable(reader.readDexTopClasses(dexPath))
+  classCount = #classList
   activity.setContentView(res.layout.api_main)
-  ClassesLen = #cls
+  activity.setTitle(dexPath:match(".*/(.*)") or dexPath)
+elseif simpleList then
+  ClassesNames.ensure()
+  classList = ClassesNames.classes
+  activity.setContentView(res.layout.api_main)
+  classCount = #classList
  else
-  cls = ClassesNames.top_classes
+  ClassesNames.ensure()
+  classList = ClassesNames.top_classes
   activity.setContentView(res.layout.api_main)
-  ClassesLen = #cls
+  classCount = #classList
 end
 
-function copyText(str)
+local function copyText(str)
   activity.getSystemService(Context.CLIPBOARD_SERVICE).setText(str)
   Toast.makeText(activity, tostring(str) .. res.string.copy_success, Toast.LENGTH_LONG).show()
 end
 
-clist.onItemLongClick = function(l, v)
-  copyText(v.Text)
+clist.onItemLongClick = function(listView, itemView)
+  copyText(itemView.Text)
   return true
 end
 
-clist.onItemClick = function(l, v)
-  activity.newActivity(activity.getLuaDir() .. "/activities/api/sub/main", { v.Text })
+clist.onItemClick = function(listView, itemView)
+  activity.newActivity(activity.getLuaDir() .. "/activities/api/sub/main", { itemView.Text })
   return true
 end
 
-function 列表(t, s)
-  local ar = ArrayAdapter(activity, R.layout.item_check)
-  if s then
-    ar.clear()
-    for k, v in (t) do
-      local aa, bb = utf8.find(v:lower():gsub([[%$]], [[.]]), s, 1, true)
-      ar.add(SpannableString(v).setSpan(ForegroundColorSpan(primaryColor), aa - 1, bb, 34))
+local function renderClassList(data, searchText)
+  local adapter = ArrayAdapter(activity, R.layout.item_check)
+  adapter.clear()
+  if searchText then
+    if isDexMode then
+      for _, className in ipairs(data) do
+        local matchStart, matchEnd = utf8.find(className:lower():gsub([[%$]], [[.]]), searchText, 1, true)
+        adapter.add(SpannableString(className).setSpan(ForegroundColorSpan(primaryColor), matchStart - 1, matchEnd, 34))
+      end
+     else
+      for _, className in (data) do
+        local matchStart, matchEnd = utf8.find(className:lower():gsub([[%$]], [[.]]), searchText, 1, true)
+        adapter.add(SpannableString(className).setSpan(ForegroundColorSpan(primaryColor), matchStart - 1, matchEnd, 34))
+      end
     end
    else
-    ar.clear()
-    for k, v in t do
-      ar.add(v)
+    if isDexMode then
+      for _, className in ipairs(data) do
+        adapter.add(className)
+      end
+     else
+      for _, className in data do
+        adapter.add(className)
+      end
     end
   end
-  clist.setAdapter(ar)
+  clist.setAdapter(adapter)
 end
 
 edit.addTextChangedListener {
-  onTextChanged = function(a, b, c, d)
-    local a = tostring(a)
-    if ((b == 0 and c == 1 and d == 0) or (b == 0 and c == 0 and d == 1)) then
+  onTextChanged = function(text, start, before, count)
+    local input = tostring(text)
+    if (start == 0 and before == 1 and count == 0) or (start == 0 and before == 0 and count == 1) then
       return
     end
 
-    local s = a:gsub([[%$]], [[.]]):lower()
-    local t = {}
+    local searchLower = input:gsub([[%$]], [[.]]):lower()
+    local filtered = {}
 
-    if s:len() < 2 then
-      列表(cls)
-      edit.Hint = ClassesLen .. " " .. res.string.classes
+    if searchLower:len() < 2 then
+      renderClassList(classList)
+      edit.Hint = classCount .. " " .. res.string.classes
      else
       xTask(function()
-        for i = 0, ClassesLen-1 do
-          local v = cls[i]
-          if v:lower():gsub([[%$]], [[.]]):find(s, 1, true) then
-            t[#t + 1] = v
+        if isDexMode then
+          -- Lua table: 1-based ipairs
+          for _, v in ipairs(classList) do
+            if v:lower():gsub([[%$]], [[.]]):find(searchLower, 1, true) then
+              filtered[#filtered + 1] = v
+            end
+          end
+         else
+          -- Java List: 0-based index
+          for i = 0, classCount - 1 do
+            local v = classList[i]
+            if v:lower():gsub([[%$]], [[.]]):find(searchLower, 1, true) then
+              filtered[#filtered + 1] = v
+            end
           end
         end
-        end,function()
-        列表(t, s)
-        edit.Hint = #t .. " " .. res.string.classes
+      end, function()
+        renderClassList(filtered, searchLower)
+        edit.Hint = #filtered .. " " .. res.string.classes
       end)
     end
   end
 }
 
-function ChangeList()
-  列表(cls)
+local function resetList()
+  renderClassList(classList)
   edit.Text = ""
-  edit.Hint = ClassesLen .. " " .. res.string.classes
+  edit.Hint = classCount .. " " .. res.string.classes
 end
 
-ChangeList()--初始化列表
+resetList() -- 初始化列表
 
-function onResult(a, b)
-  edit.Text = b
-  edit.setSelection(b:len())
+function onResult(name, text)
+  edit.Text = text
+  edit.setSelection(text:len())
 end
 

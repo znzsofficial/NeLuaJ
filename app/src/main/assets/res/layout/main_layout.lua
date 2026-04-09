@@ -15,7 +15,7 @@ import "com.google.android.material.divider.MaterialDivider";
 import "com.google.android.material.tabs.TabLayout"
 import "com.google.android.material.textview.MaterialTextView"
 import "com.nekolaska.internal.MyFullDraggableContainer"
-import "com.nekolaska.internal.MyFileTabView"
+import "github.daisukiKaffuChino.LuaFileTabView"
 --import "vinx.material.textfield.MaterialTextField"
 
 local ColorUtil = this.themeUtil
@@ -135,6 +135,18 @@ return {
           layout_width = "fill";
           orientation = "vertical";
           {
+            HorizontalScrollView,
+            horizontalScrollBarEnabled = false,
+            layout_width = "match",
+            visibility = 8, -- 默认隐藏，有候选结果时显示
+            id = "select_hint_scroll",
+            {
+              LinearLayout,
+              layout_width = "match",
+              id = "select_hint_bar",
+            },
+          },
+          {
             LuaEditor;
             layout_height = "fill";
             layout_width = "fill";
@@ -184,7 +196,7 @@ return {
         layout_height = "match_parent";
         id = "head";
         {
-          MyFileTabView,
+          LuaFileTabView,
           id = "filetab",
           layout_width = "match",
           layout_height = "48dp",

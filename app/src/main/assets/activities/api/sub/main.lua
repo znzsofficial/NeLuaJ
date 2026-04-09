@@ -4,7 +4,6 @@ import "android.widget.ImageView"
 import "android.widget.LinearLayout"
 import "android.widget.RelativeLayout"
 import "android.widget.Toast"
-import "android.graphics.Color"
 import "android.graphics.drawable.ColorDrawable"
 import "android.view.View"
 import "android.view.WindowManager"
@@ -12,32 +11,28 @@ import "android.animation.ObjectAnimator"
 import "android.animation.AnimatorSet"
 import "com.androlua.adapter.LuaAdapter"
 import "androidx.cardview.widget.CardView"
+import "com.google.android.material.card.MaterialCardView"
 import "android.text.SpannableString"
 import "android.text.style.ForegroundColorSpan"
-import "android.text.style.UnderlineSpan"
-import "android.text.style.ClickableSpan"
-import "android.graphics.drawable.GradientDrawable"
-import "android.text.method.LinkMovementMethod"
-import "com.google.android.material.card.MaterialCardView"
+
 import "com.google.android.material.textview.MaterialTextView"
 import "com.google.android.material.dialog.MaterialAlertDialogBuilder"
 local DecelerateInterpolator = luajava.newInstance "android.view.animation.DecelerateInterpolator"
-local thisField
 
 local table = table
 local insert = table.insert
 local utf8 = utf8
 local string = string
 
-local clazz=...
+local clazz = ...
 import "activities.api.sub.util"
 
 this.setTheme(R.style.Theme_NeLuaJ_Material3_DynamicColors)
 
 local ColorUtil = this.themeUtil
-local primaryColor=ColorUtil.ColorPrimary
-local secondaryColor=ColorUtil.ColorSecondary
-local tertiaryc=ColorUtil.ColorTertiary
+local primaryColor = ColorUtil.ColorPrimary
+local secondaryColor = ColorUtil.ColorSecondary
+local tertiaryColor = ColorUtil.ColorTertiary
 
 this.setContentView(loadlayout(res.layout.api_sub))
 .setTitle(clazz)
@@ -46,8 +41,6 @@ this.setContentView(loadlayout(res.layout.api_sub))
 .setBackgroundDrawable(ColorDrawable(ColorUtil.getColorBackground()))
 .setDisplayShowHomeEnabled(true)
 .setDisplayHomeAsUpEnabled(true)
-
-
 
 local window = activity.getWindow()
 .setNavigationBarColor(0)
@@ -60,526 +53,515 @@ if this.isNightMode() then
   window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR)
 end
 
-eee,class = assignClass(clazz)
+local classInfo, targetClass = assignClass(clazz)
 
 local function copyText(content)
   activity.getSystemService(Context.CLIPBOARD_SERVICE).setText(tostring(content))
 end
 
---分离修饰类和方法类、简化。
-function vvv(a,tag)
-  local i=0
-  for v a:gfind(" ")do
-    i=v
+-- 分离修饰符和方法体，并根据分类做简化
+local function splitModifierAndBody(raw, category)
+  local lastSpace = 0
+  for pos raw:gfind(" ") do
+    lastSpace = pos
   end
-  local aa=a:sub(1,i)--修饰类
-  local bb=a:sub(i+1,a:len())--方法类
-  ----------------------------
-  if tag=="bb" or tag=="cc"then
-    -----本类显示简化-----
-    local cc=class.getSimpleName()
+  local modifier = raw:sub(1, lastSpace)
+  local body = raw:sub(lastSpace + 1, raw:len())
 
-    if bb:match("(.+)%("):find(cc)then
-      bb=bb:sub(bb:find(cc),#bb)
+  if category == "bb" or category == "cc" then
+    -- 本类方法简化：去掉包名前缀
+    local simpleName = targetClass.getSimpleName()
+    local beforeParen = body:match("(.+)%(")
+    if beforeParen and beforeParen:find(simpleName) then
+      body = body:sub(body:find(simpleName), #body)
     end
-
-    --[[
-bb=bb:gsub("java.lang.Object","Object")
-bb=bb:gsub("java.lang.String","String")
-bb=bb:gsub("android.view.","")
-bb=bb:gsub("android.","")
-]]
-    --字段简化---
-   elseif tag=="ee" then
-    bb= bb:match("([^%p]+.[^.]+)$")
+   elseif category == "ee" then
+    -- 字段简化：只保留类型和字段名
+    body = body:match("([^%p]+.[^.]+)$")
   end
 
-  return aa,bb
+  return modifier, body
 end
 
-
-CAdapter = (function(item)
-  local tab = {}
-  local tab2 = {{text="全部"}}
-  for _,v in ipairs(eee.cc) do
-    local aa = vvv(v,"cc")
-    local bb = aa:gsub("public ","")
-    if not table.find(tab,bb) then
-      insert(tab,bb)
-      insert(tab2,{text=bb})
+-- 构建方法分类过滤器的 Spinner 适配器
+local function createMethodFilterAdapter(itemLayout)
+  local seen = {}
+  local items = { { text = "全部" } }
+  for _, v in ipairs(classInfo.cc) do
+    local modifier = splitModifierAndBody(v, "cc")
+    local label = modifier:gsub("public ", "")
+    if not table.find(seen, label) then
+      insert(seen, label)
+      insert(items, { text = label })
     end
   end
-  --字节小大排序
-  table.sort(tab2,function(a,b)
+  table.sort(items, function(a, b)
     return utf8.len(a.text) < utf8.len(b.text)
   end)
-  return LuaAdapter(activity,tab2,item)
-end)
-
-HAdapter = (function(item)
-  local tab = {}
-  local aab=android.R.getClasses()
-  for i=0,#aab-1 do
-    if #aab[i].getDeclaredFields() > 0 then
-      insert(tab,{text=aab[i].getSimpleName()})
-    end
-  end
-  --字母顺序排序
-  table.sort(tab,function(a,b)
-    return a.text < b.text
-  end)
-  return LuaAdapter(activity,tab,item)
-end)
---________________________________________________
-
-
-function adp()
-  local item={
-    LinearLayout,
-    orientation="vertical",
-    layout_height="wrap";
-    layout_width="match",
-    {
-      MaterialTextView,
-      id="text",
-      layout_margin="15dp",
-      textColor=textc;
-      textStyle="bold",
-    },
-  }
-
-  spc.Adapter = CAdapter(item)
-
-  sph.Adapter = HAdapter(item)
-
+  return LuaAdapter(activity, items, itemLayout)
 end
 
-adp()
+-- 构建 android.R 子类的 Spinner 适配器
+local function createRClassAdapter(itemLayout)
+  local items = {}
+  local rClasses = android.R.getClasses()
+  for i = 0, #rClasses - 1 do
+    if #rClasses[i].getDeclaredFields() > 0 then
+      insert(items, { text = rClasses[i].getSimpleName() })
+    end
+  end
+  table.sort(items, function(a, b)
+    return a.text < b.text
+  end)
+  return LuaAdapter(activity, items, itemLayout)
+end
 
-aaa={"aa","bb","cc","dd","ee","ff","gg","hh"}
+-- 初始化两个 Spinner 的适配器
+local function initSpinnerAdapters()
+  local itemLayout = {
+    LinearLayout,
+    orientation = "vertical",
+    layout_height = "wrap",
+    layout_width = "match",
+    {
+      MaterialTextView,
+      id = "text",
+      layout_margin = "15dp",
+      textStyle = "bold",
+    },
+  }
+  spc.Adapter = createMethodFilterAdapter(itemLayout)
+  sph.Adapter = createRClassAdapter(itemLayout)
+end
 
---分类按钮点击函数
+initSpinnerAdapters()
 
-function ll(a)
-  tag=a.Tag
-  ec=eee[tag]
+-- 分类按钮名称列表和 name→view 映射
+local categoryNames = { "aa", "bb", "cc", "dd", "ee", "ff", "gg", "hh" }
+local categoryViews = { aa = aa, bb = bb, cc = cc, dd = dd, ee = ee, ff = ff, gg = gg, hh = hh }
 
-  if tag == "cc" then
+local currentCategory   -- 当前选中的分类标签
+local currentList       -- 当前分类的数据列表
+local filteredMethods   -- cc 分类的过滤子集
+local modifierList = {} -- 每行对应的修饰符文本
+
+-- 分类按钮点击
+local function onCategoryClick(cardView)
+  currentCategory = cardView.Tag
+  currentList = classInfo[currentCategory]
+
+  if currentCategory == "cc" then
     spc.setVisibility(1)
     sph.setVisibility(8)
-    ed.setWidth(activity.getWidth()/1.8)
-    ec=ecc or eee[tag]
-   elseif tag == "hh" then
+    ed.setWidth(activity.getWidth() / 1.8)
+    currentList = filteredMethods or classInfo[currentCategory]
+   elseif currentCategory == "hh" then
     sph.setVisibility(1)
     spc.setVisibility(8)
-    ed.setWidth(activity.getWidth()/1.5)
+    ed.setWidth(activity.getWidth() / 1.5)
    else
     spc.setVisibility(8)
     sph.setVisibility(8)
     ed.setWidth(activity.getWidth())
   end
 
-  local Anim = AnimatorSet()
-  local X=ObjectAnimator.ofFloat(li, "translationY", {50, 0})
-  local A=ObjectAnimator.ofFloat(li, "alpha", {0, 1})
-  Anim.play(A).with(X)
-  Anim.setDuration(500)
+  local anim = AnimatorSet()
+  local translateY = ObjectAnimator.ofFloat(li, "translationY", { 50, 0 })
+  local fadeIn = ObjectAnimator.ofFloat(li, "alpha", { 0, 1 })
+  anim.play(fadeIn).with(translateY)
+  anim.setDuration(500)
   .setInterpolator(DecelerateInterpolator)
   .start()
 
-  for i=1,#aaa do
-    load(aaa[i]..".setCardElevation(0)")()--未选择的按钮颜色
+  -- 重置所有分类按钮为未选中样式
+  for _, name in ipairs(categoryNames) do
+    local v = categoryViews[name]
+    if v then
+      v.setCardElevation(0)
+      v.setCardBackgroundColor(0x00000000)
+      v.setStrokeColor(ColorUtil.getColorOutline())
+    end
   end
-  a.setCardElevation(4)--当前选择的按钮颜色
+  -- 选中按钮高亮
+  cardView.setCardElevation(2)
+  cardView.setCardBackgroundColor(ColorUtil.getColorSecondaryContainer())
+  cardView.setStrokeColor(ColorUtil.getColorSecondary())
 
-  ed.Text=""
+  ed.Text = ""
 end
 
---设置分类按钮点击函数和标签
-for i=1,#aaa do
-  load(aaa[i]..".Tag=aaa["..i.."]")()
-  load(aaa[i]..".onClick=function(a)ll(a) end")()
+-- 设置分类按钮点击函数和标签
+for _, name in ipairs(categoryNames) do
+  local v = categoryViews[name]
+  if v then
+    v.Tag = name
+    v.onClick = function(card) onCategoryClick(card) end
+  end
 end
 
---分类列表为0时按钮显示灰色并禁用
-for k,v in pairs(eee) do
-  if table.size(v)==0 then
-    local a = table.find(aaa,k)
-    local _k = aaa[a]
-    if _k ~= "hh" then
-      --load(aaa[a]..".BackgroundColor = 0x00FFFFFF")()
-      load(_k..".setVisibility(8)")()
-      table.remove(aaa,a)
+-- 分类列表为空时隐藏按钮
+for k, v in pairs(classInfo) do
+  if table.size(v) == 0 then
+    local idx = table.find(categoryNames, k)
+    if idx and categoryNames[idx] ~= "hh" then
+      local view = categoryViews[categoryNames[idx]]
+      if view then view.setVisibility(8) end
+      table.remove(categoryNames, idx)
     end
   end
 end
 
-function 切换cc(a,b)
-  local aa = "public " .. b
-  local bb = aa:gsub("%p","^")
-  local tab = {}
-  for k,v in ipairs(eee.cc) do
-    local cc=v:gsub("%p","^")
-    if cc:find(bb) then
-      insert(tab,v)
+-- 切换 cc 分类的方法过滤
+local function switchMethodFilter(position, filterName)
+  local prefix = "public " .. filterName
+  local escaped = prefix:gsub("%p", "^")
+  local filtered = {}
+  for _, v in ipairs(classInfo.cc) do
+    local escapedMethod = v:gsub("%p", "^")
+    if escapedMethod:find(escaped) then
+      insert(filtered, v)
     end
   end
-  if b == "全部" then
-    ecc=eee.cc
+  if filterName == "全部" then
+    filteredMethods = classInfo.cc
    else
-    ecc=tab
+    filteredMethods = filtered
   end
   cc.performClick()
 end
 
-local function 切换R类(a,b)
-  eee.hh={}
-  local R=load("return android.R."..b..".getFields()")()
-  for k,v in R do
-    local RR="android.R."..b.."."..v.Name
-    insert(eee.hh,RR)
+-- 切换 R 类资源子类
+local function switchRClass(position, className)
+  classInfo.hh = {}
+  local rClass = luajava.bindClass("android.R$" .. className)
+  local fields = rClass.getFields()
+  for _, field in (fields) do
+    insert(classInfo.hh, "android.R." .. className .. "." .. field.Name)
   end
   hh.performClick()
 end
 
-
---R类资源切换监听
-
-spc.setOnItemSelectedListener{
-  onItemSelected=function(a,b,c,d)
-    if b then
-      b.BackgroundColor=0x00000000
-      local e=b.Tag.text.Text--切换项名
-      切换cc(d,e)
+-- Spinner 监听
+spc.setOnItemSelectedListener {
+  onItemSelected = function(adapter, view, position, id)
+    if view then
+      view.BackgroundColor = 0x00000000
+      switchMethodFilter(id, view.Tag.text.Text)
     end
   end
 }
 
-sph.setOnItemSelectedListener{
-  onItemSelected=function(a,b,c,d)
-    if b then
-      b.BackgroundColor=0x00000000
-      local e=b.Tag.text.Text--切换项名
-      切换R类(d,e)
+sph.setOnItemSelectedListener {
+  onItemSelected = function(adapter, view, position, id)
+    if view then
+      view.BackgroundColor = 0x00000000
+      switchRClass(id, view.Tag.text.Text)
     end
   end
 }
 
-
-
-function 列表(a,s)
-
-  local function vv(a)
-    local i=0
-    for v a:gfind(" ")do
-      i=v
+-- 渲染列表
+local function renderList(dataList, searchText)
+  -- 提取方法体用于排序
+  local function extractBody(raw)
+    local lastSpace = 0
+    for pos raw:gfind(" ") do
+      lastSpace = pos
     end
-    return a:sub(i,a:len())
+    return raw:sub(lastSpace, raw:len())
   end
 
-  table.sort(a,function(a,b)
-    return (vv(a):lower()) < (vv(b):lower())
+  table.sort(dataList, function(a, b)
+    return extractBody(a):lower() < extractBody(b):lower()
   end)
 
-  item={
+  local listItemLayout = {
     LinearLayout,
-    orientation="vertical",
-    layout_height="wrap";
-    layout_width="match";
-    { RelativeLayout,
+    orientation = "vertical",
+    layout_height = "wrap",
+    layout_width = "match",
+    paddingTop = "8dp",
+    paddingBottom = "8dp",
+    paddingLeft = "12dp",
+    paddingRight = "12dp",
+    {
+      RelativeLayout,
+      layout_width = "match",
       {
-        MaterialTextView,--修饰类、翻译
-        id="ep",
-        textSize="10sp",
-        textColor=primaryColor;
-        layout_marginTop="2dp",
-        layout_marginLeft="6dp";
+        MaterialTextView, -- 修饰符
+        id = "ep",
+        textSize = "11sp",
+        textColor = primaryColor,
+        layout_alignParentLeft = "true",
       },
       {
-        MaterialTextView,--列表序号
-        id="js",
-        textSize="8sp",
-        textColor=secondaryColor;
-        layout_marginRight="8dp";
-        layout_alignParentRight="true";
+        MaterialTextView, -- 序号
+        id = "js",
+        textSize = "10sp",
+        textColor = secondaryColor,
+        layout_alignParentRight = "true",
       },
     },
     {
-      MaterialTextView,--主要内容
-      id="ez",
-      singleLine=false;
-      layout_margin="2dp",
-      layout_marginLeft="6dp";
+      MaterialTextView, -- 主要内容
+      id = "ez",
+      singleLine = false,
+      layout_marginTop = "2dp",
+      textSize = "14sp",
     },
   }
 
-  adp=LuaAdapter(activity,item)
-  li.setAdapter(adp)
-  adp.clear()
-  if s then--搜索时
-    publictable={}
-    for k,v in ipairs(a) do
-      local cc,dd=vvv(v,tag)
-      insert(publictable,cc)
-      local aa,bb= dd:lower():find(s,1,true)
-      adp.add({ep=cc,ez=SpannableString(dd).setSpan(ForegroundColorSpan(primaryColor),aa-1,bb,34),js=k})
-    end
-   else--未搜索时
-    publictable={}
-    count=0
-    for k,v in ipairs(a) do
-      local aa,bb=vvv(v,tag)
-      insert(publictable,aa)
-      adp.add({ep=aa,ez=bb,js=k})
-      --判断类库是否存在该子类
-      --[[
-if tag=="aa" and not cl.containsValue(bb) then
-cl.put(cl.size()+1,bb)
-tabadd=true
-count=count+1
-end]]
+  local listAdapter = LuaAdapter(activity, listItemLayout)
+  li.setAdapter(listAdapter)
+  listAdapter.clear()
+  modifierList = {}
 
+  if searchText then
+    -- 搜索模式
+    for k, v in ipairs(dataList) do
+      local modifier, body = splitModifierAndBody(v, currentCategory)
+      insert(modifierList, modifier)
+      local matchStart, matchEnd = body:lower():find(searchText, 1, true)
+      listAdapter.add({
+        ep = modifier,
+        ez = SpannableString(body).setSpan(ForegroundColorSpan(primaryColor), matchStart - 1, matchEnd, 34),
+        js = k,
+      })
+    end
+   else
+    -- 正常模式
+    for k, v in ipairs(dataList) do
+      local modifier, body = splitModifierAndBody(v, currentCategory)
+      insert(modifierList, modifier)
+      listAdapter.add({ ep = modifier, ez = body, js = k })
     end
   end
-  --转table保存
-  --[[
-if tabadd then
-tabadd=false
-io.open(vl,"w"):write(dump(luajava.astable(cl))):close()
-print("已自动添加"..count.."项新的类,重启后更新类列表")
-count=0
-end
-]]
-  adp.notifyDataSetChanged()
+
+  listAdapter.notifyDataSetChanged()
   li.smoothScrollToPosition(0)
 end
 
-ed.addTextChangedListener{
-  onTextChanged=function(a,b,c,d)
-
-    if tostring(a):len()<=2 and ((b==0 and c ==1 and d==0) or (b==0 and c==0 and d==1)) then
+-- 搜索框监听
+ed.addTextChangedListener {
+  onTextChanged = function(text, start, before, count)
+    local input = tostring(text)
+    if input:len() <= 2 and ((start == 0 and before == 1 and count == 0) or (start == 0 and before == 0 and count == 1)) then
       return
     end
 
-    local e=tostring(a)
-    local s=e:lower()
-    if s:len() < 2 then
-      列表(ec)
+    local searchLower = input:lower()
+    if searchLower:len() < 2 then
+      renderList(currentList)
      else
-      local t={}
-      if tag == "cc" then
-        local data={set=".set",get=".get",is=".is",add=".add",li="listener",bo="boolean"}--快捷搜索
-        for k,v in pairs(data) do
-          if s==k then
-            s=v
-          end
+      -- cc 分类的快捷搜索别名
+      if currentCategory == "cc" then
+        local shortcuts = { set = ".set", get = ".get", is = ".is", add = ".add", li = "listener", bo = "boolean" }
+        searchLower = shortcuts[searchLower] or searchLower
+      end
+      local filtered = {}
+      for _, v in ipairs(currentList) do
+        local _, body = splitModifierAndBody(v, currentCategory)
+        if body:lower():find(searchLower, 1, true) then
+          insert(filtered, v)
         end
       end
-      for _,v in ipairs(ec) do
-        local aa,bb=vvv(v,tag)
-        if bb:lower():find(s,1,true) then
-          insert(t,v)
-        end
-      end
-      列表(t,s)
+      renderList(filtered, searchLower)
     end
   end
 }
 
---长按
-li.onItemLongClick=function(l,v)
-  thisField=v.Tag.ez.Text
-  Toast.makeText(activity,thisField..res.string.copy_success, Toast.LENGTH_LONG).show()
-  copyText(tostring(thisField))
+-- 长按复制
+li.onItemLongClick = function(listView, itemView)
+  local fieldText = itemView.Tag.ez.Text
+  Toast.makeText(activity, fieldText .. res.string.copy_success, Toast.LENGTH_LONG).show()
+  copyText(tostring(fieldText))
   return true
 end
 
---弹窗布局
-local ass={
-  LinearLayout;
-  orientation="1";
-  padding="20dp",
+-- 详情弹窗布局
+local detailDialogLayout = {
+  LinearLayout,
+  orientation = "vertical",
+  padding = "24dp",
   {
-    CardView;
-    id="asf",
-    layout_height="28dp";
-    layout_width="-1";
-    Visibility=8;
-  };
+    MaterialCardView,
+    id = "colorPreview",
+    layout_height = "32dp",
+    layout_width = "match",
+    layout_marginBottom = "12dp",
+    radius = "12dp",
+    Visibility = 8,
+  },
   {
-    ImageView;
-    id="asg",
-    layout_height="88dp";
-    layout_width="88dp";
-    layout_gravity="center";
-    Visibility=8;
-  };
+    ImageView,
+    id = "drawablePreview",
+    layout_height = "96dp",
+    layout_width = "96dp",
+    layout_gravity = "center",
+    layout_marginBottom = "12dp",
+    Visibility = 8,
+  },
   {
-    MaterialTextView;
-    id="asd",
-    textSize="15sp",
-    padding="6dp";
-    textIsSelectable=true
-  };
+    MaterialTextView,
+    id = "detailText",
+    textSize = "14sp",
+    padding = "4dp",
+    textIsSelectable = true,
+  },
   {
-    MaterialTextView;
-    id="ase",
-    textSize="0sp",
-    textIsSelectable=true
-  };
+    MaterialTextView,
+    id = "detailModifier",
+    textSize = "0sp",
+    textIsSelectable = true,
+  },
+}
 
-};
-local function cvv(a)
-  a=a:match("(.-)%(")
-  local i=0
-  for v a:gfind("%.(.-)")do
-    i=v
+-- 从方法签名中提取不带参数的方法名
+local function extractMethodName(raw)
+  raw = raw:match("(.-)%(")
+  local lastDot = 0
+  for pos raw:gfind("%.(.-)") do
+    lastDot = pos
   end
-  return a:sub(i+1,a:len())
+  return raw:sub(lastDot + 1, raw:len())
 end
 
-li.onItemClick=function(l,v,a,b)
+-- 列表项点击 → 详情弹窗
+li.onItemClick = function(listView, itemView, position, index)
+  local btnCopyAll = "全部复制"
+  local btnCopyNoArgs = "无参复制"
+  local btnQuerySelected = "选中查询"
+  itemView.BackgroundColor = 0xFFFFFFFF
+  local modifierText = modifierList[index]
+  local fieldText = itemView.Tag.ez.Text
+  local dialog = MaterialAlertDialogBuilder(this)
 
-  bu1="全部复制"
-  bu2="无参复制"
-  bu3="选中查询"
-  valueType = res.string.parameter_value
-  v.BackgroundColor = 0xFFFFFFFF
-  nnn=publictable[b]
-  thisField=v.Tag.ez.Text
-  local dialog=MaterialAlertDialogBuilder(this)
+  dialog.setOnDismissListener {
+    onDismiss = function()
+      itemView.BackgroundColor = 0x00000000
+    end
+  }
 
-  dialog.setOnDismissListener{
-    onDismiss= function()
-      v.BackgroundColor = 0x00000000
-  end}
+  dialog.setView(loadlayout(detailDialogLayout))
+  dialog.setTitle(modifierText)
+  detailModifier.Text = modifierText
 
-  dialog.setView(loadlayout(ass))
-  dialog.setTitle(nnn)
-  ase.Text=nnn
+  if currentCategory == "aa" or currentCategory == "bb" or currentCategory == "cc"
+      or currentCategory == "gg" or currentCategory == "ff" then
 
-  if tag=="aa" or tag=="bb"or tag=="cc"or tag=="gg"or tag=="ff" then
-    local a,b=utf8.find(thisField,"%((.+)%)")
-    local c = utf8.match(thisField,"%((.+)%)")
+    local paramStart, paramEnd = utf8.find(fieldText, "%((.+)%)")
+    local paramContent = utf8.match(fieldText, "%((.+)%)")
 
-    SpanField=nil
-    asd.setText(SpanField or thisField)
-    if a then--有参数时
-      SpanField=SpannableString(thisField)
-
-      local ss=c:gsub("%,","\f")
-      for k,v ss:gfind("%g+") do
-        SpanField.setSpan(ForegroundColorSpan(tertiaryc),a+k-1,a+v,34)
+    local spanField = nil
+    detailText.setText(fieldText)
+    if paramStart then
+      spanField = SpannableString(fieldText)
+      local separated = paramContent:gsub("%,", "\f")
+      for matchStart, matchEnd separated:gfind("%g+") do
+        spanField.setSpan(ForegroundColorSpan(tertiaryColor), paramStart + matchStart - 1, paramStart + matchEnd, 34)
       end
-
-
-      asd.setHighlightColor(primaryColor);
-
-      asd.setText(SpanField)
+      detailText.setHighlightColor(primaryColor)
+      detailText.setText(spanField)
     end
 
-    dialog.setNegativeButton(bu1,{onClick=function(v)
-        copyText(thisField)
-    end})
-    if tag=="ff"or tag=="gg" then
-    end
-    if tag=="bb" or tag=="cc" then
-      dialog.setNeutralButton(bu2,{onClick=function(v)
-          -- local aa= thisField:sub(1,thisField:find("(",1,true)-1)
-          local aa =cvv(thisField)
-          copyText(aa)
-      end})
+    dialog.setNegativeButton(btnCopyAll, { onClick = function()
+      copyText(fieldText)
+    end })
+
+    if currentCategory == "bb" or currentCategory == "cc" then
+      dialog.setNeutralButton(btnCopyNoArgs, { onClick = function()
+        copyText(extractMethodName(fieldText))
+      end })
     end
 
-
-    dialog.setPositiveButton(bu3,{onClick=function(v)
-        local aa=asd.getSelectionStart()
-        local bb= asd.getSelectionEnd()
-        local cc=ase.getSelectionStart()
-        local dd= ase.getSelectionEnd()
-        local a=utf8.sub(thisField,aa+1,bb)
-        local b=utf8.sub(nnn,cc+1,dd)
-        local c= a .. b
-        if #c == 0 then
-          print("未选择内容")
-         else
-          if pcall(function()luajava.bindClass(c)end) then
-            activity.newActivity(activity.getLuaDir().."/activities/api/sub/main",{c})
-            return
-          end
-
-          activity.result({c})
+    dialog.setPositiveButton(btnQuerySelected, { onClick = function()
+      local selStart = detailText.getSelectionStart()
+      local selEnd = detailText.getSelectionEnd()
+      local modSelStart = detailModifier.getSelectionStart()
+      local modSelEnd = detailModifier.getSelectionEnd()
+      local selectedField = utf8.sub(fieldText, selStart + 1, selEnd)
+      local selectedModifier = utf8.sub(modifierText, modSelStart + 1, modSelEnd)
+      local combined = selectedField .. selectedModifier
+      if #combined == 0 then
+        print("未选择内容")
+       else
+        if pcall(function() luajava.bindClass(combined) end) then
+          activity.newActivity(activity.getLuaDir() .. "/activities/api/sub/main", { combined })
+          return
         end
-    end})
+        activity.result({ combined })
+      end
+    end })
   end
 
-
-  if tag=="ee" or tag=="hh"then
-
-    local p = string.match(tostring(thisField), "%.([^%.]+)$")
+  if currentCategory == "ee" or currentCategory == "hh" then
+    local fieldName = string.match(tostring(fieldText), "%.([^%.]+)$")
+    local value
     try
-      value = tostring(luajava.bindClass(clazz).getDeclaredField(p).setAccessible(true).get(nil))
+      value = tostring(luajava.bindClass(clazz).getDeclaredField(fieldName).setAccessible(true).get(nil))
      catch
       try
-        load("value=tostring("..thisField..")")()
+        local fn = load("return tostring(" .. fieldText .. ")")
+        value = fn and fn() or "获取失败"
        catch
         try
-          load("value="..thisField..".toString()")()
+          local fn = load("return " .. fieldText .. ".toString()")
+          value = fn and fn() or "获取失败"
          catch
-          value="获取失败"
+          value = "获取失败"
         end
       end
     end
 
-
-    if tag=="hh"then
-      valueType="资源ID"
-      if sph.getSelectedView().Tag.text.Text == "color" then
-        load("value=tostring(activity.getResources().getColor("..value.."))")()
-        asf.setVisibility(1)
-        asf.BackgroundColor=tonumber(value)
-        valueType="色码"
-      end
-      if sph.getSelectedView().Tag.text.Text == "drawable" then
-        asg.setVisibility(1)
-        asd.setVisibility(8)
-        asg.setBackground(activity.getResources().getDrawable(tonumber(value)))
-        value="ImageView.setBackground(activity.getResources().getDrawable("..tonumber(value).."))"
-        valueType=res.string.method
-      end
-      if sph.getSelectedView().Tag.text.Text == "string" then
-        load("value=tostring(activity.getResources().getString("..value.."))")()
-        valueType="字符"
+    local valueLabel = res.string.parameter_value
+    if currentCategory == "hh" then
+      valueLabel = "资源ID"
+      local rType = sph.getSelectedView().Tag.text.Text
+      if rType == "color" then
+        value = tostring(activity.getResources().getColor(tonumber(value)))
+        colorPreview.setVisibility(1)
+        colorPreview.BackgroundColor = tonumber(value)
+        valueLabel = "色码"
+      elseif rType == "drawable" then
+        drawablePreview.setVisibility(1)
+        detailText.setVisibility(8)
+        drawablePreview.setBackground(activity.getResources().getDrawable(tonumber(value)))
+        value = "ImageView.setBackground(activity.getResources().getDrawable(" .. tonumber(value) .. "))"
+        valueLabel = res.string.method
+      elseif rType == "string" then
+        value = tostring(activity.getResources().getString(tonumber(value)))
+        valueLabel = "字符"
       end
     end
-    asd.setText(thisField.."\n\n"..valueType..": "..value)
-    dialog.setNegativeButton(res.string.copy_field, function(v)
-      copyText(thisField)
+    detailText.setText(fieldText .. "\n\n" .. valueLabel .. ": " .. value)
+    dialog.setNegativeButton(res.string.copy_field, function()
+      copyText(fieldText)
     end)
-    dialog.setNeutralButton(string.format(res.string.copy_value, valueType), function(v)
+    dialog.setNeutralButton(string.format(res.string.copy_value, valueLabel), function()
       copyText(value)
     end)
-
   end
-  if tag=="aa"or tag=="dd"then
-    asd.setText(thisField)
-    dialog.setNegativeButton(bu1,{onClick=function(v)
-        copyText(thisField)
-    end})
+
+  if currentCategory == "aa" or currentCategory == "dd" then
+    detailText.setText(fieldText)
+    dialog.setNegativeButton(btnCopyAll, { onClick = function()
+      copyText(fieldText)
+    end })
   end
 
   dialog.show()
-
   return true
 end
---初始显示列表
-function 初始显示()
-  if #eee.cc ~= 0 then
+
+-- 初始显示列表
+local function showInitialCategory()
+  if #classInfo.cc ~= 0 then
     cc.performClick()
    else
-    for i=1,#aaa do
-      if #eee[aaa[i]] > 0 then
-        load(aaa[i]..".performClick()")()
+    for _, name in ipairs(categoryNames) do
+      if #classInfo[name] > 0 then
+        local v = categoryViews[name]
+        if v then v.performClick() end
         return
       end
     end
@@ -587,11 +569,10 @@ function 初始显示()
   end
 end
 
-初始显示()
+showInitialCategory()
 
 function onOptionsItemSelected(m)
   if m.getItemId() == android.R.id.home
     activity.finish()
   end
 end
-

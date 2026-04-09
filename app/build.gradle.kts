@@ -158,4 +158,11 @@ dependencies {
     implementation(libs.coil.network.okhttp)
     implementation(libs.coil.svg)
     implementation(libs.coil.gif)
+
+    //Markwon
+    implementation(libs.markwon.core)
+    implementation(libs.markwon.html)
+    implementation(libs.markwon.linkify)
+    implementation(libs.markwon.tables)
+    implementation(libs.markwon.strikethrough)
 }

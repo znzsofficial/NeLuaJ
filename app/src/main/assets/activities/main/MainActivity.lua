@@ -262,6 +262,9 @@ function onCreateOptionsMenu(menu)
     menu3.add(res.string.api_title).onMenuItemClick = function(a)
         ActivityUtil.new("api")
     end
+    menu3.add(res.string.resource_browser).onMenuItemClick = function(a)
+        ActivityUtil.new("resource")
+    end
     menu3.add(res.string.layout_helper)
     .setShowAsAction(menu_show)
     .onMenuItemClick = function(a)

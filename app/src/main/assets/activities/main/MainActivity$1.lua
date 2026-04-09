@@ -21,10 +21,15 @@ function _M.snack(arg)
     end
 end
 
-function _M.deleteFile(path, position)
+function _M.deleteFile(path)
     LuaUtil.rmDir(File(path))
-    MainActivity.RecyclerView.delete(path)
-    adapter_rv.notifyItemRemoved(position)
+    -- 通过 path 查找实际索引，避免对话框确认后 position 过时
+    local pos = MainActivity.RecyclerView.delete(path)
+    if pos then
+        adapter_rv.notifyItemRemoved(pos - 1) -- Lua 1-based → adapter 0-based
+    else
+        adapter_rv.notifyDataSetChanged()
+    end
 end
 
 function _M.newDir(path)
@@ -101,7 +106,7 @@ function _M.createProject(name)
     return _M
 end
 
-function _M.fileMenu(path, name, position)
+function _M.fileMenu(path, name)
     local layout = {}
     local sublayout = {}
     -- 顺便把name传进来，省得再获取一次
@@ -117,7 +122,7 @@ function _M.fileMenu(path, name, position)
                 .setMessage(res.string.sure_to_delete)
                 .setPositiveButton(android.R.string.ok, function()
             TabUtil.remove(path)
-            _M.deleteFile(path, position)
+            _M.deleteFile(path)
         end)
                 .setNegativeButton(android.R.string.cancel, nil)
                 .show();
@@ -181,7 +186,7 @@ function _M.fileMenu(path, name, position)
     end
 end
 
-function _M.dirMenu(path, name, position)
+function _M.dirMenu(path, name)
     local layout = {}
     local sublayout = {}
     local dirDialog = BottomSheetDialog(activity)
@@ -195,7 +200,7 @@ function _M.dirMenu(path, name, position)
                 .setTitle(name)
                 .setMessage(res.string.sure_to_delete)
                 .setPositiveButton(android.R.string.ok, function()
-            _M.deleteFile(path, position)
+            _M.deleteFile(path)
             TabUtil.checkAll()
         end)
                 .setNegativeButton(android.R.string.cancel, nil)
@@ -234,6 +239,10 @@ function _M.dirMenu(path, name, position)
             else
                 File(new_path).mkdirs()
                 _M.snack(res.string.create_success)
+                -- 如果当前正在浏览该目录，刷新列表
+                if Bean.Path.this_dir == path then
+                    MainActivity.RecyclerView.update()
+                end
             end
         end)
                 .setNegativeButton(android.R.string.cancel, nil)
@@ -251,6 +260,10 @@ function _M.dirMenu(path, name, position)
             else
                 LuaFileUtil.create(new_path, "")
                 _M.snack(res.string.create_success)
+                -- 如果当前正在浏览该目录，刷新列表
+                if Bean.Path.this_dir == path then
+                    MainActivity.RecyclerView.update()
+                end
             end
         end)
                 .setNegativeButton(android.R.string.cancel, nil)
@@ -260,19 +273,23 @@ end
 
 function _M.dexDialog(path)
     local file = File(path)
-    MaterialAlertDialogBuilder(activity)
+    local dialog = MaterialAlertDialogBuilder(activity)
             .setTitle(file.name)
             .setMessage(res.string.select_action)
-            .setNeutralButton(res.string.read_only, function()
-        file.setReadOnly()
+    -- 分析类：跳转到 API 页面，传入 dex 路径
+    dialog.setPositiveButton(res.string.api_title, function()
+        activity.newActivity(
+            activity.getLuaDir() .. "/activities/api/ApiActivity.lua",
+            { "dex:" .. path }
+        )
     end)
-            .setPositiveButton(res.string.open, function()
+    dialog.setNeutralButton(res.string.open, function()
         this.openFile(path, function()
             MainActivity.Public.snack(res.string.NoSupport)
         end)
     end)
-            .setNegativeButton(android.R.string.cancel, nil)
-            .show();
+    dialog.setNegativeButton(android.R.string.cancel, nil)
+    dialog.show()
 end
 
 function _M.InstallApk(filePath)

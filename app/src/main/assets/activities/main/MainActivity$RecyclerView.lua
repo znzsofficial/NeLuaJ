@@ -37,6 +37,7 @@ local _M = {}
 local FileList
 local Anim
 
+-- 扩展名 → 图标名
 local suffix_image = setmetatable({
     lua = "file_code",
     luac = "file_c_code",
@@ -47,7 +48,7 @@ local suffix_image = setmetatable({
     aab = "file_apk",
     class = "file_java",
     jar = "file_java",
-    dex = "file_java",
+    dex = "file_dex",
     alp = "file_zip",
     zip = "file_zip",
     bak = "file_zip",
@@ -58,9 +59,11 @@ local suffix_image = setmetatable({
     flac = "file_audio",
     mp3 = "file_audio",
     wav = "file_audio",
+    ogg = "file_audio",
     mp4 = "file_video",
     m3u8 = "file_video",
     avi = "file_video",
+    mkv = "file_video",
     idsig = "file_sig",
     png = "file_img",
     jpg = "file_img",
@@ -71,12 +74,44 @@ local suffix_image = setmetatable({
     webp = "file_img",
     heif = "file_img",
     heic = "file_img",
-    avif = "file_img"
+    avif = "file_img",
+    md = "file_text",
+    log = "file_text",
+    properties = "file_text",
+    gradle = "file_code",
+    kts = "file_code",
+    toml = "file_json",
+    cfg = "file_json",
+    ini = "file_json",
+    sh = "file_code",
+    bat = "file_code",
+    html = "file_code",
+    css = "file_code",
+    js = "file_code",
 }, {
     __index = function(self, key)
         return rawget(self, key) or "file"
     end
 })
+
+-- 图标名 → 打开方式
+-- "editor"=编辑器打开, "image"=图片查看, "dex"=dex工具, "install"=安装, "external"=系统打开
+local openAction = {
+    file_code   = "editor",
+    file_xml    = "editor",
+    file_json   = "editor",
+    file_text   = "editor",
+    file_img    = "image",
+    file_dex    = "dex",
+    file_java   = "external",
+    file_apk    = "install",
+    file_zip    = "external",
+    file_sig    = "external",
+    file_audio  = "external",
+    file_video  = "external",
+    file_c_code = "external",
+    file        = "external",
+}
 
 _M.init = function()
     Bean_Path = Bean.Path
@@ -137,6 +172,8 @@ _M.init = function()
                     local v_path = v.path
 
                     view.name.setText(v.file_name)
+                    -- 重置图标，防止 ViewHolder 复用时显示旧的异步加载结果
+                    view.name.setCompoundDrawables(nil, nil, nil, nil)
 
                     if v.img == "Project" then
                         imageLoader.enqueue(
@@ -164,7 +201,8 @@ _M.init = function()
                         end)
                     else
                         pcall(function()
-                            local drawable = res_drawable[v.img]
+                            local iconName = v.img == "file_dex" and "file_java" or v.img
+                            local drawable = res_drawable[iconName]
                             drawable.setBounds(0, 0, size, size)
                             view.name.setCompoundDrawables(drawable, nil, nil, nil)
                         end)
@@ -174,9 +212,9 @@ _M.init = function()
                         if v.img == "folder_up" then
                             return
                         elseif v.isDirectory then
-                            MainActivity.Public.dirMenu(v_path, v.file_name, holder.getBindingAdapterPosition())
+                            MainActivity.Public.dirMenu(v_path, v.file_name)
                         else
-                            MainActivity.Public.fileMenu(v_path, v.file_name, holder.getBindingAdapterPosition())
+                            MainActivity.Public.fileMenu(v_path, v.file_name)
                         end
                         return true
                     end
@@ -192,26 +230,25 @@ _M.init = function()
                             PathManager.updateDir(v_path)
                             filetab.setPath(v_path)
                             _M.update()
-                        elseif v.img == "file_img" then
-                            ActivityUtil.new("photo", v_path)
-                        elseif v.img == "file_java" then
-                            MainActivity.Public.dexDialog(v_path)
-                        elseif v.img == "file_zip"
-                                or v.img == "file_sig"
-                                or v.img == "file_audio"
-                                or v.img == "file_video"
-                                or v.img == "file_c_code"
-                                or v.img == "file" then
-                            this.openFile(v_path, function()
-                                MainActivity.Public.snack(res.string.NoSupport)
-                            end)
-                        elseif v.img == "file_apk" then
-                            MainActivity.Public.InstallApk(v_path)
-                        else
-                            -- 来自Recycler的加载请求
+                            return
+                        end
+
+                        local action = openAction[v.img] or "external"
+
+                        if action == "editor" then
                             EditorUtil.fromRecy = true
                             EditorUtil.load(v_path)
                             drawer.closeDrawer(GravityCompat.START)
+                        elseif action == "image" then
+                            ActivityUtil.new("photo", v_path)
+                        elseif action == "dex" then
+                            MainActivity.Public.dexDialog(v_path)
+                        elseif action == "install" then
+                            MainActivity.Public.InstallApk(v_path)
+                        else -- "external"
+                            this.openFile(v_path, function()
+                                MainActivity.Public.snack(res.string.NoSupport)
+                            end)
                         end
 
                     end
@@ -220,14 +257,36 @@ _M.init = function()
             }))
     mRecycler.setAdapter(adapter_rv).setLayoutManager(layoutManager)
 
-    --[[
-    filetab.addFileTabListener{
-      onSelected=function(path)
-        PathManager.updateDir(path:gsub("/sdcard",Bean_Path.system_root))
-        MainActivity.RecyclerView.update()
+    filetab.addFileTabListener {
+      onSelected = function(path)
+        -- 将 /sdcard 映射回实际存储根路径
+        local realPath = path:gsub("/sdcard", Bean_Path.system_root)
+        local dir = File(realPath)
+
+        if not dir.exists() or not dir.isDirectory() then
+          -- 路径不存在或不是目录，回退到当前有效目录
+          filetab.setDirectPath(Bean_Path.this_dir)
+          MainActivity.Public.snack(res.string.NoReadPms)
+          return
+        end
+
+        if not dir.canRead() then
+          -- 无读取权限，回退
+          filetab.setDirectPath(Bean_Path.this_dir)
+          MainActivity.Public.snack(res.string.NoReadPms)
+          return
+        end
+
+        PathManager.updateDir(realPath)
+        _M.update()
       end
-    }]]
+    }
     return _M
+end
+
+-- 排序函数提到模块级，避免每次 getList 都创建闭包
+local sortByName = function(a, b)
+    return a.file_name < b.file_name
 end
 
 local getList = function()
@@ -235,73 +294,85 @@ local getList = function()
     local table_sort = table.sort
     local match = string.match
 
-    local DirList = {}
-    local _FileList = {}
-    local file = File(path)
-    if not file.canRead() then
+    local dir = File(path)
+    if not dir.canRead() then
         return
     end
-    local fileArray = file.list()
 
-    for _, v in (fileArray) do
-        v = tostring(v)
-        local full_path = path .. "/" .. v
-        if File(full_path).isDirectory() then
-            local k = #DirList + 1
-            DirList[k] = {}
-            DirList[k].path = full_path
-            DirList[k].name = v
-            DirList[k].isDirectory = true
-        else
-            local k = #_FileList + 1
-            _FileList[k] = {}
-            _FileList[k].path = full_path
-            _FileList[k].name = v
-            _FileList[k].isDirectory = false
-        end
-    end
-    local sortFunc = function(a, b)
-        return a.name < b.name
-    end
-    table_sort(DirList, sortFunc)
-    table_sort(_FileList, sortFunc)
-
-    for _, v in ipairs(_FileList) do
-        DirList[#DirList + 1] = v
+    -- 使用 listFiles() 直接获取 File[]，避免对每个文件名重新构造 File 对象
+    local files = dir.listFiles()
+    if not files then
+        return
     end
 
-    local isRoot
-    local isProjectDir
-    --if Bean_Path.this_dir ~= Bean_Path.legacy_system_root then
-    if Bean_Path.this_dir ~= Bean_Path.system_root then
-        if Bean_Path.this_dir == Bean_Path.app_root_pro_dir then
-            isProjectDir = true
-        end
-        FileList = { { isDirectory = true, file_name = "...", path = File(Bean_Path.this_dir).getParent(), img = "folder_up" } }
-    else
-        isRoot = true
-        FileList = {}
-    end
-    for k, v in ipairs(DirList) do
-        local v_path = v.path
-        if not isRoot then
-            k = k + 1
-        else
-            k = k
-        end
-        FileList[k] = {}
-        local fileInfo = FileList[k]
-        fileInfo.path = v_path
-        fileInfo.file_name = v.name
-        fileInfo.isDirectory = v.isDirectory
-        if v.isDirectory then
-            fileInfo.img = isProjectDir and "Project" or "folder"
-        else
-            local ext = match(v_path, "%.([^%.]+)$")
-            fileInfo.img = suffix_image[ext]
+    local dirs = {}
+    local regulars = {}
+    local dirCount = 0
+    local fileCount = 0
+
+    for _, f in (files) do
+        local name = tostring(f.getName())
+        -- 过滤隐藏文件（以 . 开头），但保留 .gitignore 等常见配置文件
+        if name:sub(1, 1) ~= "." then
+            local fullPath = tostring(f.getPath())
+            if f.isDirectory() then
+                dirCount = dirCount + 1
+                dirs[dirCount] = {
+                    path = fullPath,
+                    file_name = name,
+                    isDirectory = true,
+                }
+            else
+                fileCount = fileCount + 1
+                regulars[fileCount] = {
+                    path = fullPath,
+                    file_name = name,
+                    isDirectory = false,
+                }
+            end
         end
     end
 
+    table_sort(dirs, sortByName)
+    table_sort(regulars, sortByName)
+
+    -- 判断当前目录状态
+    local isRoot = (path == Bean_Path.system_root)
+    local isProjectDir = (path == Bean_Path.app_root_pro_dir)
+
+    -- 直接构建最终 FileList，不再二次复制
+    local list = {}
+    local idx = 0
+
+    -- 非根目录时插入返回上级项
+    if not isRoot then
+        idx = 1
+        list[1] = {
+            isDirectory = true,
+            file_name = "...",
+            path = dir.getParent(),
+            img = "folder_up",
+        }
+    end
+
+    -- 目录优先
+    for i = 1, dirCount do
+        idx = idx + 1
+        local d = dirs[i]
+        d.img = isProjectDir and "Project" or "folder"
+        list[idx] = d
+    end
+
+    -- 然后是文件
+    for i = 1, fileCount do
+        idx = idx + 1
+        local f = regulars[i]
+        local ext = match(f.path, "%.([^%.]+)$")
+        f.img = suffix_image[ext]
+        list[idx] = f
+    end
+
+    FileList = list
 end
 
 local updateCallback = function()
@@ -317,10 +388,12 @@ end
 
 _M.delete = function(path)
     for k, v in ipairs(FileList) do
-        if v["path"] == path then
+        if v.path == path then
             table.remove(FileList, k)
+            return k
         end
     end
+    return nil
 end
 
 return _M

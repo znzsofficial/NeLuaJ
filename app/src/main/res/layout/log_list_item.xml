@@ -1,48 +1,68 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content">
+    android:layout_height="wrap_content"
+    android:layout_marginTop="4dp"
+    android:layout_marginBottom="4dp"
+    app:cardBackgroundColor="?attr/colorSurfaceContainerLow"
+    app:cardCornerRadius="16dp"
+    app:cardElevation="0dp"
+    app:strokeColor="?attr/colorOutlineVariant"
+    app:strokeWidth="1dp">
 
-    <!--
-    日志内容 TextView
-    它作为整个卡片的背景载体。
-    注意它的 paddingTop 非常大，这是为了给顶部的标签留出空间。
-    -->
-
-    <!--
-    日志类型标签 TextView
-    它被约束在 log_message 的左上角，并带有一些边距，
-    使其正好位于我们设计的宽边框区域内。
-    -->
-    <TextView
-        android:id="@+id/log_message"
-        android:layout_width="0dp"
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@drawable/log_item_frame"
-        android:paddingStart="16dp"
-        android:paddingTop="28dp"
-        android:paddingEnd="16dp"
-        android:paddingBottom="12dp"
-        android:textSize="18sp"
-        android:textColor="@android:color/black"
-        android:textIsSelectable="true"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        android:orientation="horizontal">
 
-    <TextView
-        android:id="@+id/log_tag"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="8dp"
-        android:layout_marginTop="4dp"
-        android:text="ERROR"
-        android:textColor="@android:color/white"
-        android:textSize="12sp"
-        android:textStyle="bold"
-        app:layout_constraintStart_toStartOf="@id/log_message"
-        app:layout_constraintTop_toTopOf="@id/log_message" />
+        <!-- 左侧色条指示器 -->
+        <View
+            android:id="@+id/log_indicator"
+            android:layout_width="4dp"
+            android:layout_height="match_parent"
+            android:background="?attr/colorOutlineVariant" />
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:paddingStart="12dp"
+            android:paddingTop="10dp"
+            android:paddingEnd="12dp"
+            android:paddingBottom="12dp">
+
+            <!-- 标签 badge -->
+            <TextView
+                android:id="@+id/log_tag"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/log_tag_background"
+                android:fontFamily="sans-serif-medium"
+                android:letterSpacing="0.04"
+                android:paddingStart="8dp"
+                android:paddingTop="2dp"
+                android:paddingEnd="8dp"
+                android:paddingBottom="2dp"
+                android:text="LOG"
+                android:textColor="@android:color/white"
+                android:textSize="11sp" />
+
+            <!-- 日志内容 -->
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/log_message"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:fontFamily="monospace"
+                android:lineSpacingExtra="2dp"
+                android:textColor="?attr/colorOnSurface"
+                android:textIsSelectable="true"
+                android:textSize="13sp" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</com.google.android.material.card.MaterialCardView>

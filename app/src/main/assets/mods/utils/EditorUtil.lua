@@ -227,7 +227,7 @@ function _M.init()
         end
          methods[#methods + 1] = "themeUtil"
         --补全
-
+        ClassesNames.ensure() -- 确保类名数据已加载
         local classes = ClassesNames.simple_top_classes
         local ms = {
             "onKeyDown", "onKeyUp", "onKeyLongPress", "onKeyShortcut",

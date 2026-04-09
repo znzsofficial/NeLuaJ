@@ -22,6 +22,7 @@ activity.setTitle('需要导入的类')
 
 local function fixImport()
   try
+    ClassesNames.ensure()
     local allClasses = ClassesNames.top_classes
     local cache = {}
     local function check(path, ret)
@@ -63,7 +64,7 @@ local function fixImport()
       -- table.sort(buf)
       for key,_ in pairs(buf) do
         key="[%.$]"..key.."$"
-        for _,v in allClasses do
+        for _,v : allClasses do
           if v:find(key) and not v:find("^org.luaj.android") then
             if cache[v]==nil then
               ret[#ret+1]=v

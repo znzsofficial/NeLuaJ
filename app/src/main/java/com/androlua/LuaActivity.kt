@@ -208,7 +208,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         globals = JsePlatform.standardGlobals()
         // globals.finder = this;
         globals.m = this
-        logAdapter = LogAdapter(this)
+        logAdapter = LogAdapter()
         lifecycleScope.launch {
             logEvents.collect { msg ->
                 showToast(msg)
@@ -313,34 +313,41 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
 
 
     private fun showLogView(isError: Boolean) {
-        if (isError) setTitle("Runtime Error")
-        else setTitle("Log")
-        supportActionBar?.elevation = 0f
+        supportActionBar?.hide()
         setContentView(R.layout.log_list)
-        findViewById<TextView>(R.id.file_name).text = File(luaFile).name
 
-        val logListView = findViewById<ListView>(R.id.log_list)
-        logListView.adapter = logAdapter
-
-        findViewById<View>(R.id.clear).setOnClickListener {
-            // 清理时也需要操作新的adapter
-            logAdapter.clear()
-            logAdapter.notifyDataSetChanged()
-        }
-        findViewById<View>(R.id.copy).setOnClickListener {
-            val clipboard = ContextCompat.getSystemService(
-                this,
-                ClipboardManager::class.java
-            )
-            val clip = ClipData.newPlainText("log", buildString {
-                for (i in 0 until logAdapter.count) {
-                    append(logAdapter.getItem(i))
-                    if (i < logAdapter.count - 1) {
-                        append("\n")
-                    }
+        val toolbar = findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.log_toolbar)
+        toolbar.title = File(luaFile).name
+        toolbar.subtitle = if (isError) "Runtime Error" else "Log"
+        toolbar.setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
+        toolbar.setNavigationOnClickListener { finish() }
+        toolbar.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                R.id.action_copy -> {
+                    val clipboard = ContextCompat.getSystemService(this, ClipboardManager::class.java)
+                    val clip = ClipData.newPlainText("log", buildString {
+                        for (i in 0 until logAdapter.count) {
+                            append(logAdapter.getItem(i))
+                            if (i < logAdapter.count - 1) append("\n")
+                        }
+                    })
+                    clipboard?.setPrimaryClip(clip)
+                    true
                 }
-            })
-            clipboard?.setPrimaryClip(clip)
+                R.id.action_clear -> {
+                    logAdapter.clear()
+                    true
+                }
+                else -> false
+            }
+        }
+
+        val recyclerView = findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.log_list)
+        recyclerView.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(this)
+        recyclerView.adapter = logAdapter
+        // 滚动到最新日志
+        if (logAdapter.count > 0) {
+            recyclerView.scrollToPosition(logAdapter.count - 1)
         }
     }
 

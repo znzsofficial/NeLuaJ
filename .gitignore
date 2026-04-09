@@ -18,6 +18,7 @@ local.properties
 # Log files
 *.log
 *.bak
+app/libs/mao.dex
 
 # Release build
 /app/release/

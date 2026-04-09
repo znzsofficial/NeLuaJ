@@ -8,7 +8,7 @@
     <item android:id="@+id/log_frame_border">
         <shape android:shape="rectangle">
             <!-- 默认颜色，会被代码覆盖 -->
-            <solid android:color="#CCCCCC" />
+            <solid android:color="?attr/colorOutlineVariant" />
         </shape>
     </item>
 
@@ -28,8 +28,8 @@
             这里使用一个半透明的白色，可以适应深色和浅色主题。
             你也可以使用 ?android:attr/colorBackground 之类的主题颜色。
             -->
-            <solid android:color="#DDFFFFFF" />
-            <corners android:radius="8dp" />
+            <solid android:color="?attr/colorSurfaceContainerLow" />
+            <corners android:radius="12dp" />
         </shape>
     </item>
 </layer-list>

@@ -1,6 +1,7 @@
 require "environment"
 import "android.widget.LinearLayout"
 import "android.widget.ListView"
+import "android.widget.ScrollView"
 import "androidx.viewpager2.widget.ViewPager2"
 --import "me.zhanghai.android.fastscroll.FastScrollWebView"
 local LuaFragmentAdapter = luajava.bindClass "github.znzsofficial.adapter.LuaFragmentAdapter"
@@ -18,6 +19,7 @@ local view = loadlayout {
         layout_height = "-1",
         id = "vpg",
         UserInputEnabled = false,
+        OffscreenPageLimit = 1,
     },
 }
 
@@ -28,17 +30,21 @@ local pages = {
         id = "lv",
         layout_width = "-1",
         layout_height = "-1",
-        DividerHeight = 1,
-        focusable = false,
-        focusableInTouchMode = false,
+        DividerHeight = 0,
         backgroundColor = ColorUtil.getColorSurfaceVariant(),
     },
     -----
     loadlayout {
-        import"fun.ocss.tools.MarkdownView",
-        id = "webView",
+        ScrollView,
         layout_width = "match",
         layout_height = "match",
+        {
+            import "com.nekolaska.widget.MarkwonTextView",
+            id = "webView",
+            layout_width = "match",
+            layout_height = "wrap",
+            padding = "16dp",
+        },
     },
     -----
 }

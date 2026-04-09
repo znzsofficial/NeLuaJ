@@ -1,5 +1,6 @@
 local SelectMain = require "mods.PreSelection.SelectMain"
 local _M = {}
+_M._analyseToken = 0
 
 --SelectMain.addView(text,view,list,id)
 --使用了pcall,可以判断他返回的值来判断是否执行成功
@@ -31,14 +32,29 @@ function _M.init()
 end
 
 function _M.javaClassAnalyse(view, status)
+    local hintBar = select_hint_bar or ps_bar
+    local hintBarParent = hintBar.getParent() -- HorizontalScrollView
     if view.getSelectedText() and status then
         -- 判断内容不为空，并且选中状态
         local text = view.getSelectedText() -- 获取到选中文本
+        _M._analyseToken = (_M._analyseToken or 0) + 1
+        local analyseToken = _M._analyseToken
+        SelectMain.allMoveView(hintBar) -- 避免连续选择时重复堆叠旧结果
         SelectMain.new(text, function(content)
+            if analyseToken ~= _M._analyseToken then
+                return -- 过期请求，丢弃旧结果
+            end
+            if view.getSelectedText() ~= text then
+                return -- 选区已变化，避免回写旧数据
+            end
             if type(content) == "table" then
                 -- 不为表则是错误信息
-                for _, v in pairs(content[text]) do
-                    SelectMain.addView(v)
+                local classList = content[text] or {}
+                if next(classList) and hintBarParent then
+                    hintBarParent.setVisibility(0) -- 有结果时显示
+                end
+                for _, v in pairs(classList) do
+                    SelectMain.addView(v, nil, nil, hintBar)
                     --print(v)
                 end
             else
@@ -46,7 +62,11 @@ function _M.javaClassAnalyse(view, status)
             end
         end)
     else
-        SelectMain.allMoveView() -- 移除所有新增的控件
+        _M._analyseToken = (_M._analyseToken or 0) + 1 -- 使在途请求失效
+        SelectMain.allMoveView(hintBar) -- 移除所有新增的控件
+        if hintBarParent then
+            hintBarParent.setVisibility(8) -- 无选中时隐藏
+        end
     end
 end
 

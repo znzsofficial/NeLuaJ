@@ -81,6 +81,39 @@ class ClassNamesReader(private val context: Context) {
     }
 
     /**
+     * 从外部 dex/jar/apk 文件中读取所有类名。
+     * 返回经过过滤和排序的不可变列表。
+     * @param path dex/jar/apk 文件的绝对路径。
+     * @return 类名列表，读取失败时返回空列表。
+     */
+    fun readDexClasses(path: String): List<String> {
+        return try {
+            @Suppress("DEPRECATION")
+            val dexFile = DexFile(path)
+            try {
+                dexFile.entries().asSequence()
+                    .filterNot(::isFilteredClassName)
+                    .sorted()
+                    .toList()
+            } finally {
+                dexFile.close()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            emptyList()
+        }
+    }
+
+    /**
+     * 从外部 dex/jar/apk 文件中读取所有顶层类名（不含内部类）。
+     * @param path dex/jar/apk 文件的绝对路径。
+     * @return 顶层类名列表。
+     */
+    fun readDexTopClasses(path: String): List<String> {
+        return readDexClasses(path).filterNot { it.contains('$') }
+    }
+
+    /**
      * 检查类名是否应该被过滤掉。
      * 将过滤逻辑聚合到一个方法中，使 `allNames` 的初始化代码更清晰。
      * @param className 要检查的类名。
