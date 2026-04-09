@@ -463,9 +463,7 @@ end
 setmetatable(_M, _M)
 
 return _M]]
-mcode = [[require "environment"
-
-local ColorUtil = this.themeUtil
+mcode = [[local ColorUtil = this.themeUtil
 
 -- 主题已在 init.lua 中配置，启用动态取色
 activity.dynamicColor()

@@ -1,63 +1,71 @@
 import "android.widget.LinearLayout"
 import "android.widget.ListView"
-import "androidx.appcompat.widget.AppCompatSpinner"
-import "com.google.android.material.tabs.TabLayout"
+import "android.widget.HorizontalScrollView"
 import "com.google.android.material.textview.MaterialTextView"
 import "com.google.android.material.card.MaterialCardView"
+import "com.google.android.material.chip.ChipGroup"
 import "android.widget.ImageView"
 import "vinx.material.textfield.MaterialTextField"
-import "android.graphics.drawable.GradientDrawable"
-import "android.util.TypedValue"
 
 local ColorUtil = this.themeUtil
-local getDp = lambda i : TypedValue.applyDimension(1, i, activity.getResources().getDisplayMetrics())
-local surfaceColorVar = ColorUtil.ColorSurfaceVariant
 
 return {
   LinearLayout,
   orientation = "vertical",
   layout_width = "match",
   layout_height = "match",
+  -- R 类来源选择（横向滚动 ChipGroup）
   {
-    TabLayout,
-    id = "sourceTab",
+    HorizontalScrollView,
     layout_width = "match",
     layout_height = "wrap",
-    TabMode = 0,
-    Elevation = "0dp",
-    BackgroundColor = ColorUtil.getColorBackground(),
-  },
-  {
-    LinearLayout,
-    orientation = "horizontal",
-    layout_width = "match",
-    layout_height = "wrap",
-    gravity = "center_vertical",
+    HorizontalScrollBarEnabled = false,
     {
-      MaterialTextField,
-      id = "searchEdit",
-      layout_marginLeft = "12dp",
-      layout_marginRight = "8dp",
-      layout_marginTop = "8dp",
-      layout_marginBottom = "4dp",
+      ChipGroup,
+      id = "sourceChipGroup",
+      layout_width = "wrap",
       layout_height = "wrap",
-      layout_width = "0dp",
-      layout_weight = 1,
-      textSize = "12sp",
-      singleLine = true,
-      TintColor = ColorUtil.getColorPrimary(),
-      style = MDC_R.style.Widget_Material3_TextInputLayout_OutlinedBox,
-    },
-    {
-      AppCompatSpinner,
-      id = "subClassSpinner",
-      layout_marginTop = "8dp",
-      layout_marginRight = "12dp",
-      layout_width = "0dp",
-      layout_weight = 1,
-      popupBackgroundDrawable = GradientDrawable().setShape(0).setColor(surfaceColorVar).setCornerRadius(getDp(12)),
+      SingleSelection = true,
+      SelectionRequired = true,
+      paddingLeft = "12dp",
+      paddingRight = "12dp",
+      paddingTop = "8dp",
+      paddingBottom = "4dp",
     },
   },
+  -- 子类选择（横向滚动 ChipGroup）
+  {
+    HorizontalScrollView,
+    layout_width = "match",
+    layout_height = "wrap",
+    HorizontalScrollBarEnabled = false,
+    {
+      ChipGroup,
+      id = "subClassChipGroup",
+      layout_width = "wrap",
+      layout_height = "wrap",
+      SingleSelection = true,
+      SelectionRequired = true,
+      paddingLeft = "12dp",
+      paddingRight = "12dp",
+      paddingBottom = "4dp",
+    },
+  },
+  -- 搜索框
+  {
+    MaterialTextField,
+    id = "searchEdit",
+    layout_marginLeft = "12dp",
+    layout_marginRight = "12dp",
+    layout_marginBottom = "4dp",
+    layout_height = "wrap",
+    layout_width = "match",
+    textSize = "12sp",
+    singleLine = true,
+    TintColor = ColorUtil.getColorPrimary(),
+    style = MDC_R.style.Widget_Material3_TextInputLayout_OutlinedBox_Dense,
+  },
+  -- 资源列表
   {
     ListView,
     id = "resourceList",

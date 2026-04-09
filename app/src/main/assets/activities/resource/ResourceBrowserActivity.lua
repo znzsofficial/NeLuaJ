@@ -6,10 +6,10 @@ import "android.widget.Toast"
 import "android.graphics.drawable.ColorDrawable"
 import "android.view.View"
 import "android.view.WindowManager"
-import "com.androlua.adapter.LuaAdapter"
 import "com.google.android.material.textview.MaterialTextView"
 import "com.google.android.material.card.MaterialCardView"
 import "com.google.android.material.dialog.MaterialAlertDialogBuilder"
+import "com.google.android.material.chip.Chip"
 import "android.text.SpannableString"
 import "android.text.style.ForegroundColorSpan"
 import "android.widget.ArrayAdapter"
@@ -44,16 +44,49 @@ if this.isNightMode() then
   window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR)
 end
 
--- 资源来源定义
-local sources = {
-  { name = "android.R",  rClass = bindClass "android.R" },
-  { name = "Material",   rClass = MDC_R },
-  { name = "AppCompat",  rClass = Compat_R },
+-- 自动扫描所有可用的 R 类
+local knownRClasses = {
+  -- 系统
+  { name = "android",                          class = "android.R" },
+  -- 本应用
+  { name = "app",                              class = "github.znzsofficial.neluaj.R" },
+  -- Material / AppCompat
+  { name = "material",                         class = "com.google.android.material.R" },
+  { name = "appcompat",                        class = "androidx.appcompat.R" },
+  -- AndroidX 组件
+  { name = "activity",                         class = "androidx.activity.R" },
+  { name = "constraintlayout",                 class = "androidx.constraintlayout.widget.R" },
+  { name = "coordinatorlayout",                class = "androidx.coordinatorlayout.R" },
+  { name = "core",                             class = "androidx.core.R" },
+  { name = "customview",                       class = "androidx.customview.R" },
+  { name = "drawerlayout",                     class = "androidx.drawerlayout.R" },
+  { name = "draganddrop",                      class = "androidx.draganddrop.R" },
+  { name = "dynamicanimation",                 class = "androidx.dynamicanimation.R" },
+  { name = "emoji2",                           class = "androidx.emoji2.R" },
+  { name = "fragment",                         class = "androidx.fragment.R" },
+  { name = "gridlayout",                       class = "androidx.gridlayout.R" },
+  { name = "lifecycle",                        class = "androidx.lifecycle.R" },
+  { name = "navigation",                       class = "androidx.navigation.R" },
+  { name = "navigation.ui",                    class = "androidx.navigation.ui.R" },
+  { name = "palette",                          class = "androidx.palette.R" },
+  { name = "preference",                       class = "androidx.preference.R" },
+  { name = "recyclerview",                     class = "androidx.recyclerview.R" },
+  { name = "swiperefreshlayout",               class = "androidx.swiperefreshlayout.R" },
+  { name = "transition",                       class = "androidx.transition.R" },
+  { name = "viewpager",                        class = "androidx.viewpager.R" },
+  { name = "viewpager2",                       class = "androidx.viewpager2.R" },
+  -- 第三方
+  { name = "collapsingtoolbar.subtitle",       class = "com.hendraanggrian.material.subtitlecollapsingtoolbarlayout.R" },
+  { name = "lottie",                           class = "com.airbnb.lottie.R" },
+  { name = "recyclerview-animators",           class = "jp.wasabeef.recyclerview.R" },
+  { name = "fastscroll",                       class = "me.zhanghai.android.fastscroll.R" },
 }
 
-local currentSource = sources[1]
+local sources = {}
+local currentSource = nil
 local currentSubClassName = nil
 local currentFields = {}
+local initialized = false
 
 local function copyText(content)
   activity.getSystemService(Context.CLIPBOARD_SERVICE).setText(tostring(content))
@@ -114,28 +147,6 @@ local function renderFieldList(fields, searchText)
   resourceList.setAdapter(adapter)
 end
 
--- 刷新子类 Spinner
-local function refreshSubClassSpinner()
-  local names = getSubClassNames(currentSource.rClass)
-  local spinnerItem = {
-    LinearLayout,
-    orientation = "vertical",
-    layout_height = "wrap",
-    layout_width = "match",
-    {
-      MaterialTextView,
-      id = "text",
-      layout_margin = "15dp",
-      textStyle = "bold",
-    },
-  }
-  local items = {}
-  for _, name in ipairs(names) do
-    insert(items, { text = name })
-  end
-  subClassSpinner.Adapter = LuaAdapter(activity, items, spinnerItem)
-end
-
 -- 刷新字段列表
 local function refreshFieldList()
   if not currentSubClassName then
@@ -144,6 +155,32 @@ local function refreshFieldList()
   currentFields = getFieldList(currentSource.rClass, currentSubClassName)
   renderFieldList(currentFields)
   searchEdit.Hint = #currentFields .. " " .. res.string.resource_items
+end
+
+-- 刷新子类 ChipGroup
+local function refreshSubClassChips()
+  -- 临时移除监听，避免 addView/setChecked 触发多次回调
+  subClassChipGroup.setOnCheckedStateChangeListener(nil)
+  subClassChipGroup.removeAllViews()
+  currentSubClassName = nil
+  local names = getSubClassNames(currentSource.rClass)
+  for i, name in ipairs(names) do
+    local chip = Chip(activity)
+    chip.setText(name)
+    chip.setCheckable(true)
+    chip.setCheckedIconVisible(false)
+    chip.setTextSize(0, this.spToPx(12))
+    subClassChipGroup.addView(chip)
+    if i == 1 then
+      chip.setChecked(true)
+      currentSubClassName = name
+    end
+  end
+  -- 恢复监听
+  subClassChipGroup.setOnCheckedStateChangeListener(onSubClassChipChanged)
+  if currentSubClassName then
+    refreshFieldList()
+  end
 end
 
 -- 详情弹窗
@@ -227,32 +264,77 @@ local function showFieldDetail(fieldInfo)
   dialog.show()
 end
 
--- 初始化来源 Tab
-for _, source in ipairs(sources) do
-  sourceTab.addTab(sourceTab.newTab().setText(source.name))
-end
-
-sourceTab.addOnTabSelectedListener {
-  onTabSelected = function(tab)
-    currentSource = sources[tab.getPosition() + 1]
-    refreshSubClassSpinner()
-    searchEdit.Text = ""
-  end,
-  onTabUnselected = function() end,
-  onTabReselected = function() end,
-}
-
--- Spinner 监听
-subClassSpinner.setOnItemSelectedListener {
-  onItemSelected = function(adapter, view, position, id)
-    if view then
-      view.BackgroundColor = 0x00000000
-      currentSubClassName = view.Tag.text.Text
-      searchEdit.Text = ""
-      refreshFieldList()
+-- 异步扫描所有可用的 R 类
+local function scanRClasses()
+  local result = {}
+  for _, entry in ipairs(knownRClasses) do
+    try
+      local cls = luajava.bindClass(entry.class)
+      if cls and #cls.getClasses() > 0 then
+        insert(result, { name = entry.name, rClass = cls })
+      end
+     catch
     end
   end
-}
+  if #result == 0 then
+    result = {{ name = "android", rClass = luajava.bindClass "android.R" }}
+  end
+  return result
+end
+
+-- 子类 ChipGroup 选择回调（提取为变量，供 refreshSubClassChips 恢复监听用）
+onSubClassChipChanged = function(group, checkedIds)
+  if not initialized or checkedIds.size() == 0 then return end
+  local checkedId = checkedIds.get(0)
+  for i = 0, group.getChildCount() - 1 do
+    local child = group.getChildAt(i)
+    if child.getId() == checkedId then
+      currentSubClassName = tostring(child.getText())
+      searchEdit.Text = ""
+      refreshFieldList()
+      break
+    end
+  end
+end
+
+local function initSourceChips(scannedSources)
+  sources = scannedSources
+  currentSource = sources[1]
+  initialized = true
+
+  for i, source in ipairs(sources) do
+    local chip = Chip(activity)
+    chip.setText(source.name)
+    chip.setCheckable(true)
+    chip.setCheckedIconVisible(false)
+    chip.setTextSize(0, this.spToPx(12))
+    sourceChipGroup.addView(chip)
+    if i == 1 then
+      chip.setChecked(true)
+    end
+  end
+
+  -- 初始化完成后再注册来源监听，避免 setChecked 触发多余回调
+  sourceChipGroup.setOnCheckedStateChangeListener(function(group, checkedIds)
+    if not initialized or checkedIds.size() == 0 then return end
+    local checkedId = checkedIds.get(0)
+    for i = 0, group.getChildCount() - 1 do
+      local child = group.getChildAt(i)
+      if child.getId() == checkedId then
+        currentSource = sources[i + 1]
+        searchEdit.Text = ""
+        refreshSubClassChips()
+        break
+      end
+    end
+  end)
+
+  -- 注册子类监听并加载首个来源
+  subClassChipGroup.setOnCheckedStateChangeListener(onSubClassChipChanged)
+  refreshSubClassChips()
+end
+
+xTask(scanRClasses, initSourceChips)
 
 -- 搜索
 searchEdit.addTextChangedListener {
@@ -292,9 +374,6 @@ resourceList.onItemLongClick = function(listView, itemView)
   end
   return true
 end
-
--- 初始加载
-refreshSubClassSpinner()
 
 function onOptionsItemSelected(m)
   if m.getItemId() == android.R.id.home
