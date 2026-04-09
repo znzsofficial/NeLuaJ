@@ -38,13 +38,28 @@ local function initFiles()
     checkBackup()
     Init.initView2().initBar().initFunctionTab().initCheck()
 
-    -- 恢复上次打开的文件
+    -- 恢复上次打开的文件，并将文件列表定位到对应项目目录
     mLuaEditor.post(function()
         local lastPath = this.getSharedData("lastFile")
         local lastSelect = this.getSharedData("lastSelect")
         if lastPath and File(lastPath).exists() then
             EditorUtil.load(lastPath)
             EditorUtil.setSelection(lastSelect or 0)
+            -- 从文件路径推断项目目录并定位文件列表
+            local proDir = Bean.Path.app_root_pro_dir
+            if lastPath:find(proDir, 1, true) then
+                -- 提取项目根目录：proDir/项目名/...
+                local afterPro = lastPath:sub(#proDir + 2) -- 去掉 proDir/
+                local projectName = afterPro:match("^([^/]+)")
+                if projectName then
+                    local projectDir = proDir .. "/" .. projectName
+                    if File(projectDir).isDirectory() then
+                        PathManager.updateDir(projectDir)
+                        filetab.setPath(projectDir)
+                        MainActivity.RecyclerView.update()
+                    end
+                end
+            end
         end
     end)
 end
@@ -247,8 +262,9 @@ function onCreateOptionsMenu(menu)
         end
         local project_dir = Bean.Path.app_root_pro_dir .. "/" .. Bean.Project.this_project
         local init = LuaFileUtil.loadLua(project_dir .. "/init.lua")
-        LuaFileUtil.compress(project_dir, Bean.Path.app_root_dir .. "/Backup",
-            (init.app_name or "Untitled") .. "-" .. os.date("%Y-%m-%d-%H-%M-%S") .. ".zip")
+        local zipName = (init.app_name or "Untitled") .. "-" .. os.date("%Y-%m-%d-%H-%M-%S") .. ".zip"
+        LuaFileUtil.compress(project_dir, Bean.Path.app_root_dir .. "/Backup", zipName)
+        MainActivity.Public.snack(res.string.backup .. ": " .. zipName)
     end
     --[[
     menu2.add(res.string.migrate).onMenuItemClick = function(a)

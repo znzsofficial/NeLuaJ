@@ -134,6 +134,7 @@ resetColor("Global")
 resetColor("Local")
 resetColor("Upval")
 
+-- ── 调试应用 ──
 CustomApp.onClick = function()
     local views = {}
     MaterialAlertDialogBuilder(this)
@@ -153,4 +154,13 @@ CustomApp.onClick = function()
         end)
         .show()
     views.inputField.text = this.getSharedData("debug_app", "")
+end
+
+-- ── 关于 ──
+AboutItem.onClick = function()
+    MaterialAlertDialogBuilder(this)
+        .setTitle("NeLuaJ+")
+        .setMessage(res.string.about_this)
+        .setPositiveButton(android.R.string.ok, nil)
+        .show()
 end

@@ -201,8 +201,7 @@ _M.init = function()
                         end)
                     else
                         pcall(function()
-                            local iconName = v.img == "file_dex" and "file_java" or v.img
-                            local drawable = res_drawable[iconName]
+                            local drawable = res_drawable[v.img]
                             drawable.setBounds(0, 0, size, size)
                             view.name.setCompoundDrawables(drawable, nil, nil, nil)
                         end)
@@ -290,7 +289,7 @@ local sortByName = function(a, b)
 end
 
 local getList = function()
-    local path = Bean_Path.this_dir
+    local path = tostring(Bean_Path.this_dir)
     local table_sort = table.sort
     local match = string.match
 
@@ -382,6 +381,7 @@ local updateCallback = function()
 end
 
 _M.update = function()
+    if not Bean_Path then return _M end
     xTask(getList, updateCallback)
     return _M
 end

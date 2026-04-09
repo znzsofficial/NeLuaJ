@@ -66,6 +66,7 @@ local data = {
     { text = res.string.md3_design,           file = "md3_design.md" },
     { text = res.string.layout_reference,     file = "layout_reference.md" },
     { text = res.string.utility_api,          file = "utility_api.md" },
+    { text = "Color API",                     file = "color_api.md" },
     -- 基础文档
     { text = "init.lua",                      file = "init_lua_" .. docLanguage .. ".md" },
     { text = res.string.global,               file = "global_env.md" },

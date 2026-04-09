@@ -37,7 +37,7 @@ _M.initView2 = function()
   mLuaEditor.post(function()
     EditorUtil.init()
     -- 包名补全加载放到后台线程，不阻塞编辑器
-    thread(function(bindClass)
+    thread(function()
       luajava.bindClass "com.myopicmobile.textwarrior.common.PackageUtil".load(this)
     end)
   end)
@@ -85,7 +85,9 @@ _M.initFunctionTab = function()
         end
         local project_dir = Bean.Path.app_root_pro_dir .. "/" .. Bean.Project.this_project
         local init = LuaFileUtil.loadLua(project_dir .. "/init.lua")
-        LuaFileUtil.compress(project_dir, Bean.Path.app_root_dir .. "/Backup", init.app_name or "Untitled" .. "-" .. os.date("%Y-%m-%d-%H-%M-%S") .. ".zip")
+        local zipName = (init.app_name or "Untitled") .. "-" .. os.date("%Y-%m-%d-%H-%M-%S") .. ".zip"
+        LuaFileUtil.compress(project_dir, Bean.Path.app_root_dir .. "/Backup", zipName)
+        MainActivity.Public.snack(res.string.backup .. ": " .. zipName)
       end,
     },
     {

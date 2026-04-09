@@ -69,6 +69,8 @@ import com.androlua.LuaBroadcastReceiver.OnReceiveListener
 import com.androlua.LuaService.LuaBinder
 import com.androlua.adapter.ArrayListAdapter
 import com.google.android.material.color.DynamicColors
+import com.google.android.material.color.DynamicColorsOptions
+import com.google.android.material.color.MaterialColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.nekolaska.internal.commit
 import com.nekolaska.ktx.firstArg
@@ -314,6 +316,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
 
     private fun showLogView(isError: Boolean) {
         supportActionBar?.hide()
+        DynamicColors.applyToActivityIfAvailable(this)
         setContentView(R.layout.log_list)
 
         val toolbar = findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.log_toolbar)
@@ -1461,6 +1464,46 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     }
 
     fun dynamicColor() = DynamicColors.applyToActivityIfAvailable(this)
+
+    /**
+     * Apply dynamic colors based on a seed color.
+     * Generates a full Material 3 color scheme from the given seed color
+     * and applies it to the Activity. After calling this, themeUtil will
+     * reflect the new color scheme.
+     *
+     * Usage in Lua: this.dynamicColor(0xFF6750A4)
+     */
+    fun dynamicColor(seedColor: Int) {
+        val options = DynamicColorsOptions.Builder()
+            .setContentBasedSource(seedColor)
+            .build()
+        DynamicColors.applyToActivityIfAvailable(this, options)
+    }
+
+    /**
+     * Harmonize a color with the current theme's primary color.
+     * Returns a new color that is visually harmonious with the theme.
+     *
+     * Usage in Lua: local harmonized = this.harmonizeColor(0xFFFF0000)
+     */
+    fun harmonizeColor(color: Int): Int =
+        MaterialColors.harmonizeWithPrimary(this, color)
+
+    /**
+     * Harmonize two arbitrary colors.
+     *
+     * Usage in Lua: local result = this.harmonizeColor(color1, color2)
+     */
+    fun harmonizeColor(color: Int, withColor: Int): Int =
+        MaterialColors.harmonize(color, withColor)
+
+    /**
+     * Check if a color is considered light.
+     *
+     * Usage in Lua: local light = this.isColorLight(0xFFFFFFFF)
+     */
+    fun isColorLight(color: Int): Boolean =
+        MaterialColors.isColorLight(color)
 
     fun getVersionName(default: String): String {
         return try {
