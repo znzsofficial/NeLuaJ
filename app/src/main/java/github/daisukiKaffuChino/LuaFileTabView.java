@@ -72,7 +72,7 @@ public class LuaFileTabView extends TabLayout {
                 final String segment = newSegments.get(i);
                 Tab tab = getTabAt(i);
                 if (tab == null) {
-                    tab = newTab().setIcon(R.drawable.ic_round_chevron_left_24);
+                    tab = newTab().setIcon(R.drawable.chevron_left);
                     addTab(tab, false);
                 }
                 tab.setText(segment);

@@ -20,6 +20,7 @@ import org.luaj.Globals
 import org.luaj.LuaError
 import org.luaj.LuaTable
 import org.luaj.LuaValue
+import org.luaj.lib.OneArgFunction
 import org.luaj.lib.TwoArgFunction
 import org.luaj.lib.jse.CoerceJavaToLua
 import java.io.File
@@ -30,11 +31,47 @@ inline fun File.ifExists(block: File.() -> Unit) {
 }
 
 class res(private val context: LuaContext) : TwoArgFunction() {
+
+    private var cachedLanguage: String? = null
+
+    private fun getLanguagePath(globals: Globals): String {
+        cachedLanguage?.let { return it }
+
+        val currentLocale = Locale.getDefault()
+        val lang = currentLocale.language
+        val country = currentLocale.country
+
+        // 1. 尝试的具体标签 (zh-rCN)
+        if (country.isNotEmpty()) {
+            val specificTag = "$lang-r$country"
+            if (File(context.getLuaPath("res/string", "$specificTag.lua")).exists()) {
+                return specificTag.also { cachedLanguage = it }
+            }
+        }
+
+        // 2. 尝试纯语言标签 (zh)
+        if (File(context.getLuaPath("res/string", "$lang.lua")).exists()) {
+            return lang.also { cachedLanguage = it }
+        }
+
+        // 3. 读取 default.lua
+        val defaultPath = context.getLuaPath("res/string", "default.lua")
+        if (File(defaultPath).exists()) {
+            val defValue = globals.loadfile(defaultPath).call()
+            if (defValue.isstring()) {
+                return defValue.tojstring().also { cachedLanguage = it }
+            }
+        }
+
+        return "en".also { cachedLanguage = it } // 终极兜底
+    }
+
     override fun call(modName: LuaValue, env: LuaValue): LuaValue {
         val globals = env.checkglobals()
-        val res = LuaTable().also {
-            val str = string(context, globals)
-            str.checktable()
+        val language = getLanguagePath(globals)
+
+        val resTable = LuaTable().also {
+            val str = string(context, globals, language)
             it["string"] = str
             it["drawable"] = drawable(context, globals)
             it["bitmap"] = bitmap(context, globals)
@@ -42,15 +79,16 @@ class res(private val context: LuaContext) : TwoArgFunction() {
             it["view"] = view(context, globals)
             it["font"] = font(context)
             it["raw"] = raw(context)
-            it["language"] = str.language
+            it["language"] = valueOf(language)
+            it["plurals"] = plurals(context, globals, language)
         }
         if (context is Activity) {
             val configuration = context.resources.configuration
-            res["dimen"] = dimen(context, globals, configuration)
-            res["color"] = color(context, globals, configuration)
+            resTable["dimen"] = dimen(context, globals, configuration)
+            resTable["color"] = color(context, globals, configuration)
         }
-        env["res"] = res
-        if (!env["package"].isnil()) env["package"]["loaded"]["res"] = res
+        env["res"] = resTable
+        if (!env["package"].isnil()) env["package"]["loaded"]["res"] = resTable
         return NIL
     }
 
@@ -134,14 +172,12 @@ class res(private val context: LuaContext) : TwoArgFunction() {
         }
     }
 
-    private class string(private val activity: LuaContext, private val globals: Globals) :
-        LuaValue() {
+    private class string(
+        private val activity: LuaContext,
+        private val globals: Globals,
+        val language: String
+    ) : LuaValue() {
         private var stringTable = LuaTable()
-
-        // 'language' 将会反映实际加载的资源文件名（不含.lua后缀）
-        var language: String = ""
-            private set
-
         private var loaded = false
 
         override fun type(): Int = TTABLE
@@ -152,70 +188,94 @@ class res(private val context: LuaContext) : TwoArgFunction() {
         }
 
         override fun checktable(): LuaTable {
-            // 1. 首先加载通用的 init.lua，它包含所有语言共享的字符串
-            val path = activity.getLuaPath("res/string", "init.lua")
-            File(path).ifExists {
+            if (loaded) return stringTable
+
+            // 1. 加载通用的 init.lua
+            val initPath = activity.getLuaPath("res/string", "init.lua")
+            File(initPath).ifExists {
                 globals.loadfile(this.path, stringTable).call()
             }
 
-            // 2. 实现多级回退的语言加载逻辑
-            loadLocalizedStrings()
+            // 2. 使用计算好的 language 标签加载对应的语言文件
+            val langPath = activity.getLuaPath("res/string", "$language.lua")
+            File(langPath).ifExists {
+                globals.loadfile(this.path, stringTable).call()
+            }
 
             loaded = true
             return stringTable
         }
 
-        private fun loadLocalizedStrings() {
-            val currentLocale = Locale.getDefault()
-            val lang = currentLocale.language // 例如 "zh"
-            val country = currentLocale.country // 例如 "CN"
-
-            // 尝试加载最具体的语言资源（例如 "zh-rCN.lua"）
-            if (country.isNotEmpty()) {
-                val specificLangTag = "$lang-r$country"
-                if (tryLoadLangFile(specificLangTag)) {
-                    language = specificLangTag
-                    return // 加载成功，直接返回
-                }
-            }
-
-            // 如果最具体的资源不存在，则回退到仅语言的资源（例如 "zh.lua"）
-            if (tryLoadLangFile(lang)) {
-                language = lang
-                return // 加载成功，直接返回
-            }
-
-            // 如果上述资源都不存在，则使用 default.lua 指定的默认语言
-            val defaultPath = activity.getLuaPath("res/string", "default.lua")
-            File(defaultPath).ifExists {
-                val defValue: LuaValue = globals.loadfile(this.path).call()
-                if (defValue.isstring()) {
-                    val defaultLanguage = defValue.tojstring()
-                    language = defaultLanguage
-                    // 加载 default.lua 中指定的语言文件
-                    tryLoadLangFile(defaultLanguage)
-                }
-            }
-        }
-
-        /**
-         * 尝试加载指定语言的资源文件
-         * @param langTag 语言标签 (例如 "zh-rCN" 或 "zh")
-         * @return 如果文件存在并加载成功，返回 true，否则返回 false
-         */
-        private fun tryLoadLangFile(langTag: String): Boolean {
-            val path = activity.getLuaPath("res/string", "$langTag.lua")
-            val file = File(path)
-            if (file.exists()) {
-                globals.loadfile(path, stringTable).call()
-                return true
-            }
-            return false
-        }
-
         override fun get(key: String): LuaValue {
             if (loaded) return stringTable[key]
             return checktable()[key]
+        }
+    }
+
+    private class plurals(
+        private val activity: LuaContext,
+        private val globals: Globals,
+        private val language: String
+    ) : LuaValue() { // 修改为继承 LuaValue 以支持属性访问
+        private var pluralsTable = LuaTable()
+        private var loaded = false
+
+        override fun type(): Int = TTABLE
+        override fun typename(): String = "table"
+
+        override fun get(key: LuaValue): LuaValue {
+            val keyStr = key.tojstring()
+            if (!loaded) checktable()
+            
+            val item = pluralsTable[keyStr]
+            if (item.istable()) {
+                return object : OneArgFunction() {
+                    override fun call(quantity: LuaValue): LuaValue {
+                        val pluralTable = item.checktable()
+                        val q = quantity.toint()
+                        val rawTemplate = when (q) {
+                            0 -> pluralTable["zero"].ifNil { pluralTable["other"] }
+                            1 -> pluralTable["one"].ifNil { pluralTable["other"] }
+                            2 -> pluralTable["two"].ifNil { pluralTable["other"] }
+                            else -> pluralTable["other"]
+                        }
+                        
+                        // 处理 %d 替换逻辑
+                        if (rawTemplate.isstring()) {
+                            val templateStr = rawTemplate.tojstring()
+                            if (templateStr.contains("%d")) {
+                                return valueOf(templateStr.replace("%d", q.toString()))
+                            }
+                            return rawTemplate
+                        }
+                        return rawTemplate
+                    }
+                }
+            }
+            return NIL
+        }
+
+        private fun LuaValue.ifNil(block: () -> LuaValue): LuaValue {
+            return if (this.isnil()) block() else this
+        }
+
+        override fun checktable(): LuaTable {
+            if (loaded) return pluralsTable
+
+            // 1. 加载通用的 init.lua
+            val path = activity.getLuaPath("res/plurals", "init.lua")
+            File(path).ifExists {
+                globals.loadfile(path, pluralsTable).call()
+            }
+
+            // 2. 使用计算好的 language 标签加载对应的语言文件
+            val langPath = activity.getLuaPath("res/plurals", "$language.lua")
+            File(langPath).ifExists {
+                globals.loadfile(this.path, pluralsTable).call()
+            }
+
+            loaded = true
+            return pluralsTable
         }
     }
 

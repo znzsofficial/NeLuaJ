@@ -65,15 +65,19 @@
 -   **用法**:
   -   **作为 `table` 使用 (属性访问)**: `res.drawable.my_icon`
     -   这是最基础的用法。它会查找 `my_icon` 对应的图片文件（如 `my_icon.png`）或 Lua 脚本 (`my_icon.lua`)，并返回一个 `Drawable` 对象。
+    
     -   **示例**: `imageView.setImageDrawable(res.drawable.my_icon)`
 
   -   **作为函数调用 (仅drawable)**: `res.drawable(name, callback_or_color)`
     -   这种方式提供了更强大的动态处理能力，允许在加载 `Drawable` 后立即对其进行操作。它接受两个参数：
+    
     -   `name` (string, **必需**): 要加载的资源名称，与属性访问时的 `key` 相同。
+    
     -   `callback_or_color` (function or number, **可选**):
       -   如果是一个**函数**，该函数将在 `Drawable` 对象成功加载后被调用，并将 `Drawable` 作为其唯一参数。这非常适合执行回调操作。
       -   如果是一个**整数**（颜色值），它会立即为加载到的 `Drawable` 应用一个颜色过滤器 (`setColorFilter`)。这是一种为图标动态着色的快捷方式。
   -   **返回值**:
+    
     -   两种用法最终都返回查找到的 `Drawable` 对象（经过可选操作处理后）。如果资源未找到，则返回 `nil`。
 
 -   **函数调用示例**:
@@ -136,3 +140,32 @@
     - 一个字符串，例如 `"zh-rCN"`, `"zh"`, 或 `"en"`，反映了资源回退后的最终结果。这对于调试或在应用内显示当前语言非常有用。
 
 ---
+
+### **10. `res.plurals` (复数资源)**
+- **主要功能**: 根据数量返回适当的字符串形式，支持多语言和回退机制。
+- **文件结构**:
+    - `res/plurals/init.lua`: (可选) 存放所有语言通用的复数资源。
+    - `res/plurals/zh-rCN.lua`: (示例) 简体中文（中国）的特定复数资源。
+    - `res/plurals/zh.lua`: (示例) 所有中文地区的通用回退复数资源。
+    - `res/plurals/en.lua`: (示例) 英文的复数资源。
+- **加载逻辑**:
+    1. 加载 `init.lua`。
+    2. 严格跟随 `res.string` 的语言检测结果，加载对应语言的复数资源文件。
+- **用法**:
+    - **获取复数字符串**: `res.plurals.key(quantity)`
+        - `key` (string): 复数资源的键。
+        - `quantity` (int): 数量，用于选择适当的字符串形式。
+        - **返回值**: 对应数量的字符串形式。
+    - **示例**:
+        ```lua
+        local apples = res.plurals.apple_count(5)
+        print(apples) -- 输出: "5 apples"
+        ```
+- **资源文件示例**:
+    ```lua
+    apple_count = {
+            zero = "No apples",
+            one = "1 apple",
+            other = "%d apples"
+    }
+    ```
