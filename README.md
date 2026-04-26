@@ -133,6 +133,7 @@ Below are the main variables and functions injected into the global Lua environm
 | `timer(func, delay, period)` | Start a timer |
 | `okHttp` | Asynchronous OkHttp client instance |
 | `json` | JSON parsing library |
+| `ext` | Extension library with Lua 5.5-style binary helpers: `pack`, `unpack`, `packsize` |
 | `import` | Import Java class (requires `require "import"`) |
 
 ## 📄 License

@@ -93,6 +93,7 @@ import org.luaj.LuaValue
 import org.luaj.Varargs
 import org.luaj.android.AsyncOkHttp
 import org.luaj.android.call
+import org.luaj.android.ext
 import org.luaj.android.file
 import org.luaj.android.http
 import org.luaj.android.json
@@ -260,6 +261,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
                 it.load(res(this))
                 it.load(json())
                 it.load(file())
+                it.load(ext())
                 it.load(okhttp())
                 it.jset("saf", saf(this))
                 it.jset("Http", Http::class.java)

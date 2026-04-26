@@ -133,6 +133,7 @@ end)
 | `timer(func, delay, period)` | 启动定时器 |
 | `okHttp` | 异步 OkHttp 客户端实例 |
 | `json` | JSON 解析库 |
+| `ext` | 扩展库，提供 Lua 5.5 风格的二进制辅助函数：`pack`、`unpack`、`packsize` |
 | `import` | 导入 Java 类 (需要 `require "import"`) |
 
 ## 📄 许可证

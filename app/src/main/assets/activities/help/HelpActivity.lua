@@ -78,6 +78,7 @@ local data = {
     { text = "loadlayout",                    file = "module_loadlayout.md" },
     { text = "file " .. res.string._module,   file = "module_file.md" },
     { text = "saf " .. res.string._module,    file = "module_saf.md" },
+    { text = "ext " .. res.string._module,    file = "module_ext.md" },
     { text = "lazy",                          file = "lazy.md" },
     { text = "xTask",                         file = "xTask.md" },
     -- 组件
