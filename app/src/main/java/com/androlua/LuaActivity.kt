@@ -134,6 +134,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     private var mHeight = 0
     private var debug = false
     private var luaDir: String? = null
+    private var luaRootDir: String? = null
     private var luaFile = "main.lua"
     private var permissions: ArrayList<String?>? = null
     private var isSetViewed = false
@@ -188,6 +189,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         luaDir = filesDir.absolutePath
+        luaRootDir = luaDir
         intent.data?.let {
             var p = it.path
             if (!p.isNullOrEmpty()) {
@@ -200,13 +202,13 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
                 setTitle(File(luaDir!!).getName())
             }
         }
-        luaDir = checkProjectDir(File(luaDir!!)).absolutePath
+        luaRootDir = checkProjectDir(File(luaDir!!)).absolutePath
         initSize()
         pageName = File(luaFile).getName()
         val idx = pageName.lastIndexOf(".")
         if (idx > 0) pageName = pageName.substring(0, idx)
         sLuaActivityMap[pageName] = this
-        mLuaDexLoader = LuaDexLoader(this, luaDir)
+        mLuaDexLoader = LuaDexLoader(this, luaRootDir)
         mLuaDexLoader.loadLibs()
         globals = JsePlatform.standardGlobals()
         // globals.finder = this;
@@ -320,6 +322,16 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         supportActionBar?.hide()
         DynamicColors.applyToActivityIfAvailable(this)
         setContentView(R.layout.log_list)
+
+        val surfaceColor = MaterialColors.getColor(this, com.google.android.material.R.attr.colorSurface, "LogView")
+        window.statusBarColor = surfaceColor
+        window.navigationBarColor = surfaceColor
+        val systemUiFlags = if (MaterialColors.isColorLight(surfaceColor)) {
+            View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+        } else {
+            View.SYSTEM_UI_FLAG_VISIBLE
+        }
+        window.decorView.systemUiVisibility = systemUiFlags
 
         val toolbar = findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.log_toolbar)
         toolbar.title = File(luaFile).name
@@ -468,10 +480,11 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     }
 
     protected fun initENV() {
-        if (!File("$luaDir/init.lua").exists()) return
+        val rootDir = luaRootDir ?: luaDir ?: return
+        if (!File(rootDir, "init.lua").exists()) return
         try {
             val env = LuaTable()
-            globals.loadfile("init.lua", env).call()
+            globals.loadfile(File(rootDir, "init.lua").absolutePath, env).call()
             var v = env.get("appname")
             if (v.isstring()) setTitle(v.tojstring())
             v = env.get("app_name")
@@ -659,7 +672,13 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         } catch (_: Exception) {
         }
         try {
-            return FileInputStream(getLuaPath(name))
+            val file = File(luaDir, name)
+            if (file.exists()) return FileInputStream(file)
+        } catch (_: Exception) {
+        }
+        try {
+            val file = File(luaRootDir ?: luaDir, name)
+            if (file.exists()) return FileInputStream(file)
         } catch (_: Exception) {
         }
         try {
@@ -675,7 +694,11 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         } catch (_: Exception) {
         }
         try {
-            return File(getLuaPath(name)).exists()
+            if (File(luaDir, name).exists()) return true
+        } catch (_: Exception) {
+        }
+        try {
+            return File(luaRootDir ?: luaDir, name).exists()
         } catch (_: Exception) {
         }
         try {
@@ -689,7 +712,9 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
 
     override fun findFile(filename: String): String {
         if (filename.startsWith("/")) return filename
-        return getLuaPath(filename)
+        val scriptFile = File(luaDir, filename)
+        if (scriptFile.exists()) return scriptFile.absolutePath
+        return File(luaRootDir ?: luaDir, filename).absolutePath
     }
 
     private var toastTextView: TextView? = null
@@ -768,11 +793,11 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     }
 
     override fun getLuaPath(path: String): String {
-        return File(luaDir, path).absolutePath
+        return File(luaRootDir ?: luaDir, path).absolutePath
     }
 
     override fun getLuaPath(dir: String, name: String): String {
-        return File(getLuaDir(dir), name).absolutePath
+        return File(File(luaRootDir ?: luaDir, dir), name).absolutePath
     }
 
     override fun getLuaDir(): String? {
@@ -1031,7 +1056,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         val service = Intent(this, LuaService::class.java)
         var path = "service.lua"
         service.putExtra(NAME, path)
-        if (luaDir != null) path = "$luaDir/$path"
+        if (luaRootDir != null) path = "$luaRootDir/$path"
         val f = File(path)
         if (f.isDirectory() && File("$path/service.lua").exists()) path += "/service.lua"
         else if ((f.isDirectory() || !f.exists()) && !path.endsWith(".lua")) path += ".lua"
@@ -1064,8 +1089,8 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         intent.putExtra(NAME, finalPath) // 使用原始 path 作为 NAME
 
         // 路径处理逻辑
-        if (finalPath[0] != '/' && luaDir != null) {
-            finalPath = "$luaDir/$finalPath"
+        if (finalPath[0] != '/' && luaRootDir != null) {
+            finalPath = "$luaRootDir/$finalPath"
         }
 
         val f = File(finalPath)
@@ -1201,7 +1226,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
 
     private fun buildLuaIntent(path: String, arg: Array<Any?>?, newDocument: Boolean): Intent {
         var resolved =
-            if (path.startsWith("/")) path else "${luaDir ?: filesDir.absolutePath}/$path"
+            if (path.startsWith("/")) path else "${luaRootDir ?: luaDir ?: filesDir.absolutePath}/$path"
         val file = File(resolved)
         if (file.isDirectory && File(file, "main.lua").exists()) resolved =
             "${file.absolutePath}/main.lua"
