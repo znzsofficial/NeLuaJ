@@ -47,54 +47,6 @@ adapter.reload()
 
 注意：`position` 使用 ViewPager2/RecyclerView 的索引，从 `0` 开始。
 
-## 稳定 ID
-
-如果页面会动态增删或重排，建议使用 `StableIdCreator` 提供稳定 ID，避免 Fragment 状态错乱。
-
-```lua
-local ids = { 1001, 1002, 1003 }
-
-local adapter = LuaFragmentAdapter(activity,
-    LuaFragmentAdapter.StableIdCreator {
-        createFragment = function(i)
-            return Fragments[i + 1]
-        end,
-        getItemCount = function()
-            return #Fragments
-        end,
-        getItemId = function(i)
-            return ids[i + 1]
-        end,
-        containsItem = function(id)
-            for _, v in ipairs(ids) do
-                if v == id then
-                    return true
-                end
-            end
-            return false
-        end,
-    })
-```
-
-## 视图类型
-
-如需给不同页面返回不同的 RecyclerView item type，可使用 `ViewTypeCreator`。
-
-```lua
-local adapter = LuaFragmentAdapter(activity,
-    LuaFragmentAdapter.ViewTypeCreator {
-        createFragment = function(i)
-            return Fragments[i + 1]
-        end,
-        getItemCount = function()
-            return #Fragments
-        end,
-        getItemViewType = function(i)
-            return i % 2
-        end,
-    })
-```
-
 ## 错误处理
 
 当 `createFragment` 或 `getItemCount` 抛出异常时，LuaFragmentAdapter 会通过 `activity.sendError("FragmentAdapter", e)` 输出错误，并使用安全默认值避免 ViewPager2 崩溃。

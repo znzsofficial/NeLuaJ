@@ -233,12 +233,7 @@ class res(private val context: LuaContext) : TwoArgFunction() {
                     override fun call(quantity: LuaValue): LuaValue {
                         val pluralTable = item.checktable()
                         val q = quantity.toint()
-                        val rawTemplate = when (q) {
-                            0 -> pluralTable["zero"].ifNil { pluralTable["other"] }
-                            1 -> pluralTable["one"].ifNil { pluralTable["other"] }
-                            2 -> pluralTable["two"].ifNil { pluralTable["other"] }
-                            else -> pluralTable["other"]
-                        }
+                        val rawTemplate = selectPlural(pluralTable, q)
                         
                         // 处理 %d 替换逻辑
                         if (rawTemplate.isstring()) {
@@ -253,6 +248,31 @@ class res(private val context: LuaContext) : TwoArgFunction() {
                 }
             }
             return NIL
+        }
+
+        private fun selectPlural(pluralTable: LuaTable, quantity: Int): LuaValue {
+            return if (language.startsWith("ru")) {
+                selectRussianPlural(pluralTable, quantity)
+            } else {
+                when (quantity) {
+                    0 -> pluralTable["zero"].ifNil { pluralTable["other"] }
+                    1 -> pluralTable["one"].ifNil { pluralTable["other"] }
+                    2 -> pluralTable["two"].ifNil { pluralTable["other"] }
+                    else -> pluralTable["other"]
+                }
+            }
+        }
+
+        private fun selectRussianPlural(pluralTable: LuaTable, quantity: Int): LuaValue {
+            val n = kotlin.math.abs(quantity)
+            val mod10 = n % 10
+            val mod100 = n % 100
+            return when {
+                mod10 == 1 && mod100 != 11 -> pluralTable["one"].ifNil { pluralTable["other"] }
+                mod10 in 2..4 && mod100 !in 12..14 -> pluralTable["few"].ifNil { pluralTable["other"] }
+                mod10 == 0 || mod10 in 5..9 || mod100 in 11..14 -> pluralTable["many"].ifNil { pluralTable["other"] }
+                else -> pluralTable["other"]
+            }
         }
 
         private fun LuaValue.ifNil(block: () -> LuaValue): LuaValue {
