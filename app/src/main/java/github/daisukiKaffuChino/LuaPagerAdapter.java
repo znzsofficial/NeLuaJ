@@ -11,31 +11,24 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class LuaPagerAdapter extends PagerAdapter {
-    final List<View> pagerViews;
-    List<String> titles;
+    private final List<View> pagerViews = new ArrayList<>();
+    private final List<String> titles = new ArrayList<>();
 
-    public LuaPagerAdapter(List<View> list) {
-        this.pagerViews = list;
-    }
-
-    public LuaPagerAdapter(List<View> list, List<String> titles) {
-        this.pagerViews = list;
-        this.titles = titles != null ? titles : new ArrayList<>(); // 避免 titles 为 null
+    public LuaPagerAdapter() {
     }
 
     @Nullable
     @Override
     public CharSequence getPageTitle(int position) {
-        if (titles != null && position < titles.size()) {
+        if (position >= 0 && position < titles.size()) {
             return titles.get(position);
-        } else {
-            return "No Title";
         }
+        return "";
     }
 
     @Override
-    public void destroyItem(@NonNull ViewGroup viewGroup, int position, @NonNull Object object) {
-        viewGroup.removeView(this.pagerViews.get(position));
+    public void destroyItem(@NonNull ViewGroup container, int position, @NonNull Object object) {
+        container.removeView((View) object);
     }
 
     @Override
@@ -45,9 +38,10 @@ public final class LuaPagerAdapter extends PagerAdapter {
 
     @NonNull
     @Override
-    public Object instantiateItem(@NonNull ViewGroup viewGroup, int position) {
-        viewGroup.addView(this.pagerViews.get(position));
-        return this.pagerViews.get(position);
+    public Object instantiateItem(@NonNull ViewGroup container, int position) {
+        View view = pagerViews.get(position);
+        container.addView(view);
+        return view;
     }
 
     @Override
@@ -55,42 +49,91 @@ public final class LuaPagerAdapter extends PagerAdapter {
         return view == object;
     }
 
+    @Override
+    public int getItemPosition(@NonNull Object object) {
+        int index = pagerViews.indexOf(object);
+        return index >= 0 ? index : POSITION_NONE;
+    }
+
+    public void setData(List<View> list) {
+        pagerViews.clear();
+        titles.clear();
+        if (list != null) pagerViews.addAll(list);
+        notifyDataSetChanged();
+    }
+
+    public void setData(List<View> list, List<String> titleList) {
+        pagerViews.clear();
+        titles.clear();
+        if (list != null) pagerViews.addAll(list);
+        if (titleList != null) titles.addAll(titleList);
+        normalizeTitles();
+        notifyDataSetChanged();
+    }
+
 
     public void add(View view) {
         pagerViews.add(view);
+        titles.add("");
         notifyDataSetChanged();  // 通知数据已更改
     }
 
     public void add(View view, String title) {
         pagerViews.add(view);
-        titles.add(title);
+        titles.add(normalizeTitle(title));
         notifyDataSetChanged();  // 通知数据已更改
     }
 
     public void insert(int index, View view) {
-        pagerViews.add(index, view);
-        notifyDataSetChanged();  // 通知数据已更改
+        insert(index, view, "");
     }
 
     public void insert(int index, View view, String title) {
+        if (index < 0 || index > pagerViews.size()) return;
         pagerViews.add(index, view);
-        titles.add(index, title);
+        titles.add(index, normalizeTitle(title));
         notifyDataSetChanged();  // 通知数据已更改
     }
 
+    public void set(int index, View view) {
+        set(index, view, index < titles.size() ? titles.get(index) : "");
+    }
+
+    public void set(int index, View view, String title) {
+        if (index < 0 || index >= pagerViews.size()) return;
+        pagerViews.set(index, view);
+        if (index < titles.size()) {
+            titles.set(index, normalizeTitle(title));
+        } else {
+            normalizeTitles();
+            titles.set(index, normalizeTitle(title));
+        }
+        notifyDataSetChanged();
+    }
+
     public View remove(int index) {
+        if (index < 0 || index >= pagerViews.size()) return null;
         View removedView = pagerViews.remove(index);
-        if (titles != null) titles.remove(index);
+        if (index < titles.size()) titles.remove(index);
         notifyDataSetChanged();  // 通知数据已更改
         return removedView;
     }
 
     public boolean remove(View view) {
-        boolean removed = pagerViews.remove(view);
-        if (removed) {
+        int index = pagerViews.indexOf(view);
+        if (index >= 0) {
+            pagerViews.remove(index);
+            if (index < titles.size()) titles.remove(index);
             notifyDataSetChanged();  // 通知数据已更改
+            return true;
         }
-        return removed;
+        return false;
+    }
+
+    public void clear() {
+        pagerViews.clear();
+        titles.clear();
+        notifyDataSetChanged();
     }
 
     public View getItem(int index) {
@@ -99,5 +142,25 @@ public final class LuaPagerAdapter extends PagerAdapter {
 
     public List<View> getData() {
         return pagerViews;
+    }
+
+    public List<String> getTitles() {
+        return titles;
+    }
+
+    private void normalizeTitles() {
+        while (titles.size() > pagerViews.size()) {
+            titles.remove(titles.size() - 1);
+        }
+        while (titles.size() < pagerViews.size()) {
+            titles.add("");
+        }
+        for (int i = 0; i < titles.size(); i++) {
+            titles.set(i, normalizeTitle(titles.get(i)));
+        }
+    }
+
+    private String normalizeTitle(String title) {
+        return title != null ? title : "";
     }
 }

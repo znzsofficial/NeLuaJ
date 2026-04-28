@@ -360,7 +360,9 @@ class LuaLayout(private val initialContext: Context) {
                             "pages" -> {
                                 val viewsTable = tValue.checktable()
                                 val viewList = processLuaPages(viewsTable, env)
-                                view["setAdapter"].jcall(LuaPagerAdapter(viewList))
+                                val pagerAdapter = LuaPagerAdapter()
+                                pagerAdapter.setData(viewList)
+                                view["setAdapter"].jcall(pagerAdapter)
                                 continue
                             }
 
@@ -378,7 +380,9 @@ class LuaLayout(private val initialContext: Context) {
                                     titleList.add(titlesTable[i].asString())
                                 }
 
-                                view["setAdapter"].jcall(LuaPagerAdapter(viewList, titleList))
+                                val pagerAdapter = LuaPagerAdapter()
+                                pagerAdapter.setData(viewList, titleList)
+                                view["setAdapter"].jcall(pagerAdapter)
                                 continue
                             }
 

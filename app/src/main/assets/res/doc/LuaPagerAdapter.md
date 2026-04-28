@@ -1,189 +1,200 @@
 # `LuaPagerAdapter` API
 
-提供一个自定义的 `PagerAdapter` 实现，方便在 LuaJ+ 中使用，用于轻松管理 Android `ViewPager` 中的页面 (View)。它简化了动态添加、移除和管理页面的过程。
+`LuaPagerAdapter` 是用于 `androidx.viewpager.widget.ViewPager` 的自定义 `PagerAdapter`，用于在 LuaJ+ 中动态管理页面 `View` 和可选标题。
 
-也可以通过在布局表中给 `ViewPager` 设置 `pages` 或 `pagesWithTitle` 来自动创建 `LuaPagerAdapter`
+也可以通过在布局表中给 `ViewPager` 设置 `pages` 或 `pagesWithTitle` 来自动创建并填充 `LuaPagerAdapter`。
 
 ## 导入类
 
-使用 `LuaPagerAdapter` 前，首先需要导入该类：
-
 ```lua
--- 导入 LuaPagerAdapter 类
 local LuaPagerAdapter = luajava.bindClass("github.daisukiKaffuChino.LuaPagerAdapter")
-
--- 导入必要的 Android 类
-local ArrayList = luajava.bindClass("java.util.ArrayList")
-local View = luajava.bindClass("android.view.View")
--- 根据需要导入其他类 (例如 TextView, Button, ViewPager 等)
 ```
 
-## 描述
+## 设计说明
 
-`LuaPagerAdapter` 继承自 `androidx.viewpager.widget.PagerAdapter`。它内部维护一个 `View` 对象的列表 (`List<View>`)，每个 View 代表 `ViewPager` 中的一个页面。它还可以选择性地管理一个对应的 `String` 标题列表 (`List<String>`)，可供 `TabLayout` 等组件使用以显示页面标题。
+`LuaPagerAdapter` 使用无参构造，并在 Java 侧内部维护页面列表和标题列表。这样可以避免 LuaJ 包装 Lua table 后，Java 侧无法感知 table 后续变更而导致 `ViewPager` 不刷新的问题。
 
-该适配器在进行修改操作（添加、插入、移除）后会自动调用 `notifyDataSetChanged()` 来更新 `ViewPager`。
+适配器在 `setData`、`add`、`insert`、`set`、`remove`、`clear` 后会自动调用 `notifyDataSetChanged()`。同时已重写 `getItemPosition()`，便于页面动态更新。
 
-**重要索引说明：** 所有接受或返回索引（`index` 或 `position`）的方法（如 `insert`, `remove`, `getItem`, `getPageTitle`）都使用 **基于 0 的索引**，这与 Java List 和 Android Adapter 的约定一致，即使 Lua 表通常是基于 1 的。从 Lua 调用这些方法时请务必注意这一点。
+**索引说明：** 所有 `index` / `position` 均为 Java/Android 风格的 **0 基索引**。Lua 表通常从 1 开始，从 Lua 调用这些方法时请注意转换。
 
 ## 构造函数
 
-### 1. `LuaPagerAdapter(views)`
+### `LuaPagerAdapter()`
 
-创建一个只包含视图列表的 `LuaPagerAdapter`。页面标题将默认为 "No Title"。
+创建一个空的页面适配器。
 
-*   **参数:**
-    *   `views`: `List<View>` - 一个包含各页面 View 对象的 Java 列表。可以使用 `ArrayList` 创建。
-*   **Lua 示例:**
-    ```lua
-    -- 实际上 LuaJ 可以将表自动转为 ArrayList
-    local viewList = ArrayList()
-    -- 向 viewList 添加 View 对象...
-    local adapter = LuaPagerAdapter(viewList)
-    ```
+```lua
+local adapter = LuaPagerAdapter()
+pager.setAdapter(adapter)
+```
 
-### 2. `LuaPagerAdapter(views, titles)`
+> 不再支持通过构造函数传入页面列表。请使用 `setData`、`add`、`insert` 等方法维护数据。
 
-创建一个同时包含视图列表和对应标题列表的 `LuaPagerAdapter`。
+## 批量设置数据
 
-*   **参数:**
-    *   `views`: `List<View>` - 包含页面 View 对象的 Java 列表。
-    *   `titles`: `List<String>` - 包含页面标题 String 的 Java 列表。其大小最好与 `views` 列表匹配。如果传入 `nil`，内部会使用一个空列表。
-*   **Lua 示例:**
-    ```lua
-    local viewList = ArrayList()
-    local titleList = ArrayList()
-    -- 向 viewList 和 titleList 添加 View 和对应的 String...
-    local adapter = LuaPagerAdapter(viewList, titleList)
-    ```
+### `setData(views)`
 
-## 方法
+替换全部页面，标题会自动补齐为空标题。
+
+```lua
+adapter.setData(viewList)
+```
+
+### `setData(views, titles)`
+
+替换全部页面和标题。标题数量会自动裁剪或补齐，`nil` 标题会转为空字符串。
+
+```lua
+adapter.setData(viewList, titleList)
+```
+
+## 添加页面
 
 ### `add(view)`
 
-将一个 `View` 添加到页面列表的末尾。
+添加一个页面，标题为空字符串。
 
-*   **参数:**
-    *   `view`: `View` - 要添加为新页面的视图。
-*   **返回值:** `void`
-*   **Lua 示例:**
-    ```lua
-    local newView = TextView(activity)
-    adapter.add(newView) -- 假设 'adapter' 是 LuaPagerAdapter 实例
-    ```
+```lua
+adapter.add(pageView)
+```
 
 ### `add(view, title)`
 
-将一个 `View` 及其对应的 `String` 标题添加到列表末尾。
+添加一个带标题的页面。
 
-*   **参数:**
-    *   `view`: `View` - 要添加的视图。
-    *   `title`: `String` - 新页面的标题。
-*   **返回值:** `void`
-*   **Lua 示例:**
-    ```lua
-    local newView = TextView(activity)
-    adapter.add(newView, "新页面标题")
-    ```
+```lua
+adapter.add(pageView, "首页")
+```
+
+## 插入页面
 
 ### `insert(index, view)`
 
-在指定位置（基于 0 的索引）插入一个 `View`。
+在指定 0 基索引处插入页面，标题为空字符串。索引越界时不会修改数据。
 
-*   **参数:**
-    *   `index`: `int` - 要插入视图的基于 0 的位置。
-    *   `view`: `View` - 要插入的视图。
-*   **返回值:** `void`
-*   **Lua 示例:**
-    ```lua
-    local insertedView = TextView(activity)
-    adapter.insert(0, insertedView) -- 插入到列表开头 (索引 0)
-    ```
+```lua
+adapter.insert(0, pageView)
+```
 
 ### `insert(index, view, title)`
 
-在指定位置（基于 0 的索引）插入一个 `View` 及其 `String` 标题。
+在指定 0 基索引处插入带标题页面。索引越界时不会修改数据。
 
-*   **参数:**
-    *   `index`: `int` - 要插入的基于 0 的位置。
-    *   `view`: `View` - 要插入的视图。
-    *   `title`: `String` - 插入页面的标题。
-*   **返回值:** `void`
-*   **Lua 示例:**
-    ```lua
-    local insertedView = TextView(activity)
-    adapter.insert(1, insertedView, "插入的标题") -- 插入到第二个位置 (索引 1)
-    ```
+```lua
+adapter.insert(1, pageView, "设置")
+```
+
+## 替换页面
+
+### `set(index, view)`
+
+替换指定页面并保留原标题。索引越界时不会修改数据。
+
+```lua
+adapter.set(0, newPageView)
+```
+
+### `set(index, view, title)`
+
+替换指定页面和标题。索引越界时不会修改数据。
+
+```lua
+adapter.set(0, newPageView, "新标题")
+```
+
+## 移除页面
 
 ### `remove(index)`
 
-移除指定位置（基于 0 的索引）的页面（包括 View 和对应的标题，如果存在）。
+移除指定 0 基索引的页面和对应标题，并返回被移除的 `View`。索引越界时返回 `nil`。
 
-*   **参数:**
-    *   `index`: `int` - 要移除的页面的基于 0 的索引。
-*   **返回值:** `View` - 被移除的 View 对象。
-*   **Lua 示例:**
-    ```lua
-    local removedView = adapter.remove(0) -- 移除第一个页面 (索引 0)
-    ```
+```lua
+local removed = adapter.remove(0)
+```
 
 ### `remove(view)`
 
-从页面列表中移除指定的 `View` 对象。**注意：此方法仅移除 View，不会自动移除对应的标题（如果存在）。**
+移除指定 `View` 及其对应标题，返回是否成功移除。
 
-*   **参数:**
-    *   `view`: `View` - 要移除的确切 View 对象。
-*   **返回值:** `boolean` - 如果找到并成功移除了视图，则返回 `true`，否则返回 `false`。
-*   **Lua 示例:**
-    ```lua
-    local viewToRemove = adapter.getItem(1) -- 获取索引为 1 的视图
-    if viewToRemove then adapter.remove(viewToRemove) end
-    ```
+```lua
+local page = adapter.getItem(0)
+local ok = adapter.remove(page)
+```
+
+## 清空页面
+
+### `clear()`
+
+清空所有页面和标题。
+
+```lua
+adapter.clear()
+```
+
+## 查询数据
 
 ### `getItem(index)`
 
-获取指定位置（基于 0 的索引）的 `View` 对象。
+获取指定 0 基索引的页面 `View`。
 
-*   **参数:**
-    *   `index`: `int` - 所需页面的基于 0 的索引。
-*   **返回值:** `View` - 指定索引处的 View 对象，如果索引越界则返回 `nil`。
-*   **Lua 示例:**
-    ```lua
-    local pageView = adapter.getItem(1) -- 获取第二个页面的视图 (索引 1)
-    ```
+```lua
+local page = adapter.getItem(0)
+```
 
 ### `getCount()`
 
-返回适配器当前管理的页面总数。
+返回页面数量。
 
-*   **参数:** 无
-*   **返回值:** `int` - 页面数量。
-*   **Lua 示例:**
-    ```lua
-    local count = adapter.getCount()
-    print("总页数: " .. count)
-    ```
+```lua
+local count = adapter.getCount()
+```
 
 ### `getPageTitle(position)`
 
-返回指定位置（基于 0 的索引）的页面标题。此方法主要供 `TabLayout` 等组件内部使用。
+返回指定位置标题。无标题或索引无效时返回空字符串。
 
-*   **参数:**
-    *   `position`: `int` - 页面的基于 0 的索引。
-*   **返回值:** `CharSequence` (在 Lua 中通常作为 `String` 处理) - 页面的标题，如果无标题或索引无效，则返回 "No Title"。
-*   **Lua 示例 (直接调用较少见):**
-    ```lua
-    local title = adapter.getPageTitle(0) -- 获取第一个页面的标题
-    ```
+```lua
+local title = adapter.getPageTitle(0)
+```
 
 ### `getData()`
 
-返回包含所有页面视图的底层 Java `List<View>`。
+返回内部页面 `List<View>`。
 
-*   **参数:** 无
-*   **返回值:** `List<View>` - 包含所有视图的 Java 列表。
-*   **Lua 示例:**
-    ```lua
-    local allViewsList = adapter.getData()
-    local size = allViewsList.size() -- 获取列表大小
-    ```
+```lua
+local views = adapter.getData()
+```
+
+### `getTitles()`
+
+返回内部标题 `List<String>`。
+
+```lua
+local titles = adapter.getTitles()
+```
+
+## 布局表快捷属性
+
+### `pages`
+
+```lua
+{
+    ViewPager,
+    id = "pager",
+    pages = { page1View, page2View },
+}
+```
+
+### `pagesWithTitle`
+
+```lua
+{
+    ViewPager,
+    id = "pager",
+    pagesWithTitle = {
+        { page1View, page2View },
+        { "首页", "设置" },
+    },
+}
+```
