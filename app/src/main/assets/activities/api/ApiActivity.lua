@@ -17,7 +17,7 @@ local ForegroundColorSpan = bindClass "android.text.style.ForegroundColorSpan"
 
 local primaryColor = ColorUtil.ColorPrimary
 
-luadir = activity.getLuaDir()
+luadir = activity.getLuaPath("")
 local isDexMode = false
 
 activity
@@ -50,7 +50,7 @@ function onOptionsItemSelected(m)
   if m.getItemId() == android.R.id.home then
     activity.finish()
    elseif m.title == res.string._switch then
-    activity.newActivity(luadir .. "/activities/api/ApiActivity.lua", { not simpleList })
+    activity.newActivity(activity.getLuaPath("activities/api/ApiActivity.lua"), { not simpleList })
     activity.overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
     activity.finish()
    elseif m.title == res.string.open then
@@ -59,7 +59,7 @@ function onOptionsItemSelected(m)
     .setTitle(res.string.input_class)
     .setView(loadlayout(res.layout.dialog_fileinput, sublayout))
     .setPositiveButton(android.R.string.ok, function()
-      activity.newActivity(activity.getLuaDir() .. "/activities/api/sub/main", { tostring(sublayout.file_name.getText()) })
+      activity.newActivity(activity.getLuaPath("activities/api/sub/main"), { tostring(sublayout.file_name.getText()) })
     end)
     .setNegativeButton(android.R.string.cancel, nil)
     .show();
@@ -101,7 +101,7 @@ clist.onItemLongClick = function(listView, itemView)
 end
 
 clist.onItemClick = function(listView, itemView)
-  activity.newActivity(activity.getLuaDir() .. "/activities/api/sub/main", { itemView.Text })
+  activity.newActivity(activity.getLuaPath("activities/api/sub/main"), { itemView.Text })
   return true
 end
 

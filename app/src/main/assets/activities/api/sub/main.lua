@@ -486,7 +486,7 @@ li.onItemClick = function(listView, itemView, position, index)
         print("未选择内容")
        else
         if pcall(function() luajava.bindClass(combined) end) then
-          activity.newActivity(activity.getLuaDir() .. "/activities/api/sub/main", { combined })
+          activity.newActivity(activity.getLuaPath("activities/api/sub/main"), { combined })
           return
         end
         activity.result({ combined })

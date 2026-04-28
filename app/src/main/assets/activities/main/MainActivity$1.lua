@@ -283,7 +283,7 @@ function _M.dexDialog(path)
     -- 分析类：跳转到 API 页面，传入 dex 路径
     dialog.setPositiveButton(res.string.api_title, function()
         activity.newActivity(
-            activity.getLuaDir() .. "/activities/api/ApiActivity.lua",
+            activity.getLuaPath("activities/api/ApiActivity.lua"),
             { "dex:" .. path }
         )
     end)

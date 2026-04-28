@@ -103,7 +103,7 @@ lv.setAdapter(adp)
 lv.onItemClick = function(l, v, p, i)
     activity.setTitle(data[i].text)
     vpg.setCurrentItem(1)
-    local md = LuaFileUtil.read(activity.getLuaDir() .. "/res/doc/" .. data[i].file)
+    local md = LuaFileUtil.read(activity.getLuaPath("res/doc", data[i].file))
     webView.loadFromText(md)
 end
 

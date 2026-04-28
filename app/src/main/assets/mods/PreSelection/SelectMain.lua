@@ -247,7 +247,7 @@ function _M.addView(text, view, list, id)
               --mLuaEditor.paste(v)
               print("已复制导入代码")
              case "查看Api"
-              activity.newActivity(activity.getLuaDir() .. "/activities/api/sub/main", { text })
+              activity.newActivity(activity.getLuaPath("activities/api/sub/main"), { text })
             end
           end
           popupMenu.show()
