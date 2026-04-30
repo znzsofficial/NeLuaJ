@@ -42,7 +42,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.webkit.MimeTypeMap
 import android.widget.ImageView
-import android.widget.ListView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
@@ -106,7 +105,6 @@ import org.luaj.android.saf
 import org.luaj.android.task
 import org.luaj.android.timer
 import org.luaj.android.xTask
-import org.luaj.android.thread as luajthread
 import org.luaj.compiler.DumpState
 import org.luaj.lib.ResourceFinder
 import org.luaj.lib.VarArgFunction
@@ -120,6 +118,7 @@ import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
 import kotlin.system.measureTimeMillis
+import org.luaj.android.thread as luajthread
 
 @Suppress("UNUSED")
 open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnReceiveListener,
@@ -565,8 +564,13 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
                 val permissionsToRequest = requestedPermissions?.mapNotNull { permissionName ->
                     try {
                         val pInfo = packageManager.getPermissionInfo(permissionName, 0)
-                        // 使用新的 API: getProtection() 来判断是否为危险权限
-                        if (pInfo.protection == PermissionInfo.PROTECTION_DANGEROUS) {
+                        val protection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                            pInfo.protection
+                        } else {
+                            @Suppress("DEPRECATION")
+                            pInfo.protectionLevel and PermissionInfo.PROTECTION_MASK_BASE
+                        }
+                        if (protection == PermissionInfo.PROTECTION_DANGEROUS) {
                             // 确认该权限当前是否尚未被授予
                             if (checkCallingOrSelfPermission(permissionName) != PackageManager.PERMISSION_GRANTED) {
                                 permissionName // 如果是需要请求的危险权限，则返回权限名

@@ -1,6 +1,7 @@
 # IntelliJ IDEA / Android Studio
 *.iml
 /.idea/
+/.vscode/
 
 # Gradle files
 .gradle/

@@ -16,6 +16,10 @@ local LuaPagerAdapter = luajava.bindClass("github.daisukiKaffuChino.LuaPagerAdap
 
 适配器在 `setData`、`add`、`insert`、`set`、`remove`、`clear` 后会自动调用 `notifyDataSetChanged()`。同时已重写 `getItemPosition()`，便于页面动态更新。
 
+标题列表会和页面列表保持同长度：标题过多会被裁剪，标题不足会补为空字符串，`nil` 标题也会转为空字符串。
+
+> 如果通过 `getData()` 或 `getTitles()` 取得内部 `List` 后直接修改列表，适配器不会自动收到通知。推荐使用本文档中的 `setData`、`add`、`insert`、`set`、`remove`、`clear` 方法修改数据。
+
 **索引说明：** 所有 `index` / `position` 均为 Java/Android 风格的 **0 基索引**。Lua 表通常从 1 开始，从 Lua 调用这些方法时请注意转换。
 
 ## 构造函数
@@ -136,7 +140,7 @@ adapter.clear()
 
 ### `getItem(index)`
 
-获取指定 0 基索引的页面 `View`。
+获取指定 0 基索引的页面 `View`。该方法直接访问内部列表，索引越界时会抛出 Java 异常。
 
 ```lua
 local page = adapter.getItem(0)
@@ -160,7 +164,7 @@ local title = adapter.getPageTitle(0)
 
 ### `getData()`
 
-返回内部页面 `List<View>`。
+返回内部页面 `List<View>`。直接修改该列表不会自动刷新 `ViewPager`。
 
 ```lua
 local views = adapter.getData()
@@ -168,7 +172,7 @@ local views = adapter.getData()
 
 ### `getTitles()`
 
-返回内部标题 `List<String>`。
+返回内部标题 `List<String>`。直接修改该列表不会自动刷新 `ViewPager`。
 
 ```lua
 local titles = adapter.getTitles()

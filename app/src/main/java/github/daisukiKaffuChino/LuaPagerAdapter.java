@@ -59,6 +59,7 @@ public final class LuaPagerAdapter extends PagerAdapter {
         pagerViews.clear();
         titles.clear();
         if (list != null) pagerViews.addAll(list);
+        normalizeTitles();
         notifyDataSetChanged();
     }
 
