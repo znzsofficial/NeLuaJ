@@ -1,4 +1,6 @@
+import com.android.build.api.dsl.Packaging
 import com.android.build.gradle.internal.api.BaseVariantOutputImpl
+import org.gradle.jvm.tasks.Jar
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.io.FileInputStream
 import java.time.LocalDateTime
@@ -49,6 +51,11 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+    packaging {
+        resources {
+            excludes.add("META-INF/androidx/emoji2/emoji2/LICENSE.txt")
+        }
+    }
     kotlin {
         jvmToolchain(17)
         compilerOptions {
@@ -64,7 +71,6 @@ android {
             targetCompatibility = JavaVersion.VERSION_17
         }
     }
-    packagingOptions.resources.excludes.add("META-INF/androidx/emoji2/emoji2/LICENSE.txt")
     configurations.all {
         exclude(group = "androidx.asynclayoutinflater", module = "asynclayoutinflater")
         exclude(group = "androidx.localbroadcastmanager", module = "localbroadcastmanager")
@@ -84,8 +90,20 @@ android {
     }
 }
 
+val filteredLuajppJar by tasks.registering(Jar::class) {
+    archiveFileName.set("luajpp_nocglib_without_luajava.jar")
+    destinationDirectory.set(layout.buildDirectory.dir("filtered-libs"))
+    from(zipTree(layout.projectDirectory.file("libs/luajpp_nocglib.jar"))) {
+        exclude("org/luaj/lib/jse/LuajavaLib*.class")
+    }
+}
+
 dependencies {
-    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar"))))
+    implementation(fileTree("libs") {
+        include("*.jar")
+        exclude("luajpp_nocglib.jar")
+    })
+    implementation(files(filteredLuajppJar))
     //implementation(libs.kotlin.reflect)
     //implementation("me.jahnen.libaums:core:0.10.0")
     //implementation("me.jahnen.libaums:httpserver:0.6.2")
