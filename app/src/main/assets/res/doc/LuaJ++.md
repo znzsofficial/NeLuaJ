@@ -257,12 +257,40 @@ c = abstract {
     methodName=function(super, arg)
     end
 }
+
+-- 单方法接口可以直接使用函数
+i = interface(function(arg)
+  print(arg)
+end)
+
+-- JavaClass 方式同样支持单方法接口函数代理
+Runnable(function()
+  print("run")
+end)
+
+-- 多接口代理会按所有接口查找方法
+local proxy = luajava.createProxy(
+  Map,
+  Closeable,
+  {
+    get = function(key)
+      return key
+    end,
+    close = function()
+      print("closed")
+    end
+  }
+)
 ```
+
+接口代理和 `override` 在未提供 `equals`、`hashCode`、`toString` 时，会回退到 Java 默认对象语义，避免作为 Java 容器键时匹配失败；多接口代理会按所有接口查找方法，避免被首接口同名成员干扰。
+
+`override` 用于继承 Java 类或抽象类并覆盖指定方法。被覆盖方法的第一个参数固定为 `superCall`，调用它可以执行父类原方法；如果不调用 `superCall`，则完全由 Lua 实现接管。
 
 - 支持覆盖方法
 ```lua
 list = ArrayList.override {
-  function add(superCall, arg)
+  add = function(superCall, arg)
     superCall(arg)
   end
 }()
@@ -270,7 +298,19 @@ list = ArrayList {
   add = function(s, a)
   end
 }
+
+-- 覆盖抽象类或普通类方法
+local MyObserver = FileObserver.override {
+  onEvent = function(superCall, event, path)
+    print(event, path)
+  end
+}
+
+-- 创建覆盖后的对象
+local observer = MyObserver(path)
 ```
+
+`override` 只会增强 Lua 表中提供的方法，未提供的方法保持 Java 原本行为。`superCall(...)` 会按 Java 方法签名把 Lua 参数转换为 Java 参数，适合在扩展原有行为时先调用父类逻辑。
 
 - 支持元方法
 ```lua

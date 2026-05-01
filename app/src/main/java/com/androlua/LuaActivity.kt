@@ -318,11 +318,13 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
 
 
     private fun showLogView(isError: Boolean) {
+        setTheme(R.style.Theme_NeLuaJ_Material3_DynamicColors_NoActionBar)
         supportActionBar?.hide()
         DynamicColors.applyToActivityIfAvailable(this)
         setContentView(R.layout.log_list)
 
         val surfaceColor = MaterialColors.getColor(this, com.google.android.material.R.attr.colorSurface, "LogView")
+        findViewById<View>(android.R.id.content)?.setBackgroundColor(surfaceColor)
         window.statusBarColor = surfaceColor
         window.navigationBarColor = surfaceColor
         val systemUiFlags = if (MaterialColors.isColorLight(surfaceColor)) {

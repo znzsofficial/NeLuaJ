@@ -32,55 +32,14 @@ public class LuajavaLib extends VarArgFunction {
     public HashMap<String, LuaValue> f = new HashMap<>();
 
     public static LuaValue asTable(Object object) {
-        if (object == null) {
-            return LuaValue.NIL;
-        }
-
-        LuaTable table = new LuaTable();
-        if (object.getClass().isArray()) {
-            int length = Array.getLength(object);
-            for (int index = 0; index < length; index++) {
-                table.set(index + 1, asTable(Array.get(object, index)));
-            }
-        } else if (object instanceof Collection) {
-            int index = 1;
-            for (Object item : (Collection<?>) object) {
-                table.set(index++, asTable(item));
-            }
-        } else if (object instanceof Map) {
-            for (Map.Entry<?, ?> entry : ((Map<?, ?>) object).entrySet()) {
-                table.set(CoerceJavaToLua.coerce(entry.getKey()), asTable(entry.getValue()));
-            }
-        } else if (object instanceof JSONObject) {
-            JSONObject jsonObject = (JSONObject) object;
-            Iterator<?> keys = jsonObject.keys();
-            while (keys.hasNext()) {
-                String key = (String) keys.next();
-                try {
-                    table.set(key, asTable(jsonObject.get(key)));
-                } catch (JSONException ignored) {
-                }
-            }
-        } else if (object instanceof JSONArray) {
-            JSONArray jsonArray = (JSONArray) object;
-            int length = jsonArray.length();
-            for (int index = 0; index < length; index++) {
-                try {
-                    table.set(index + 1, asTable(jsonArray.get(index)));
-                } catch (JSONException ignored) {
-                }
-            }
-        } else {
-            return CoerceJavaToLua.coerce(object);
-        }
-
-        return table;
+        return asTable(object, true);
     }
 
     public static LuaValue asTable(Object object, boolean recursive) {
-        if (recursive) {
-            return asTable(object);
-        }
+        return asTableInternal(object, recursive);
+    }
+
+    private static LuaValue asTableInternal(Object object, boolean recursive) {
         if (object == null) {
             return LuaValue.NIL;
         }
@@ -89,16 +48,16 @@ public class LuajavaLib extends VarArgFunction {
         if (object.getClass().isArray()) {
             int length = Array.getLength(object);
             for (int index = 0; index < length; index++) {
-                table.set(index + 1, CoerceJavaToLua.coerce(Array.get(object, index)));
+                table.set(index + 1, convertTableValue(Array.get(object, index), false));
             }
         } else if (object instanceof Collection) {
             int index = 1;
             for (Object item : (Collection<?>) object) {
-                table.set(index++, CoerceJavaToLua.coerce(item));
+                table.set(index++, convertTableValue(item, false));
             }
         } else if (object instanceof Map) {
             for (Map.Entry<?, ?> entry : ((Map<?, ?>) object).entrySet()) {
-                table.set(CoerceJavaToLua.coerce(entry.getKey()), CoerceJavaToLua.coerce(entry.getValue()));
+                table.set(CoerceJavaToLua.coerce(entry.getKey()), convertTableValue(entry.getValue(), false));
             }
         } else if (object instanceof JSONObject) {
             JSONObject jsonObject = (JSONObject) object;
@@ -106,7 +65,7 @@ public class LuajavaLib extends VarArgFunction {
             while (keys.hasNext()) {
                 String key = (String) keys.next();
                 try {
-                    table.set(key, CoerceJavaToLua.coerce(jsonObject.get(key)));
+                    table.set(key, convertTableValue(jsonObject.get(key), false));
                 } catch (JSONException ignored) {
                 }
             }
@@ -115,7 +74,7 @@ public class LuajavaLib extends VarArgFunction {
             int length = jsonArray.length();
             for (int index = 0; index < length; index++) {
                 try {
-                    table.set(index + 1, CoerceJavaToLua.coerce(jsonArray.get(index)));
+                    table.set(index + 1, convertTableValue(jsonArray.get(index), false));
                 } catch (JSONException ignored) {
                 }
             }
@@ -126,9 +85,27 @@ public class LuajavaLib extends VarArgFunction {
         return table;
     }
 
-    public static LuaUserdata createProxy(Class type, LuaValue value) {
+    private static LuaValue convertTableValue(Object value, boolean recursive) {
+        return recursive ? asTableInternal(value, true) : CoerceJavaToLua.coerce(value);
+    }
+
+    public static LuaUserdata createProxy(Class<?> type, LuaValue value) {
+        checkInterface(type);
         ProxyInvocationHandler handler = new ProxyInvocationHandler(value);
-        return LuaValue.userdataOf(Proxy.newProxyInstance(type.getClassLoader(), new Class[]{type}, handler));
+        return createProxyUserdata(Proxy.newProxyInstance(type.getClassLoader(), new Class[]{type}, handler), type);
+    }
+
+    private static LuaUserdata createProxyUserdata(Object proxy, Class<?> primaryInterface) {
+        JavaInstance instance = new JavaInstance(proxy);
+        instance.f = JavaClass.a(primaryInterface);
+        return instance;
+    }
+
+    private static LuaUserdata createProxyUserdata(Object proxy, Class<?>[] interfaces) {
+        if (interfaces.length == 1) {
+            return createProxyUserdata(proxy, interfaces[0]);
+        }
+        return new ProxyJavaInstance(proxy, interfaces);
     }
 
     public static LuaValue override(Class type, LuaValue value) {
@@ -231,14 +208,69 @@ public class LuajavaLib extends VarArgFunction {
             throw new LuaError("no interfaces");
         }
 
-        LuaTable table = args.checktable(interfaceCount + 1);
-        Class[] interfaces = new Class[interfaceCount];
+        LuaValue value = args.checkvalue(interfaceCount + 1);
+        Class<?>[] interfaces = new Class<?>[interfaceCount];
         for (int index = 0; index < interfaceCount; index++) {
-            interfaces[index] = this.f(args.checkjstring(index + 1));
+            interfaces[index] = checkInterface(toClass(args.arg(index + 1)));
         }
 
-        ProxyInvocationHandler handler = new ProxyInvocationHandler(table);
-        return LuaValue.userdataOf(Proxy.newProxyInstance(this.getClass().getClassLoader(), interfaces, handler));
+        ProxyInvocationHandler handler = new ProxyInvocationHandler(value);
+        return createProxyUserdata(Proxy.newProxyInstance(interfaces[0].getClassLoader(), interfaces, handler), interfaces);
+    }
+
+    private Class<?> toClass(LuaValue value) throws ClassNotFoundException {
+        if (value.isstring()) {
+            return this.f(value.checkjstring());
+        }
+        Object userdata = value.touserdata(Class.class);
+        if (userdata instanceof Class) {
+            return (Class<?>) userdata;
+        }
+        userdata = value.touserdata(JavaClass.class);
+        if (userdata instanceof JavaClass) {
+            return (Class<?>) ((JavaClass) userdata).touserdata(Class.class);
+        }
+        throw new LuaError("interface expected, got " + value.typename());
+    }
+
+    private static Class<?> checkInterface(Class<?> type) {
+        if (!type.isInterface()) {
+            throw new LuaError("not an interface: " + type.getName());
+        }
+        return type;
+    }
+
+    private static final class ProxyJavaInstance extends JavaInstance {
+        private final JavaClass[] interfaces;
+
+        private ProxyJavaInstance(Object proxy, Class<?>[] interfaces) {
+            super(proxy);
+            this.interfaces = new JavaClass[interfaces.length];
+            for (int index = 0; index < interfaces.length; index++) {
+                this.interfaces[index] = JavaClass.a(interfaces[index]);
+            }
+            this.f = this.interfaces[0];
+        }
+
+        @Override
+        public LuaValue getJavaMethod(LuaValue key) {
+            for (JavaClass javaInterface : this.interfaces) {
+                LuaValue method = javaInterface.getMethod(key);
+                if (method != null) {
+                    return new JavaMethod.JavaOOMethod(this, method);
+                }
+            }
+            return LuaValue.NIL;
+        }
+
+        @Override
+        public LuaValue get(LuaValue key) {
+            LuaValue value = getJavaMethod(key);
+            if (!value.isnil()) {
+                return value;
+            }
+            return super.get(key);
+        }
     }
 
     private Varargs loadLib(Varargs args) throws Exception {
@@ -283,7 +315,13 @@ public class LuajavaLib extends VarArgFunction {
 
         public Object invoke(Object proxy, Method method, Object[] args) {
             String methodName = method.getName();
-            LuaValue function = this.a.isfunction() ? this.a : this.a.get(methodName);
+            boolean functionMode = this.a.isfunction();
+            Object defaultObjectResult = getDefaultObjectMethodResult(proxy, method, args);
+            if (functionMode && defaultObjectResult != null) {
+                return defaultObjectResult;
+            }
+
+            LuaValue function = functionMode ? this.a : this.a.get(methodName);
 
             if (!function.isnil()) {
                 LuaValue[] luaArgs = toLuaArgs(method, args);
@@ -294,7 +332,6 @@ public class LuajavaLib extends VarArgFunction {
                 }
             }
 
-            Object defaultObjectResult = getDefaultObjectMethodResult(proxy, method, args);
             if (defaultObjectResult != null) {
                 return defaultObjectResult;
             }

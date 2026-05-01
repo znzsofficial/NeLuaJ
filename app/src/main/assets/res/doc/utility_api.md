@@ -271,7 +271,52 @@ local runnable = luajava.createProxy("java.lang.Runnable", {
         print("running")
     end
 })
+
+-- 单方法接口可以直接使用函数
+local runnable2 = luajava.createProxy("java.lang.Runnable", function()
+    print("running")
+end)
+
+-- 接口参数也可以传入已绑定的 Java 类
+local Runnable = luajava.bindClass("java.lang.Runnable")
+local runnable3 = luajava.createProxy(Runnable, function()
+    print("running")
+end)
+
+-- 已绑定的接口类也可以直接用函数创建代理
+local runnable4 = Runnable(function()
+    print("running")
+end)
+
+-- 多接口代理：最后一个参数仍然是实现表或函数
+local proxy = luajava.createProxy(
+    "java.util.Map",
+    "java.io.Closeable",
+    {
+        get = function(key)
+            return key
+        end,
+        close = function()
+            print("closed")
+        end
+    }
+)
+
+-- 覆盖 Java 类或抽象类方法
+local ArrayList = luajava.bindClass("java.util.ArrayList")
+local MyList = ArrayList.override {
+    add = function(superCall, value)
+        print("add:", value)
+        return superCall(value)
+    end
+}
+local list = MyList()
+list.add("item")
 ```
+
+`createProxy` 未显式实现 `equals`、`hashCode`、`toString` 时，会使用 Java 默认对象语义；多接口代理会按所有接口顺序查找方法，避免被第一个接口的同名成员干扰。
+
+`override` 会生成 Java 类的增强子类，只覆盖 Lua 表中提供的方法。覆盖方法的第一个参数是 `superCall`，调用 `superCall(...)` 可执行父类原方法；未提供的方法保持 Java 原本行为。
 
 ---
 

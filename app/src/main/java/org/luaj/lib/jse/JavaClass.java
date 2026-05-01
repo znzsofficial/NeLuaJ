@@ -24,8 +24,8 @@ import java.util.Map;
 
 public class JavaClass extends JavaInstance implements CoerceJavaToLua.Coercion {
     static final HashMap<LuaValue, LuaValue> i = new HashMap<>();
-    static final Map<Class<?>, JavaClass> j = Collections.synchronizedMap(new HashMap());
-    static final Map<String, JavaClass> k = Collections.synchronizedMap(new HashMap());
+    static final Map<Class<?>, JavaClass> j = Collections.synchronizedMap(new HashMap<>());
+    static final Map<String, JavaClass> k = Collections.synchronizedMap(new HashMap<>());
     static final LuaValue l = LuaValue.valueOf("new");
     final HashMap<LuaValue, Integer> m = new HashMap<>();
     final HashMap<LuaValue, Integer> n = new HashMap<>();
@@ -49,12 +49,7 @@ public class JavaClass extends JavaInstance implements CoerceJavaToLua.Coercion 
     }
 
     static JavaClass a(Class<?> var0) {
-        JavaClass javaClass = j.get(var0);
-        if (javaClass == null) {
-            javaClass = new JavaClass(var0);
-            ((Map) j).put(var0, javaClass);
-        }
-        return javaClass;
+        return j.computeIfAbsent(var0, JavaClass::new);
     }
 
     static JavaClass a(String var0, ClassLoader var1) throws ClassNotFoundException {
@@ -62,7 +57,7 @@ public class JavaClass extends JavaInstance implements CoerceJavaToLua.Coercion 
         JavaClass var2 = var3;
         if (var3 == null) {
             var2 = a(Class.forName(var0, true, var1));
-            ((Map) k).put(var0, var2);
+            k.put(var0, var2);
         }
         return var2;
     }
@@ -72,7 +67,7 @@ public class JavaClass extends JavaInstance implements CoerceJavaToLua.Coercion 
         JavaClass var1 = var2;
         if (var2 == null) {
             var1 = a(Class.forName(var0));
-            ((Map) k).put(var0, var1);
+            k.put(var0, var1);
         }
 
         return var1;
@@ -80,7 +75,7 @@ public class JavaClass extends JavaInstance implements CoerceJavaToLua.Coercion 
 
     Field b(LuaValue var1) {
         if (this.s == null) {
-            HashMap var4 = new HashMap();
+            HashMap<LuaValue, Field> var4 = new HashMap<>();
             Field[] var3 = ((Class<?>) super.b).getFields();
 
             for (int var2 = var3.length - 1; var2 >= 0; --var2) {
@@ -105,10 +100,10 @@ public class JavaClass extends JavaInstance implements CoerceJavaToLua.Coercion 
 
     JavaClass c(LuaValue var1) {
         if (this.u == null) {
-            HashMap var5 = new HashMap();
+            HashMap<LuaValue, JavaClass> var5 = new HashMap<>();
 
-            for (Class var4 = (Class) super.b; var4 != null; var4 = var4.getSuperclass()) {
-                for (Class var7 : var4.getDeclaredClasses()) {
+            for (Class<?> var4 = (Class<?>) super.b; var4 != null; var4 = var4.getSuperclass()) {
+                for (Class<?> var7 : var4.getDeclaredClasses()) {
                     if (Modifier.isPublic(var7.getModifiers())) {
                         String var8 = var7.getName();
                         LuaString var9 = LuaValue.valueOf(var8.substring(Math.max(var8.lastIndexOf(36), var8.lastIndexOf(46)) + 1));
@@ -134,39 +129,14 @@ public class JavaClass extends JavaInstance implements CoerceJavaToLua.Coercion 
 
     public LuaValue call(LuaValue arg) {
         Class<?> obj = (Class<?>) this.touserdata();
-        if (arg.istable()) {
-            if (obj.isPrimitive()) {
-                return CoerceJavaToLua.coerce((new CoerceLuaToJava.ArrayCoercion(obj)).coerce(arg));
-            } else if (obj.isInterface()) {
-                return LuajavaLib.createProxy(obj, arg);
-            } else if ((obj.getModifiers() & Modifier.ABSTRACT) != 0) {
-                try {
-                    return LuajavaLib.override(obj, arg).call();
-                } catch (Exception e) {
-                    throw new LuaError(e);
-                }
-            } else if (Map.class.isAssignableFrom(obj)) {
-                return CoerceJavaToLua.coerce((new CoerceLuaToJava.MapCoercion(obj)).coerce(arg));
-            } else if (List.class.isAssignableFrom(obj)) {
-                return CoerceJavaToLua.coerce((new CoerceLuaToJava.CollectionCoercion(obj)).coerce(arg));
-            } else if (arg.length() == 0 && arg.checktable().size() > 0) {
-                try {
-                    return LuajavaLib.override(obj, arg);
-                } catch (Exception var4) {
-                    throw new LuaError(var4);
-                }
-            } else {
-                try {
-                    return this.get(l).call(arg);
-                } catch (Exception var6) {
-                    return CoerceJavaToLua.coerce((new CoerceLuaToJava.ArrayCoercion(obj)).coerce(arg));
-                }
-            }
-        } else if (obj.isPrimitive()) {
-            return new JavaInstance(CoerceLuaToJava.coerce(arg, obj));
-        } else {
-            return this.getMethod(l).call(arg);
+        LuaValue converted = coerceOrCreateFromSingleArg(obj, arg, null);
+        if (converted != null) {
+            return converted;
         }
+        if (obj.isPrimitive()) {
+            return new JavaInstance(CoerceLuaToJava.coerce(arg, obj));
+        }
+        return this.getMethod(l).call(arg);
     }
 
     public LuaValue call(LuaValue var1, LuaValue var2) {
@@ -191,7 +161,7 @@ public class JavaClass extends JavaInstance implements CoerceJavaToLua.Coercion 
             case "new" -> getMethod(key);
             case "array" -> new OneArgFunction() {
                 public LuaValue call(LuaValue var1) {
-                    return CoerceJavaToLua.coerce((new CoerceLuaToJava.ArrayCoercion((Class) JavaClass.super.b)).coerce(var1));
+                    return CoerceJavaToLua.coerce((new CoerceLuaToJava.ArrayCoercion((Class<?>) JavaClass.super.b)).coerce(var1));
                 }
             };
             case "class" -> this;
@@ -205,38 +175,26 @@ public class JavaClass extends JavaInstance implements CoerceJavaToLua.Coercion 
 
     public LuaValue getMethod(LuaValue var1) {
         if (this.t == null) {
-            HashMap<String, List> methodMap = new HashMap<>();
-            Method[] methods = ((Class) super.b).getMethods();
+            HashMap<String, List<JavaMethod>> methodMap = new HashMap<>();
+            Method[] methods = ((Class<?>) super.b).getMethods();
 
             for (Method method : methods) {
                 if (Modifier.isPublic(method.getModifiers())) {
-                    // 获取方法名
                     String methodName = method.getName();
-
-                    // 从方法映射中获取与该方法名对应的 JavaMethod 列表
-                    List<JavaMethod> methodList = (List<JavaMethod>) methodMap.get(methodName);
-
-                    // 如果该方法名的列表为空，则初始化一个新的列表
-                    if (methodList == null) {
-                        methodList = new ArrayList<>();
-                        methodMap.put(methodName, methodList);
-                    }
-
-                    // 将该方法转化为 JavaMethod 对象并添加到方法列表中
-                    methodList.add(JavaMethod.a(method));
+                    methodMap.computeIfAbsent(methodName, key -> new ArrayList<>()).add(JavaMethod.a(method));
                 }
             }
 
 
-            HashMap constructorMap = new HashMap();
-            Constructor[] constructors = ((Class) super.b).getConstructors();
+            HashMap<LuaValue, LuaValue> constructorMap = new HashMap<>();
+            Constructor<?>[] constructors = ((Class<?>) super.b).getConstructors();
             if (constructors.length == 0) {
-                constructors = ((Class) super.b).getDeclaredConstructors();
+                constructors = ((Class<?>) super.b).getDeclaredConstructors();
             }
 
-            ArrayList list = new ArrayList();
+            ArrayList<JavaConstructor> list = new ArrayList<>();
 
-            for (Constructor constructor : constructors) {
+            for (Constructor<?> constructor : constructors) {
                 if (Modifier.isPublic(constructor.getModifiers())) {
                     constructor.setAccessible(true);
                     list.add(JavaConstructor.a(constructor));
@@ -250,21 +208,21 @@ public class JavaClass extends JavaInstance implements CoerceJavaToLua.Coercion 
                     constructorMap.put(l, list.get(0));
                     break;
                 default:
-                    constructorMap.put(l, JavaConstructor.forConstructors((JavaConstructor[]) list.toArray(new JavaConstructor[0])));
+                    constructorMap.put(l, JavaConstructor.forConstructors(list.toArray(new JavaConstructor[0])));
                     break;
             }
 
             constructorMap.putAll(i);
 
-            for (Map.Entry entry : methodMap.entrySet()) {
-                String methodNameKey = (String) entry.getKey();
-                List methodList = (List) entry.getValue();
+            for (Map.Entry<String, List<JavaMethod>> entry : methodMap.entrySet()) {
+                String methodNameKey = entry.getKey();
+                List<JavaMethod> methodList = entry.getValue();
                 LuaString luaMethodName = LuaValue.valueOf(methodNameKey);
-                Object methodValue;
+                LuaValue methodValue;
                 if (methodList.size() == 1) {
                     methodValue = methodList.get(0);
                 } else {
-                    methodValue = JavaMethod.a((JavaMethod[]) methodList.toArray(new JavaMethod[0]));
+                    methodValue = JavaMethod.a(methodList.toArray(new JavaMethod[0]));
                 }
 
                 constructorMap.put(luaMethodName, methodValue);
@@ -280,34 +238,9 @@ public class JavaClass extends JavaInstance implements CoerceJavaToLua.Coercion 
         if (args.narg() == 1) {
             Class<?> obj = (Class<?>) this.touserdata();
             LuaValue arg = args.arg1();
-            if (arg.istable()) {
-                if (obj.isPrimitive()) {
-                    return CoerceJavaToLua.coerce((new CoerceLuaToJava.ArrayCoercion(obj)).coerce(arg));
-                } else if (obj.isInterface()) {
-                    return LuajavaLib.createProxy(obj, arg);
-                } else if ((obj.getModifiers() & Modifier.ABSTRACT) != 0) {
-                    try {
-                        return LuajavaLib.override(obj, arg).call();
-                    } catch (Exception e) {
-                        throw new LuaError(e);
-                    }
-                } else if (Map.class.isAssignableFrom(obj)) {
-                    return CoerceJavaToLua.coerce((new CoerceLuaToJava.MapCoercion(obj)).coerce(arg));
-                } else if (List.class.isAssignableFrom(obj)) {
-                    return CoerceJavaToLua.coerce((new CoerceLuaToJava.CollectionCoercion(obj)).coerce(arg));
-                } else if (arg.length() == 0 && arg.checktable().size() > 0) {
-                    try {
-                        return LuajavaLib.override(obj, arg);
-                    } catch (Exception e) {
-                        throw new LuaError(e);
-                    }
-                } else {
-                    try {
-                        return this.get(l).invoke(args);
-                    } catch (Exception var4) {
-                        return CoerceJavaToLua.coerce((new CoerceLuaToJava.ArrayCoercion(obj)).coerce(arg));
-                    }
-                }
+            LuaValue converted = coerceOrCreateFromSingleArg(obj, arg, args);
+            if (converted != null) {
+                return converted;
             }
 
             if (obj.isPrimitive()) {
@@ -316,5 +249,45 @@ public class JavaClass extends JavaInstance implements CoerceJavaToLua.Coercion 
         }
 
         return this.get(l).invoke(args);
+    }
+
+    private LuaValue coerceOrCreateFromSingleArg(Class<?> obj, LuaValue arg, Varargs originalArgs) {
+        if (obj.isInterface() && arg.isfunction()) {
+            return LuajavaLib.createProxy(obj, arg);
+        }
+        if (!arg.istable()) {
+            return null;
+        }
+
+        if (obj.isPrimitive()) {
+            return CoerceJavaToLua.coerce((new CoerceLuaToJava.ArrayCoercion(obj)).coerce(arg));
+        } else if (obj.isInterface()) {
+            return LuajavaLib.createProxy(obj, arg);
+        } else if ((obj.getModifiers() & Modifier.ABSTRACT) != 0) {
+            try {
+                return LuajavaLib.override(obj, arg).call();
+            } catch (Exception e) {
+                throw new LuaError(e);
+            }
+        } else if (Map.class.isAssignableFrom(obj)) {
+            return CoerceJavaToLua.coerce((new CoerceLuaToJava.MapCoercion(obj)).coerce(arg));
+        } else if (List.class.isAssignableFrom(obj)) {
+            return CoerceJavaToLua.coerce((new CoerceLuaToJava.CollectionCoercion(obj)).coerce(arg));
+        } else if (arg.length() == 0 && arg.checktable().size() > 0) {
+            try {
+                return LuajavaLib.override(obj, arg);
+            } catch (Exception e) {
+                throw new LuaError(e);
+            }
+        }
+
+        try {
+            if (originalArgs != null) {
+                return this.get(l).invoke(originalArgs).arg1();
+            }
+            return this.get(l).call(arg);
+        } catch (Exception e) {
+            return CoerceJavaToLua.coerce((new CoerceLuaToJava.ArrayCoercion(obj)).coerce(arg));
+        }
     }
 }

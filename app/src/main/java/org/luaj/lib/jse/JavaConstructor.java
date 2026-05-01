@@ -16,7 +16,7 @@ import org.luaj.Varargs;
 import org.luaj.lib.VarArgFunction;
 
 class JavaConstructor extends JavaMember {
-    static final Map<Object, Object> h = Collections.synchronizedMap(new HashMap<>());
+    static final Map<Constructor<?>, JavaConstructor> h = Collections.synchronizedMap(new HashMap<>());
     final Constructor i;
 
     private JavaConstructor(Constructor var1) {
@@ -24,15 +24,8 @@ class JavaConstructor extends JavaMember {
         this.i = var1;
     }
 
-    static JavaConstructor a(Constructor var0) {
-        JavaConstructor var2 = (JavaConstructor)h.get(var0);
-        JavaConstructor var1 = var2;
-        if (var2 == null) {
-            var1 = new JavaConstructor(var0);
-            h.put(var0, var1);
-        }
-
-        return var1;
+    static JavaConstructor a(Constructor<?> var0) {
+        return h.computeIfAbsent(var0, JavaConstructor::new);
     }
 
     public static LuaValue forConstructors(JavaConstructor[] var0) {
@@ -41,25 +34,68 @@ class JavaConstructor extends JavaMember {
 
     public Varargs invoke(Varargs var1) {
         if (super.e == null && super.d.length != var1.narg()) {
-            throw new IllegalArgumentException(this.i.toString());
-        } else {
-            Object[] var5 = this.a(var1);
-
-            try {
-                return new JavaInstance(this.i.newInstance(var5));
-            } catch (InvocationTargetException e) {
-                throw new LuaError(this.i +
-                        " " +
-                        e.getTargetException());
-            } catch (Exception var4) {
-                String var2 = "coercion error " +
-                        this.i +
-                        " " +
-                        var4;
-                LuaValue.error(var2);
-                throw null;
-            }
+            throw new IllegalArgumentException(buildArityError(var1));
         }
+
+        Object[] var5 = this.a(var1);
+
+        try {
+            return new JavaInstance(this.i.newInstance(var5));
+        } catch (InvocationTargetException e) {
+            throw new LuaError(buildInvocationError(var1, e.getTargetException()));
+        } catch (Exception var4) {
+            throw new LuaError(buildCoercionError(var1, var4));
+        }
+    }
+
+    private String buildArityError(Varargs args) {
+        return "no matching constructor: " + describeConstructor(this.i) +
+                " expected " + this.i.getParameterTypes().length +
+                " args, got " + args.narg() +
+                " -> " + describeArgs(args);
+    }
+
+    private String buildInvocationError(Varargs args, Throwable cause) {
+        return "constructor failed: " + describeConstructor(this.i) +
+                " with args " + describeArgs(args) +
+                " -> " + cause;
+    }
+
+    private String buildCoercionError(Varargs args, Exception exception) {
+        return "coercion error for constructor: " + describeConstructor(this.i) +
+                " with args " + describeArgs(args) +
+                " -> " + exception;
+    }
+
+    private static String describeConstructor(Constructor<?> constructor) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(constructor.getDeclaringClass().getName());
+        sb.append('(');
+        Class<?>[] parameterTypes = constructor.getParameterTypes();
+        for (int i = 0; i < parameterTypes.length; i++) {
+            if (i > 0) {
+                sb.append(", ");
+            }
+            sb.append(parameterTypes[i].getTypeName());
+        }
+        sb.append(')');
+        return sb.toString();
+    }
+
+    private static String describeArgs(Varargs args) {
+        StringBuilder sb = new StringBuilder("[");
+        int n = args.narg();
+        for (int i = 1; i <= n; i++) {
+            if (i > 1) {
+                sb.append(", ");
+            }
+            LuaValue arg = args.arg(i);
+            sb.append(arg.typename());
+            sb.append('=');
+            sb.append(arg);
+        }
+        sb.append(']');
+        return sb.toString();
     }
 
     public String tojstring() {
@@ -76,17 +112,16 @@ class JavaConstructor extends JavaMember {
         }
 
         public Varargs invoke(Varargs args) {
-            int minCost = CoerceLuaToJava.e; // 初始最小匹配开销
-            JavaConstructor bestConstructor = null; // 最优匹配的构造函数
+            int minCost = CoerceLuaToJava.e;
+            JavaConstructor bestConstructor = null;
 
             for (JavaConstructor javaConstructor : this.d) {
-                int cost = javaConstructor.b(args); // 计算当前构造函数的匹配开销
+                int cost = javaConstructor.b(args);
 
                 if (cost < minCost) {
                     bestConstructor = javaConstructor;
                     minCost = cost;
 
-                    // 如果完全匹配，提前退出
                     if (cost == 0) {
                         break;
                     }
@@ -94,12 +129,10 @@ class JavaConstructor extends JavaMember {
             }
 
             if (bestConstructor != null) {
-                return bestConstructor.invoke(args); // 调用最佳匹配的构造函数
-            } else {
-                // 抛出错误信息并包含当前对象的详细信息
-                LuaValue.error("No coercible public constructor found for arguments: " + args + "\n" + this);
-                return null; // 永远不会被执行
+                return bestConstructor.invoke(args);
             }
+
+            throw new LuaError("no coercible public constructor found for arguments: " + describeArgs(args) + "\navailable constructors:\n" + this);
         }
 
         public String tojstring() {

@@ -27,6 +27,7 @@
 
 - **🔧 强大的 Lua 互操作性**
     - **原生 API 访问**：通过 `LuaJava` 桥接技术，可直接在 Lua 中调用 Java/Android 类库（如 `android.widget.TextView`）。
+    - **增强的接口代理**：支持 `luajava.createProxy`、`JavaClass(function)` 函数式接口代理，以及多个 Java 接口组合实现。
     - **全局环境增强**：内置 `activity`、`this`、`call` 等全局变量，以及 `print`、`printf` 等标准输出函数。
     - **布局动态加载**：提供 `loadlayout` 函数，支持将 Lua 表结构直接转换为 Android View 层次结构，实现声明式 UI 开发。
 
@@ -116,6 +117,52 @@ okHttp.postJson("https://api.example.com/data", jsonData, headers, function(code
     print("错误: " .. code)
   end
 end)
+```
+
+### 3. Java 接口代理
+
+`LuaJava` 支持使用 Lua 表或函数实现 Java 接口。单方法接口可以直接传入函数，多接口代理会按所有接口查找方法；未实现 `equals`、`hashCode`、`toString` 时会回退到 Java 默认对象语义，便于代理对象作为 `HashMap` 等容器的键使用。
+
+```lua
+require "import"
+import "java.lang.Runnable"
+import "java.io.Closeable"
+import "java.util.Map"
+
+-- 单方法接口函数式写法
+local runnable = Runnable(function()
+  print("running")
+end)
+
+-- 多接口代理
+local proxy = luajava.createProxy(Map, Closeable, {
+  get = function(key)
+    return key
+  end,
+  close = function()
+    print("closed")
+  end
+})
+
+proxy.get("name")
+proxy.close()
+```
+
+也可以通过 `override` 继承 Java 类或抽象类并覆盖指定方法。覆盖方法的第一个参数是 `superCall`，调用它可以执行父类原方法；未覆盖的方法保持 Java 原本行为。
+
+```lua
+require "import"
+import "java.util.ArrayList"
+
+local MyList = ArrayList.override {
+  add = function(superCall, value)
+    print("add:", value)
+    return superCall(value)
+  end
+}
+
+local list = MyList()
+list.add("item")
 ```
 
 ## 📚 API 参考

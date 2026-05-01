@@ -29,6 +29,10 @@ public class LuaMethodInterceptor implements MethodInterceptor {
     public Object intercept(Object object, Object[] args, MethodProxy methodProxy) throws Exception {
         Method method = methodProxy.getOriginalMethod();
         String methodName = method.getName();
+        Object defaultObjectResult = getDefaultObjectMethodResult(object, method, args);
+        if (defaultObjectResult != null) {
+            return defaultObjectResult;
+        }
         LuaValue func;
         if (obj.isfunction()) {
             func = obj;
@@ -66,6 +70,24 @@ public class LuaMethodInterceptor implements MethodInterceptor {
             else if (retType.isPrimitive() || Number.class.isAssignableFrom(retType))
                 return 0;
         return ret;
+    }
+
+    private static Object getDefaultObjectMethodResult(Object object, Method method, Object[] args) {
+        String methodName = method.getName();
+        Class<?>[] parameterTypes = method.getParameterTypes();
+        if (parameterTypes.length == 1 && methodName.equals("equals") && parameterTypes[0] == Object.class) {
+            Object other = args != null && args.length > 0 ? args[0] : null;
+            return object == other;
+        }
+        if (parameterTypes.length == 0 && methodName.equals("hashCode")) {
+            return System.identityHashCode(object);
+        }
+        if (parameterTypes.length == 0 && methodName.equals("toString")) {
+            Class<?> superclass = object.getClass().getSuperclass();
+            String typeName = superclass != null ? superclass.getName() : object.getClass().getName();
+            return typeName + "@" + Integer.toHexString(System.identityHashCode(object));
+        }
+        return null;
     }
 
     private static class SuperCall extends VarArgFunction {

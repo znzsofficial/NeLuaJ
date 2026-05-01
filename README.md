@@ -27,6 +27,7 @@ Based on code analysis, NeLuaJ+ offers these core capabilities:
 
 - **🔧 Powerful Lua Interoperability**
     - **Native API Access**: Uses `LuaJava` bridging technology to directly call Java/Android classes (e.g., `android.widget.TextView`) from Lua.
+  - **Enhanced Interface Proxies**: Supports `luajava.createProxy`, `JavaClass(function)` functional-interface proxies, and combined implementations of multiple Java interfaces.
     - **Global Environment Enhancements**: Built-in global variables like `activity`, `this`, `call`, and standard output functions `print`, `printf`.
     - **Dynamic Layout Loading**: Provides `loadlayout` function to convert Lua tables directly into Android View hierarchies, enabling declarative UI development.
 
@@ -116,6 +117,52 @@ okHttp.postJson("https://api.example.com/data", jsonData, headers, function(code
     print("Error: " .. code)
   end
 end)
+```
+
+### 3. Java Interface Proxies
+
+`LuaJava` can implement Java interfaces with Lua tables or functions. Single-method interfaces can be passed as functions directly, and multi-interface proxies resolve methods across all declared interfaces. When `equals`, `hashCode`, or `toString` is not implemented explicitly, proxies fall back to Java's default object semantics so they can safely be used as keys in Java containers such as `HashMap`.
+
+```lua
+require "import"
+import "java.lang.Runnable"
+import "java.io.Closeable"
+import "java.util.Map"
+
+-- Functional style for single-method interfaces
+local runnable = Runnable(function()
+  print("running")
+end)
+
+-- Multi-interface proxy
+local proxy = luajava.createProxy(Map, Closeable, {
+  get = function(key)
+    return key
+  end,
+  close = function()
+    print("closed")
+  end
+})
+
+proxy.get("name")
+proxy.close()
+```
+
+You can also use `override` to subclass Java classes or abstract classes and override selected methods. The first argument of an overridden method is `superCall`, which invokes the original superclass method; methods not provided by Lua keep their original Java behavior.
+
+```lua
+require "import"
+import "java.util.ArrayList"
+
+local MyList = ArrayList.override {
+  add = function(superCall, value)
+    print("add:", value)
+    return superCall(value)
+  end
+}
+
+local list = MyList()
+list.add("item")
 ```
 
 ## 📚 API Reference
