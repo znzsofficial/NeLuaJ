@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.Typeface
 import android.graphics.drawable.Drawable
 import android.text.TextUtils
+import android.util.AttributeSet
 import android.util.DisplayMetrics
 import android.util.TypedValue
 import android.view.View
@@ -44,6 +45,7 @@ import org.luaj.LuaValue.NIL
 import org.luaj.Varargs
 import org.luaj.lib.VarArgFunction
 import org.luaj.lib.jse.CoerceLuaToJava
+import java.lang.reflect.Constructor
 import java.util.Locale
 
 fun LuaValue.toView(): View = this.touserdata(View::class.java)
@@ -60,6 +62,8 @@ class LuaLayout(private val initialContext: Context) {
     private val luaContext = luaValueContext.touserdata(LuaContext::class.java)
     private val imageLoader: ImageLoader = initialContext.imageLoader
     private val scaleTypeValues: Array<ScaleType> = ScaleType.entries.toTypedArray()
+    private val resourceReferenceCache = HashMap<String, ResourceReference>()
+    private val fourArgConstructorCache = HashMap<Class<*>, Constructor<*>?>()
 
     val id: Map<String, Int>
         get() = ids
@@ -197,6 +201,181 @@ class LuaLayout(private val initialContext: Context) {
         return ids.getOrPut(idString) { idCounter++ }
     }
 
+    private data class ViewStyleSpec(
+        val themeResId: Int = 0,
+        val styleAttr: Int = 0,
+        val styleRes: Int = 0,
+        val legacyStyleResId: Int = 0
+    ) {
+        val hasStyle: Boolean
+            get() = themeResId != 0 || styleAttr != 0 || styleRes != 0 || legacyStyleResId != 0
+    }
+
+    private enum class ResourceKind { ATTR, STYLE }
+
+    private data class ResourceReference(val id: Int, val kind: ResourceKind)
+
+    private fun inferResourceKind(value: LuaValue, fieldName: String): ResourceKind {
+        if (value.isstring()) {
+            val ref = value.asString().trim()
+            if (ref.startsWith("?")) return ResourceKind.ATTR
+            if (ref.startsWith("@attr/") || ref.startsWith("@android:attr/")) return ResourceKind.ATTR
+            if (ref.startsWith("@style/") || ref.startsWith("@android:style/")) return ResourceKind.STYLE
+        }
+        return if (fieldName == "styleAttr") ResourceKind.ATTR else ResourceKind.STYLE
+    }
+
+    private fun resolveResourceReference(value: LuaValue, fieldName: String): ResourceReference {
+        val kind = inferResourceKind(value, fieldName)
+        if (value.isnil()) return ResourceReference(0, kind)
+        if (value.isnumber()) return ResourceReference(value.toint(), kind)
+        if (!value.isstring()) {
+            luaContext.sendMsg("loadlayout: $fieldName 需要资源 id 或资源字符串，实际为 ${value.typename()}")
+            return ResourceReference(0, kind)
+        }
+
+        val ref = value.asString().trim()
+        if (ref.isEmpty() || ref == "nil") return ResourceReference(0, kind)
+        ref.toIntOrNull()?.let { return ResourceReference(it, kind) }
+
+        val cacheKey = "$fieldName|${kind.name}|$ref"
+        resourceReferenceCache[cacheKey]?.let { return it }
+
+        val resources = initialContext.resources
+        val packageName = initialContext.packageName
+        val normalized = when {
+            ref.startsWith("?attr/") -> ref.removePrefix("?attr/")
+            ref.startsWith("?android:attr/") -> "android:${ref.removePrefix("?android:attr/")}"
+            ref.startsWith("?") -> ref.removePrefix("?")
+            ref.startsWith("@") -> ref.removePrefix("@")
+            else -> ref
+        }
+
+        val parts = normalized.split('/', limit = 2)
+        val (typeName, entryName) = if (parts.size == 2) {
+            parts[0] to parts[1]
+        } else {
+            val defaultType = if (kind == ResourceKind.ATTR) "attr" else "style"
+            defaultType to normalized
+        }
+
+        val isAndroid = typeName.startsWith("android:")
+        val cleanType = typeName.removePrefix("android:")
+        val cleanName = entryName.removePrefix("android:")
+        val resolved = resources.getIdentifier(cleanName, cleanType, if (isAndroid) "android" else packageName)
+        if (resolved == 0) {
+            luaContext.sendMsg("loadlayout: 无法解析 $fieldName 资源 '$ref'")
+        }
+        return ResourceReference(resolved, kind).also {
+            resourceReferenceCache[cacheKey] = it
+        }
+    }
+
+    private fun parseViewStyle(layout: LuaValue): ViewStyleSpec {
+        val themeResId = resolveResourceReference(layout["theme"], "theme").id
+        val explicitStyleAttr = resolveResourceReference(layout["styleAttr"], "styleAttr").id
+        val explicitStyleRes = resolveResourceReference(layout["styleRes"], "styleRes").id
+        val legacyStyleRef = resolveResourceReference(layout["style"], "style")
+        val styleAttr = explicitStyleAttr.takeIf { it != 0 }
+            ?: legacyStyleRef.id.takeIf { legacyStyleRef.kind == ResourceKind.ATTR }
+            ?: 0
+        val styleRes = explicitStyleRes.takeIf { it != 0 } ?: 0
+        val legacyStyleResId = legacyStyleRef.id.takeIf { legacyStyleRef.kind == ResourceKind.STYLE } ?: 0
+        return ViewStyleSpec(
+            themeResId = themeResId,
+            styleAttr = styleAttr,
+            styleRes = styleRes,
+            legacyStyleResId = legacyStyleResId
+        )
+    }
+
+    private fun instantiateView(
+        viewClass: LuaValue,
+        context: Context,
+        attrs: AttributeSet?,
+        defStyleAttr: Int,
+        defStyleRes: Int
+    ): LuaValue {
+        val clazz = viewClass.touserdata(Class::class.java) as Class<*>
+        val constructor = fourArgConstructorCache.getOrPut(clazz) {
+            runCatching {
+                clazz.getConstructor(
+                    Context::class.java,
+                    AttributeSet::class.java,
+                    Int::class.javaPrimitiveType,
+                    Int::class.javaPrimitiveType
+                )
+            }.getOrNull()
+        } ?: throw NoSuchMethodException("${clazz.name}(Context, AttributeSet, int, int)")
+        return constructor.newInstance(context, attrs, defStyleAttr, defStyleRes).toLuaInstance()
+    }
+
+    private fun createViewWithStyle(viewClass: LuaValue, layout: LuaValue): LuaValue {
+        val styleSpec = parseViewStyle(layout)
+        if (!styleSpec.hasStyle) return viewClass.call(luaValueContext)
+
+        val themedContext = when {
+            styleSpec.themeResId != 0 -> ContextThemeWrapper(initialContext, styleSpec.themeResId)
+            styleSpec.legacyStyleResId != 0 && styleSpec.styleAttr == 0 -> ContextThemeWrapper(initialContext, styleSpec.legacyStyleResId)
+            styleSpec.styleRes != 0 && styleSpec.styleAttr == 0 && styleSpec.legacyStyleResId == 0 -> ContextThemeWrapper(initialContext, styleSpec.styleRes)
+            else -> initialContext
+        }
+        val themedLuaContext = themedContext.toLuaInstance()
+        val attrs = NIL
+        val attempts = mutableListOf<String>()
+        val failures = mutableListOf<String>()
+
+        fun tryCreate(signature: String, block: () -> LuaValue): LuaValue? {
+            attempts.add(signature)
+            return runCatching(block).getOrElse { error ->
+                failures.add("$signature -> ${error.message ?: error::class.java.simpleName}")
+                null
+            }
+        }
+
+        if (styleSpec.styleAttr != 0) {
+            if (styleSpec.styleRes != 0 && viewClass.isuserdata(Class::class.java)) {
+                tryCreate("(Context, AttributeSet?, defStyleAttr, defStyleRes)") {
+                    instantiateView(
+                        viewClass,
+                        themedContext,
+                        null,
+                        styleSpec.styleAttr,
+                        styleSpec.styleRes
+                    )
+                }?.let { return it }
+            }
+
+            tryCreate("(Context, AttributeSet?, defStyleAttr)") {
+                viewClass.call(themedLuaContext, attrs, styleSpec.styleAttr.toLuaValue())
+            }?.let { return it }
+        }
+
+        if (styleSpec.styleRes != 0) {
+            tryCreate("(Context, AttributeSet?, styleRes fallback)") {
+                viewClass.call(themedLuaContext, attrs, styleSpec.styleRes.toLuaValue())
+            }?.let { return it }
+        }
+
+        if (styleSpec.legacyStyleResId != 0) {
+            tryCreate("legacy (ContextThemeWrapper(style), AttributeSet?, style)") {
+                viewClass.call(themedLuaContext, attrs, styleSpec.legacyStyleResId.toLuaValue())
+            }?.let { return it }
+        }
+
+        tryCreate("(Context)") {
+            viewClass.call(themedLuaContext)
+        }?.let { return it }
+
+        val viewId = layout["id"].let { if (it.isstring()) "[${it.asString()}] " else "" }
+        throw LuaError(
+            "loadlayout 构造 View 失败 $viewId$viewClass\n" +
+                "theme=${layout["theme"]}, style=${layout["style"]}, styleAttr=${layout["styleAttr"]}, styleRes=${layout["styleRes"]}\n" +
+                "已尝试: ${attempts.joinToString()}\n" +
+                "失败原因: ${failures.joinToString("; ")}"
+        )
+    }
+
     @JvmOverloads
     fun load(
         layout: LuaValue, env: LuaTable = LuaTable(), params: LuaValue =
@@ -213,13 +392,7 @@ class LuaLayout(private val initialContext: Context) {
                 "布局表内容: ${layout.checktable().dump()}"
             )
         }
-        val view = layout["style"].run {
-            if (isNotNil()) viewClass.call(
-                ContextThemeWrapper(initialContext, toint()).toLuaInstance(),
-                NIL,
-                this
-            ) else viewClass.call(luaValueContext)
-        }
+        val view = createViewWithStyle(viewClass, layout)
         params = params.call(Wrap, Wrap)
         try {
             var key = NIL
@@ -255,6 +428,7 @@ class LuaLayout(private val initialContext: Context) {
                         var tValue = next.secondArg()
 
                         when (keyString) {
+                            "style", "styleAttr", "styleRes", "theme" -> continue
                             "padding" -> continue
                             "id" -> {
                                 val viewId = getOrGenerateId(tValue.asString())
