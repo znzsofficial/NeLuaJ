@@ -7,8 +7,8 @@ local View = luajava.bindClass "android.view.View"
 local MDC_R = luajava.bindClass "com.google.android.material.R"
 import "android.widget.LinearLayout"
 import "vinx.material.textfield.MaterialTextField"
-local ColorUtil = this.themeUtil
 this.dynamicColor()
+local ColorUtil = this.themeUtil
 
 activity {
     title = res.string.setting,
@@ -84,12 +84,56 @@ local defaultMap = {
     Upval = 0xff8080c0,
 }
 
+local themeColorPresets = {
+    { "默认紫", "#FF6750A4" },
+    { "天空蓝", "#FF1976D2" },
+    { "湖水青", "#FF00897B" },
+    { "森林绿", "#FF2E7D32" },
+    { "暖橙", "#FFEF6C00" },
+    { "玫瑰红", "#FFC2185B" },
+    { "深灰", "#FF455A64" },
+}
+
+local setCircleColor = function(view, color)
+    view.background = GradientDrawable()
+        .setShape(GradientDrawable.OVAL)
+        .setColor(color)
+        .setStroke(4, ColorUtil.getColorOutline())
+end
+
+local resolveColorValue = function(value)
+    if type(value) == "number" then
+        return value
+    end
+
+    if type(value) == "string" and value ~= "" then
+        local ok, color = pcall(Color.parseColor, value)
+        if ok then
+            return color
+        end
+    end
+
+    return nil
+end
+
+local formatColorValue = function(value)
+    local color = resolveColorValue(value)
+    if color then
+        return string.format("#%08X", color)
+    end
+    return "跟随系统动态取色"
+end
+
+local resetThemeColor = function()
+    local seedColor = this.getSharedData("theme_seed_color", nil)
+    local color = resolveColorValue(seedColor)
+    ThemeColorDesc.text = formatColorValue(seedColor)
+    setCircleColor(ThemeColorCircle, color or ColorUtil.getColorPrimary())
+end
+
 local resetColor = function(tag)
     local data = this.getSharedData()
-    _G[tag .. "Circle"].background = GradientDrawable()
-        .setShape(GradientDrawable.OVAL)
-        .setColor(data[tag] and Color.parseColor(data[tag]) or defaultMap[tag])
-        .setStroke(4, ColorUtil.getColorOutline())
+    setCircleColor(_G[tag .. "Circle"], data[tag] and Color.parseColor(data[tag]) or defaultMap[tag])
 end
 
 local click = View.OnClickListener {
@@ -125,6 +169,58 @@ GlobalItem.setOnClickListener(click)
 LocalItem.setOnClickListener(click)
 UpvalItem.setOnClickListener(click)
 
+ThemeColorItem.onClick = function()
+    local items = { "跟随系统动态取色" }
+    for _, item in ipairs(themeColorPresets) do
+        table.insert(items, item[1])
+    end
+    table.insert(items, "自定义颜色...")
+
+    MaterialAlertDialogBuilder(this)
+        .setTitle("主题色")
+        .setItems(items, function(dialog, which)
+            if which == 0 then
+                this.setSharedData("theme_seed_color", nil)
+                this.dynamicColor()
+                this.recreate()
+                return
+            end
+
+            if which == #items - 1 then
+                local views = {}
+                MaterialAlertDialogBuilder(this)
+                    .setTitle("自定义主题色")
+                    .setView(loadlayout(input, views))
+                    .setPositiveButton(android.R.string.ok, function()
+                        local inputColor = views.inputField.text
+                        local bool, color = pcall(Color.parseColor, inputColor)
+                        if not bool then
+                            print(res.string.invalid_format)
+                            return
+                        end
+                        this.setSharedData("theme_seed_color", color)
+                        this.dynamicColor(color)
+                        this.recreate()
+                    end)
+                    .setNegativeButton(android.R.string.cancel, nil)
+                    .show()
+                local seedColor = this.getSharedData("theme_seed_color", nil)
+                local seedText = formatColorValue(seedColor)
+                views.inputField.text = seedText ~= "跟随系统动态取色" and seedText or ""
+                return
+            end
+
+            local seedColor = themeColorPresets[which][2]
+            local color = Color.parseColor(seedColor)
+            this.setSharedData("theme_seed_color", color)
+            this.dynamicColor(color)
+            this.recreate()
+        end)
+        .setNegativeButton(android.R.string.cancel, nil)
+        .show()
+end
+
+resetThemeColor()
 resetColor("BaseWord")
 resetColor("KeyWord")
 resetColor("String")

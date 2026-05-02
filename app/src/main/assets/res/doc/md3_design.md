@@ -31,7 +31,13 @@ activity.setTheme(R.style.Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay)
 activity.dynamicColor()  -- 启用 Material You 动态取色
 ```
 
+如果用户已经在设置页选过主题色，应用会把种子色保存到 `theme_seed_color`，后续页面启动时会优先按该值生成完整色板。这样整套软件都能保持统一的 MD3 视觉风格，而不是只在单个页面生效。
+
+设置页使用预设色板和自定义颜色入口来代替手动输入十六进制颜色值，更适合移动端快速切换主题。
+
 > **注意**：如果 `init.lua` 已设置 `NeLuaJ_Theme`，则无需在 `main.lua` 中重复调用 `setTheme`。
+
+> **注意**：全局主题色种子会影响后续所有调用 `activity.dynamicColor()` / `this.dynamicColor()` 的页面。若要临时覆盖，建议仅在当前 Activity 内显式传入自己的 seed color。
 
 ### 可用主题
 

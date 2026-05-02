@@ -8,6 +8,8 @@ Compat_R = bindClass "androidx.appcompat.R"
 ColorPrimary = ColorUtil.getColorPrimary() --这个 loadlayout 和 mods 都要用，所以直接全局la
 
 local MotionEvent = bindClass "android.view.MotionEvent"
+local ViewConfiguration = bindClass "android.view.ViewConfiguration"
+local System = bindClass "java.lang.System"
 local MaterialAlertDialogBuilder = bindClass "com.google.android.material.dialog.MaterialAlertDialogBuilder"
 local ProgressBar = bindClass "android.widget.ProgressBar"
 local Paint = bindClass "android.graphics.Paint"
@@ -63,19 +65,31 @@ this.delay(1,function()
 
 end)
 
-local onTouchTime = 0
+local touchDownTime = 0
+local touchDownX = 0
+local touchDownY = 0
+local touchMoved = false
+local tapTimeout = 250
+local touchSlop = ViewConfiguration.get(activity).getScaledTouchSlop()
+local touchSlopSquare = touchSlop ^ 2
 
 function onViewTouch(v,e)
 
   if e.getAction() == MotionEvent.ACTION_DOWN then
 
-    onTouchTime = 0
+    touchDownTime = System.currentTimeMillis()
+    touchDownX = e.getRawX()
+    touchDownY = e.getRawY()
+    touchMoved = false
     LayoutHelperActivity.mods.setSelectForeground(v)
     LayoutHelperActivity.data.current_view = v
 
    elseif e.getAction() == MotionEvent.ACTION_UP then
 
-    if onTouchTime < 30 then
+    local dx = e.getRawX() - touchDownX
+    local dy = e.getRawY() - touchDownY
+    local isTap = not touchMoved and (System.currentTimeMillis() - touchDownTime) <= tapTimeout and (dx * dx + dy * dy) <= touchSlopSquare
+    if isTap then
       LayoutHelperActivity.mods.showEditViewDialog(v)
     end
 
@@ -83,8 +97,10 @@ function onViewTouch(v,e)
 
    elseif e.getAction() == MotionEvent.ACTION_MOVE then
 
-    onTouchTime = onTouchTime + 1
-    if onTouchTime > 30 then
+    local dx = e.getRawX() - touchDownX
+    local dy = e.getRawY() - touchDownY
+    if dx * dx + dy * dy > touchSlopSquare then
+      touchMoved = true
       LayoutHelperActivity.mods.setCancelSelectForeground(v)
     end
 

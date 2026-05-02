@@ -2,12 +2,15 @@ import "android.widget.*"
 import "android.widget.ScrollView"
 import "com.google.android.material.textview.MaterialTextView"
 import "com.google.android.material.divider.MaterialDivider"
+import "com.google.android.material.card.MaterialCardView"
 local View = luajava.bindClass "android.view.View"
 local GradientDrawable = luajava.bindClass "android.graphics.drawable.GradientDrawable"
 local themeUtil = this.themeUtil
 local primaryColor = themeUtil.getColorPrimary()
 local onSurfaceColor = themeUtil.getColorOnSurface()
 local onSurfaceVarColor = themeUtil.getColorOnSurfaceVariant()
+local surfaceColor = themeUtil.getColorSurface()
+local surfaceContainerColor = themeUtil.getColorSurfaceContainer()
 local outlineColor = themeUtil.getColorOutlineVariant()
 local rippleRes = activity.obtainStyledAttributes({ android.R.attr.selectableItemBackground }).getResourceId(0, 0)
 
@@ -119,38 +122,122 @@ local divider = function()
     }
 end
 
+local card = function(...)
+    return {
+        MaterialCardView,
+        layout_width = "match",
+        layout_height = "wrap",
+        layout_marginLeft = "16dp",
+        layout_marginRight = "16dp",
+        layout_marginTop = "8dp",
+        layout_marginBottom = "8dp",
+        radius = "20dp",
+        CardElevation = 0,
+        strokeWidth = "1dp",
+        strokeColor = outlineColor,
+        CardBackgroundColor = surfaceContainerColor,
+        {
+            LinearLayout,
+            orientation = "vertical",
+            layout_width = "match",
+            layout_height = "wrap",
+            ...
+        }
+    }
+end
+
+local themeItem = function()
+    return {
+        LinearLayout,
+        layout_width = "match",
+        layout_height = "wrap",
+        id = "ThemeColorItem",
+        clickable = true,
+        focusable = true,
+        backgroundResource = rippleRes,
+        gravity = "center_vertical",
+        paddingLeft = "16dp",
+        paddingRight = "16dp",
+        paddingTop = "14dp",
+        paddingBottom = "14dp",
+        {
+            LinearLayout,
+            orientation = "vertical",
+            layout_width = "0dp",
+            layout_weight = 1,
+            {
+                MaterialTextView,
+                textSize = "16sp",
+                text = "主题色",
+                textColor = onSurfaceColor,
+            },
+            {
+                MaterialTextView,
+                textSize = "12sp",
+                id = "ThemeColorDesc",
+                text = "跟随系统动态取色",
+                textColor = onSurfaceVarColor,
+            },
+        },
+        {
+            View,
+            id = "ThemeColorCircle",
+            layout_width = "32dp",
+            layout_height = "32dp",
+            layout_marginLeft = "12dp",
+        },
+    }
+end
+
 return {
     ScrollView,
     layout_width = "match",
     layout_height = "match",
+    backgroundColor = surfaceColor,
     {
         LinearLayout,
         orientation = "vertical",
         layout_width = "match",
         layout_height = "wrap",
-        paddingBottom = "24dp",
+        paddingTop = "8dp",
+        paddingBottom = "32dp",
+
+        -- ── 外观 ──
+        sectionTitle("外观"),
+        card(
+            themeItem()
+        ),
 
         -- ── 编辑器 ──
         sectionTitle(res.string.editor_highlight_color),
-        colorItem("BaseWord", "标识符"),
-        colorItem("KeyWord", "关键字"),
-        colorItem("String", "字符串"),
-        colorItem("UserWord", "用户词"),
-        colorItem("Comment", "注释"),
-        colorItem("Global", "全局变量"),
-        colorItem("Local", "局部变量"),
-        colorItem("Upval", "上值"),
-
-        divider(),
+        card(
+            colorItem("BaseWord", "标识符"),
+            divider(),
+            colorItem("KeyWord", "关键字"),
+            divider(),
+            colorItem("String", "字符串"),
+            divider(),
+            colorItem("UserWord", "用户词"),
+            divider(),
+            colorItem("Comment", "注释"),
+            divider(),
+            colorItem("Global", "全局变量"),
+            divider(),
+            colorItem("Local", "局部变量"),
+            divider(),
+            colorItem("Upval", "上值")
+        ),
 
         -- ── 调试 ──
         sectionTitle(res.string.debug),
-        settingItem("CustomApp", res.string.debug_app, "设置外部调试应用包名"),
-
-        divider(),
+        card(
+            settingItem("CustomApp", res.string.debug_app, "设置外部调试应用包名")
+        ),
 
         -- ── 关于 ──
         sectionTitle(res.string.about),
-        settingItem("AboutItem", "NeLuaJ+", this.getVersionName("unknown")),
+        card(
+            settingItem("AboutItem", "NeLuaJ+", this.getVersionName("unknown"))
+        ),
     },
 }

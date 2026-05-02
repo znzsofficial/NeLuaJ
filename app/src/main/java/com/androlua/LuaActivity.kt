@@ -17,6 +17,7 @@ import android.content.res.XmlResourceParser
 import android.graphics.Bitmap
 import android.graphics.BlendMode
 import android.graphics.BlendModeColorFilter
+import android.graphics.Color
 import android.graphics.ColorFilter
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
@@ -1496,7 +1497,22 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         }
     }
 
-    fun dynamicColor() = DynamicColors.applyToActivityIfAvailable(this)
+    fun dynamicColor() {
+        when (val seedColor = getSharedData("theme_seed_color")) {
+            is Int -> dynamicColor(seedColor)
+            is Long -> dynamicColor(seedColor.toInt())
+            is String -> {
+                if (seedColor.isNotBlank()) {
+                    runCatching { Color.parseColor(seedColor) }
+                        .onSuccess { dynamicColor(it) }
+                        .onFailure { DynamicColors.applyToActivityIfAvailable(this) }
+                } else {
+                    DynamicColors.applyToActivityIfAvailable(this)
+                }
+            }
+            else -> DynamicColors.applyToActivityIfAvailable(this)
+        }
+    }
 
     /**
      * Apply dynamic colors based on a seed color.

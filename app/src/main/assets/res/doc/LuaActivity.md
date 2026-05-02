@@ -255,6 +255,10 @@ activity.setTheme(R.style.Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay)
 
 ### 动态颜色与深色模式
 
+如果应用已经保存了全局主题色种子 `theme_seed_color`，启动时会优先用该值生成整套动态色板。也就是说，绝大多数页面只需要继续调用 `this.dynamicColor()`，无需每个页面重复处理种子色逻辑。
+
+设置页提供了预设色板和自定义颜色入口，最终会把结果保存到 `theme_seed_color`。后续进入应用的页面会沿用这个值，从而保持整个软件的配色一致。
+
 ```lua
 -- 启用 Material You 动态颜色
 this.dynamicColor()
