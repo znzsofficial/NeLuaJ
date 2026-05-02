@@ -18,6 +18,7 @@ local LuaDrawable = bindClass "com.androlua.LuaDrawable"
 local ArrayListAdapter = bindClass "com.androlua.adapter.ArrayListAdapter"
 local AbsoluteLayout = bindClass "android.widget.AbsoluteLayout"
 local LuaAdapter = bindClass "com.androlua.adapter.LuaAdapter"
+local ContextThemeWrapper = bindClass "androidx.appcompat.view.ContextThemeWrapper"
 local View = bindClass "android.view.View"
 local ViewGroup = bindClass "android.view.ViewGroup"
 local ArrayAdapter = bindClass "android.widget.ArrayAdapter"
@@ -42,6 +43,142 @@ local W = outMetrics.widthPixels;
 local H = outMetrics.heightPixels;
 
 local dm = context.getResources().getDisplayMetrics()
+local resourceCache = {}
+
+local function cacheKey(defType, name)
+    return tostring(defType or "") .. ":" .. tostring(name)
+end
+
+local function getIdentifier(name, defType)
+    local key = cacheKey(defType, name)
+    local cached = resourceCache[key]
+    if cached ~= nil then
+        return cached ~= false and cached or nil
+    end
+
+    local res = context.getResources().getIdentifier(name, defType, context.getPackageName())
+    if res == 0 and name:find("%.") then
+        res = context.getResources().getIdentifier((name:gsub("%.", "_")), defType, context.getPackageName())
+    end
+
+    resourceCache[key] = res ~= 0 and res or false
+    return res ~= 0 and res or nil
+end
+
+local function getAttrIdentifier(name)
+    return android_R.attr[name] or getIdentifier(name, "attr")
+end
+
+local function getStyleIdentifier(name)
+    return android_R.style[name] or getIdentifier(name, "style")
+end
+
+local checkattr
+
+local function safeCall(target, method, ...)
+    if target and target[method] then
+        local ok = pcall(target[method], ...)
+        return ok
+    end
+    return false
+end
+
+local function resolveStyleField(v, field)
+    if type(v) == "number" then
+        return v
+    end
+    if type(v) ~= "string" then
+        return nil
+    end
+
+    v = v:match("^%s*(.-)%s*$")
+    if v == "" or v == "nil" then
+        return nil
+    end
+
+    local n = tonumber(v)
+    if n then
+        return n
+    end
+
+    if field == "theme" then
+        if v:find("^@android:style/") then
+            return android_R.style[v:sub(16)] or getStyleIdentifier(v:sub(16))
+        elseif v:find("^@style/") then
+            return getStyleIdentifier(v:sub(8))
+        elseif v:find("^@") then
+            local name = v:sub(2)
+            return getStyleIdentifier(name) or getAttrIdentifier(name)
+        end
+        return getStyleIdentifier(v)
+    elseif field == "styleAttr" then
+        if v:find("^%?android:attr/") then
+            return android_R.attr[v:sub(15)] or getAttrIdentifier(v:sub(15))
+        elseif v:find("^%?attr/") then
+            return getAttrIdentifier(v:sub(7))
+        elseif v:find("^%?") then
+            local name = v:sub(2)
+            return getAttrIdentifier(name)
+        elseif v:find("^@attr/") then
+            return getAttrIdentifier(v:sub(7))
+        end
+        return getAttrIdentifier(v)
+    elseif field == "styleRes" then
+        if v:find("^@android:style/") then
+            return android_R.style[v:sub(16)] or getStyleIdentifier(v:sub(16))
+        elseif v:find("^@style/") then
+            return getStyleIdentifier(v:sub(8))
+        elseif v:find("^@") then
+            local name = v:sub(2)
+            return getStyleIdentifier(name) or getAttrIdentifier(name)
+        end
+        return getStyleIdentifier(v)
+    elseif field == "style" then
+        if v:find("^%?android:attr/") then
+            return android_R.attr[v:sub(15)] or getAttrIdentifier(v:sub(15))
+        elseif v:find("^%?attr/") then
+            return getAttrIdentifier(v:sub(7))
+        elseif v:find("^%?") then
+            local name = v:sub(2)
+            return getAttrIdentifier(name)
+        elseif v:find("^@android:style/") then
+            return android_R.style[v:sub(16)] or getStyleIdentifier(v:sub(16))
+        elseif v:find("^@style/") then
+            return getStyleIdentifier(v:sub(8))
+        elseif v:find("^@attr/") then
+            return getAttrIdentifier(v:sub(7))
+        elseif v:find("^@") then
+            local name = v:sub(2)
+            return getStyleIdentifier(name) or getAttrIdentifier(name)
+        end
+    end
+
+    return nil
+end
+
+local function resolveLegacyStyle(v)
+    local style = resolveStyleField(v, "style")
+    if style then
+        return style
+    end
+
+    if type(v) == "string" then
+        local ok, sty = pcall(require, v)
+        if ok then
+            return sty, "table"
+        end
+        local attr = checkattr(v)
+        if attr then
+            return attr, "attr"
+        end
+        return getStyleIdentifier(v), "style"
+    elseif type(v) == "number" then
+        return v, "style"
+    end
+
+    return nil
+end
+
 local toint = {
     --android:drawingCacheQuality
     auto = 0,
@@ -323,6 +460,22 @@ local function checkNumber(var)
     -- return var
 end
 
+local function getViewClassConstructor(cls, contextObj, attrSet, styleAttr, styleRes)
+    local ok, result = pcall(function()
+        if styleAttr and styleRes then
+            return cls(contextObj, attrSet, styleAttr, styleRes)
+        elseif styleAttr then
+            return cls(contextObj, attrSet, styleAttr)
+        elseif styleRes then
+            return cls(contextObj, attrSet, 0, styleRes)
+        end
+        return nil
+    end)
+    if ok and result then
+        return result
+    end
+end
+
 local function checkValue(var)
     return tonumber(var) or checkNumber(var) or var
 end
@@ -339,7 +492,7 @@ local function getattr(s)
     return android_R.attr[s]
 end
 
-local function checkattr(s)
+function checkattr(s)
     try
         getattr(s)
     catch(e)
@@ -353,10 +506,6 @@ local function checkattr(s)
     end
     return nil
     ]]
-end
-
-local function getIdentifier(name)
-    return context.getResources().getIdentifier(name, nil, nil)
 end
 
 local function dump2 (t)
@@ -384,6 +533,22 @@ function setBackground(view, bg)
     end
 end
 
+local function createBehaviorFromString(behaviorString)
+    if behaviorString == "@string/bottom_sheet_behavior" then
+        return bindClass("com.google.android.material.bottomsheet.BottomSheetBehavior")()
+    elseif behaviorString == "@string/side_sheet_behavior" then
+        return bindClass("com.google.android.material.sidesheet.SideSheetBehavior")()
+    elseif behaviorString == "@string/hide_bottom_view_on_scroll_behavior" then
+        return bindClass("com.google.android.material.behavior.HideBottomViewOnScrollBehavior")()
+    elseif behaviorString == "@string/hide_view_on_scroll_behavior" then
+        return bindClass("com.google.android.material.behavior.HideViewOnScrollBehavior")()
+    elseif behaviorString == "@string/appbar_scrolling_view_behavior" then
+        return bindClass("com.google.android.material.appbar.AppBarLayout$ScrollingViewBehavior")()
+    elseif behaviorString == "@string/searchbar_scrolling_view_behavior" then
+        return bindClass("com.google.android.material.search.SearchBar$ScrollingViewBehavior")()
+    end
+end
+
 local function setattribute(root, view, params, k, v, ids)
     if k == "layout_x" then
         params.x = checkValue(v)
@@ -393,10 +558,40 @@ local function setattribute(root, view, params, k, v, ids)
         params.weight = checkValue(v)
     elseif k == "layout_gravity" then
         params.gravity = checkValue(v)
+    elseif k == "layout_anchorGravity" then
+        safeCall(params, "setAnchorGravity", checkValue(v))
     elseif k == "layout_marginStart" then
         params.setMarginStart(checkValue(v))
     elseif k == "layout_marginEnd" then
         params.setMarginEnd(checkValue(v))
+    elseif k == "layout_goneMarginLeft" then
+        safeCall(params, "setGoneLeftMargin", checkValue(v))
+    elseif k == "layout_goneMarginTop" then
+        safeCall(params, "setGoneTopMargin", checkValue(v))
+    elseif k == "layout_goneMarginRight" then
+        safeCall(params, "setGoneRightMargin", checkValue(v))
+    elseif k == "layout_goneMarginBottom" then
+        safeCall(params, "setGoneBottomMargin", checkValue(v))
+    elseif k == "layout_goneMarginStart" then
+        safeCall(params, "setGoneStartMargin", checkValue(v))
+    elseif k == "layout_goneMarginEnd" then
+        safeCall(params, "setGoneEndMargin", checkValue(v))
+    elseif k == "layout_behavior" then
+        local behavior = type(v) == "string" and createBehaviorFromString(v) or v
+        if behavior then
+            params.setBehavior(behavior)
+        end
+    elseif k == "layout_anchor" then
+        local anchorId = ids[v]
+        if anchorId then
+            params.setAnchorId(anchorId)
+        end
+    elseif k == "layout_collapseParallaxMultiplier" then
+        params.setParallaxMultiplier(checkValue(v))
+    elseif k == "layout_collapseMode" then
+        params.setCollapseMode(checkValue(v))
+    elseif k == "layout_scrollFlags" then
+        params.setScrollFlags(checkValue(v))
     elseif rules[k] and (v == true or v == "true") then
         params.addRule(rules[k])
     elseif rules[k] then
@@ -452,10 +647,44 @@ local function setattribute(root, view, params, k, v, ids)
         this.loadImage(v, view)
     elseif k == "scaleType" then
         view.setScaleType(scaleTypes[scaleType[v]])
+    elseif k == "textColor" then
+        safeCall(view, "setTextColor", checkValue(v))
+    elseif k == "hintTextColor" then
+        safeCall(view, "setHintTextColor", checkValue(v))
+    elseif k == "textAppearance" then
+        safeCall(view, "setTextAppearance", context, checkValue(v))
+    elseif k == "textAlignment" then
+        safeCall(view, "setTextAlignment", checkValue(v))
+    elseif k == "inputType" then
+        safeCall(view, "setInputType", checkValue(v))
+    elseif k == "imeOptions" then
+        safeCall(view, "setImeOptions", checkValue(v))
+    elseif k == "maxLines" then
+        safeCall(view, "setMaxLines", checkValue(v))
+    elseif k == "minLines" then
+        safeCall(view, "setMinLines", checkValue(v))
+    elseif k == "singleLine" then
+        safeCall(view, "setSingleLine", v == true or v == "true")
+    elseif k == "backgroundResource" then
+        safeCall(view, "setBackgroundResource", checkValue(v))
+    elseif k == "backgroundDrawable" then
+        safeCall(view, "setBackground", v)
+    elseif k == "paddingStart" then
+        view.setPaddingRelative(checkValue(v), view.getPaddingTop(), view.getPaddingEnd(), view.getPaddingBottom())
+    elseif k == "paddingEnd" then
+        view.setPaddingRelative(view.getPaddingStart(), view.getPaddingTop(), checkValue(v), view.getPaddingBottom())
+    elseif k == "paddingTop" then
+        view.setPadding(view.getPaddingLeft(), checkValue(v), view.getPaddingRight(), view.getPaddingBottom())
+    elseif k == "paddingBottom" then
+        view.setPadding(view.getPaddingLeft(), view.getPaddingTop(), view.getPaddingRight(), checkValue(v))
+    elseif k == "paddingLeft" then
+        view.setPadding(checkValue(v), view.getPaddingTop(), view.getPaddingRight(), view.getPaddingBottom())
+    elseif k == "paddingRight" then
+        view.setPadding(view.getPaddingLeft(), view.getPaddingTop(), checkValue(v), view.getPaddingBottom())
     elseif k == "background" then
         if type(v) == "string" then
             if v:find("^%?") then
-                view.setBackgroundResource(getIdentifier(v:sub(2, -1)))
+                view.setBackgroundResource(getAttrIdentifier(v:sub(2, -1)))
             elseif v:find("^#") then
                 view.setBackgroundColor(checkNumber(v))
             elseif rawget(root, v) or rawget(_G, v) then
@@ -482,17 +711,34 @@ local function setattribute(root, view, params, k, v, ids)
         end
     elseif k == "password" and (v == "true" or v == true) then
         view.setInputType(0x81)
-    elseif type(k) == "string" and not (k:find("layout_")) and not (k:find("padding")) and k ~= "style" then
+    elseif type(k) == "string" and not (k:find("layout_")) and not (k:find("padding")) and k ~= "style" and k ~= "theme" and k ~= "styleAttr" and k ~= "styleRes" then
         --设置属性
+        local rawKey = k
         k = string.gsub(k, "^(%w)", function(s)
             return string.upper(s)
         end)
         if k == "Text" or k == "Title" or k == "Subtitle" then
-            view["set" .. k](v)
+            if not safeCall(view, "set" .. k, v) then
+                safeCall(view, "set" .. rawKey, v)
+            end
         else
-            view["set" .. k](checkValue(v))
+            local value = checkValue(v)
+            if not safeCall(view, "set" .. k, value) then
+                if not safeCall(view, rawKey, value) then
+                    view[rawKey] = value
+                end
+            end
         end
     end
+end
+
+LayoutHelperActivity.applyLayoutAttribute = function(root, view, k, v)
+    local params = view.getLayoutParams()
+    setattribute(root or _G, view, params, k, v, ids)
+    if params then
+        view.setLayoutParams(params)
+    end
+    view.invalidate()
 end
 
 local function setMiniSize(view)
@@ -536,30 +782,43 @@ local function loadlayout(t, root, group, p)
         error(string.format("loadlayout error: Fist value Must be a table, checked import layout.", 0))
     end
     root = root or _G
-    local view, style
+    local view
+    local theme = resolveStyleField(t.theme, "theme")
+    local styleAttr = resolveStyleField(t.styleAttr, "styleAttr")
+    local styleRes = resolveStyleField(t.styleRes, "styleRes")
+    local style = nil
+    local legacyStyleType = nil
+
     if t.style then
-        if type(t.style) == "number" then
-            style = t.style
-        elseif t.style:find("^%?") then
-            style = getIdentifier(t.style:sub(2, -1))
-        else
-            local st, sty = pcall(require, t.style)
-            if st then
-                --copytable(sty,t)
-                setmetatable(t, { __index = sty })
-            else
-                style = checkattr(t.style)
-            end
+        style, legacyStyleType = resolveLegacyStyle(t.style)
+        if legacyStyleType == "table" then
+            setmetatable(t, { __index = style })
+            style = nil
         end
     end
     if not t[1] then
         error(string.format("loadlayout error: First value Must be a Class, checked import package.\n\tat %s", dump2(t)), 0)
     end
 
-    if style then
-        view = t[1](context, nil, style)
-    else
-        view = t[1](context) --创建view
+    local viewContext = context
+    if theme then
+        viewContext = ContextThemeWrapper(context, theme)
+    end
+
+    if styleAttr and styleRes then
+        view = getViewClassConstructor(t[1], viewContext, nil, styleAttr, styleRes)
+    end
+    if not view and styleAttr then
+        view = getViewClassConstructor(t[1], viewContext, nil, styleAttr, nil)
+    end
+    if not view and styleRes then
+        view = getViewClassConstructor(t[1], viewContext, nil, nil, styleRes)
+    end
+    if not view and style then
+        view = getViewClassConstructor(t[1], viewContext, nil, style, nil)
+    end
+    if not view then
+        view = t[1](viewContext) --创建view
     end
     if p then
         view.onTouch = function(v, e)

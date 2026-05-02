@@ -58,14 +58,50 @@ local showErrorDialog = function(e)
   .show()
 end
 
+local recreateMethods = {
+  style = true,
+  theme = true,
+  styleAttr = true,
+  styleRes = true,
+  id = true,
+  layout_width = true,
+  layout_height = true,
+  layout_margin = true,
+  layout_marginLeft = true,
+  layout_marginTop = true,
+  layout_marginRight = true,
+  layout_marginBottom = true,
+  layout_marginStart = true,
+  layout_marginEnd = true,
+  layout_weight = true,
+  layout_gravity = true,
+  layout_behavior = true,
+  layout_anchor = true,
+  layout_scrollFlags = true,
+  layout_collapseMode = true,
+  layout_collapseParallaxMultiplier = true,
+}
+
+local refreshLayout = function()
+  activity.setContentView(loadlayout2(
+  LayoutHelperActivity.data.current_layout_table,{}
+  ))
+end
+
+local canApplyDirectly = function(method)
+  return not recreateMethods[method] and LayoutHelperActivity.applyLayoutAttribute ~= nil
+end
+
 local setMethod = function(method,parameter)
   local tag = getCurrentViewTag()
   local o = tag[method]
   try
     tag[method] = parameter
-    activity.setContentView(loadlayout2(
-    LayoutHelperActivity.data.current_layout_table,{}
-    ))
+    if canApplyDirectly(method) then
+      LayoutHelperActivity.applyLayoutAttribute(_G,getCurrentView(),method,parameter)
+     else
+      refreshLayout()
+    end
    catch(e)
     if tag[method] != nil then
       tag[method] = o
