@@ -44,12 +44,34 @@ local H = outMetrics.heightPixels;
 
 local dm = context.getResources().getDisplayMetrics()
 local resourceCache = {}
+local warnedAttributes = {}
 
 local function cacheKey(defType, name)
     return tostring(defType or "") .. ":" .. tostring(name)
 end
 
+local function trimString(s)
+    return type(s) == "string" and s:match("^%s*(.-)%s*$") or s
+end
+
+local function normalizeResourceName(name)
+    name = trimString(name)
+    if type(name) ~= "string" then
+        return nil
+    end
+    name = name:gsub("^android%.R%.style%.", "")
+        :gsub("^R%.style%.", "")
+        :gsub("^android%.R%.attr%.", "")
+        :gsub("^R%.attr%.", "")
+        :gsub("^android:", "")
+    return name ~= "" and name or nil
+end
+
 local function getIdentifier(name, defType)
+    name = normalizeResourceName(name)
+    if not name then
+        return nil
+    end
     local key = cacheKey(defType, name)
     local cached = resourceCache[key]
     if cached ~= nil then
@@ -57,6 +79,9 @@ local function getIdentifier(name, defType)
     end
 
     local res = context.getResources().getIdentifier(name, defType, context.getPackageName())
+    if res == 0 then
+        res = context.getResources().getIdentifier(name, defType, "android")
+    end
     if res == 0 and name:find("%.") then
         res = context.getResources().getIdentifier((name:gsub("%.", "_")), defType, context.getPackageName())
     end
@@ -66,14 +91,62 @@ local function getIdentifier(name, defType)
 end
 
 local function getAttrIdentifier(name)
+    name = normalizeResourceName(name)
     return android_R.attr[name] or getIdentifier(name, "attr")
 end
 
 local function getStyleIdentifier(name)
+    name = normalizeResourceName(name)
     return android_R.style[name] or getIdentifier(name, "style")
 end
 
-local checkattr
+local function resolveResourceRef(v, preferredType)
+    if type(v) == "number" then
+        return v
+    end
+    if type(v) ~= "string" then
+        return nil
+    end
+
+    v = trimString(v)
+    if v == "" or v == "nil" then
+        return nil
+    end
+
+    local n = tonumber(v)
+    if n then
+        return n
+    end
+
+    if v:find("^%?android:attr/") then
+        return getAttrIdentifier(v:sub(15))
+    elseif v:find("^%?attr/") then
+        return getAttrIdentifier(v:sub(7))
+    elseif v:find("^%?") then
+        return getAttrIdentifier(v:sub(2))
+    elseif v:find("^@android:style/") then
+        return getStyleIdentifier(v:sub(16))
+    elseif v:find("^@style/") then
+        return getStyleIdentifier(v:sub(8))
+    elseif v:find("^@android:attr/") then
+        return getAttrIdentifier(v:sub(15))
+    elseif v:find("^@attr/") then
+        return getAttrIdentifier(v:sub(7))
+    elseif v:find("^@") then
+        local name = v:sub(2)
+        if preferredType == "attr" then
+            return getAttrIdentifier(name)
+        end
+        return getStyleIdentifier(name) or getAttrIdentifier(name)
+    elseif v:find("attr") and not v:find("style") then
+        return getAttrIdentifier(v)
+    end
+
+    if preferredType == "attr" then
+        return getAttrIdentifier(v)
+    end
+    return getStyleIdentifier(v) or getAttrIdentifier(v)
+end
 
 local function safeCall(target, method, ...)
     if target and target[method] then
@@ -81,6 +154,15 @@ local function safeCall(target, method, ...)
         return ok
     end
     return false
+end
+
+local function warnUnsupportedAttribute(k, v, err)
+    local key = tostring(k) .. ":" .. tostring(v)
+    if warnedAttributes[key] then
+        return
+    end
+    warnedAttributes[key] = true
+    print("LayoutHelper skip unsupported attribute: " .. tostring(k) .. "=" .. tostring(v) .. (err and (" (" .. tostring(err) .. ")") or ""))
 end
 
 local function resolveStyleField(v, field)
@@ -91,7 +173,7 @@ local function resolveStyleField(v, field)
         return nil
     end
 
-    v = v:match("^%s*(.-)%s*$")
+    v = trimString(v)
     if v == "" or v == "nil" then
         return nil
     end
@@ -101,56 +183,12 @@ local function resolveStyleField(v, field)
         return n
     end
 
-    if field == "theme" then
-        if v:find("^@android:style/") then
-            return android_R.style[v:sub(16)] or getStyleIdentifier(v:sub(16))
-        elseif v:find("^@style/") then
-            return getStyleIdentifier(v:sub(8))
-        elseif v:find("^@") then
-            local name = v:sub(2)
-            return getStyleIdentifier(name) or getAttrIdentifier(name)
-        end
-        return getStyleIdentifier(v)
-    elseif field == "styleAttr" then
-        if v:find("^%?android:attr/") then
-            return android_R.attr[v:sub(15)] or getAttrIdentifier(v:sub(15))
-        elseif v:find("^%?attr/") then
-            return getAttrIdentifier(v:sub(7))
-        elseif v:find("^%?") then
-            local name = v:sub(2)
-            return getAttrIdentifier(name)
-        elseif v:find("^@attr/") then
-            return getAttrIdentifier(v:sub(7))
-        end
-        return getAttrIdentifier(v)
-    elseif field == "styleRes" then
-        if v:find("^@android:style/") then
-            return android_R.style[v:sub(16)] or getStyleIdentifier(v:sub(16))
-        elseif v:find("^@style/") then
-            return getStyleIdentifier(v:sub(8))
-        elseif v:find("^@") then
-            local name = v:sub(2)
-            return getStyleIdentifier(name) or getAttrIdentifier(name)
-        end
-        return getStyleIdentifier(v)
+    if field == "styleAttr" then
+        return resolveResourceRef(v, "attr")
+    elseif field == "theme" or field == "styleRes" then
+        return resolveResourceRef(v, "style")
     elseif field == "style" then
-        if v:find("^%?android:attr/") then
-            return android_R.attr[v:sub(15)] or getAttrIdentifier(v:sub(15))
-        elseif v:find("^%?attr/") then
-            return getAttrIdentifier(v:sub(7))
-        elseif v:find("^%?") then
-            local name = v:sub(2)
-            return getAttrIdentifier(name)
-        elseif v:find("^@android:style/") then
-            return android_R.style[v:sub(16)] or getStyleIdentifier(v:sub(16))
-        elseif v:find("^@style/") then
-            return getStyleIdentifier(v:sub(8))
-        elseif v:find("^@attr/") then
-            return getAttrIdentifier(v:sub(7))
-        elseif v:find("^@") then
-            local name = v:sub(2)
-            return getStyleIdentifier(name) or getAttrIdentifier(name)
-        end
+        return resolveResourceRef(v, v:find("^%?") and "attr" or "style")
     end
 
     return nil
@@ -477,7 +515,35 @@ local function getViewClassConstructor(cls, contextObj, attrSet, styleAttr, styl
 end
 
 local function checkValue(var)
+    if type(var) == "string" then
+        local res = resolveResourceRef(var, nil)
+        if res then
+            return res
+        end
+    end
     return tonumber(var) or checkNumber(var) or var
+end
+
+local function trySetProperty(view, rawKey, value)
+    if not view or not rawKey then
+        return false
+    end
+
+    local methodKey = string.gsub(rawKey, "^(%w)", function(s)
+        return string.upper(s)
+    end)
+    local checkedValue = checkValue(value)
+
+    if methodKey == "Text" or methodKey == "Title" or methodKey == "Subtitle" or methodKey == "Hint" or methodKey == "Error" then
+        return safeCall(view, "set" .. methodKey, value)
+            or safeCall(view, "set" .. rawKey, value)
+            or pcall(function() view[rawKey] = value end)
+    end
+
+    return safeCall(view, "set" .. methodKey, checkedValue)
+        or safeCall(view, "set" .. rawKey, checkedValue)
+        or safeCall(view, rawKey, checkedValue)
+        or pcall(function() view[rawKey] = checkedValue end)
 end
 
 local function checkValues(...)
@@ -489,16 +555,11 @@ local function checkValues(...)
 end
 
 local function getattr(s)
-    return android_R.attr[s]
+    return getAttrIdentifier(s)
 end
 
 function checkattr(s)
-    try
-        getattr(s)
-    catch(e)
-        return e
-    end
-    return nil
+    return getAttrIdentifier(s) or getStyleIdentifier(s)
     -[[
     local e, s = pcall(getattr, s)
     if e then
@@ -550,7 +611,9 @@ local function createBehaviorFromString(behaviorString)
 end
 
 local function setattribute(root, view, params, k, v, ids)
-    if k == "layout_x" then
+    if k == "style" or k == "theme" or k == "styleAttr" or k == "styleRes" then
+        return true
+    elseif k == "layout_x" then
         params.x = checkValue(v)
     elseif k == "layout_y" then
         params.y = checkValue(v)
@@ -637,22 +700,26 @@ local function setattribute(root, view, params, k, v, ids)
             local bold_italic = Typeface.defaultFromStyle(Typeface.BOLD_ITALIC)
             view.setTypeface(bold_italic)
         end
-    elseif k == "textAppearance" then
-        view.setTextAppearance(context, checkattr(v))
     elseif k == "ellipsize" then
-        view.setEllipsize(TruncateAt[string.upper(v)])
+        local ellipsize = type(v) == "string" and TruncateAt[string.upper(v)] or v
+        if ellipsize then
+            safeCall(view, "setEllipsize", ellipsize)
+        end
     elseif k == "url" then
-        view.loadUrl(url)
+        safeCall(view, "loadUrl", v)
     elseif k == "src" then
         this.loadImage(v, view)
     elseif k == "scaleType" then
-        view.setScaleType(scaleTypes[scaleType[v]])
+        local scale = type(v) == "string" and scaleTypes[scaleType[v]] or v
+        if scale then
+            safeCall(view, "setScaleType", scale)
+        end
     elseif k == "textColor" then
         safeCall(view, "setTextColor", checkValue(v))
     elseif k == "hintTextColor" then
         safeCall(view, "setHintTextColor", checkValue(v))
     elseif k == "textAppearance" then
-        safeCall(view, "setTextAppearance", context, checkValue(v))
+        safeCall(view, "setTextAppearance", context, resolveResourceRef(v, "style") or checkValue(v))
     elseif k == "textAlignment" then
         safeCall(view, "setTextAlignment", checkValue(v))
     elseif k == "inputType" then
@@ -666,7 +733,7 @@ local function setattribute(root, view, params, k, v, ids)
     elseif k == "singleLine" then
         safeCall(view, "setSingleLine", v == true or v == "true")
     elseif k == "backgroundResource" then
-        safeCall(view, "setBackgroundResource", checkValue(v))
+        safeCall(view, "setBackgroundResource", resolveResourceRef(v, nil) or checkValue(v))
     elseif k == "backgroundDrawable" then
         safeCall(view, "setBackground", v)
     elseif k == "paddingStart" then
@@ -684,9 +751,9 @@ local function setattribute(root, view, params, k, v, ids)
     elseif k == "background" then
         if type(v) == "string" then
             if v:find("^%?") then
-                view.setBackgroundResource(getAttrIdentifier(v:sub(2, -1)))
+                safeCall(view, "setBackgroundResource", getAttrIdentifier(v:sub(2, -1)))
             elseif v:find("^#") then
-                view.setBackgroundColor(checkNumber(v))
+                safeCall(view, "setBackgroundColor", checkNumber(v))
             elseif rawget(root, v) or rawget(_G, v) then
                 v = rawget(root, v) or rawget(_G, v)
                 if type(v) == "function" then
@@ -699,36 +766,21 @@ local function setattribute(root, view, params, k, v, ids)
                     v = luadir .. v
                 end
                 if v:find("%.9%.png") then
-                    setBackground(view, NineBitmapDrawable(loadbitmap(v)))
+                    pcall(setBackground, view, NineBitmapDrawable(loadbitmap(v)))
                 else
-                    setBackground(view, BitmapDrawable(loadbitmap(v)))
+                    pcall(setBackground, view, BitmapDrawable(loadbitmap(v)))
                 end
             end
         elseif type(v) == "userdata" then
-            setBackground(view, v)
+            pcall(setBackground, view, v)
         elseif type(v) == "number" then
-            view.setBackgroundColor(v)
+            safeCall(view, "setBackgroundColor", v)
         end
     elseif k == "password" and (v == "true" or v == true) then
         view.setInputType(0x81)
     elseif type(k) == "string" and not (k:find("layout_")) and not (k:find("padding")) and k ~= "style" and k ~= "theme" and k ~= "styleAttr" and k ~= "styleRes" then
-        --设置属性
-        local rawKey = k
-        k = string.gsub(k, "^(%w)", function(s)
-            return string.upper(s)
-        end)
-        if k == "Text" or k == "Title" or k == "Subtitle" then
-            if not safeCall(view, "set" .. k, v) then
-                safeCall(view, "set" .. rawKey, v)
-            end
-        else
-            local value = checkValue(v)
-            if not safeCall(view, "set" .. k, value) then
-                if not safeCall(view, rawKey, value) then
-                    view[rawKey] = value
-                end
-            end
-        end
+        --设置属性。LayoutHelper 预览优先不崩溃，未知属性尝试 setter / 原方法 / 字段后静默跳过。
+        trySetProperty(view, k, v)
     end
 end
 
@@ -894,11 +946,12 @@ for k, v in pairs(t) do
         view.setId(id)
         ids[v] = id
     else
-        local e, s = pcall(setattribute, root, view, params, k, v, ids)
-        if not e then
-            local _, i = s:find(":%d+:")
-            s = s:sub(i or 1, -1)
-            error(string.format("loadlayout error %s \n\tat %s\n\tat  key=%s value=%s\n\tat %s", s, view.toString(), k, v, dump2(t)), 0)
+        local ok, s = pcall(setattribute, root, view, params, k, v, ids)
+        if not ok then
+            local message = tostring(s)
+            local _, i = message:find(":%d+:")
+            message = message:sub(i or 1, -1)
+            warnUnsupportedAttribute(k, v, message)
         end
     end
 end
