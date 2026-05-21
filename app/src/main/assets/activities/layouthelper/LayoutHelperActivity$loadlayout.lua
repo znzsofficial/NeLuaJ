@@ -100,6 +100,8 @@ local function getStyleIdentifier(name)
     return android_R.style[name] or getIdentifier(name, "style")
 end
 
+local checkValue
+
 local function resolveResourceRef(v, preferredType)
     if type(v) == "number" then
         return v
@@ -146,6 +148,45 @@ local function resolveResourceRef(v, preferredType)
         return getAttrIdentifier(v)
     end
     return getStyleIdentifier(v) or getAttrIdentifier(v)
+end
+
+local function resolveThemeAttributeValue(v)
+    if type(v) ~= "string" or not v:find("^%?") then
+        return nil
+    end
+
+    local attrName
+    if v:find("^%?android:attr/") then
+        attrName = v:sub(15)
+    elseif v:find("^%?attr/") then
+        attrName = v:sub(7)
+    else
+        attrName = v:sub(2)
+    end
+
+    local attrId = getAttrIdentifier(attrName)
+    if not attrId then
+        return nil
+    end
+
+    local outValue = TypedValue()
+    if not context.getTheme().resolveAttribute(attrId, outValue, true) then
+        return nil
+    end
+
+    if outValue.type == TypedValue.TYPE_DIMENSION then
+        return outValue.getDimension(dm)
+    elseif outValue.type == TypedValue.TYPE_FLOAT then
+        return outValue.getFloat()
+    elseif outValue.type >= TypedValue.TYPE_FIRST_INT and outValue.type <= TypedValue.TYPE_LAST_INT then
+        return outValue.data
+    elseif outValue.type == TypedValue.TYPE_STRING and outValue.string then
+        return checkValue(tostring(outValue.string))
+    elseif outValue.resourceId and outValue.resourceId ~= 0 then
+        return outValue.resourceId
+    end
+
+    return outValue.data
 end
 
 local function safeCall(target, method, ...)
@@ -514,14 +555,24 @@ local function getViewClassConstructor(cls, contextObj, attrSet, styleAttr, styl
     end
 end
 
-local function checkValue(var)
+checkValue = function(var)
+    local value = tonumber(var) or checkNumber(var)
+    if value ~= nil then
+        return value
+    end
+
     if type(var) == "string" then
-        local res = resolveResourceRef(var, nil)
-        if res then
-            return res
+        local attrValue = resolveThemeAttributeValue(var)
+        if attrValue ~= nil then
+            return attrValue
+        end
+
+        local resourceId = resolveResourceRef(var, nil)
+        if resourceId then
+            return resourceId
         end
     end
-    return tonumber(var) or checkNumber(var) or var
+    return var
 end
 
 local function trySetProperty(view, rawKey, value)

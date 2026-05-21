@@ -141,6 +141,8 @@ class LuaLayout(private val initialContext: Context) {
             }
         }
 
+        resolveThemeAttributeValue(str.trim())?.let { return it }
+
         // Long or Double fallback
         str.toLongOrNull()?.let { return it }
         str.toDoubleOrNull()?.let { return it }
@@ -214,6 +216,35 @@ class LuaLayout(private val initialContext: Context) {
     private enum class ResourceKind { ATTR, STYLE }
 
     private data class ResourceReference(val id: Int, val kind: ResourceKind)
+
+    private fun resolveThemeAttributeValue(ref: String): Any? {
+        if (!ref.startsWith("?")) return null
+        val attrName = when {
+            ref.startsWith("?attr/") -> ref.removePrefix("?attr/")
+            ref.startsWith("?android:attr/") -> ref.removePrefix("?android:attr/")
+            else -> ref.removePrefix("?")
+        }
+        if (attrName.isBlank()) return null
+
+        val attrId = when {
+            ref.startsWith("?android:attr/") -> initialContext.resources.getIdentifier(attrName, "attr", "android")
+            else -> initialContext.resources.getIdentifier(attrName, "attr", initialContext.packageName)
+                .takeIf { it != 0 }
+                ?: initialContext.resources.getIdentifier(attrName, "attr", "android")
+        }
+        if (attrId == 0) return null
+
+        val outValue = TypedValue()
+        if (!initialContext.theme.resolveAttribute(attrId, outValue, true)) return null
+
+        return when (outValue.type) {
+            TypedValue.TYPE_DIMENSION -> outValue.getDimension(dm)
+            TypedValue.TYPE_FLOAT -> outValue.float
+            in TypedValue.TYPE_FIRST_INT..TypedValue.TYPE_LAST_INT -> outValue.data
+            TypedValue.TYPE_STRING -> outValue.string?.toString()?.let { toValue(it) }
+            else -> outValue.resourceId.takeIf { it != 0 } ?: outValue.data
+        }
+    }
 
     private fun inferResourceKind(value: LuaValue, fieldName: String): ResourceKind {
         if (value.isstring()) {
