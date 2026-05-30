@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="doc.css" />
+    <title>介绍</title>
+  </head>
+  <body>
+    <main class="markdown-export">
+<h2>介绍</h2>
+<p>NeLuaJ+ 实现了基于 OkHttp3 的同步网络模块和异步网络模块</p>
+<p>headers 均为可选参数</p>
+<hr>
+<h2>同步模式</h2>
+<p>headers 和 body 类型为 <code>LuaTable</code></p>
+<p>函数返回值均为 <code>Response</code> 对象</p>
+<h3>okhttp.get</h3>
+<pre><code class="language-lua">okhttp.get(url, headers)
+</code></pre>
+<h3>okhttp.delete</h3>
+<pre><code class="language-lua">okhttp.delete(url, body, headers)
+</code></pre>
+<h3>okhttp.post</h3>
+<pre><code class="language-lua">okhttp.post(url, body, headers)
+</code></pre>
+<h3>okhttp.put</h3>
+<pre><code class="language-lua">okhttp.put(url, body, headers)
+</code></pre>
+<h3>okhttp.patch</h3>
+<pre><code class="language-lua">okhttp.patch(url, body, headers)
+</code></pre>
+<h3>okhttp.head</h3>
+<pre><code class="language-lua">okhttp.head(url, headers)
+</code></pre>
+<hr>
+<h2>异步模式</h2>
+<p>headers 类型为 <code>Map</code></p>
+<p>body 类型为 application/x-www-form-urlencoded</p>
+<p>或 text/plain</p>
+<p>或 application/json</p>
+<p>编码格式的字符串</p>
+<h3>okHttp.unsafe</h3>
+<p>不安全的 okHttp 模块实例</p>
+<pre><code class="language-lua">okHttp.unsafe.get("https://m.baidu.com", function(code, body, response)
+end)
+</code></pre>
+<h3>okHttp.get</h3>
+<pre><code class="language-lua">okHttp.get(url, headers, function(code, body, response)
+end)
+</code></pre>
+<h3>okHttp.post</h3>
+<pre><code class="language-lua">okHttp.post(url, body, headers, function(code, body, response)
+end)
+</code></pre>
+<h3>okHttp.postText</h3>
+<pre><code class="language-lua">okHttp.postText(url, body, headers, function(code, body, response)
+end)
+</code></pre>
+<h3>okHttp.postJson</h3>
+<pre><code class="language-lua">okHttp.postJson(url, body, headers, function(code, body, response)
+end)
+</code></pre>
+    </main>
+  </body>
+</html>

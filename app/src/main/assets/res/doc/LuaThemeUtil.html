@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="doc.css" />
+    <title>LuaThemeUtil API 文档</title>
+  </head>
+  <body>
+    <main class="markdown-export">
+<h1>LuaThemeUtil API 文档</h1>
+<h2>1. 类概述</h2>
+<p><code>LuaThemeUtil</code> 是一个强大的工具类，用于从 Android App 的当前主题中动态获取颜色。它完美适配 Material Design 3 (Material You) 和旧版 Material/AppCompat 主题，让你的 LuaJ 脚本界面与 App 的原生主题保持一致。</p>
+<p>该类提供了两种访问颜色的方式：</p>
+<ol>
+<li><strong>结构化访问 (推荐)</strong>：通过逻辑分组（如 <code>primary</code>, <code>surface</code>, <code>text</code>）来获取颜色，代码更清晰、更易读。</li>
+<li><strong>传统方法访问</strong>：保留了所有旧的 <code>get...()</code> 方法，确保与旧脚本的完全兼容。</li>
+</ol>
+<p><strong>构造函数</strong>:</p>
+<pre><code class="language-lua">local themeUtil = LuaThemeUtil(activity) 
+</code></pre>
+<ul>
+<li><strong>参数</strong>: <code>context</code> - 必须传入一个 Android <code>Context</code> 对象。</li>
+</ul>
+<hr>
+<h2>2. 结构化访问 (推荐用法)</h2>
+<p>这是获取颜色的首选方式。它通过逻辑分组的对象来访问，使代码意图一目了然。</p>
+<h3>示例</h3>
+<pre><code class="language-lua">import "github.daisukiKaffuChino.utils.LuaThemeUtil"
+local themeUtil = LuaThemeUtil(activity)
+
+-- 或直接使用 LuaActvity.getThemeUtil()
+local themeUtil = this.themeUtil
+
+-- 获取主色
+local primaryColor = themeUtil.primary.main
+
+-- 获取表面容器颜色
+local surfaceContainerColor = themeUtil.surface.container
+
+-- 获取默认文本颜色
+local textColor = themeUtil.text.primary
+
+-- 获取错误颜色
+local errorColor = themeUtil.error.main
+</code></pre>
+<hr>
+<h2>3. API 分组详解</h2>
+<p>下面是所有可用的结构化颜色分组及其属性。</p>
+<h3>3.1 <code>themeUtil.primary</code> - 主色系</h3>
+<div class="table-wrapper"><table><thead><tr><th>属性</th><th>完整方法名</th><th>说明</th></tr></thead><tbody><tr><td><code>main</code></td><td><code>getMain()</code></td><td>主色 (<code>colorPrimary</code>)</td></tr><tr><td><code>on</code></td><td><code>getOn()</code></td><td>主色上的内容颜色 (<code>colorOnPrimary</code>)</td></tr><tr><td><code>container</code></td><td><code>getContainer()</code></td><td>主色容器颜色 (<code>colorPrimaryContainer</code>)</td></tr><tr><td><code>onContainer</code></td><td><code>getOnContainer()</code></td><td>主色容器上的内容颜色</td></tr><tr><td><code>fixed</code></td><td><code>getFixed()</code></td><td>固定主色 (M3)</td></tr><tr><td><code>onFixed</code></td><td><code>getOnFixed()</code></td><td>固定主色上的内容颜色 (M3)</td></tr><tr><td><code>fixedDim</code></td><td><code>getFixedDim()</code></td><td>较暗的固定主色 (M3)</td></tr><tr><td><code>onFixedVariant</code></td><td><code>getOnFixedVariant()</code></td><td>固定主色上的内容变体颜色 (M3)</td></tr><tr><td><code>inverse</code></td><td><code>getInverse()</code></td><td>反色主色 (<code>colorPrimaryInverse</code>)</td></tr><tr><td><code>dark</code></td><td><code>getDark()</code></td><td>深色主色 (<code>colorPrimaryDark</code>, 旧版)</td></tr><tr><td><code>variant</code></td><td><code>getVariant()</code></td><td>主色变体 (<code>colorPrimaryVariant</code>, 旧版)</td></tr></tbody></table></div>
+<h3>3.2 <code>themeUtil.secondary</code> - 次要/辅助色系</h3>
+<div class="table-wrapper"><table><thead><tr><th>属性</th><th>完整方法名</th><th>说明</th></tr></thead><tbody><tr><td><code>main</code></td><td><code>getMain()</code></td><td>次要颜色 (<code>colorSecondary</code>)</td></tr><tr><td><code>on</code></td><td><code>getOn()</code></td><td>次要颜色上的内容颜色</td></tr><tr><td><code>container</code></td><td><code>getContainer()</code></td><td>次要颜色容器</td></tr><tr><td><code>onContainer</code></td><td><code>getOnContainer()</code></td><td>次要颜色容器上的内容颜色</td></tr><tr><td><code>fixed</code></td><td><code>getFixed()</code></td><td>固定次要色 (M3)</td></tr><tr><td><code>onFixed</code></td><td><code>getOnFixed()</code></td><td>固定次要色上的内容颜色 (M3)</td></tr><tr><td><code>fixedDim</code></td><td><code>getFixedDim()</code></td><td>较暗的固定次要色 (M3)</td></tr><tr><td><code>onFixedVariant</code></td><td><code>getOnFixedVariant()</code></td><td>固定次要色上的内容变体颜色 (M3)</td></tr><tr><td><code>variant</code></td><td><code>getVariant()</code></td><td>次要颜色变体 (<code>colorSecondaryVariant</code>, 旧版)</td></tr></tbody></table></div>
+<h3>3.3 <code>themeUtil.tertiary</code> - 第三色系</h3>
+<div class="table-wrapper"><table><thead><tr><th>属性</th><th>完整方法名</th><th>说明</th></tr></thead><tbody><tr><td><code>main</code></td><td><code>getMain()</code></td><td>第三色 (<code>colorTertiary</code>)</td></tr><tr><td><code>on</code></td><td><code>getOn()</code></td><td>第三色上的内容颜色</td></tr><tr><td><code>container</code></td><td><code>getContainer()</code></td><td>第三色容器</td></tr><tr><td><code>onContainer</code></td><td><code>getOnContainer()</code></td><td>第三色容器上的内容颜色</td></tr><tr><td><code>fixed</code></td><td><code>getFixed()</code></td><td>固定第三色 (M3)</td></tr><tr><td><code>onFixed</code></td><td><code>getOnFixed()</code></td><td>固定第三色上的内容颜色 (M3)</td></tr><tr><td><code>fixedDim</code></td><td><code>getFixedDim()</code></td><td>较暗的固定第三色 (M3)</td></tr><tr><td><code>onFixedVariant</code></td><td><code>getOnFixedVariant()</code></td><td>固定第三色上的内容变体颜色 (M3)</td></tr></tbody></table></div>
+<h3>3.4 <code>themeUtil.error</code> - 错误状态色系</h3>
+<div class="table-wrapper"><table><thead><tr><th>属性</th><th>完整方法名</th><th>说明</th></tr></thead><tbody><tr><td><code>main</code></td><td><code>getMain()</code></td><td>错误颜色 (<code>colorError</code>)</td></tr><tr><td><code>on</code></td><td><code>getOn()</code></td><td>错误颜色上的内容颜色</td></tr><tr><td><code>container</code></td><td><code>getContainer()</code></td><td>错误颜色容器</td></tr><tr><td><code>onContainer</code></td><td><code>getOnContainer()</code></td><td>错误颜色容器上的内容颜色</td></tr></tbody></table></div>
+<h3>3.5 <code>themeUtil.surface</code> - 表面/卡片色系</h3>
+<p>这是 UI 组件背景（如卡片、对话框、菜单）最常用的颜色。</p>
+<div class="table-wrapper"><table><thead><tr><th>属性</th><th>完整方法名</th><th>说明</th></tr></thead><tbody><tr><td><code>main</code></td><td><code>getMain()</code></td><td>基础表面颜色 (<code>colorSurface</code>)</td></tr><tr><td><code>on</code></td><td><code>getOn()</code></td><td>基础表面上的内容颜色</td></tr><tr><td><code>variant</code></td><td><code>getVariant()</code></td><td>表面变体颜色</td></tr><tr><td><code>onVariant</code></td><td><code>getOnVariant()</code></td><td>表面变体上的内容颜色</td></tr><tr><td><code>inverse</code></td><td><code>getInverse()</code></td><td>反色表面</td></tr><tr><td><code>onInverse</code></td><td><code>getOnInverse()</code></td><td>反色表面上的内容颜色</td></tr><tr><td><code>container</code></td><td><code>getContainer()</code></td><td>表面容器色 (M3, 默认层级)</td></tr><tr><td><code>containerLow</code></td><td><code>getContainerLow()</code></td><td>表面容器色 (M3, 低层级)</td></tr><tr><td><code>containerLowest</code></td><td><code>getContainerLowest()</code></td><td>表面容器色 (M3, 最低层级)</td></tr><tr><td><code>containerHigh</code></td><td><code>getContainerHigh()</code></td><td>表面容器色 (M3, 高层级)</td></tr><tr><td><code>containerHighest</code></td><td><code>getContainerHighest()</code></td><td>表面容器色 (M3, 最高层级)</td></tr><tr><td><code>bright</code></td><td><code>getBright()</code></td><td>明亮的表面色 (M3)</td></tr><tr><td><code>dim</code></td><td><code>getDim()</code></td><td>昏暗的表面色 (M3)</td></tr><tr><td><code>primary</code></td><td><code>getPrimary()</code></td><td>主表面色 (<code>colorPrimarySurface</code>)</td></tr><tr><td><code>onPrimary</code></td><td><code>getOnPrimary()</code></td><td>主表面上的内容颜色 (<code>colorOnPrimarySurface</code>)</td></tr></tbody></table></div>
+<h3>3.6 <code>themeUtil.background</code> - 背景色系</h3>
+<div class="table-wrapper"><table><thead><tr><th>属性</th><th>完整方法名</th><th>说明</th></tr></thead><tbody><tr><td><code>main</code></td><td><code>getMain()</code></td><td>窗口或屏幕的默认背景色</td></tr><tr><td><code>on</code></td><td><code>getOn()</code></td><td>背景色上的内容颜色</td></tr></tbody></table></div>
+<h3>3.7 <code>themeUtil.text</code> - 文本颜色</h3>
+<div class="table-wrapper"><table><thead><tr><th>属性</th><th>完整方法名</th><th>说明</th></tr></thead><tbody><tr><td><code>primary</code></td><td><code>getPrimary()</code></td><td>主要/默认文本颜色</td></tr><tr><td><code>hint</code></td><td><code>getHint()</code></td><td>输入框提示文本颜色</td></tr><tr><td><code>highlight</code></td><td><code>getHighlight()</code></td><td>文本选中时的高亮背景</td></tr><tr><td><code>title</code></td><td><code>getTitle()</code></td><td>标题文本颜色</td></tr><tr><td><code>subtitle</code></td><td><code>getSubtitle()</code></td><td>副标题文本颜色</td></tr><tr><td><code>actionMenu</code></td><td><code>getActionMenu()</code></td><td>操作菜单项文本颜色</td></tr><tr><td><code>editText</code></td><td><code>getEditText()</code></td><td>编辑框（EditText）文本颜色</td></tr></tbody></table></div>
+<h3>3.8 <code>themeUtil.outline</code> - 轮廓/边框颜色</h3>
+<div class="table-wrapper"><table><thead><tr><th>属性</th><th>完整方法名</th><th>说明</th></tr></thead><tbody><tr><td><code>main</code></td><td><code>getMain()</code></td><td>主要轮廓线颜色</td></tr><tr><td><code>variant</code></td><td><code>getVariant()</code></td><td>轮廓线变体颜色</td></tr></tbody></table></div>
+<hr>
+<h2>4. 传统方法</h2>
+<p>如果你需要维护旧代码，或者习惯于旧的 <code>get...()</code> 方法名，它们依然可用。</p>
+<p><strong>getter 简写兼容性</strong>: <code>themeUtil.getColorPrimary()</code> 也可以简写为 <code>themeUtil.colorPrimary</code>。</p>
+<h3>示例</h3>
+<pre><code class="language-lua">-- 使用完整方法名
+local primaryColor = themeUtil.getColorPrimary()
+local errorColor = themeUtil.getColorError()
+
+-- 使用 getter 简写
+local onPrimaryColor = themeUtil.colorOnPrimary
+local tertiaryColor = themeUtil.colorTertiary
+</code></pre>
+<h3>传统方法列表</h3>
+<div class="table-wrapper"><table><thead><tr><th>方法</th><th>说明</th></tr></thead><tbody><tr><td><code>getColorPrimary()</code> / <code>colorPrimary</code></td><td>获取主题的主色</td></tr><tr><td><code>getColorOnPrimary()</code> / <code>colorOnPrimary</code></td><td>主色上的内容颜色</td></tr><tr><td><code>getColorPrimaryContainer()</code> / <code>colorPrimaryContainer</code></td><td>主色容器颜色</td></tr><tr><td><code>getColorSecondary()</code> / <code>colorSecondary</code></td><td>获取次色</td></tr><tr><td><code>getColorError()</code> / <code>colorError</code></td><td>获取错误色</td></tr><tr><td><code>getColorSurface()</code> / <code>colorSurface</code></td><td>获取表面颜色</td></tr><tr><td><code>getColorBackground()</code> / <code>colorBackground</code></td><td>获取背景颜色</td></tr><tr><td><code>getTextColor()</code> / <code>textColor</code></td><td>获取默认文本颜色</td></tr><tr><td><code>getColorAccent()</code> / <code>colorAccent</code></td><td>获取强调色 (旧版)</td></tr><tr><td>... (其他所有 <code>get...</code> 方法都支持)</td><td>...</td></tr></tbody></table></div>
+<hr>
+<h2>5. 通用方法</h2>
+<p>如果你需要获取一个不在列表中的、自定义的颜色属性，可以使用此方法。</p>
+<div class="table-wrapper"><table><thead><tr><th>方法</th><th>说明</th><th>参数</th></tr></thead><tbody><tr><td><code>getAnyColor(id)</code></td><td>通过属性 ID 获取任意颜色</td><td><code>id</code>: 颜色属性的整数 ID，例如 <code>android.R.attr.button</code></td></tr></tbody></table></div>
+<h3>示例</h3>
+<pre><code class="language-lua">-- 假设你需要一个特殊的、未在上面列出的颜色
+-- 首先需要获取它的 R 值
+local my_attr = android.R.attr.colorActivatedHighlight
+local customColor = themeUtil.getAnyColor(my_attr)
+</code></pre>
+    </main>
+  </body>
+</html>

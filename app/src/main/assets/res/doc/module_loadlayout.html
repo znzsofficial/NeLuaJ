@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="doc.css" />
+    <title>介绍</title>
+  </head>
+  <body>
+    <main class="markdown-export">
+<h2>介绍</h2>
+<p>使用 LuaLayout 加载布局表的函数。</p>
+<p>支持更多属性，例如 <code>textStyle</code>、<code>layout_anchor</code>、<code>pages</code>（for ViewPager）等，并支持 Material 组件的主题/样式增强：<code>theme</code>、<code>style</code>、<code>styleAttr</code>、<code>styleRes</code>。</p>
+<p>参数类型分别为 <code>LuaTable</code>、<code>LuaTable</code>、<code>ViewGroup.LayoutParams</code>。</p>
+<pre><code class="language-lua">loadlayout(layout)
+loadlayout(layout, _G)
+loadlayout(layout, _G, FrameLayout.LayoutParams)
+</code></pre>
+<h2>基本结构</h2>
+<p>布局表的第一个元素必须是 View 类，后续键值会作为属性写入 View，数字索引用作子视图。</p>
+<pre><code class="language-lua">return {
+	LinearLayout,
+	orientation = "vertical",
+	layout_width = "match",
+	layout_height = "match",
+	{
+		TextView,
+		id = "title",
+		text = "标题",
+		textSize = "20sp",
+	},
+}
+</code></pre>
+<h2>参数说明</h2>
+<div class="table-wrapper"><table><thead><tr><th>参数</th><th>类型</th><th>说明</th></tr></thead><tbody><tr><td><code>layout</code></td><td><code>LuaTable</code></td><td>布局表，或可被 <code>require</code> 得到的布局表</td></tr><tr><td><code>env</code></td><td><code>LuaTable</code></td><td>可选。绑定 <code>id</code> 对应 View 的表，常用 <code>_G</code> 或局部 <code>binding</code></td></tr><tr><td><code>params</code></td><td><code>ViewGroup.LayoutParams</code> 类</td><td>可选。指定根视图 LayoutParams 类型</td></tr></tbody></table></div>
+<pre><code class="language-lua">local binding = {}
+local view = loadlayout(layout, binding)
+print(binding.title) -- id = "title" 的 View
+</code></pre>
+<h2>常用属性</h2>
+<div class="table-wrapper"><table><thead><tr><th>属性</th><th>说明</th><th>示例</th></tr></thead><tbody><tr><td><code>id</code></td><td>设置 View ID，并写入绑定表</td><td><code>id = "button"</code></td></tr><tr><td><code>layout_width</code> / <code>layout_height</code></td><td>宽高</td><td><code>"match"</code>, <code>"wrap"</code>, <code>"120dp"</code>, <code>"50%"</code></td></tr><tr><td><code>padding</code> / <code>paddingLeft</code> 等</td><td>内边距</td><td><code>"16dp"</code></td></tr><tr><td><code>layout_margin</code> / <code>layout_marginTop</code> 等</td><td>外边距</td><td><code>"8dp"</code></td></tr><tr><td><code>text</code> / <code>hint</code> / <code>textSize</code></td><td>文本属性</td><td><code>text = "OK"</code>, <code>textSize = "14sp"</code></td></tr><tr><td><code>textStyle</code></td><td>文字样式</td><td><code>"bold"</code>, <code>"italic"</code>, `"bold</td></tr><tr><td><code>background</code></td><td>背景颜色、Drawable 或图片路径</td><td><code>"#FF0000"</code>, <code>drawable</code>, <code>"bg.png"</code></td></tr><tr><td><code>src</code></td><td>ImageView 图片源</td><td>Bitmap、Drawable、文件路径、URL</td></tr><tr><td><code>items</code></td><td>ListView/Spinner 简单字符串列表</td><td><code>{ "A", "B" }</code></td></tr><tr><td><code>pages</code> / <code>pagesWithTitle</code></td><td>ViewPager 页面</td><td><code>{ page1, page2 }</code></td></tr></tbody></table></div>
+<p>尺寸字符串支持 <code>dp</code>、<code>sp</code>、<code>px</code>、<code>pt</code>、<code>in</code>、<code>mm</code>，以及 <code>%</code>、<code>%w</code>、<code>%h</code>。</p>
+<h2>事件监听</h2>
+<p>所有以 <code>on</code> 开头的属性会按监听器处理。属性值可以是函数，也可以是绑定表中的函数名字符串。</p>
+<pre><code class="language-lua">local binding = {
+	onButtonClick = function(view)
+		print("clicked")
+	end,
+}
+
+local view = loadlayout({
+	Button,
+	text = "点击",
+	onClick = "onButtonClick",
+}, binding)
+</code></pre>
+<pre><code class="language-lua">{
+	Button,
+	text = "直接函数",
+	onClick = function(view)
+		print(view)
+	end,
+}
+</code></pre>
+<h2>style / theme 用法</h2>
+<p><code>loadlayout</code> 会在创建 View 时优先处理构造期样式字段，适合 MaterialButton、MaterialTextView、TextInputLayout、MaterialCardView 等组件。</p>
+<h3>兼容字段</h3>
+<ul>
+<li><code>style</code>：旧写法，仍可继续使用；传 <code>?attr/...</code> 时会按 <code>defStyleAttr</code> 处理，传 <code>@style/...</code> 或样式资源 ID 时按旧 style 兼容。</li>
+<li><code>theme</code>：视图创建时使用的主题资源，会包装当前 Context。</li>
+<li><code>styleAttr</code>：构造函数的 <code>defStyleAttr</code>，推荐用于 Material 组件的变体样式。</li>
+<li><code>styleRes</code>：构造函数的 <code>defStyleRes</code>，可与 <code>styleAttr</code> 组合使用。</li>
+</ul>
+<p>支持的资源写法：</p>
+<div class="table-wrapper"><table><thead><tr><th>写法</th><th>说明</th></tr></thead><tbody><tr><td><code>?attr/name</code></td><td>当前主题中的属性，例如 <code>?attr/materialButtonOutlinedStyle</code></td></tr><tr><td><code>?android:attr/name</code></td><td>Android 系统 attr</td></tr><tr><td><code>@attr/name</code></td><td>应用 attr 资源</td></tr><tr><td><code>@style/name</code></td><td>应用 style 资源</td></tr><tr><td><code>@android:style/name</code></td><td>Android 系统 style</td></tr><tr><td>数字资源 ID</td><td>直接使用 <code>R.attr.xxx</code> / <code>R.style.xxx</code> / <code>MDC_R.attr.xxx</code></td></tr></tbody></table></div>
+<h3>示例</h3>
+<p>旧写法仍然可用：</p>
+<pre><code class="language-lua">import "com.google.android.material.button.MaterialButton"
+
+return {
+	MaterialButton,
+	text = "轮廓按钮",
+	style = "?attr/materialButtonOutlinedStyle",
+}
+</code></pre>
+<p>推荐写法：显式区分 <code>styleAttr</code> 与 <code>styleRes</code>。</p>
+<pre><code class="language-lua">import "com.google.android.material.button.MaterialButton"
+
+return {
+	MaterialButton,
+	text = "轮廓按钮",
+	styleAttr = "?attr/materialButtonOutlinedStyle",
+}
+</code></pre>
+<p>同时指定 theme overlay 与样式：</p>
+<pre><code class="language-lua">import "com.google.android.material.textfield.TextInputLayout"
+import "com.google.android.material.textfield.TextInputEditText"
+
+return {
+	TextInputLayout,
+	layout_width = "match",
+	layout_height = "wrap",
+	theme = "ThemeOverlay.Material3",
+	styleAttr = "?attr/textInputOutlinedStyle",
+	{
+		TextInputEditText,
+		layout_width = "match",
+		layout_height = "wrap",
+	}
+}
+</code></pre>
+<p>如果已经拿到资源 ID，优先传数字 ID，可避免运行时字符串查找：</p>
+<pre><code class="language-lua">return {
+	MaterialButton,
+	text = "高性能写法",
+	styleAttr = MDC_R.attr.materialButtonOutlinedStyle,
+}
+</code></pre>
+<h3>说明</h3>
+<ul>
+<li><code>style</code> 继续兼容旧布局。</li>
+<li>对 Material 组件，推荐优先使用 <code>styleAttr</code> / <code>styleRes</code>，必要时再叠加 <code>theme</code>。</li>
+<li>字符串资源引用会被缓存；大量 RecyclerView item 中仍推荐直接使用数字资源 ID。</li>
+<li>无效资源会在运行时输出更明确的错误提示，方便排查 Lua 布局问题。</li>
+</ul>
+<h2>CoordinatorLayout 特殊属性</h2>
+<p><code>loadlayout</code> 对部分 Material/CoordinatorLayout 布局参数做了特殊处理：</p>
+<div class="table-wrapper"><table><thead><tr><th>属性</th><th>说明</th><th>示例</th></tr></thead><tbody><tr><td><code>layout_behavior</code></td><td>设置 CoordinatorLayout Behavior</td><td><code>"@string/appbar_scrolling_view_behavior"</code></td></tr><tr><td><code>layout_anchor</code></td><td>锚定到已定义 id 的 View</td><td><code>"fab"</code></td></tr><tr><td><code>layout_scrollFlags</code></td><td>AppBar 滚动标志</td><td>`"scroll</td></tr><tr><td><code>layout_collapseMode</code></td><td>CollapsingToolbar 折叠模式</td><td><code>"pin"</code>, <code>"parallax"</code></td></tr><tr><td><code>layout_collapseParallaxMultiplier</code></td><td>视差系数</td><td><code>0.5</code></td></tr></tbody></table></div>
+<p>相对布局规则也支持字符串 id 引用，例如 <code>layout_below = "title"</code>。被引用的 id 需要在当前 View 之前定义。</p>
+<h2>注意事项</h2>
+<ul>
+<li>布局表第一个元素必须是 View 类；如果是 <code>nil</code>，通常是忘记 <code>import</code> 或类名拼写错误。</li>
+<li><code>id</code> 会生成 Android View ID，并将 View 写入绑定表。</li>
+<li><code>style</code>、<code>styleAttr</code>、<code>styleRes</code>、<code>theme</code> 是构造期字段，不会作为普通属性再次写入 View。</li>
+<li>普通 Java setter 通常可直接用属性名调用，例如 <code>alpha = 0.5</code>、<code>enabled = false</code>。</li>
+<li>子视图会递归调用 <code>loadlayout</code> 创建；如果子项是字符串，会先通过 Lua <code>require</code> 加载。</li>
+</ul>
+    </main>
+  </body>
+</html>

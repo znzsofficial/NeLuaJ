@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="doc.css" />
+    <title>Material 3 Expressive 设计指南</title>
+  </head>
+  <body>
+    <main class="markdown-export">
+<h1>Material 3 Expressive 设计指南</h1>
+<p>NeLuaJ+ 使用 <strong>Material 3 Expressive</strong> (MD3E) 设计规范。本文档介绍如何在 Lua 布局中正确使用 MD3 组件和主题。</p>
+<hr>
+<h2>1. 主题设置</h2>
+<h3>方式一：init.lua 配置（推荐）</h3>
+<p>在项目的 <code>init.lua</code> 中设置 <code>NeLuaJ_Theme</code>，Activity 启动时会自动应用：</p>
+<pre><code class="language-lua">-- init.lua
+NeLuaJ_Theme = "Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay"
+</code></pre>
+<p>也支持 <code>theme</code> 字段，值为 <code>android.R.style</code> 中的样式名或整数 ID：</p>
+<pre><code class="language-lua">-- init.lua
+theme = "Theme_Material3_DayNight"  -- android.R.style 中的样式
+</code></pre>
+<h3>方式二：main.lua 手动设置</h3>
+<p>如果需要在运行时动态切换主题，可在 <code>main.lua</code> 中手动调用（必须在 <code>setContentView</code> 之前）：</p>
+<pre><code class="language-lua">activity.setTheme(R.style.Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay)
+activity.dynamicColor()  -- 启用 Material You 动态取色
+</code></pre>
+<p>如果用户已经在设置页选过主题色，应用会把种子色保存到 <code>theme_seed_color</code>，后续页面启动时会优先按该值生成完整色板。这样整套软件都能保持统一的 MD3 视觉风格，而不是只在单个页面生效。</p>
+<p>设置页使用预设色板和自定义颜色入口来代替手动输入十六进制颜色值，更适合移动端快速切换主题。</p>
+<blockquote>
+<p><strong>注意</strong>：如果 <code>init.lua</code> 已设置 <code>NeLuaJ_Theme</code>，则无需在 <code>main.lua</code> 中重复调用 <code>setTheme</code>。</p>
+</blockquote>
+<blockquote>
+<p><strong>注意</strong>：全局主题色种子会影响后续所有调用 <code>activity.dynamicColor()</code> / <code>this.dynamicColor()</code> 的页面。若要临时覆盖，建议仅在当前 Activity 内显式传入自己的 seed color。</p>
+</blockquote>
+<h3>可用主题</h3>
+<div class="table-wrapper"><table><thead><tr><th>NeLuaJ_Theme 值</th><th>说明</th></tr></thead><tbody><tr><td><code>Theme_NeLuaJ_Material3</code></td><td>带 ActionBar（默认）</td></tr><tr><td><code>Theme_NeLuaJ_Material3_ActionOverlay</code></td><td>带 ActionBar + ActionMode 覆盖</td></tr><tr><td><code>Theme_NeLuaJ_Material3_NoActionBar</code></td><td>无 ActionBar</td></tr><tr><td><code>Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay</code></td><td>无 ActionBar + ActionMode 覆盖（推荐）</td></tr></tbody></table></div>
+<hr>
+<h2>2. 颜色系统</h2>
+<p>MD3 使用基于色调的颜色系统。通过 <code>this.themeUtil</code> 获取：</p>
+<h3>主色 (Primary)</h3>
+<pre><code class="language-lua">local ColorUtil = this.themeUtil
+ColorUtil.primary.main          -- 主色（按钮、FAB）
+ColorUtil.primary.on            -- 主色上的文字/图标
+ColorUtil.primary.container     -- 主色容器（卡片高亮）
+ColorUtil.primary.onContainer   -- 主色容器上的文字
+</code></pre>
+<h3>表面色 (Surface) — 最常用</h3>
+<pre><code class="language-lua">ColorUtil.surface.main              -- 页面背景
+ColorUtil.surface.on                -- 背景上的文字
+ColorUtil.surface.variant           -- 变体表面
+ColorUtil.surface.onVariant         -- 变体表面上的文字
+ColorUtil.surface.container         -- 容器背景
+ColorUtil.surface.containerLow      -- 低层容器
+ColorUtil.surface.containerHigh     -- 高层容器
+ColorUtil.surface.containerHighest  -- 最高层容器
+ColorUtil.surface.bright            -- 亮表面
+ColorUtil.surface.dim               -- 暗表面
+</code></pre>
+<h3>其他色系</h3>
+<pre><code class="language-lua">ColorUtil.secondary.main / .container / .onContainer
+ColorUtil.tertiary.main / .container / .onContainer
+ColorUtil.error.main / .container / .onContainer
+ColorUtil.outline.main      -- 边框色
+ColorUtil.outline.variant   -- 淡边框色
+ColorUtil.background.main   -- 背景色（≈ surface.main）
+</code></pre>
+<h3>传统方法（向后兼容）</h3>
+<pre><code class="language-lua">ColorUtil.getColorPrimary()
+ColorUtil.getColorBackground()
+ColorUtil.getColorSurfaceVariant()
+ColorUtil.getAnyColor(android.R.attr.colorAccent)
+</code></pre>
+<hr>
+<h2>3. 常用 MD3 组件</h2>
+<h3>MaterialToolbar — 顶部工具栏</h3>
+<pre><code class="language-lua">import "com.google.android.material.appbar.MaterialToolbar"
+
+{
+    MaterialToolbar,
+    id = "toolbar",
+    layout_width = "match",
+    layout_height = "?attr/actionBarSize",
+    BackgroundColor = ColorUtil.getColorBackground(),
+}
+</code></pre>
+<h3>MaterialButton — 按钮</h3>
+<pre><code class="language-lua">import "com.google.android.material.button.MaterialButton"
+
+-- 填充按钮（默认）
+{ MaterialButton, text = "确定" }
+
+-- 轮廓按钮
+{ MaterialButton, text = "取消",
+  style = "?attr/materialButtonOutlinedStyle" }
+
+-- 文字按钮
+{ MaterialButton, text = "跳过",
+  style = "?attr/borderlessButtonStyle" }
+</code></pre>
+<h3>MaterialCardView — 卡片</h3>
+<pre><code class="language-lua">import "com.google.android.material.card.MaterialCardView"
+
+{
+    MaterialCardView,
+    layout_width = "match",
+    layout_height = "wrap",
+    layout_margin = "8dp",
+    radius = "16dp",           -- 圆角
+    strokeWidth = "1dp",       -- 描边宽度
+    strokeColor = ColorUtil.outline.variant,
+    CardBackgroundColor = ColorUtil.surface.containerLow,
+    CardElevation = 0,         -- MD3 推荐 0 高度
+    {
+        -- 卡片内容
+    }
+}
+</code></pre>
+<h3>TextInputLayout — 输入框</h3>
+<pre><code class="language-lua">import "com.google.android.material.textfield.TextInputLayout"
+import "com.google.android.material.textfield.TextInputEditText"
+
+{
+    TextInputLayout,
+    layout_width = "match",
+    layout_height = "wrap",
+    Hint = "请输入内容",
+    style = "?attr/textInputOutlinedStyle",  -- 轮廓样式
+    {
+        TextInputEditText,
+        layout_width = "match",
+        layout_height = "wrap",
+    }
+}
+</code></pre>
+<h3>MaterialTextView — 文本</h3>
+<pre><code class="language-lua">import "com.google.android.material.textview.MaterialTextView"
+
+{ MaterialTextView,
+  text = "标题",
+  textSize = "24sp",
+  textColor = ColorUtil.surface.on }
+
+{ MaterialTextView,
+  text = "正文内容",
+  textSize = "14sp",
+  textColor = ColorUtil.surface.onVariant }
+</code></pre>
+<h3>TabLayout — 标签页</h3>
+<pre><code class="language-lua">import "com.google.android.material.tabs.TabLayout"
+
+{
+    TabLayout,
+    id = "tabs",
+    layout_width = "match",
+    layout_height = "wrap",
+    TabMode = 1,           -- 0=fixed, 1=scrollable, 2=auto
+    TabGravity = 0,        -- 0=fill, 1=center, 2=start
+}
+</code></pre>
+<h3>FloatingActionButton — 浮动按钮</h3>
+<pre><code class="language-lua">import "com.google.android.material.floatingactionbutton.FloatingActionButton"
+
+{
+    FloatingActionButton,
+    id = "fab",
+    layout_width = "wrap",
+    layout_height = "wrap",
+    layout_gravity = "bottom|end",
+    layout_margin = "16dp",
+    src = "icon.png",
+}
+</code></pre>
+<h3>Chip / ChipGroup — 标签</h3>
+<pre><code class="language-lua">import "com.google.android.material.chip.Chip"
+import "com.google.android.material.chip.ChipGroup"
+
+{
+    ChipGroup,
+    layout_width = "match",
+    layout_height = "wrap",
+    {
+        Chip, text = "选项1", Checkable = true,
+    },
+    {
+        Chip, text = "选项2", Checkable = true,
+    },
+}
+</code></pre>
+<h3>MaterialDivider — 分割线</h3>
+<pre><code class="language-lua">import "com.google.android.material.divider.MaterialDivider"
+
+{ MaterialDivider, layout_width = "match", layout_height = "wrap" }
+</code></pre>
+<hr>
+<h2>4. 常用布局模式</h2>
+<h3>AppBarLayout + 滚动内容</h3>
+<pre><code class="language-lua">import "com.google.android.material.appbar.AppBarLayout"
+import "androidx.coordinatorlayout.widget.CoordinatorLayout"
+
+{
+    CoordinatorLayout,
+    layout_width = "match",
+    layout_height = "match",
+    fitsSystemWindows = true,
+    {
+        AppBarLayout,
+        layout_width = "match",
+        layout_height = "wrap",
+        {
+            MaterialToolbar,
+            id = "toolbar",
+            layout_width = "match",
+            layout_height = "?attr/actionBarSize",
+            layout_scrollFlags = "scroll|enterAlways",
+        },
+    },
+    {
+        RecyclerView,
+        layout_width = "match",
+        layout_height = "match",
+        layout_behavior = "@string/appbar_scrolling_view_behavior",
+    },
+}
+</code></pre>
+<h3>BottomSheet — 底部弹出</h3>
+<pre><code class="language-lua">import "com.google.android.material.bottomsheet.BottomSheetDialog"
+
+local dialog = BottomSheetDialog(activity)
+dialog.setContentView(loadlayout(sheetLayout))
+dialog.show()
+</code></pre>
+<hr>
+<h2>5. 设计原则</h2>
+<h3>间距</h3>
+<ul>
+<li>使用 <strong>8dp 网格</strong>：4dp, 8dp, 12dp, 16dp, 24dp, 32dp</li>
+<li>卡片内边距：<strong>16dp</strong></li>
+<li>列表项内边距：水平 <strong>16dp</strong>，垂直 <strong>12dp</strong></li>
+</ul>
+<h3>圆角</h3>
+<ul>
+<li>小组件（Chip）：<strong>8dp</strong></li>
+<li>卡片：<strong>12dp ~ 16dp</strong></li>
+<li>对话框：<strong>28dp</strong></li>
+<li>底部弹出：<strong>28dp</strong>（顶部）</li>
+</ul>
+<h3>文字大小（必须用 sp）</h3>
+<ul>
+<li>标题：<strong>24sp</strong></li>
+<li>副标题：<strong>16sp</strong></li>
+<li>正文：<strong>14sp</strong></li>
+<li>标签/说明：<strong>12sp</strong></li>
+</ul>
+<h3>颜色使用</h3>
+<ul>
+<li>背景：<code>surface.main</code> 或 <code>surface.container</code></li>
+<li>正文：<code>surface.on</code></li>
+<li>次要文字：<code>surface.onVariant</code></li>
+<li>强调：<code>primary.main</code></li>
+<li>边框：<code>outline.variant</code></li>
+<li>错误：<code>error.main</code></li>
+</ul>
+    </main>
+  </body>
+</html>

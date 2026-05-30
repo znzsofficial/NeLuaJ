@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="doc.css" />
+    <title>luaj nirenr 修改版语法</title>
+  </head>
+  <body>
+    <main class="markdown-export">
+<h1>luaj nirenr 修改版语法</h1>
+<h3>入口文件</h3>
+<p>Activity main.lua</p>
+<p>Service service.lua</p>
+<p>AccessibilityService accessibility.lua</p>
+<p>NotificationListenerService notification.lua</p>
+<p>WallpaperService wallpaper.lua</p>
+<p>服务可以使用setLuaDir(dir)设置运行目录，setEnabled(context)打开启动服务设置界面，getInstance()获取服务实例。</p>
+<h4><strong>可省略非必要关键字</strong></h4>
+<ul>
+<li>省略then</li>
+</ul>
+<pre><code class="language-lua">if a then
+
+end
+
+--&gt;
+
+if a
+
+end
+</code></pre>
+<ul>
+<li>省略do</li>
+</ul>
+<pre><code class="language-lua">while a do
+
+end
+
+--&gt;
+
+while a
+
+end
+</code></pre>
+<ul>
+<li>省略in</li>
+</ul>
+<pre><code class="language-lua">for k,v in pairs(t) do
+
+end
+
+--&gt;
+
+for k,v pairs(t)
+
+end
+</code></pre>
+<ul>
+<li>省略function</li>
+</ul>
+<pre><code class="language-lua">local function a()
+    
+end
+
+--&gt;
+
+local a()
+
+end
+</code></pre>
+<ul>
+<li>支持switch</li>
+</ul>
+<pre><code class="language-lua">switch a
+  case 1,3,5,7,9
+    print(1)
+  case 2,4,6,8
+    print(2)
+  case 0
+    print(0)
+  default
+    print(nil)
+end
+</code></pre>
+<ul>
+<li>支持when</li>
+</ul>
+<pre><code class="language-lua">a = when a
+   case 1,3,5,7,9
+     return 1
+   case 2,4,6,8
+     return 2
+   case 0
+     return 0
+   default
+     return nil
+ end
+</code></pre>
+<ul>
+<li>支持continue</li>
+</ul>
+<pre><code class="language-lua">for n = 1,10
+  if n % 2 == 0
+    continue
+  end
+  print(n)
+end
+</code></pre>
+<h4><strong>支持 foreach</strong></h4>
+<pre><code class="language-lua">for k,v : t
+end
+
+for k,v in t
+end
+
+</code></pre>
+<h4><strong>支持 defer</strong></h4>
+<p>defer 后语句将在函数结束时运行，多个 defer 将按照后入先出原则运行。</p>
+<pre><code class="language-lua">defer print("2")
+
+defer do
+  print("1")
+end
+</code></pre>
+<h4><strong>支持 ? 操作符</strong></h4>
+<pre><code class="language-lua">?a print(1)`print(2)
+a = ?a print(1)`print(2)
+</code></pre>
+<h4><strong>支持三目 if</strong></h4>
+<pre><code class="language-lua">b = if a 1 else 2
+print(b)
+</code></pre>
+<h4><strong>支持 try-catch-finally</strong></h4>
+<pre><code class="language-lua">try
+  error("err")
+catch(e)
+  print("catch", e)
+finally
+  print("finally")
+end
+</code></pre>
+<h4><strong>支持 lambda</strong></h4>
+<p>可以使用反斜杠代替 lambda 关键字。</p>
+<pre><code class="language-lua">lambda a,b-&gt;a+b
+
+lambda a,b=&gt;print(a+b)
+
+lambda a,b:print(a+b)
+
+lambda () -&gt; print("lambda")
+</code></pre>
+<h4><strong>支持 import</strong></h4>
+<p>import 将导入包并设置为局部变量。</p>
+<ul>
+<li><code>import "java.lang.String"</code> — 返回值为 javaClass</li>
+<li><code>import "java.lang.*"</code> — 返回值为 javaPackage</li>
+<li><code>import str "java.lang.String"</code> — 设置别名</li>
+<li><code>import "java.lang.*", "java.io.*"</code> — 一次性导入多个包或类</li>
+</ul>
+<h4><strong>支持 module</strong></h4>
+<p>module 自带环境，默认设置环境表的 metatable 为自己。</p>
+<pre><code class="language-lua">module "name"
+</code></pre>
+<h4><strong>支持自赋值 local</strong></h4>
+<pre><code class="language-lua">local:print
+</code></pre>
+<p>将全局 <code>print</code> 设置为局部 <code>print</code>。</p>
+<h4><strong>运算符优化</strong></h4>
+<pre><code class="language-lua">!= 可代替 ~=
+！ 可代替 not
+&amp;&amp; 可代替 and
+|| 可代替 or
+</code></pre>
+<h4><strong>支持位运算</strong></h4>
+<pre><code class="language-lua">-- 按位与
+a = 1 &amp; 2
+-- 按位或
+a = 1 | 2
+-- 按位异或
+a = 1 ~ 2
+-- 右移
+a = 1 &gt;&gt; 8
+-- 左移
+a = 8 &lt;&lt; 2
+-- 按位非
+a = ~2
+</code></pre>
+<h4><strong>支持 64 位整数</strong></h4>
+<pre><code class="language-lua">i=0xffffffffff
+</code></pre>
+<h4><strong>支持复合赋值运算</strong></h4>
+<p>支持 <code>+=</code> <code>-=</code> <code>*=</code> <code>/=</code> <code>%=</code> <code>^=</code> <code>//=</code> <code>&amp;=</code> <code>|=</code> <code>~=</code> <code>&lt;&lt;=</code> <code>&gt;&gt;=</code> <code>..=</code> 运算。</p>
+<pre><code class="language-lua">a+=1
+a-=1
+a*=1
+a/=1
+</code></pre>
+<h4><strong>调用 Java 优化</strong></h4>
+<ul>
+<li>javaClass 拓展函数/属性</li>
+</ul>
+<pre><code class="language-lua">Object.array{} -- 创建数组
+print(Object.new) -- 类的构造器
+print(Object.class) -- 获取类本身
+Object.override{} -- 覆盖方法
+</code></pre>
+<ul>
+<li>直接()构建实例或实现接口,抽象类</li>
+</ul>
+<pre><code class="language-lua">b = ArrayList()
+m = HashMap()
+i = interface { 
+    methodName=function(arg)
+    end
+}
+c = abstract {
+    methodName=function(super, arg)
+    end
+}
+
+-- 单方法接口可以直接使用函数
+i = interface(function(arg)
+  print(arg)
+end)
+
+-- JavaClass 方式同样支持单方法接口函数代理
+Runnable(function()
+  print("run")
+end)
+
+-- 多接口代理会按所有接口查找方法
+local proxy = luajava.createProxy(
+  Map,
+  Closeable,
+  {
+    get = function(key)
+      return key
+    end,
+    close = function()
+      print("closed")
+    end
+  }
+)
+</code></pre>
+<p>接口代理和 <code>override</code> 在未提供 <code>equals</code>、<code>hashCode</code>、<code>toString</code> 时，会回退到 Java 默认对象语义，避免作为 Java 容器键时匹配失败；多接口代理会按所有接口查找方法，避免被首接口同名成员干扰。</p>
+<p><code>override</code> 用于继承 Java 类或抽象类并覆盖指定方法。被覆盖方法的第一个参数固定为 <code>superCall</code>，调用它可以执行父类原方法；如果不调用 <code>superCall</code>，则完全由 Lua 实现接管。</p>
+<ul>
+<li>支持覆盖方法</li>
+</ul>
+<pre><code class="language-lua">list = ArrayList.override {
+  add = function(superCall, arg)
+    superCall(arg)
+  end
+}()
+list = ArrayList {
+  add = function(s, a)
+  end
+}
+
+-- 覆盖抽象类或普通类方法
+local MyObserver = FileObserver.override {
+  onEvent = function(superCall, event, path)
+    print(event, path)
+  end
+}
+
+-- 创建覆盖后的对象
+local observer = MyObserver(path)
+</code></pre>
+<p><code>override</code> 只会增强 Lua 表中提供的方法，未提供的方法保持 Java 原本行为。<code>superCall(...)</code> 会按 Java 方法签名把 Lua 参数转换为 Java 参数，适合在扩展原有行为时先调用父类逻辑。</p>
+<ul>
+<li>支持元方法</li>
+</ul>
+<pre><code class="language-lua">function Button:print()
+  print(self)
+end
+Button(this):print()
+</code></pre>
+<ul>
+<li>支持批量设置属性</li>
+</ul>
+<pre><code class="language-lua">Button(this) {
+  text="test",
+  enabled=false
+}
+</code></pre>
+<ul>
+<li>直接创建数组</li>
+</ul>
+<pre><code class="language-lua">i=int[10]
+i=int{1,2,3}
+i=Integer[10]
+</code></pre>
+<ul>
+<li>java 方法使用.调用</li>
+</ul>
+<pre><code class="language-lua">b.add(!)
+</code></pre>
+<ul>
+<li>is 方法简写</li>
+</ul>
+<pre><code class="language-lua">view.isActivated()
+--&gt;
+view.Activated
+</code></pre>
+<ul>
+<li>java getter/setter优化</li>
+</ul>
+<pre><code class="language-lua">b.setText("")
+--&gt;
+b.text=""
+m.abc=1
+
+t=b.getText()
+--&gt;
+t=b.text
+t=m.abc
+</code></pre>
+<ul>
+<li>语法糖示例</li>
+</ul>
+<pre><code class="language-lua">  mBtn.setOnClickListener(View.OnClickListener {
+    onClick = function(v)
+      print(v)
+    end
+  })
+  --&gt; 忽略接口类型
+  mBtn.setOnClickListener({
+    onClick = function(v)
+      print(v)
+    end
+  })
+  --&gt; 简写函数式接口
+  mBtn.setOnClickListener(function(v)
+    print(v)
+  end)
+  --&gt; 简写此类方法
+  mBtn.onClick = function(v)
+    print(v)
+  end
+</code></pre>
+<ul>
+<li>
+<p>数组操作
+<br>
+使用 <code>#</code> 获取 Java 常见数据类型的长度，使用 <code>["索引"]</code> 或 <code>.索引</code> 直接访问数组。</p>
+</li>
+<li>
+<p>索引优化</p>
+</li>
+</ul>
+<pre><code class="language-lua">t={}
+t."end"=123
+t.end=123
+</code></pre>
+<ul>
+<li>非必要的接口类型可省略</li>
+</ul>
+<pre><code class="language-lua">mViewPager.addOnPageChangeListener(
+  ViewPager.OnPageChangeListener{
+    onPageSelected = function(_)
+    end
+  }
+)
+--&gt;
+mViewPager.addOnPageChangeListener{
+  onPageSelected = function(_)
+  end
+}
+</code></pre>
+<ul>
+<li>函数式接口可简写</li>
+</ul>
+<pre><code class="language-lua">obj.run(Runnable {
+  run = function()
+    -- do something
+  end
+})
+--&gt;
+obj.run(function()
+  -- do something
+end)
+</code></pre>
+<h4><strong>支持增强型字符串格式化</strong></h4>
+<div class="table-wrapper"><table><thead><tr><th>格式符</th><th>说明</th></tr></thead><tbody><tr><td><code>a/A</code></td><td>有符号十六进制浮点数</td></tr><tr><td><code>b</code></td><td>布尔值</td></tr><tr><td><code>B</code></td><td>无符号 byte 类型</td></tr><tr><td><code>c</code></td><td>char 类型，数字转文字</td></tr><tr><td><code>i/d</code></td><td>有符号整数类型，字符串转十进制</td></tr><tr><td><code>I</code></td><td>无符号 int 整数</td></tr><tr><td><code>e/E/f/g/G</code></td><td>有符号浮点数</td></tr><tr><td><code>o</code></td><td>八进制有符号整数</td></tr><tr><td><code>L</code></td><td>无符号长整数</td></tr><tr><td><code>u/U</code></td><td>字符串转 Unicode</td></tr><tr><td><code>x/X</code></td><td>十六进制有符号整数，字符串转 hex</td></tr><tr><td><code>r</code></td><td>解析字符串转义</td></tr><tr><td><code>q</code></td><td>格式化为合法字符串形式</td></tr><tr><td><code>s</code></td><td>转字符串</td></tr><tr><td><code>l</code></td><td>URL 编码</td></tr></tbody></table></div>
+    </main>
+  </body>
+</html>

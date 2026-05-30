@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="doc.css" />
+    <title>📘 LuaPreferenceFragment</title>
+  </head>
+  <body>
+    <main class="markdown-export">
+<h2>📘 <code>LuaPreferenceFragment</code></h2>
+<p><code>LuaPreferenceFragment</code> 基于 <code>androidx.preference.PreferenceFragmentCompat</code> 实现。</p>
+<h3>📦 引入</h3>
+<p>在使用前，请确保已正确引入该类及其相关依赖，例如：</p>
+<pre><code class="language-lua">import "com.androlua.LuaPreferenceFragment"
+import "androidx.preference.*"
+</code></pre>
+<h3>🔧 构造函数</h3>
+<pre><code class="language-lua">fragment = LuaPreferenceFragment(preferenceTable)
+</code></pre>
+<ul>
+<li><code>preferenceTable</code>：一个 LuaTable 表，定义所有 Preference 项。</li>
+</ul>
+<p>示例结构：</p>
+<pre><code class="language-lua">local prefs = {
+  {
+    PreferenceCategory,  -- 第一项必须是 Preference 类
+    title = "设置分类"
+  },
+  {
+    EditTextPreference,
+    key = "username",
+    title = "用户名",
+    summary = "请输入用户名",
+    defaultValue = "guest"
+  }
+}
+
+fragment = LuaPreferenceFragment(prefs)
+</code></pre>
+<h3>🔁 方法说明</h3>
+<h4>🧩 <code>setPreference(preferenceTable)</code></h4>
+<p>更新 fragment 使用的配置项。</p>
+<pre><code class="language-lua">fragment.setPreference(newPrefs)
+</code></pre>
+<h4>🔔 <code>setOnPreferenceChangeListener(listener)</code></h4>
+<p>设置监听器函数，当某项 Preference 值被更改时触发。</p>
+<pre><code class="language-lua">fragment.setOnPreferenceChangeListener(function(preference, newValue)
+  print("Preference changed:", preference, newValue)
+  return true -- 返回 true 表示接受更改
+end)
+</code></pre>
+<h4>🖱 <code>setOnPreferenceClickListener(listener)</code></h4>
+<p>设置点击监听器，当某项 Preference 被点击时触发（适用于非可编辑类如 Switch、Category 等）。</p>
+<pre><code class="language-lua">fragment.setOnPreferenceClickListener(function(preference)
+  print("Clicked:", preference.getKey())
+  return true
+end)
+</code></pre>
+<h3>🧰 Preference 表定义说明</h3>
+<p>每一个子表代表一个 Preference 对象：</p>
+<pre><code class="language-lua">{
+  PreferenceClass, -- 必填，Preference 类型
+  key = "your_key", 
+  title = "显示标题", 
+  summary = "描述文本",
+  defaultValue = "默认值",
+  -- 其他属性根据实际 Preference 类型而定
+}
+</code></pre>
+<p>可用的 <code>Preference</code> 类型：</p>
+<ul>
+<li><code>Preference</code></li>
+<li><code>EditTextPreference</code></li>
+<li><code>CheckBoxPreference</code></li>
+<li><code>SwitchPreferenceCompat</code></li>
+<li><code>PreferenceCategory</code></li>
+<li><code>ListPreference</code> 等</li>
+</ul>
+<h3>📝 使用示例</h3>
+<pre><code class="language-lua">import "com.androlua.LuaPreferenceFragment"
+import "androidx.preference.SeekBarPreference"
+import "androidx.preference.SwitchPreference"
+local fragment = LuaPreferenceFragment{
+    {
+        SwitchPreference,
+        defaultValue=true;
+        title="开关";
+        summary="描述";
+        key="key_preference";
+    },
+    {
+        SeekBarPreference,
+        value=5,
+    }
+}
+this.setFragment(fragment)
+
+fragment.onPreferenceChange = function(preference, newValue)
+    print(preference, newValue)
+end
+
+fragment.onPreferenceClick = function(preference)
+    print(preference)
+end
+</code></pre>
+    </main>
+  </body>
+</html>

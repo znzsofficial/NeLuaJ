@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="doc.css" />
+    <title>介绍</title>
+  </head>
+  <body>
+    <main class="markdown-export">
+<h2>介绍</h2>
+<p>NeLuaJ+ 实现了基于 kotlin 协程的异步函数。</p>
+<h3>使用</h3>
+<pre><code class="language-lua">xTask {
+    --dispatcher = "io",
+    task = function(coroutineContext)
+        return "ret"
+    end,
+    callback = function(result)
+        print(result)
+    end
+}
+-- 或
+xTask(function(coroutineContext)  end,
+function()  end
+--,"io"
+)
+</code></pre>
+<p>dispatcher为"io"，使用io调度器</p>
+<p>回调函数的参数为异步函数的返回值或错误信息</p>
+<p>允许忽略回调函数</p>
+    </main>
+  </body>
+</html>

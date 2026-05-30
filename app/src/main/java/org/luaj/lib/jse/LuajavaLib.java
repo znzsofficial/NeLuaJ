@@ -48,16 +48,16 @@ public class LuajavaLib extends VarArgFunction {
         if (object.getClass().isArray()) {
             int length = Array.getLength(object);
             for (int index = 0; index < length; index++) {
-                table.set(index + 1, convertTableValue(Array.get(object, index), false));
+                table.set(index + 1, convertTableValue(Array.get(object, index), recursive));
             }
         } else if (object instanceof Collection) {
             int index = 1;
             for (Object item : (Collection<?>) object) {
-                table.set(index++, convertTableValue(item, false));
+                table.set(index++, convertTableValue(item, recursive));
             }
         } else if (object instanceof Map) {
             for (Map.Entry<?, ?> entry : ((Map<?, ?>) object).entrySet()) {
-                table.set(CoerceJavaToLua.coerce(entry.getKey()), convertTableValue(entry.getValue(), false));
+                table.set(CoerceJavaToLua.coerce(entry.getKey()), convertTableValue(entry.getValue(), recursive));
             }
         } else if (object instanceof JSONObject) {
             JSONObject jsonObject = (JSONObject) object;
@@ -65,7 +65,7 @@ public class LuajavaLib extends VarArgFunction {
             while (keys.hasNext()) {
                 String key = (String) keys.next();
                 try {
-                    table.set(key, convertTableValue(jsonObject.get(key), false));
+                    table.set(key, convertTableValue(jsonObject.get(key), recursive));
                 } catch (JSONException ignored) {
                 }
             }
@@ -74,7 +74,7 @@ public class LuajavaLib extends VarArgFunction {
             int length = jsonArray.length();
             for (int index = 0; index < length; index++) {
                 try {
-                    table.set(index + 1, convertTableValue(jsonArray.get(index), false));
+                    table.set(index + 1, convertTableValue(jsonArray.get(index), recursive));
                 } catch (JSONException ignored) {
                 }
             }
@@ -86,6 +86,9 @@ public class LuajavaLib extends VarArgFunction {
     }
 
     private static LuaValue convertTableValue(Object value, boolean recursive) {
+        if (value == null || value == JSONObject.NULL) {
+            return LuaValue.NIL;
+        }
         return recursive ? asTableInternal(value, true) : CoerceJavaToLua.coerce(value);
     }
 

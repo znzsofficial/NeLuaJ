@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="doc.css" />
+    <title>LuaFragmentAdapter</title>
+  </head>
+  <body>
+    <main class="markdown-export">
+<h1>LuaFragmentAdapter</h1>
+<h2>介绍</h2>
+<p>与 ViewPager 不同，ViewPager2 利用了 RecyclerView 的优化能力使得它更具有灵活性和可扩展性。例如，ViewPager2 支持垂直滑动、RTL(从右到左) 布局、无限循环滑动等功能。此外，ViewPager2 还提供了监听页面改变和滑动事件的回调接口，让开发者可以在合适的时机处理一些操作，比如：页面渲染完毕时请求数据等。另外，由于采用 RecyclerView 作为底层实现，ViewPager2 的性能也得到了进一步提升。</p>
+<p>LuaFragmentAdapter 继承 FragmentStateAdapter，可以帮助你以贴近原生开发的风格创建适配器。</p>
+<h2>示例</h2>
+<pre><code class="language-lua">LuaFragmentAdapter(activity,
+        LuaFragmentAdapter.Creator {
+            createFragment = function(i)
+                return Fragments[i + 1]
+            end,
+            getItemCount = function()
+                return #Fragments
+            end,
+        })
+</code></pre>
+<h2>刷新页面</h2>
+<p>LuaFragmentAdapter 提供了几个便于 Lua 调用的刷新方法：</p>
+<div class="table-wrapper"><table><thead><tr><th align="left">方法</th><th align="left">描述</th></tr></thead><tbody><tr><td align="left"><code>reload()</code></td><td align="left">刷新全部页面</td></tr><tr><td align="left"><code>reloadItem(position)</code></td><td align="left">刷新指定位置页面</td></tr><tr><td align="left"><code>changed(position, count)</code></td><td align="left">通知一段页面内容变化</td></tr><tr><td align="left"><code>inserted(position, count)</code></td><td align="left">通知插入一段页面</td></tr><tr><td align="left"><code>removed(position, count)</code></td><td align="left">通知移除一段页面</td></tr><tr><td align="left"><code>moved(fromPosition, toPosition)</code></td><td align="left">通知页面移动</td></tr></tbody></table></div>
+<p>示例：</p>
+<pre><code class="language-lua">table.insert(Fragments, newFragment)
+adapter.inserted(#Fragments - 1, 1)
+
+table.remove(Fragments, index)
+adapter.removed(index - 1, 1)
+
+adapter.reload()
+</code></pre>
+<p>注意：<code>position</code> 使用 ViewPager2/RecyclerView 的索引，从 <code>0</code> 开始。</p>
+<h2>错误处理</h2>
+<p>当 <code>createFragment</code> 或 <code>getItemCount</code> 抛出异常时，LuaFragmentAdapter 会通过 <code>activity.sendError("FragmentAdapter", e)</code> 输出错误，并使用安全默认值避免 ViewPager2 崩溃。</p>
+    </main>
+  </body>
+</html>

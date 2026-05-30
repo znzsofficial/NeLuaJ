@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="doc.css" />
+    <title>迁移指南</title>
+  </head>
+  <body>
+    <main class="markdown-export">
+<h1>迁移指南</h1>
+<p>本文档帮助你将旧版 NeLuaJ+ 项目迁移到最新版本。新版本引入了 <strong>Material 3 Expressive</strong> 设计规范。</p>
+<hr>
+<h2>1. 状态栏适配</h2>
+<h3>推荐写法</h3>
+<p>新版本推荐使用以下模式设置状态栏，确保深色/浅色模式正确切换：</p>
+<pre><code class="language-lua">import "android.view.View"
+import "android.view.WindowManager"
+
+local ColorUtil = this.themeUtil
+
+local window = activity.getWindow()
+    .setNavigationBarColor(0)
+    .setStatusBarColor(ColorUtil.getColorBackground())
+    .addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
+    .clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
+if this.isNightMode() then
+    window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE)
+else
+    window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR)
+end
+</code></pre>
+<blockquote>
+<p><strong>提示</strong>：使用 ActionBar 主题（<code>Theme_NeLuaJ_Material3</code>）时，ActionBar 会自动处理状态栏颜色。使用 NoActionBar 主题时需要手动设置。</p>
+</blockquote>
+<hr>
+<h2>2. 主题迁移</h2>
+<h3>推荐主题</h3>
+<div class="table-wrapper"><table><thead><tr><th>主题</th><th>说明</th></tr></thead><tbody><tr><td><code>Theme_NeLuaJ_Material3</code></td><td>带 ActionBar，适合简单页面</td></tr><tr><td><code>Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay</code></td><td>无 ActionBar，适合自定义 Toolbar 的页面</td></tr></tbody></table></div>
+<h3>主题设置方式</h3>
+<p><strong>方式一（推荐）</strong>：在 <code>init.lua</code> 中配置，Activity 自动应用：</p>
+<pre><code class="language-lua">-- init.lua
+NeLuaJ_Theme = "Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay"
+</code></pre>
+<p><strong>方式二</strong>：在 <code>main.lua</code> 中手动设置（必须在 <code>setContentView</code> 之前）：</p>
+<pre><code class="language-lua">activity.setTheme(R.style.Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay)
+</code></pre>
+<blockquote>
+<p>如果 <code>init.lua</code> 已设置 <code>NeLuaJ_Theme</code>，则无需在 <code>main.lua</code> 中重复调用。</p>
+</blockquote>
+<h3>动态颜色</h3>
+<p>推荐在 <code>onCreate</code> 中调用 <code>activity.dynamicColor()</code> 启用 Material You 动态取色：</p>
+<pre><code class="language-lua">activity.dynamicColor()
+</code></pre>
+<hr>
+<h2>3. 布局组件迁移</h2>
+<h3>推荐使用 Material 3 组件</h3>
+<div class="table-wrapper"><table><thead><tr><th>旧组件</th><th>新组件</th><th>说明</th></tr></thead><tbody><tr><td><code>TextView</code></td><td><code>MaterialTextView</code></td><td>支持 MD3 文字样式</td></tr><tr><td><code>Button</code></td><td><code>MaterialButton</code></td><td>自动应用 MD3 按钮样式</td></tr><tr><td><code>EditText</code></td><td><code>TextInputEditText</code> + <code>TextInputLayout</code></td><td>MD3 输入框</td></tr><tr><td><code>CardView</code></td><td><code>MaterialCardView</code></td><td>支持描边、圆角等 MD3 属性</td></tr><tr><td><code>Toolbar</code></td><td><code>MaterialToolbar</code></td><td>MD3 工具栏</td></tr></tbody></table></div>
+<h3>颜色获取</h3>
+<p>使用 <code>LuaThemeUtil</code> 获取主题颜色，而非硬编码：</p>
+<pre><code class="language-lua">local ColorUtil = this.themeUtil
+
+-- 推荐：结构化访问
+local primary = ColorUtil.primary.main
+local surface = ColorUtil.surface.main
+local onSurface = ColorUtil.text.primary
+
+-- 兼容：传统方法
+local primary = ColorUtil.getColorPrimary()
+local background = ColorUtil.getColorBackground()
+</code></pre>
+<h3>尺寸单位</h3>
+<ul>
+<li>文字大小使用 <strong><code>sp</code></strong>（会跟随系统字体缩放）</li>
+<li>间距和尺寸使用 <strong><code>dp</code></strong></li>
+<li>❌ 不要对文字大小使用 <code>dp</code></li>
+</ul>
+<hr>
+<h2>4. init.lua 配置更新</h2>
+<h3>推荐配置</h3>
+<pre><code class="language-lua">app_name = "我的应用"
+package_name = "com.example.myapp"
+ver_name = "1.0"
+ver_code = "1"
+min_sdk = "26"        -- Android 8.0（旧版默认 21）
+target_sdk = "33"     -- Android 13（旧版默认 29）
+debug_mode = true
+NeLuaJ_Theme = "Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay"
+user_permission = {
+  "INTERNET",
+}
+</code></pre>
+<h3>变更说明</h3>
+<div class="table-wrapper"><table><thead><tr><th>配置项</th><th>旧默认值</th><th>新默认值</th><th>原因</th></tr></thead><tbody><tr><td><code>min_sdk</code></td><td><code>21</code></td><td><code>26</code></td><td>Android 8.0 以下设备占比极低</td></tr><tr><td><code>target_sdk</code></td><td><code>29</code></td><td><code>33</code></td><td>适配 Android 13 权限模型</td></tr><tr><td><code>user_permission</code></td><td>含 <code>WRITE_EXTERNAL_STORAGE</code></td><td>仅 <code>INTERNET</code></td><td>Android 13+ 不再需要存储权限</td></tr></tbody></table></div>
+<hr>
+<h2>5. 新版模板示例</h2>
+<h3>main.lua</h3>
+<pre><code class="language-lua">require "environment"
+
+local ColorUtil = this.themeUtil
+
+-- 主题已在 init.lua 中配置，无需手动 setTheme
+activity.dynamicColor()
+activity.setContentView(res.layout.main)
+  .setSupportActionBar(toolbar)
+  .getSupportActionBar() {
+  Title = res.string.app_title,
+  Elevation = 0,
+}
+</code></pre>
+<h3>res/layout/main.lua</h3>
+<pre><code class="language-lua">import "com.google.android.material.appbar.MaterialToolbar"
+import "com.google.android.material.textview.MaterialTextView"
+import "com.google.android.material.button.MaterialButton"
+
+local ColorUtil = this.themeUtil
+
+return {
+  LinearLayout,
+  orientation = "vertical",
+  layout_width = "match",
+  layout_height = "match",
+  {
+    MaterialToolbar,
+    id = "toolbar",
+    layout_width = "match",
+    layout_height = "?attr/actionBarSize",
+    BackgroundColor = ColorUtil.getColorBackground(),
+  },
+  {
+    LinearLayout,
+    orientation = "vertical",
+    layout_width = "match",
+    layout_height = "match",
+    gravity = "center",
+    {
+      MaterialTextView,
+      text = "Hello NeLuaJ+",
+      textSize = "24sp",
+      textColor = ColorUtil.getColorPrimary(),
+    },
+    {
+      MaterialButton,
+      text = "Click Me",
+      layout_marginTop = "16dp",
+      onClick = function()
+        print("Hello World!")
+      end,
+    },
+  },
+}
+</code></pre>
+<hr>
+<h2>6. 常见问题</h2>
+<h3>Q: 深色模式下状态栏图标看不清？</h3>
+<p>A: 确保根据 <code>isNightMode()</code> 正确设置了 <code>setSystemUiVisibility</code>：</p>
+<pre><code class="language-lua">if this.isNightMode() then
+    window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE)
+else
+    window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR)
+end
+</code></pre>
+<h3>Q: 如何让状态栏和 ActionBar 颜色一致？</h3>
+<p>A: 使用 <code>setStatusBarColor</code> 设置为与 ActionBar 相同的背景色：</p>
+<pre><code class="language-lua">activity.getWindow().setStatusBarColor(ColorUtil.getColorBackground())
+</code></pre>
+<h3>Q: 如何实现全屏沉浸式（如图片查看器）？</h3>
+<p>A: 使用以下代码让内容延伸到系统栏下方：</p>
+<pre><code class="language-lua">pcall(function()
+    local window = activity.getWindow()
+    window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
+    window.getDecorView().setSystemUiVisibility(
+        View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+        | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR)
+    window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
+    window.setStatusBarColor(Color.TRANSPARENT)
+    window.addFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS)
+end)
+</code></pre>
+<h3>Q: 如何获取主题颜色而不是硬编码？</h3>
+<p>A: 使用 <code>this.themeUtil</code>（详见 LuaThemeUtil 文档）：</p>
+<pre><code class="language-lua">local ColorUtil = this.themeUtil
+local bg = ColorUtil.getColorBackground()
+local primary = ColorUtil.primary.main
+local onSurface = ColorUtil.surface.on
+</code></pre>
+    </main>
+  </body>
+</html>

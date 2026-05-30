@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="doc.css" />
+    <title>ext 模块</title>
+  </head>
+  <body>
+    <main class="markdown-export">
+<h1>ext 模块</h1>
+<h2>介绍</h2>
+<p><code>ext</code> 是 NeLuaJ+ 的扩展模块，提供 Lua 5.5 风格的二进制打包和解包辅助函数。</p>
+<p>当前包含：</p>
+<ul>
+<li><code>ext.pack(format, ...)</code></li>
+<li><code>ext.unpack(format, data, pos)</code></li>
+<li><code>ext.packsize(format)</code></li>
+</ul>
+<hr>
+<h2>格式字符串</h2>
+<h3>字节序</h3>
+<div class="table-wrapper"><table><thead><tr><th align="left">选项</th><th align="left">描述</th></tr></thead><tbody><tr><td align="left"><code>&lt;</code></td><td align="left">小端序</td></tr><tr><td align="left"><code>&gt;</code></td><td align="left">大端序</td></tr><tr><td align="left"><code>=</code></td><td align="left">使用本机字节序</td></tr></tbody></table></div>
+<h3>对齐与填充</h3>
+<div class="table-wrapper"><table><thead><tr><th align="left">选项</th><th align="left">描述</th></tr></thead><tbody><tr><td align="left"><code>!n</code></td><td align="left">设置最大对齐值</td></tr><tr><td align="left"><code>x</code></td><td align="left">填充 1 个字节</td></tr><tr><td align="left"><code>Xop</code></td><td align="left">按下一个选项的对齐要求进行填充</td></tr><tr><td align="left">空格</td><td align="left">忽略</td></tr></tbody></table></div>
+<h3>数值类型</h3>
+<div class="table-wrapper"><table><thead><tr><th align="left">选项</th><th align="left">描述</th></tr></thead><tbody><tr><td align="left"><code>b</code> / <code>B</code></td><td align="left">有符号 / 无符号 1 字节整数</td></tr><tr><td align="left"><code>h</code> / <code>H</code></td><td align="left">有符号 / 无符号 2 字节整数</td></tr><tr><td align="left"><code>l</code> / <code>L</code></td><td align="left">有符号 / 无符号 8 字节整数</td></tr><tr><td align="left"><code>j</code> / <code>J</code></td><td align="left">有符号 / 无符号 Lua 整数，按 8 字节处理</td></tr><tr><td align="left"><code>T</code></td><td align="left"><code>size_t</code>，按 8 字节无符号整数处理</td></tr><tr><td align="left"><code>i[n]</code> / <code>I[n]</code></td><td align="left">有符号 / 无符号 n 字节整数，默认 4 字节，范围 1 到 16</td></tr><tr><td align="left"><code>f</code></td><td align="left">4 字节单精度浮点数</td></tr><tr><td align="left"><code>d</code> / <code>n</code></td><td align="left">8 字节双精度浮点数</td></tr></tbody></table></div>
+<h3>字符串类型</h3>
+<div class="table-wrapper"><table><thead><tr><th align="left">选项</th><th align="left">描述</th></tr></thead><tbody><tr><td align="left"><code>c[n]</code></td><td align="left">固定长度字符串，不足部分用 <code>\0</code> 填充</td></tr><tr><td align="left"><code>s[n]</code></td><td align="left">带长度前缀的字符串，长度字段 n 字节，默认 8 字节</td></tr><tr><td align="left"><code>z</code></td><td align="left">以 <code>\0</code> 结尾的字符串</td></tr></tbody></table></div>
+<hr>
+<h2>ext.pack</h2>
+<pre><code class="language-lua">local data = ext.pack("&lt;i4 I2 f c5 z", -123456, 65535, 3.5, "abc", "hello")
+</code></pre>
+<p>按照 <code>format</code> 将参数打包为二进制字符串。</p>
+<hr>
+<h2>ext.unpack</h2>
+<pre><code class="language-lua">local i, u, f, c, z, nextPos = ext.unpack("&lt;i4 I2 f c5 z", data)
+</code></pre>
+<p>按照 <code>format</code> 从二进制字符串中读取数据。最后一个返回值是下一次读取的位置。</p>
+<p><code>pos</code> 参数可选，默认从 1 开始：</p>
+<pre><code class="language-lua">local data = "XX" .. ext.pack("&lt;h", -321)
+local value, nextPos = ext.unpack("&lt;h", data, 3)
+</code></pre>
+<hr>
+<h2>ext.packsize</h2>
+<pre><code class="language-lua">local size = ext.packsize("&lt;i4 I2 f c5")
+</code></pre>
+<p>返回固定长度格式的打包大小。</p>
+<p>包含 <code>s</code> 或 <code>z</code> 这类可变长度格式时会报错：</p>
+<pre><code class="language-lua">-- variable-length format
+ext.packsize("s2")
+</code></pre>
+<hr>
+<h2>完整示例</h2>
+<pre><code class="language-lua">local data = ext.pack("&lt;i4 I2 f d c5 s2 z",
+  -123456,
+  65535,
+  3.5,
+  123.456,
+  "abc",
+  "hello",
+  "world"
+)
+
+local i, u, f, d, c, s, z, nextPos = ext.unpack("&lt;i4 I2 f d c5 s2 z", data)
+
+print(i, u, f, d, c, s, z, nextPos)
+print("size", #data)
+</code></pre>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="doc.css" />
+    <title>介绍</title>
+  </head>
+  <body>
+    <main class="markdown-export">
+<h2>介绍</h2>
+<p>file 文件操作模块
+<br>
+所有函数均支持绝对路径和项目路径</p>
+<h3>readall</h3>
+<p>file.readall("main.lua")
+<br>
+file.readall("/sdcard/test.lua")
+<br>
+读取文件内容</p>
+<h3>list</h3>
+<p>file.list("/sdcard")
+<br>
+返回文件夹内容表 (使用astable实现，效率较低)</p>
+<h3>exists</h3>
+<p>file.exists(path)
+<br>
+判断文件是否存在</p>
+<h3>save</h3>
+<p>file.save(path, "print('hello world')")
+<br>
+保存文件</p>
+<h3>type</h3>
+<p>file.type(path)
+<br>
+返回 "dir" 或 "file"</p>
+<h3>info</h3>
+<p>file.info(path)
+<br>
+返回文件信息表</p>
+<h3>mkdir</h3>
+<p>file.mkdir("/sdcard/test")
+<br>
+创建文件夹及其父文件夹</p>
+    </main>
+  </body>
+</html>

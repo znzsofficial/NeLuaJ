@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="doc.css" />
+    <title>布局表属性参考</title>
+  </head>
+  <body>
+    <main class="markdown-export">
+<h1>布局表属性参考</h1>
+<p><code>loadlayout</code> 将 Lua 表转换为 Android 视图。本文档列出所有支持的属性。</p>
+<hr>
+<h2>1. 基本结构</h2>
+<pre><code class="language-lua">return {
+    ViewClass,              -- 第一个元素必须是 View 类
+    属性名 = 属性值,          -- 视图属性
+    { ChildViewClass, ... } -- 子视图
+}
+</code></pre>
+<hr>
+<h2>2. 通用属性</h2>
+<h3>尺寸</h3>
+<div class="table-wrapper"><table><thead><tr><th>属性</th><th>说明</th><th>示例</th></tr></thead><tbody><tr><td><code>layout_width</code></td><td>宽度</td><td><code>"match"</code>, <code>"wrap"</code>, <code>"200dp"</code>, <code>"50%"</code></td></tr><tr><td><code>layout_height</code></td><td>高度</td><td><code>"match"</code>, <code>"wrap"</code>, <code>"100dp"</code></td></tr><tr><td><code>minWidth</code></td><td>最小宽度</td><td><code>"48dp"</code></td></tr><tr><td><code>minHeight</code></td><td>最小高度</td><td><code>"48dp"</code></td></tr></tbody></table></div>
+<p><strong>尺寸值简写</strong>：</p>
+<div class="table-wrapper"><table><thead><tr><th>值</th><th>等价于</th></tr></thead><tbody><tr><td><code>"match"</code> / <code>"fill"</code> / <code>"-1"</code></td><td><code>match_parent</code></td></tr><tr><td><code>"wrap"</code> / <code>"-2"</code></td><td><code>wrap_content</code></td></tr></tbody></table></div>
+<p><strong>尺寸单位</strong>：</p>
+<div class="table-wrapper"><table><thead><tr><th>后缀</th><th>说明</th><th>示例</th></tr></thead><tbody><tr><td><code>dp</code></td><td>密度无关像素</td><td><code>"16dp"</code></td></tr><tr><td><code>sp</code></td><td>缩放像素（文字专用）</td><td><code>"14sp"</code></td></tr><tr><td><code>px</code></td><td>像素</td><td><code>"1px"</code></td></tr><tr><td><code>%</code> / <code>%w</code></td><td>屏幕宽度百分比</td><td><code>"50%"</code></td></tr><tr><td><code>%h</code></td><td>屏幕高度百分比</td><td><code>"30%h"</code></td></tr><tr><td><code>pt</code></td><td>点</td><td><code>"12pt"</code></td></tr><tr><td><code>in</code></td><td>英寸</td><td><code>"0.5in"</code></td></tr><tr><td><code>mm</code></td><td>毫米</td><td><code>"10mm"</code></td></tr></tbody></table></div>
+<h3>间距</h3>
+<div class="table-wrapper"><table><thead><tr><th>属性</th><th>说明</th></tr></thead><tbody><tr><td><code>padding</code></td><td>四边内边距</td></tr><tr><td><code>paddingLeft</code> / <code>paddingStart</code></td><td>左/起始内边距</td></tr><tr><td><code>paddingRight</code> / <code>paddingEnd</code></td><td>右/末端内边距</td></tr><tr><td><code>paddingTop</code></td><td>上内边距</td></tr><tr><td><code>paddingBottom</code></td><td>下内边距</td></tr><tr><td><code>layout_margin</code></td><td>四边外边距</td></tr><tr><td><code>layout_marginLeft</code> / <code>layout_marginStart</code></td><td>左/起始外边距</td></tr><tr><td><code>layout_marginRight</code> / <code>layout_marginEnd</code></td><td>右/末端外边距</td></tr><tr><td><code>layout_marginTop</code></td><td>上外边距</td></tr><tr><td><code>layout_marginBottom</code></td><td>下外边距</td></tr></tbody></table></div>
+<h3>可见性</h3>
+<div class="table-wrapper"><table><thead><tr><th>属性</th><th>值</th><th>说明</th></tr></thead><tbody><tr><td><code>visibility</code></td><td><code>"visible"</code></td><td>可见（默认）</td></tr><tr><td></td><td><code>"invisible"</code></td><td>不可见但占位</td></tr><tr><td></td><td><code>"gone"</code></td><td>不可见且不占位</td></tr></tbody></table></div>
+<h3>背景</h3>
+<pre><code class="language-lua">-- 颜色值
+background = 0xFFFF0000          -- 整数颜色
+background = "#FF0000"           -- 十六进制字符串
+background = "#80FF0000"         -- 带透明度
+
+-- Drawable 对象
+background = drawable
+
+-- 图片路径（自动加载）
+background = "bg.png"
+</code></pre>
+<h3>ID</h3>
+<pre><code class="language-lua">id = "myView"  -- 设置 ID，之后可通过变量名 myView 访问
+</code></pre>
+<hr>
+<h2>3. 文本属性</h2>
+<div class="table-wrapper"><table><thead><tr><th>属性</th><th>说明</th><th>示例</th></tr></thead><tbody><tr><td><code>text</code></td><td>文本内容</td><td><code>"Hello"</code></td></tr><tr><td><code>hint</code></td><td>提示文本</td><td><code>"请输入..."</code></td></tr><tr><td><code>textSize</code></td><td>文字大小（用 sp）</td><td><code>"14sp"</code></td></tr><tr><td><code>textColor</code></td><td>文字颜色</td><td><code>0xFF000000</code></td></tr><tr><td><code>textStyle</code></td><td>文字样式</td><td><code>"bold"</code>, <code>"italic"</code>, <code>"bold|italic"</code>, <code>"normal"</code></td></tr><tr><td><code>ellipsize</code></td><td>省略方式</td><td><code>"END"</code>, <code>"START"</code>, <code>"MIDDLE"</code>, <code>"MARQUEE"</code></td></tr><tr><td><code>singleLine</code></td><td>单行模式</td><td><code>true</code></td></tr><tr><td><code>maxLines</code></td><td>最大行数</td><td><code>3</code></td></tr><tr><td><code>gravity</code></td><td>文字对齐</td><td><code>"center"</code>, <code>"left"</code>, <code>"right"</code></td></tr><tr><td><code>textAlignment</code></td><td>文字对齐</td><td>见下表</td></tr><tr><td><code>inputType</code></td><td>输入类型</td><td>见下表</td></tr><tr><td><code>imeOptions</code></td><td>IME 选项</td><td>见下表</td></tr><tr><td><code>autoLink</code></td><td>自动链接</td><td><code>"web"</code>, <code>"email"</code>, <code>"all"</code></td></tr></tbody></table></div>
+<h3>textAlignment 值</h3>
+<div class="table-wrapper"><table><thead><tr><th>值</th><th>说明</th></tr></thead><tbody><tr><td><code>"inherit"</code></td><td>继承父视图</td></tr><tr><td><code>"gravity"</code></td><td>跟随 gravity</td></tr><tr><td><code>"textStart"</code></td><td>文本起始对齐</td></tr><tr><td><code>"textEnd"</code></td><td>文本末端对齐</td></tr><tr><td><code>"textCenter"</code></td><td>文本居中</td></tr><tr><td><code>"viewStart"</code></td><td>视图起始对齐</td></tr><tr><td><code>"viewEnd"</code></td><td>视图末端对齐</td></tr></tbody></table></div>
+<h3>inputType 值</h3>
+<div class="table-wrapper"><table><thead><tr><th>值</th><th>说明</th></tr></thead><tbody><tr><td><code>"text"</code></td><td>普通文本</td></tr><tr><td><code>"textMultiLine"</code></td><td>多行文本</td></tr><tr><td><code>"textPassword"</code></td><td>密码</td></tr><tr><td><code>"textVisiblePassword"</code></td><td>可见密码</td></tr><tr><td><code>"textUri"</code></td><td>URI</td></tr><tr><td><code>"textEmailAddress"</code></td><td>邮箱</td></tr><tr><td><code>"textCapWords"</code></td><td>首字母大写</td></tr><tr><td><code>"textCapSentences"</code></td><td>句首大写</td></tr><tr><td><code>"textAutoCorrect"</code></td><td>自动纠错</td></tr><tr><td><code>"textNoSuggestions"</code></td><td>无建议</td></tr><tr><td><code>"number"</code></td><td>数字</td></tr><tr><td><code>"numberSigned"</code></td><td>带符号数字</td></tr><tr><td><code>"numberDecimal"</code></td><td>小数</td></tr><tr><td><code>"numberPassword"</code></td><td>数字密码</td></tr><tr><td><code>"phone"</code></td><td>电话号码</td></tr><tr><td><code>"datetime"</code></td><td>日期时间</td></tr><tr><td><code>"date"</code></td><td>日期</td></tr><tr><td><code>"time"</code></td><td>时间</td></tr></tbody></table></div>
+<h3>imeOptions 值</h3>
+<div class="table-wrapper"><table><thead><tr><th>值</th><th>说明</th></tr></thead><tbody><tr><td><code>"actionDone"</code></td><td>完成</td></tr><tr><td><code>"actionSearch"</code></td><td>搜索</td></tr><tr><td><code>"actionSend"</code></td><td>发送</td></tr><tr><td><code>"actionNext"</code></td><td>下一个</td></tr><tr><td><code>"actionGo"</code></td><td>前往</td></tr><tr><td><code>"actionPrevious"</code></td><td>上一个</td></tr><tr><td><code>"actionNone"</code></td><td>无动作</td></tr><tr><td><code>"flagNoFullscreen"</code></td><td>禁止全屏</td></tr><tr><td><code>"flagNoExtractUi"</code></td><td>禁止提取 UI</td></tr></tbody></table></div>
+<hr>
+<h2>4. 图片属性</h2>
+<div class="table-wrapper"><table><thead><tr><th>属性</th><th>说明</th><th>示例</th></tr></thead><tbody><tr><td><code>src</code></td><td>图片源</td><td><code>"icon.png"</code>, URL 字符串, Bitmap, Drawable</td></tr><tr><td><code>scaleType</code></td><td>缩放类型</td><td>见下表</td></tr></tbody></table></div>
+<p><strong>scaleType 值</strong>：</p>
+<div class="table-wrapper"><table><thead><tr><th>值</th><th>说明</th></tr></thead><tbody><tr><td><code>"fitCenter"</code></td><td>等比缩放居中（默认）</td></tr><tr><td><code>"centerCrop"</code></td><td>等比缩放裁剪填满</td></tr><tr><td><code>"centerInside"</code></td><td>等比缩放不超出</td></tr><tr><td><code>"fitXY"</code></td><td>拉伸填满</td></tr><tr><td><code>"center"</code></td><td>原始大小居中</td></tr><tr><td><code>"fitStart"</code></td><td>等比缩放靠左上</td></tr><tr><td><code>"fitEnd"</code></td><td>等比缩放靠右下</td></tr></tbody></table></div>
+<hr>
+<h2>5. View 通用属性</h2>
+<p>以下属性可用于任何 View，直接通过 Java 反射设置：</p>
+<div class="table-wrapper"><table><thead><tr><th>属性</th><th>说明</th><th>示例</th></tr></thead><tbody><tr><td><code>alpha</code></td><td>透明度 (0.0~1.0)</td><td><code>0.5</code></td></tr><tr><td><code>rotation</code></td><td>旋转角度</td><td><code>45</code></td></tr><tr><td><code>rotationX</code> / <code>rotationY</code></td><td>X/Y 轴旋转</td><td><code>30</code></td></tr><tr><td><code>scaleX</code> / <code>scaleY</code></td><td>X/Y 轴缩放</td><td><code>1.5</code></td></tr><tr><td><code>translationX</code> / <code>translationY</code></td><td>X/Y 轴平移</td><td><code>"10dp"</code></td></tr><tr><td><code>elevation</code></td><td>高度（阴影）</td><td><code>"4dp"</code></td></tr><tr><td><code>enabled</code></td><td>是否启用</td><td><code>true</code> / <code>false</code></td></tr><tr><td><code>clickable</code></td><td>是否可点击</td><td><code>true</code></td></tr><tr><td><code>focusable</code></td><td>是否可获取焦点</td><td><code>true</code></td></tr><tr><td><code>focusableInTouchMode</code></td><td>触摸模式下可获取焦点</td><td><code>true</code></td></tr><tr><td><code>selected</code></td><td>是否选中</td><td><code>true</code></td></tr><tr><td><code>clipToPadding</code></td><td>是否裁剪到 padding</td><td><code>false</code></td></tr><tr><td><code>clipChildren</code></td><td>是否裁剪子视图</td><td><code>false</code></td></tr><tr><td><code>layerType</code></td><td>图层类型</td><td><code>"none"</code>, <code>"software"</code>, <code>"hardware"</code></td></tr><tr><td><code>layoutDirection</code></td><td>布局方向</td><td><code>"ltr"</code>, <code>"rtl"</code>, <code>"locale"</code></td></tr><tr><td><code>drawingCacheQuality</code></td><td>绘制缓存质量</td><td><code>"auto"</code>, <code>"low"</code>, <code>"high"</code></td></tr><tr><td><code>scrollbarStyle</code></td><td>滚动条样式</td><td><code>"insideOverlay"</code>, <code>"outsideOverlay"</code></td></tr><tr><td><code>horizontalScrollBarEnabled</code></td><td>水平滚动条</td><td><code>true</code> / <code>false</code></td></tr><tr><td><code>verticalScrollBarEnabled</code></td><td>垂直滚动条</td><td><code>true</code> / <code>false</code></td></tr><tr><td><code>BackgroundResource</code></td><td>背景资源 ID</td><td><code>rippleRes</code></td></tr><tr><td><code>BackgroundColor</code></td><td>背景颜色</td><td><code>0xFFFF0000</code></td></tr></tbody></table></div>
+<blockquote>
+<p><strong>提示</strong>：任何 View 的 Java setter 方法都可以作为属性使用。例如 <code>setAlpha(0.5f)</code> 对应 <code>alpha = 0.5</code>，<code>setEnabled(false)</code> 对应 <code>enabled = false</code>。首字母大写的属性名（如 <code>BackgroundColor</code>）会调用对应的 <code>setBackgroundColor</code> 方法。</p>
+</blockquote>
+<hr>
+<h2>6. LinearLayout 属性</h2>
+<div class="table-wrapper"><table><thead><tr><th>属性</th><th>说明</th><th>值</th></tr></thead><tbody><tr><td><code>orientation</code></td><td>排列方向</td><td><code>"vertical"</code>, <code>"horizontal"</code></td></tr><tr><td><code>gravity</code></td><td>子视图对齐</td><td>见下表</td></tr><tr><td><code>layout_weight</code></td><td>权重</td><td>数字，如 <code>1</code></td></tr><tr><td><code>layout_gravity</code></td><td>自身在父中的对齐</td><td>同 gravity</td></tr></tbody></table></div>
+<h3>Gravity 值</h3>
+<div class="table-wrapper"><table><thead><tr><th>值</th><th>说明</th></tr></thead><tbody><tr><td><code>"center"</code></td><td>居中</td></tr><tr><td><code>"center_horizontal"</code></td><td>水平居中</td></tr><tr><td><code>"center_vertical"</code></td><td>垂直居中</td></tr><tr><td><code>"top"</code></td><td>顶部</td></tr><tr><td><code>"bottom"</code></td><td>底部</td></tr><tr><td><code>"left"</code></td><td>左侧</td></tr><tr><td><code>"right"</code></td><td>右侧</td></tr><tr><td><code>"start"</code></td><td>起始端（RTL 感知）</td></tr><tr><td><code>"end"</code></td><td>末端（RTL 感知）</td></tr><tr><td><code>"fill_horizontal"</code></td><td>水平填充</td></tr><tr><td><code>"fill_vertical"</code></td><td>垂直填充</td></tr><tr><td><code>"no_gravity"</code></td><td>无对齐</td></tr><tr><td><code>"clip_horizontal"</code></td><td>水平裁剪</td></tr><tr><td><code>"clip_vertical"</code></td><td>垂直裁剪</td></tr></tbody></table></div>
+<p><strong>组合</strong>：用 <code>|</code> 连接，如 <code>"center_vertical|right"</code>, <code>"bottom|end"</code></p>
+<hr>
+<h2>6. RelativeLayout 规则</h2>
+<pre><code class="language-lua">{
+    RelativeLayout,
+    layout_width = "match",
+    layout_height = "match",
+    {
+        TextView, id = "title", text = "标题",
+        layout_alignParentTop = true,
+        layout_centerHorizontal = true,
+    },
+    {
+        TextView, text = "副标题",
+        layout_below = "title",          -- 在 title 下方
+        layout_centerHorizontal = true,
+    },
+}
+</code></pre>
+<h3>相对于父容器</h3>
+<div class="table-wrapper"><table><thead><tr><th>属性</th><th>说明</th></tr></thead><tbody><tr><td><code>layout_alignParentTop</code></td><td>对齐父顶部</td></tr><tr><td><code>layout_alignParentBottom</code></td><td>对齐父底部</td></tr><tr><td><code>layout_alignParentLeft</code> / <code>Start</code></td><td>对齐父左/起始</td></tr><tr><td><code>layout_alignParentRight</code> / <code>End</code></td><td>对齐父右/末端</td></tr><tr><td><code>layout_centerInParent</code></td><td>父内居中</td></tr><tr><td><code>layout_centerHorizontal</code></td><td>水平居中</td></tr><tr><td><code>layout_centerVertical</code></td><td>垂直居中</td></tr></tbody></table></div>
+<h3>相对于兄弟视图</h3>
+<div class="table-wrapper"><table><thead><tr><th>属性</th><th>说明</th></tr></thead><tbody><tr><td><code>layout_above</code></td><td>在目标上方</td></tr><tr><td><code>layout_below</code></td><td>在目标下方</td></tr><tr><td><code>layout_toLeftOf</code> / <code>toStartOf</code></td><td>在目标左/起始侧</td></tr><tr><td><code>layout_toRightOf</code> / <code>toEndOf</code></td><td>在目标右/末端侧</td></tr><tr><td><code>layout_alignTop</code></td><td>顶部对齐</td></tr><tr><td><code>layout_alignBottom</code></td><td>底部对齐</td></tr><tr><td><code>layout_alignLeft</code> / <code>alignStart</code></td><td>左/起始对齐</td></tr><tr><td><code>layout_alignRight</code> / <code>alignEnd</code></td><td>右/末端对齐</td></tr><tr><td><code>layout_alignBaseline</code></td><td>基线对齐</td></tr></tbody></table></div>
+<hr>
+<h2>7. CoordinatorLayout 属性</h2>
+<div class="table-wrapper"><table><thead><tr><th>属性</th><th>说明</th><th>值</th></tr></thead><tbody><tr><td><code>layout_behavior</code></td><td>行为</td><td>见下表</td></tr><tr><td><code>layout_anchor</code></td><td>锚点视图 ID</td><td><code>"fab"</code></td></tr><tr><td><code>layout_scrollFlags</code></td><td>滚动标志</td><td>见下表</td></tr><tr><td><code>layout_collapseMode</code></td><td>折叠模式</td><td><code>"pin"</code>, <code>"parallax"</code></td></tr><tr><td><code>layout_collapseParallaxMultiplier</code></td><td>视差系数</td><td><code>0.5</code></td></tr><tr><td><code>fitsSystemWindows</code></td><td>处理系统栏间距</td><td><code>true</code></td></tr></tbody></table></div>
+<h3>Behavior 值</h3>
+<div class="table-wrapper"><table><thead><tr><th>值</th><th>说明</th></tr></thead><tbody><tr><td><code>"@string/appbar_scrolling_view_behavior"</code></td><td>跟随 AppBar 滚动</td></tr><tr><td><code>"@string/bottom_sheet_behavior"</code></td><td>底部弹出行为</td></tr><tr><td><code>"@string/side_sheet_behavior"</code></td><td>侧边弹出行为</td></tr><tr><td><code>"@string/hide_bottom_view_on_scroll_behavior"</code></td><td>滚动时隐藏底部视图</td></tr><tr><td><code>"@string/hide_view_on_scroll_behavior"</code></td><td>滚动时隐藏视图</td></tr><tr><td><code>"@string/searchbar_scrolling_view_behavior"</code></td><td>SearchBar 滚动行为</td></tr><tr><td><code>"@string/fab_transformation_scrim_behavior"</code></td><td>FAB 变换遮罩</td></tr><tr><td><code>"@string/fab_transformation_sheet_behavior"</code></td><td>FAB 变换为 Sheet</td></tr></tbody></table></div>
+<h3>ScrollFlags 值</h3>
+<div class="table-wrapper"><table><thead><tr><th>值</th><th>说明</th></tr></thead><tbody><tr><td><code>"scroll"</code></td><td>可滚动</td></tr><tr><td><code>"enterAlways"</code></td><td>向下滚动时立即显示</td></tr><tr><td><code>"exitUntilCollapsed"</code></td><td>向上滚动时折叠到最小高度</td></tr><tr><td><code>"snap"</code></td><td>吸附效果</td></tr></tbody></table></div>
+<hr>
+<h2>8. 事件监听</h2>
+<p>所有以 <code>on</code> 开头的属性会被设置为事件监听器：</p>
+<pre><code class="language-lua">{
+    MaterialButton,
+    text = "点击",
+    onClick = function(view)
+        print("被点击了")
+    end,
+    onLongClick = function(view)
+        print("被长按了")
+        return true  -- 返回 true 表示已消费
+    end,
+}
+</code></pre>
+<p>常用事件：</p>
+<div class="table-wrapper"><table><thead><tr><th>属性</th><th>说明</th></tr></thead><tbody><tr><td><code>onClick</code></td><td>点击</td></tr><tr><td><code>onLongClick</code></td><td>长按</td></tr><tr><td><code>onTouch</code></td><td>触摸</td></tr><tr><td><code>onFocusChange</code></td><td>焦点变化</td></tr><tr><td><code>onItemClick</code></td><td>列表项点击</td></tr><tr><td><code>onItemLongClick</code></td><td>列表项长按</td></tr><tr><td><code>onCheckedChange</code></td><td>选中状态变化</td></tr><tr><td><code>onScrollChange</code></td><td>滚动变化</td></tr></tbody></table></div>
+<hr>
+<h2>10. 列表与容器属性</h2>
+<h3>ListView / Spinner</h3>
+<div class="table-wrapper"><table><thead><tr><th>属性</th><th>说明</th><th>示例</th></tr></thead><tbody><tr><td><code>items</code></td><td>字符串数组，自动创建 Adapter</td><td><code>{ "选项1", "选项2" }</code></td></tr><tr><td><code>DividerHeight</code></td><td>分割线高度</td><td><code>0</code>, <code>1</code></td></tr><tr><td><code>FastScrollEnabled</code></td><td>快速滚动</td><td><code>true</code></td></tr></tbody></table></div>
+<pre><code class="language-lua">{
+    ListView,
+    id = "list",
+    items = { "苹果", "香蕉", "橙子" },
+    DividerHeight = 0,
+    onItemClick = function(parent, view, pos, id)
+        print("点击了第", pos, "项")
+    end,
+}
+</code></pre>
+<h3>ViewPager</h3>
+<div class="table-wrapper"><table><thead><tr><th>属性</th><th>说明</th><th>示例</th></tr></thead><tbody><tr><td><code>pages</code></td><td>View 列表</td><td><code>{ view1, view2, view3 }</code></td></tr><tr><td><code>pagesWithTitle</code></td><td>带标题的页面</td><td><code>{ {view1, view2}, {"标题1", "标题2"} }</code></td></tr></tbody></table></div>
+<pre><code class="language-lua">{
+    ViewPager,
+    id = "pager",
+    pages = { page1View, page2View },
+}
+
+-- 带标题（配合 TabLayout）
+{
+    ViewPager,
+    id = "pager",
+    pagesWithTitle = {
+        { page1View, page2View },
+        { "首页", "设置" },
+    },
+}
+</code></pre>
+<h3>ScrollView</h3>
+<div class="table-wrapper"><table><thead><tr><th>属性</th><th>说明</th><th>示例</th></tr></thead><tbody><tr><td><code>fillViewport</code></td><td>内容不足时填满</td><td><code>true</code></td></tr><tr><td><code>scrollbars</code></td><td>滚动条</td><td><code>"vertical"</code>, <code>"horizontal"</code>, <code>"none"</code></td></tr></tbody></table></div>
+<blockquote>
+<p><strong>注意</strong>：<code>ScrollView</code> 只能有一个子视图，通常是 <code>LinearLayout</code>。</p>
+</blockquote>
+<h3>RecyclerView</h3>
+<p>RecyclerView 需要在 Lua 代码中设置 LayoutManager 和 Adapter：</p>
+<pre><code class="language-lua">import "androidx.recyclerview.widget.LinearLayoutManager"
+
+recyclerView.setLayoutManager(LinearLayoutManager(activity))
+recyclerView.setAdapter(adapter)
+</code></pre>
+<hr>
+<h2>11. style 属性</h2>
+<p>通过 <code>style</code> 属性应用 Android 主题样式：</p>
+<pre><code class="language-lua">-- 使用主题属性引用
+{ MaterialButton, text = "轮廓按钮",
+  style = "?attr/materialButtonOutlinedStyle" }
+
+-- 使用资源 ID
+{ MaterialButton, text = "文字按钮",
+  style = "?attr/borderlessButtonStyle" }
+</code></pre>
+<hr>
+<h2>12. 完整示例</h2>
+<pre><code class="language-lua">import "com.google.android.material.appbar.MaterialToolbar"
+import "com.google.android.material.textview.MaterialTextView"
+import "com.google.android.material.button.MaterialButton"
+import "com.google.android.material.card.MaterialCardView"
+
+local ColorUtil = this.themeUtil
+
+return {
+    LinearLayout,
+    orientation = "vertical",
+    layout_width = "match",
+    layout_height = "match",
+    {
+        MaterialToolbar,
+        id = "toolbar",
+        layout_width = "match",
+        layout_height = "?attr/actionBarSize",
+        BackgroundColor = ColorUtil.getColorBackground(),
+    },
+    {
+        ScrollView,
+        layout_width = "match",
+        layout_height = "match",
+        {
+            LinearLayout,
+            orientation = "vertical",
+            layout_width = "match",
+            layout_height = "wrap",
+            padding = "16dp",
+            {
+                MaterialCardView,
+                layout_width = "match",
+                layout_height = "wrap",
+                radius = "16dp",
+                CardElevation = 0,
+                strokeWidth = "1dp",
+                strokeColor = ColorUtil.outline.variant,
+                {
+                    LinearLayout,
+                    orientation = "vertical",
+                    padding = "16dp",
+                    layout_width = "match",
+                    layout_height = "wrap",
+                    {
+                        MaterialTextView,
+                        text = "欢迎",
+                        textSize = "24sp",
+                        textColor = ColorUtil.surface.on,
+                    },
+                    {
+                        MaterialTextView,
+                        text = "这是一个示例卡片",
+                        textSize = "14sp",
+                        textColor = ColorUtil.surface.onVariant,
+                        layout_marginTop = "8dp",
+                    },
+                    {
+                        MaterialButton,
+                        text = "了解更多",
+                        layout_marginTop = "16dp",
+                    },
+                },
+            },
+        },
+    },
+}
+</code></pre>
+    </main>
+  </body>
+</html>

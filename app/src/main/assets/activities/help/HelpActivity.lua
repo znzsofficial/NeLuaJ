@@ -62,49 +62,61 @@ local item = {
 local docLanguage = res.language:find("zh") and "zh" or "en"
 local data = {
     -- 入门指南
-    { text = res.string.migration_guide,      file = "migration_" .. docLanguage .. ".md" },
-    { text = res.string.md3_design,           file = "md3_design.md" },
-    { text = res.string.layout_reference,     file = "layout_reference.md" },
-    { text = res.string.utility_api,          file = "utility_api.md" },
-    { text = "Color API",                     file = "color_api.md" },
+    { text = res.string.migration_guide,      file = "migration_" .. docLanguage .. ".html" },
+    { text = res.string.md3_design,           file = "md3_design.html" },
+    { text = res.string.layout_reference,     file = "layout_reference.html" },
+    { text = res.string.utility_api,          file = "utility_api.html" },
+    { text = "Color API",                     file = "color_api.html" },
     -- 基础文档
-    { text = "init.lua",                      file = "init_lua_" .. docLanguage .. ".md" },
-    { text = res.string.global,               file = "global_env.md" },
-    { text = "LuaJ++",                        file = "LuaJ++.md" },
-    { text = res.string.backup_crash,         file = "backup_crash.md" },
+    { text = "init.lua",                      file = "init_lua_" .. docLanguage .. ".html" },
+    { text = res.string.global,               file = "global_env.html" },
+    { text = "LuaJ++",                        file = "LuaJ++.html" },
+    { text = res.string.backup_crash,         file = "backup_crash.html" },
     -- 模块
-    { text = "res " .. res.string._module,    file = "module_res.md" },
-    { text = "okhttp " .. res.string._module, file = "module_okhttp.md" },
-    { text = "loadlayout",                    file = "module_loadlayout.md" },
-    { text = "file " .. res.string._module,   file = "module_file.md" },
-    { text = "saf " .. res.string._module,    file = "module_saf.md" },
-    { text = "ext " .. res.string._module,    file = "module_ext.md" },
-    { text = "lazy",                          file = "lazy.md" },
-    { text = "xTask",                         file = "xTask.md" },
+    { text = "res " .. res.string._module,    file = "module_res.html" },
+    { text = "okhttp " .. res.string._module, file = "module_okhttp.html" },
+    { text = "loadlayout",                    file = "module_loadlayout.html" },
+    { text = "file " .. res.string._module,   file = "module_file.html" },
+    { text = "saf " .. res.string._module,    file = "module_saf.html" },
+    { text = "ext " .. res.string._module,    file = "module_ext.html" },
+    { text = "lazy",                          file = "lazy.html" },
+    { text = "xTask",                         file = "xTask.html" },
     -- 组件
-    { text = "LuaActivity",                   file = "LuaActivity.md" },
-    { text = "LuaCustRecyclerAdapter",        file = "LuaCustRecyclerAdapter.md" },
-    { text = "LuaFragment",                   file = "LuaFragment.md" },
-    { text = "LuaFragmentAdapter",            file = "LuaFragmentAdapter.md" },
-    { text = "LuaPagerAdapter",               file = "LuaPagerAdapter.md" },
-    { text = "LuaPreferenceFragment",         file = "LuaPreferenceFragment.md" },
-    { text = "LuaRecyclerAdapter",            file = "LuaRecyclerAdapter.md" },
-    { text = "LuaThemeUtil",                  file = "LuaThemeUtil.md" },
-    { text = "MaterialTextField",             file = "MaterialTextField.md" },
-    { text = "Coil",                          file = "Coil.md" },
+    { text = "LuaActivity",                   file = "LuaActivity.html" },
+    { text = "LuaCustRecyclerAdapter",        file = "LuaCustRecyclerAdapter.html" },
+    { text = "LuaFragment",                   file = "LuaFragment.html" },
+    { text = "LuaFragmentAdapter",            file = "LuaFragmentAdapter.html" },
+    { text = "LuaPagerAdapter",               file = "LuaPagerAdapter.html" },
+    { text = "LuaPreferenceFragment",         file = "LuaPreferenceFragment.html" },
+    { text = "LuaRecyclerAdapter",            file = "LuaRecyclerAdapter.html" },
+    { text = "LuaThemeUtil",                  file = "LuaThemeUtil.html" },
+    { text = "MaterialTextField",             file = "MaterialTextField.html" },
+    { text = "Coil",                          file = "Coil.html" },
     -- 其他
-    { text = "FileObserver",                  file = "other_FileObserver.md" },
-    { text = "FastScrollerBuilder",           file = "other_FastScrollerBuilder.md" },
+    { text = "FileObserver",                  file = "other_FileObserver.html" },
+    { text = "FastScrollerBuilder",           file = "other_FastScrollerBuilder.html" },
 }
 
 local adp = LuaAdapter(activity, data, item)
 lv.setAdapter(adp)
 
+local docCss = LuaFileUtil.read(activity.getLuaPath("res/doc", "doc.css"))
+
+local function loadHtmlDocument(fileName)
+    local docDir = activity.getLuaPath("res/doc")
+    local html = LuaFileUtil.read(activity.getLuaPath("res/doc", fileName))
+    if docCss and #docCss > 0 then
+        html = html:gsub('<link rel="stylesheet" href="doc%.css" />', function()
+            return '<style>\n' .. docCss .. '\n</style>'
+        end)
+    end
+    webView.loadDataWithBaseURL("file://" .. docDir .. "/", html, "text/html", "UTF-8", nil)
+end
+
 lv.onItemClick = function(l, v, p, i)
     activity.setTitle(data[i].text)
     vpg.setCurrentItem(1)
-    local md = LuaFileUtil.read(activity.getLuaPath("res/doc", data[i].file))
-    webView.loadFromText(md)
+    loadHtmlDocument(data[i].file)
 end
 
 this.addOnBackPressedCallback(function()

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="doc.css" />
+    <title>FileObserver 示例</title>
+  </head>
+  <body>
+    <main class="markdown-export">
+<h2>FileObserver 示例</h2>
+<pre><code class="language-lua">local FileObserver = luajava.bindClass "android.os.FileObserver"
+local MyObserver = FileObserver.override{
+  onEvent = function(super, event, path)
+    switch (event)
+     case FileObserver.CREATE
+      print("File created: ",super(), event, path)
+
+     case FileObserver.DELETE
+      print("File deleted: ",super(), event, path)
+
+     case FileObserver.MODIFY
+      print("File modified: ",super(), event, path)
+    end
+  end
+}
+
+local observer = MyObserver("/sdcard/Android")
+observer.startWatching()
+
+function onDestroy()
+  print("stop")
+  observer.stopWatching()
+end
+</code></pre>
+    </main>
+  </body>
+</html>

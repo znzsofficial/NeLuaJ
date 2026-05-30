@@ -1,9 +1,7 @@
 require "environment"
 import "android.widget.LinearLayout"
 import "android.widget.ListView"
-import "android.widget.ScrollView"
 import "androidx.viewpager2.widget.ViewPager2"
---import "me.zhanghai.android.fastscroll.FastScrollWebView"
 local LuaFragmentAdapter = luajava.bindClass "github.znzsofficial.adapter.LuaFragmentAdapter"
 local LuaFragment = luajava.bindClass "com.androlua.LuaFragment"
 local ColorUtil = this.themeUtil
@@ -35,16 +33,11 @@ local pages = {
     },
     -----
     loadlayout {
-        ScrollView,
+        import "com.androlua.LuaWebView",
+        id = "webView",
         layout_width = "match",
         layout_height = "match",
-        {
-            import "com.nekolaska.widget.MarkwonTextView",
-            id = "webView",
-            layout_width = "match",
-            layout_height = "wrap",
-            padding = "16dp",
-        },
+        backgroundColor = ColorUtil.getColorBackground(),
     },
     -----
 }
