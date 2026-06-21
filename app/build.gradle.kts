@@ -16,7 +16,7 @@ android {
     namespace = "github.znzsofficial.neluaj"
     //compileSdk = 36
     compileSdk {
-        version = release(36)
+        version = release(37)
     }
 
     val versionProps = Properties()
