@@ -67,6 +67,15 @@ import coil3.request.crossfade
 import coil3.toBitmap
 import com.androlua.LuaBroadcastReceiver.OnReceiveListener
 import com.androlua.LuaService.LuaBinder
+import com.androlua.activity.LuaActivityFiles
+import com.androlua.activity.LuaActivityImageLoader
+import com.androlua.activity.LuaActivityNavigation
+import com.androlua.activity.LuaActivityPermissions
+import com.androlua.activity.LuaActivityServices
+import com.androlua.activity.LuaActivityStorage
+import com.androlua.activity.LuaActivityTheme
+import com.androlua.activity.LuaActivityUI
+import com.androlua.activity.LuaActivityUtils
 import com.androlua.adapter.ArrayListAdapter
 import com.google.android.material.color.DynamicColors
 import com.google.android.material.color.DynamicColorsOptions
@@ -124,20 +133,23 @@ import org.luaj.android.thread as luajthread
 @Suppress("UNUSED")
 open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnReceiveListener,
     LuaMetaTable {
-    private lateinit var globals: Globals
+    
+    // 将一些字段改为internal，以便辅助类可以访问
+    internal lateinit var globals: Globals
+    internal lateinit var logAdapter: LogAdapter
+    internal var luaDir: String? = null
+    internal var luaRootDir: String? = null
+    internal var luaFile = "main.lua"
+    internal var debug = false
+    internal var isSetViewed = false
+    
     private val toastBuilder = StringBuilder()
     private var toast: Toast? = null
     private var lastShow: Long = 0
-    private lateinit var logAdapter: LogAdapter
     private var mExtDir: String? = null
     private var mWidth = 0
     private var mHeight = 0
-    private var debug = false
-    private var luaDir: String? = null
-    private var luaRootDir: String? = null
-    private var luaFile = "main.lua"
     private var permissions: ArrayList<String?>? = null
-    private var isSetViewed = false
     private lateinit var mLuaDexLoader: LuaDexLoader
     private val mGc = ArrayList<LuaGcable>()
     private var mReceiver: LuaBroadcastReceiver? = null
@@ -148,42 +160,20 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     private var mOnKeyLongPress: LuaValue? = null
     private var mOnTouchEvent: LuaValue? = null
     private val logEvents = MutableSharedFlow<String>(extraBufferCapacity = 128)
-
-    private val pendingResults = SparseArray<String?>()
-    private var lastRequestCode = 0
-
-    @Suppress("DEPRECATION")
-    private val activityLauncher =
-        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            val requestCode = lastRequestCode
-            val name = pendingResults.get(requestCode)
-            pendingResults.remove(requestCode)
-
-            val data = result.data
-            if (data != null) {
-                val res = when (val serializable = data.getSerializableExtra(DATA)) {
-                    is Array<*> -> serializable
-                    is List<*> -> serializable.toTypedArray()
-                    null -> null
-                    else -> arrayOf(serializable)
-                }
-                //val res = data.getSerializableExtra(DATA, Array<Any?>::class.java)
-                if (name != null) {
-                    if (res == null) runFunc("onResult", name)
-                    else {
-                        val args = arrayOfNulls<Any>(res.size + 1)
-                        args[0] = name
-                        System.arraycopy(res, 0, args, 1, res.size)
-                        val handled = runFunc("onResult", *args)
-                        if (handled is Boolean && handled) return@registerForActivityResult
-                    }
-                }
-            }
-            runFunc("onActivityResult", requestCode, result.resultCode, data)
-        }
-
+    
+    // 创建辅助类实例
+    private val permissionsHelper = LuaActivityPermissions(this)
+    private val navigationHelper = LuaActivityNavigation(this)
+    private val filesHelper = LuaActivityFiles(this)
+    private val servicesHelper = LuaActivityServices(this)
+    private val imageLoaderHelper = LuaActivityImageLoader(this)
+    private val themeHelper = LuaActivityTheme(this)
+    private val storageHelper = LuaActivityStorage(this)
+    private val uiHelper = LuaActivityUI(this)
+    private val utilsHelper = LuaActivityUtils(this)
+    
     val themeUtil = LuaThemeUtil(this)
-
+    
     @Suppress("UNCHECKED_CAST", "DEPRECATION")
     @CallLuaFunction
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -222,7 +212,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
             }
         }
         initENV()
-
+        
         /* globals.package_.searchers.insert(0,new VarArgFunction() {
         public Varargs invoke(Varargs args) {
             String classname = args.checkjstring(1);
@@ -316,92 +306,11 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
             setResult(-1, res)
         }
     }
-
-
-    private fun showLogView(isError: Boolean) {
-        setTheme(R.style.Theme_NeLuaJ_Material3_DynamicColors_NoActionBar)
-        supportActionBar?.hide()
-        DynamicColors.applyToActivityIfAvailable(this)
-        setContentView(R.layout.log_list)
-
-        val surfaceColor = MaterialColors.getColor(this, com.google.android.material.R.attr.colorSurface, "LogView")
-        findViewById<View>(android.R.id.content)?.setBackgroundColor(surfaceColor)
-        window.statusBarColor = surfaceColor
-        window.navigationBarColor = surfaceColor
-        val systemUiFlags = if (MaterialColors.isColorLight(surfaceColor)) {
-            View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
-        } else {
-            View.SYSTEM_UI_FLAG_VISIBLE
-        }
-        window.decorView.systemUiVisibility = systemUiFlags
-
-        val toolbar = findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.log_toolbar)
-        toolbar.title = File(luaFile).name
-        toolbar.subtitle = if (isError) "Runtime Error" else "Log"
-        toolbar.setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
-        toolbar.setNavigationOnClickListener { finish() }
-        toolbar.setOnMenuItemClickListener { item ->
-            when (item.itemId) {
-                R.id.action_copy -> {
-                    val clipboard = ContextCompat.getSystemService(this, ClipboardManager::class.java)
-                    val clip = ClipData.newPlainText("log", buildString {
-                        for (i in 0 until logAdapter.count) {
-                            append(logAdapter.getItem(i))
-                            if (i < logAdapter.count - 1) append("\n")
-                        }
-                    })
-                    clipboard?.setPrimaryClip(clip)
-                    true
-                }
-                R.id.action_clear -> {
-                    logAdapter.clear()
-                    true
-                }
-                else -> false
-            }
-        }
-
-        val recyclerView = findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.log_list)
-        recyclerView.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(this)
-        recyclerView.adapter = logAdapter
-        // 滚动到最新日志
-        if (logAdapter.count > 0) {
-            recyclerView.scrollToPosition(logAdapter.count - 1)
-        }
-    }
-
-    fun setAllowThread(bool: Boolean) {
-        val policy = if (bool) {
-            ThreadPolicy.Builder().permitAll().build()
-        } else {
-            ThreadPolicy.Builder().detectAll().build()
-        }
-        StrictMode.setThreadPolicy(policy)
-    }
-
-//    fun runMainFunc(name: String?, vararg arg: Any?): Any? {
-//        try {
-//            var f = globals.get(name)
-//            if (f.isfunction()) return f.jcall(*arg)
-//            f = globals.get("main")
-//            if (f.isfunction()) return f.jcall(*arg)
-//        } catch (e: Exception) {
-//            sendError(name, e)
-//        }
-//        return null
-//    }
-//    fun runMainFunc(name: String?, arg: Array<Any?>): Any? {
-//        try {
-//            var f = globals.get(name)
-//            if (f.isfunction()) return f.jcall(*arg)
-//            f = globals.get("main")
-//            if (f.isfunction()) return f.jcall(*arg)
-//        } catch (e: Exception) {
-//            sendError(name, e)
-//        }
-//        return null
-//    }
-
+    
+    private fun showLogView(isError: Boolean) = uiHelper.showLogView(isError)
+    
+    fun setAllowThread(bool: Boolean) = utilsHelper.setAllowThread(bool)
+    
     @CallLuaFunction
     override fun onRequestPermissionsResult(
         requestCode: Int, permissions: Array<String>, grantResults: IntArray
@@ -409,7 +318,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         runFunc("onRequestPermissionsResult", requestCode, permissions, grantResults)
     }
-
+    
     @CallLuaFunction
     override fun onKeyShortcut(keyCode: Int, event: KeyEvent?): Boolean {
         if (mOnKeyShortcut != null) {
@@ -422,7 +331,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         }
         return super.onKeyShortcut(keyCode, event)
     }
-
+    
     @CallLuaFunction
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (mOnKeyDown != null) {
@@ -435,7 +344,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         }
         return super.onKeyDown(keyCode, event)
     }
-
+    
     @CallLuaFunction
     override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
         if (mOnKeyUp != null) {
@@ -448,7 +357,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         }
         return super.onKeyUp(keyCode, event)
     }
-
+    
     @CallLuaFunction
     override fun onKeyLongPress(keyCode: Int, event: KeyEvent?): Boolean {
         if (mOnKeyLongPress != null) {
@@ -461,7 +370,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         }
         return super.onKeyLongPress(keyCode, event)
     }
-
+    
     @CallLuaFunction
     override fun onTouchEvent(event: MotionEvent?): Boolean {
         if (mOnTouchEvent != null) {
@@ -474,13 +383,13 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         }
         return super.onTouchEvent(event)
     }
-
+    
     private fun checkProjectDir(dir: File?): File {
         if (dir == null) return File(luaDir!!)
         if (File(dir, "main.lua").exists() && File(dir, "init.lua").exists()) return dir
         return checkProjectDir(dir.getParentFile())
     }
-
+    
     protected fun initENV() {
         val rootDir = luaRootDir ?: luaDir ?: return
         if (!File(rootDir, "init.lua").exists()) return
@@ -508,7 +417,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
             sendError("init.lua Error", e)
         }
     }
-
+    
     @Suppress("DEPRECATION")
     override fun setTitle(title: CharSequence) {
         super.setTitle(title)
@@ -518,111 +427,41 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
             else TaskDescription(title.toString())
         )
     }
-
-    fun setContentView(view: LuaTable) {
-        isSetViewed = true
-        setContentView(LuaLayout(this).load(view, globals).touserdata(View::class.java))
-    }
-
-    fun setContentView(view: LuaTable, env: LuaTable) {
-        isSetViewed = true
-        setContentView(LuaLayout(this).load(view, env).touserdata(View::class.java))
-    }
-
-    fun setFragment(fragment: Fragment) {
-        isSetViewed = true
-        setContentView(View(this))
-        supportFragmentManager.beginTransaction().replace(android.R.id.content, fragment)
-            .commit()
-    }
-
-    fun showLogs() {
-        MaterialAlertDialogBuilder(this)
-            .setTitle("Logs")
-            .setAdapter(ArrayListAdapter(this, logs), null)
-            .setPositiveButton(android.R.string.ok, null)
-            .show()
-    }
-
+    
+    fun setContentView(view: LuaTable) = uiHelper.setContentView(view)
+    
+    fun setContentView(view: LuaTable, env: LuaTable) = uiHelper.setContentView(view, env)
+    
+    fun setFragment(fragment: Fragment) = uiHelper.setFragment(fragment)
+    
+    fun showLogs() = uiHelper.showLogs()
+    
     fun setDebug(bool: Boolean) {
         debug = bool
     }
-
+    
     private fun initSize() {
         val windowMetrics = WindowMetricsCalculator.getOrCreate().computeCurrentWindowMetrics(this)
         mWidth = windowMetrics.bounds.width()
         mHeight = windowMetrics.bounds.height()
     }
-
-    fun checkAllPermissions(): Boolean {
-        if (checkCallingOrSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-            try {
-                // 获取应用在 Manifest 中声明的所有权限
-                val requestedPermissions = packageManager.getPackageInfo(
-                    packageName,
-                    PackageManager.GET_PERMISSIONS
-                ).requestedPermissions
-
-                // 筛选出需要请求的危险权限
-                val permissionsToRequest = requestedPermissions?.mapNotNull { permissionName ->
-                    try {
-                        val pInfo = packageManager.getPermissionInfo(permissionName, 0)
-                        val protection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                            pInfo.protection
-                        } else {
-                            @Suppress("DEPRECATION")
-                            pInfo.protectionLevel and PermissionInfo.PROTECTION_MASK_BASE
-                        }
-                        if (protection == PermissionInfo.PROTECTION_DANGEROUS) {
-                            // 确认该权限当前是否尚未被授予
-                            if (checkCallingOrSelfPermission(permissionName) != PackageManager.PERMISSION_GRANTED) {
-                                permissionName // 如果是需要请求的危险权限，则返回权限名
-                            } else {
-                                null // 如果已授予，则返回 null
-                            }
-                        } else {
-                            null // 如果不是危险权限，则返回 null
-                        }
-                    } catch (e: PackageManager.NameNotFoundException) {
-                        // 这个权限名在系统中找不到，忽略它
-                        e.printStackTrace()
-                        null
-                    }
-                } ?: emptyList() // 如果 requestedPermissions 为 null, 则返回一个空列表
-
-                // 如果有需要请求的权限，则发起请求
-                if (permissionsToRequest.isNotEmpty()) {
-                    requestPermissions(permissionsToRequest.toTypedArray(), 0)
-                    return false // 返回 false，表示权限请求已发出，等待用户响应
-                }
-
-            } catch (e: Exception) {
-                // 捕获 getPackageInfo 可能抛出的异常
-                e.printStackTrace()
-            }
-        }
-        // 如果所有权限都已满足，或没有需要请求的权限，返回 true
-        return true
-    }
-
-    private fun checkPermission(permission: String?) {
-        if (checkCallingOrSelfPermission(permission!!) != PackageManager.PERMISSION_GRANTED) {
-            permissions!!.add(permission)
-        }
-    }
-
+    
+    fun checkAllPermissions(): Boolean = permissionsHelper.checkAllPermissions()
+    
+    private fun checkPermission(permission: String?) = permissionsHelper.checkPermission(permission)
+    
     @CallLuaFunction
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
         runFunc("onCreateOptionsMenu", menu)
         return true
     }
-
+    
     @CallLuaFunction
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         runFunc("onOptionsItemSelected", item)
         return super.onOptionsItemSelected(item)
     }
-
+    
     @CallLuaFunction
     override fun onCreateContextMenu(
         contextMenu: ContextMenu?, view: View?, contextMenuInfo: ContextMenuInfo?
@@ -630,38 +469,38 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         runFunc("onCreateContextMenu", contextMenu, view, contextMenuInfo)
         super.onCreateContextMenu(contextMenu, view, contextMenuInfo)
     }
-
+    
     @CallLuaFunction
     override fun onContextItemSelected(menuItem: MenuItem): Boolean {
         runFunc("onContextItemSelected", menuItem)
         return super.onContextItemSelected(menuItem)
     }
-
-
+    
+    
     @CallLuaFunction
     public override fun onNightModeChanged(i: Int) {
         runFunc("onNightModeChanged", i)
         super.onNightModeChanged(i)
     }
-
+    
     @CallLuaFunction
     override fun onPanelClosed(featureId: Int, menu: Menu) {
         runFunc("onPanelClosed", featureId, menu)
         super.onPanelClosed(featureId, menu)
     }
-
+    
     @CallLuaFunction
     override fun onSupportActionModeStarted(mode: ActionMode) {
         runFunc("onSupportActionModeStarted", mode)
         super.onSupportActionModeStarted(mode)
     }
-
+    
     @CallLuaFunction
     override fun onSupportActionModeFinished(mode: ActionMode) {
         runFunc("onSupportActionModeFinished", mode)
         super.onSupportActionModeFinished(mode)
     }
-
+    
     fun runFunc(name: String, vararg arg: Any?): Any? {
         try {
             val func = globals.get(name)
@@ -671,150 +510,59 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         }
         return null
     }
-
-    override fun findResource(name: String): InputStream? {
-        try {
-            val file = File(name)
-            if (file.exists()) return FileInputStream(file)
-        } catch (_: Exception) {
-        }
-        try {
-            val file = File(luaDir, name)
-            if (file.exists()) return FileInputStream(file)
-        } catch (_: Exception) {
-        }
-        try {
-            val file = File(luaRootDir ?: luaDir, name)
-            if (file.exists()) return FileInputStream(file)
-        } catch (_: Exception) {
-        }
-        try {
-            return assets.open(name)
-        } catch (_: Exception) {
-        }
-        return null
-    }
-
-    fun checkResource(name: String): Boolean {
-        try {
-            if (File(name).exists()) return true
-        } catch (_: Exception) {
-        }
-        try {
-            if (File(luaDir, name).exists()) return true
-        } catch (_: Exception) {
-        }
-        try {
-            return File(luaRootDir ?: luaDir, name).exists()
-        } catch (_: Exception) {
-        }
-        try {
-            val stream = assets.open(name)
-            stream.close()
-            return true
-        } catch (_: Exception) {
-        }
-        return false
-    }
-
-    override fun findFile(filename: String): String {
-        if (filename.startsWith("/")) return filename
-        val scriptFile = File(luaDir, filename)
-        if (scriptFile.exists()) return scriptFile.absolutePath
-        return File(luaRootDir ?: luaDir, filename).absolutePath
-    }
-
-    private var toastTextView: TextView? = null
-    fun showToast(text: String?) {
-        if (!debug) return
-        val now = System.currentTimeMillis()
-
-        // 2. 判断是创建新 Toast 还是更新现有 Toast
-        if (toast == null || toastTextView == null || now - lastShow > 2000) { // 延长一点间隔时间，体验更好
-            // --- 创建一个新的 Toast ---
-
-            // 重置 StringBuilder
-            toastBuilder.setLength(0)
-            toastBuilder.append(text)
-
-            // 加载自定义布局
-            val inflater = LayoutInflater.from(this)
-            val layout = inflater.inflate(R.layout.toast_layout, null)
-
-            // 找到 TextView 并设置文本
-            toastTextView = layout.findViewById(R.id.toast_text)
-            toastTextView?.text = toastBuilder.toString()
-
-            // 创建 Toast 实例并设置自定义视图
-            toast = Toast(this).apply {
-                duration = Toast.LENGTH_LONG
-                view = layout
-            }
-            toast?.show()
-
-        } else {
-            // --- 更新现有的 Toast ---
-
-            // 追加新内容
-            toastBuilder.append("\n")
-            toastBuilder.append(text)
-
-            // 直接更新 TextView 的文本
-            toastTextView?.text = toastBuilder.toString()
-
-            // 重新设置时长并再次显示，这会重置 Toast 的显示计时器
-            toast?.duration = Toast.LENGTH_LONG
-            toast?.show()
-        }
-
-        // 3. 更新最后显示时间
-        lastShow = now
-    }
-
+    
+    override fun findResource(name: String): InputStream? = filesHelper.findResource(name)
+    
+    fun checkResource(name: String): Boolean = filesHelper.checkResource(name)
+    
+    override fun findFile(filename: String): String = filesHelper.findFile(filename)
+    
+    fun showToast(text: String?) = uiHelper.showToast(text)
+    
     override fun getClassLoaders(): ArrayList<ClassLoader?>? {
         return mLuaDexLoader.classLoaders
     }
-
+    
     fun loadDex(path: String?): DexClassLoader? {
         return mLuaDexLoader.loadDex(path)
     }
-
+    
     override fun call(func: String?, vararg args: Any?) {
         lifecycleScope.launch(Dispatchers.Main.immediate) { globals.get(func).jcall(*args) }
     }
-
+    
     override fun set(name: String?, value: Any?) {
         lifecycleScope.launch(Dispatchers.Main.immediate) { globals.jset(name, value) }
     }
-
+    
     override fun __index(key: LuaValue?): LuaValue? {
         return globals.get(key)
     }
-
+    
     override fun __newindex(key: LuaValue?, value: LuaValue?) {
         globals.set(key, value)
     }
-
+    
     override fun getLuaPath(): String {
         return luaFile
     }
-
+    
     override fun getLuaPath(path: String): String {
         return File(luaRootDir ?: luaDir, path).absolutePath
     }
-
+    
     override fun getLuaPath(dir: String, name: String): String {
         return File(File(luaRootDir ?: luaDir, dir), name).absolutePath
     }
-
+    
     override fun getLuaDir(): String? {
         return luaDir
     }
-
+    
     override fun getLuaDir(dir: String): String {
         return File(luaDir, dir).absolutePath
     }
-
+    
     override fun getLuaExtDir(): String {
         if (mExtDir != null) return mExtDir!!
         val d = File(Environment.getExternalStorageDirectory(), "LuaJ")
@@ -822,49 +570,45 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         mExtDir = d.absolutePath
         return mExtDir!!
     }
-
+    
     override fun getLuaExtDir(dir: String): String {
         val d = File(getLuaExtDir(), dir)
         if (!d.exists()) d.mkdirs()
         return d.absolutePath
     }
-
+    
     override fun setLuaExtDir(dir: String?) {
         mExtDir = dir
     }
-
+    
     override fun getLuaExtPath(path: String): String {
         return File(getLuaExtDir(), path).absolutePath
     }
-
+    
     override fun getLuaExtPath(dir: String, name: String): String {
         return File(getLuaExtDir(dir), name).absolutePath
     }
-
+    
     override fun getContext(): Context {
         return this
     }
-
+    
     override fun getLuaState(): Globals {
         return globals
     }
-
-    fun getDecorView(): ViewGroup {
-        return window.decorView as ViewGroup
-    }
-
-    fun getRootView(): ViewGroup {
-        return window.decorView.rootView as ViewGroup
-    }
-
+    
+    fun getDecorView(): ViewGroup = uiHelper.getDecorView()
+    
+    fun getRootView(): ViewGroup = uiHelper.getRootView()
+    
     override fun doFile(path: String?, vararg arg: Any?): Any? {
         return globals.loadfile(path).jcall(*arg)
     }
-
+    
     override fun sendMsg(msg: String?) {
         logEvents.tryEmit(msg.orEmpty())
     }
-
+    
     @CallLuaFunction
     override fun sendError(title: String?, exception: Exception) {
         when (runFunc("onError", title, exception)?.toString()) {
@@ -874,32 +618,32 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
             "log", null -> sendMsg("$title: ${exception.message}")
         }
     }
-
+    
     @CallLuaFunction
     override fun onStart() {
         super.onStart()
         sActivity = this
         runFunc("onStart")
     }
-
+    
     @CallLuaFunction
     override fun onResume() {
         super.onResume()
         runFunc("onResume")
     }
-
+    
     @CallLuaFunction
     override fun onPause() {
         super.onPause()
         runFunc("onPause")
     }
-
+    
     @CallLuaFunction
     override fun onStop() {
         super.onStop()
         runFunc("onStop")
     }
-
+    
     fun registerReceiver(receiver: LuaBroadcastReceiver?, filter: IntentFilter): Intent? {
         return ContextCompat.registerReceiver(
             this,
@@ -908,7 +652,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
     }
-
+    
     fun registerReceiver(ltr: OnReceiveListener?, filter: IntentFilter): Intent? {
         return ContextCompat.registerReceiver(
             this,
@@ -917,7 +661,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
     }
-
+    
     fun registerReceiver(filter: IntentFilter): Intent? {
         if (mReceiver != null) unregisterReceiver(mReceiver)
         mReceiver = LuaBroadcastReceiver(this)
@@ -928,29 +672,20 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
     }
-
-//    override fun unregisterReceiver(receiver: BroadcastReceiver?) {
-//        try {
-//            super.unregisterReceiver(receiver)
-//        } catch (e: Exception) {
-//            //Log.i("lua", "unregisterReceiver: $receiver")
-//            e.printStackTrace()
-//        }
-//    }
-
+    
     @CallLuaFunction
     override fun onReceive(context: Context?, intent: Intent?) {
         runFunc("onReceive", context, intent)
     }
-
-
+    
+    
     @CallLuaFunction
     override fun onContentChanged() {
         super.onContentChanged()
         runFunc("onContentChanged")
         isSetViewed = true
     }
-
+    
     @CallLuaFunction
     override fun onDestroy() {
         runFunc("onDestroy")
@@ -963,162 +698,51 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         if (equals(sActivity)) sActivity = null
         super.onDestroy()
     }
-
-//    @CallLuaFunction
-//    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-//        if (data != null) {
-//            val name = data.getStringExtra(NAME)
-//            if (name != null) {
-//                val res = data.getSerializableExtra(DATA, Array<Any?>::class.java)
-//                if (res == null) {
-//                    runFunc("onResult", name)
-//                } else {
-//                    val arg = arrayOfNulls<Any>(res.size + 1)
-//                    arg[0] = name
-//                    System.arraycopy(res, 0, arg, 1, res.size)
-//                    val ret = runFunc("onResult", *arg)
-//                    if (ret != null && ret.javaClass == Boolean::class.java && ret as Boolean) return
-//                }
-//            }
-//        }
-//        runFunc("onActivityResult", requestCode, resultCode, data)
-//        super.onActivityResult(requestCode, resultCode, data)
-//    }
-
-    fun result(data: Array<Any?>?) {
-        val res = Intent()
-        res.putExtra(NAME, intent.getStringExtra(NAME))
-        res.putExtra(DATA, data)
-        setResult(0, res)
-        finish()
-    }
-
+    
+    fun result(data: Array<Any?>?) = navigationHelper.result(data)
+    
     @CallLuaFunction
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         runFunc("onConfigurationChanged", newConfig)
         initSize()
     }
-
+    
     override fun getWidth(): Int {
         return mWidth
     }
-
+    
     override fun getHeight(): Int {
         return mHeight
     }
-
-    override fun getGlobalData(): Map<*, *> {
-        return LuaApplication.instance.globalData
-    }
-
-    override fun getSharedData(): MutableMap<String?, *>? {
-        return PreferenceManager.getDefaultSharedPreferences(this).all
-    }
-
-    override fun getSharedData(key: String?): Any? {
-        return PreferenceManager.getDefaultSharedPreferences(this).all[key]
-    }
-
-    override fun getSharedData(key: String?, default: Any?): Any? {
-        return PreferenceManager.getDefaultSharedPreferences(this).all[key] ?: default
-    }
-
+    
+    override fun getGlobalData(): Map<*, *> = storageHelper.getGlobalData()
+    
+    override fun getSharedData(): MutableMap<String?, *>? = storageHelper.getSharedData()
+    
+    override fun getSharedData(key: String?): Any? = storageHelper.getSharedData(key)
+    
+    override fun getSharedData(key: String?, default: Any?): Any? = storageHelper.getSharedData(key, default)
+    
     @Suppress("UNCHECKED_CAST")
-    override fun setSharedData(key: String?, value: Any?): Boolean {
-        return PreferenceManager.getDefaultSharedPreferences(this).commit {
-            if (value == null) remove(key)
-            else when (value) {
-                is Boolean -> putBoolean(key, value)
-                is Int -> putInt(key, value)
-                is Long -> putLong(key, value)
-                is Float -> putFloat(key, value)
-                is String -> putString(key, value)
-                is LuaTable -> putStringSet(key, value.values().toSet() as MutableSet<String?>)
-                is MutableSet<*> -> putStringSet(key, value as MutableSet<String?>)
-                else -> return false
-            }
-        }
-    }
-
+    override fun setSharedData(key: String?, value: Any?): Boolean = storageHelper.setSharedData(key, value)
+    
     override fun regGc(obj: LuaGcable) {
         mGc.add(obj)
     }
-
-    fun bindService(flag: Int) =
-        bindService(object : ServiceConnection {
-            @CallLuaFunction
-            override fun onServiceConnected(comp: ComponentName?, binder: IBinder) {
-                runFunc("onServiceConnected", comp, (binder as LuaBinder).service)
-            }
-
-            @CallLuaFunction
-            override fun onServiceDisconnected(comp: ComponentName?) {
-                runFunc("onServiceDisconnected", comp)
-            }
-        }, flag)
-
-
-    fun bindService(conn: ServiceConnection, flag: Int): Boolean {
-        val service = Intent(this, LuaService::class.java)
-        var path = "service.lua"
-        service.putExtra(NAME, path)
-        if (luaRootDir != null) path = "$luaRootDir/$path"
-        val f = File(path)
-        if (f.isDirectory() && File("$path/service.lua").exists()) path += "/service.lua"
-        else if ((f.isDirectory() || !f.exists()) && !path.endsWith(".lua")) path += ".lua"
-        if (!File(path).exists()) throw LuaError(FileNotFoundException(path))
-
-        service.setData("file://$path".toUri())
-
-        return super.bindService(service, conn, flag)
-    }
-
-    fun stopService(): Boolean {
-        return stopService(Intent(this, LuaService::class.java))
-    }
-
+    
+    fun bindService(flag: Int) = servicesHelper.bindService(flag)
+    
+    fun bindService(conn: ServiceConnection, flag: Int): Boolean = servicesHelper.bindService(conn, flag)
+    
+    fun stopService(): Boolean = servicesHelper.stopService()
+    
     @JvmOverloads
     fun startService(
         path: String? = null,
         arg: Array<Any?>? = null
-    ): ComponentName? {
-        if (path == null) {
-            // 如果 path 为 null，直接创建不带文件路径的 Intent
-            val intent = Intent(this, LuaService::class.java)
-            arg?.let { intent.putExtra(ARG, it) } // 如果 arg 不为 null，则添加它
-            return super.startService(intent)
-        }
-
-        // path 不为 null 的情况，执行原始的文件逻辑
-        var finalPath = path
-        val intent = Intent(this, LuaService::class.java)
-        intent.putExtra(NAME, finalPath) // 使用原始 path 作为 NAME
-
-        // 路径处理逻辑
-        if (finalPath[0] != '/' && luaRootDir != null) {
-            finalPath = "$luaRootDir/$finalPath"
-        }
-
-        val f = File(finalPath)
-        if (f.isDirectory && File("$finalPath/service.lua").exists()) {
-            finalPath += "/service.lua"
-        } else if ((f.isDirectory || !f.exists()) && !finalPath.endsWith(".lua")) {
-            finalPath += ".lua"
-        }
-
-        if (!File(finalPath).exists()) {
-            throw LuaError(FileNotFoundException("Service file not found: $finalPath"))
-        }
-
-        // 使用处理后的 finalPath 设置 URI
-        intent.data = "file://$finalPath".toUri()
-
-        arg?.let { intent.putExtra(ARG, it) }
-
-        return super.startService(intent)
-    }
-
+    ): ComponentName? = servicesHelper.startService(path, arg)
+    
     /**
      * 新建活动
      *
@@ -1127,10 +751,8 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
      * @throws FileNotFoundException 文件未找到异常
      */
     @Throws(FileNotFoundException::class)
-    fun newActivity(path: String, newDocument: Boolean) {
-        newActivity(1, path, null, newDocument)
-    }
-
+    fun newActivity(path: String, newDocument: Boolean) = navigationHelper.newActivity(path, newDocument)
+    
     /**
      * 新建活动
      *
@@ -1140,10 +762,8 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
      * @throws FileNotFoundException 文件未找到异常
      */
     @Throws(FileNotFoundException::class)
-    fun newActivity(path: String, arg: Array<Any?>?, newDocument: Boolean) {
-        newActivity(1, path, arg, newDocument)
-    }
-
+    fun newActivity(path: String, arg: Array<Any?>?, newDocument: Boolean) = navigationHelper.newActivity(path, arg, newDocument)
+    
     /**
      * 新建活动
      *
@@ -1153,10 +773,8 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
      * @throws FileNotFoundException 文件未找到异常
      */
     @Throws(FileNotFoundException::class)
-    fun newActivity(req: Int, path: String, newDocument: Boolean) {
-        newActivity(req, path, null, newDocument)
-    }
-
+    fun newActivity(req: Int, path: String, newDocument: Boolean) = navigationHelper.newActivity(req, path, newDocument)
+    
     /**
      * 新建活动
      *
@@ -1164,10 +782,8 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
      * @throws FileNotFoundException 文件未找到异常
      */
     @Throws(FileNotFoundException::class)
-    fun newActivity(path: String) {
-        newActivity(1, path, arrayOfNulls(0))
-    }
-
+    fun newActivity(path: String) = navigationHelper.newActivity(path)
+    
     /**
      * 新建活动
      *
@@ -1176,10 +792,8 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
      * @throws FileNotFoundException 文件未找到异常
      */
     @Throws(FileNotFoundException::class)
-    fun newActivity(path: String, arg: Array<Any?>?) {
-        newActivity(1, path, arg)
-    }
-
+    fun newActivity(path: String, arg: Array<Any?>?) = navigationHelper.newActivity(path, arg)
+    
     /**
      * 新建活动
      *
@@ -1190,35 +804,23 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
      */
     @JvmOverloads
     @Throws(FileNotFoundException::class)
-    fun newActivity(req: Int, path: String, arg: Array<Any?>? = arrayOfNulls(0)) {
-        newActivity(req, path, arg, false)
-    }
-
+    fun newActivity(req: Int, path: String, arg: Array<Any?>? = arrayOfNulls(0)) = navigationHelper.newActivity(req, path, arg)
+    
     @Throws(FileNotFoundException::class)
-    fun newActivity(path: String, `in`: Int, out: Int, newDocument: Boolean) {
-        newActivity(1, path, `in`, out, null, newDocument)
-    }
-
+    fun newActivity(path: String, `in`: Int, out: Int, newDocument: Boolean) = navigationHelper.newActivity(path, `in`, out, newDocument)
+    
     @Throws(FileNotFoundException::class)
-    fun newActivity(path: String, `in`: Int, out: Int, arg: Array<Any?>?, newDocument: Boolean) {
-        newActivity(1, path, `in`, out, arg, newDocument)
-    }
-
+    fun newActivity(path: String, `in`: Int, out: Int, arg: Array<Any?>?, newDocument: Boolean) = navigationHelper.newActivity(path, `in`, out, arg, newDocument)
+    
     @Throws(FileNotFoundException::class)
-    fun newActivity(req: Int, path: String, `in`: Int, out: Int, newDocument: Boolean) {
-        newActivity(req, path, `in`, out, null, newDocument)
-    }
-
+    fun newActivity(req: Int, path: String, `in`: Int, out: Int, newDocument: Boolean) = navigationHelper.newActivity(req, path, `in`, out, newDocument)
+    
     @Throws(FileNotFoundException::class)
-    fun newActivity(path: String, `in`: Int, out: Int) {
-        newActivity(1, path, `in`, out, arrayOfNulls(0))
-    }
-
+    fun newActivity(path: String, `in`: Int, out: Int) = navigationHelper.newActivity(path, `in`, out)
+    
     @Throws(FileNotFoundException::class)
-    fun newActivity(path: String, `in`: Int, out: Int, arg: Array<Any?>?) {
-        newActivity(1, path, `in`, out, arg)
-    }
-
+    fun newActivity(path: String, `in`: Int, out: Int, arg: Array<Any?>?) = navigationHelper.newActivity(path, `in`, out, arg)
+    
     @JvmOverloads
     @Throws(FileNotFoundException::class)
     fun newActivity(
@@ -1227,49 +829,10 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         `in`: Int,
         out: Int,
         arg: Array<Any?>? = arrayOfNulls(0)
-    ) {
-        newActivity(req, path, `in`, out, arg, false)
-    }
-
-    private fun buildLuaIntent(path: String, arg: Array<Any?>?, newDocument: Boolean): Intent {
-        var resolved =
-            if (path.startsWith("/")) path else "${luaRootDir ?: luaDir ?: filesDir.absolutePath}/$path"
-        val file = File(resolved)
-        if (file.isDirectory && File(file, "main.lua").exists()) resolved =
-            "${file.absolutePath}/main.lua"
-        else if ((file.isDirectory || !file.exists()) && !resolved.endsWith(".lua")) resolved += ".lua"
-        require(File(resolved).exists()) { "File not found: $resolved" }
-        return Intent(
-            this,
-            if (newDocument) LuaActivityX::class.java else LuaActivity::class.java
-        ).apply {
-            setData("file://$resolved".toUri())
-            putExtra(NAME, path)
-            if (newDocument) addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
-            arg?.let { putExtra(ARG, it) }
-        }
-    }
-
-    private fun launchLuaActivity(
-        req: Int,
-        intent: Intent,
-        newDocument: Boolean,
-        pendingName: String?
-    ) {
-        if (newDocument) {
-            startActivity(intent)
-        } else {
-            lastRequestCode = req
-            pendingResults.put(req, pendingName)
-            activityLauncher.launch(intent)
-        }
-    }
-
-    fun newActivity(req: Int, path: String, arg: Array<Any?>?, newDocument: Boolean) {
-        val intent = buildLuaIntent(path, arg, newDocument)
-        launchLuaActivity(req, intent, newDocument, path)
-    }
-
+    ) = navigationHelper.newActivity(req, path, `in`, out, arg)
+    
+    fun newActivity(req: Int, path: String, arg: Array<Any?>?, newDocument: Boolean) = navigationHelper.newActivity(req, path, arg, newDocument)
+    
     @Throws(FileNotFoundException::class)
     fun newActivity(
         req: Int,
@@ -1278,242 +841,68 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         out: Int,
         arg: Array<Any?>?,
         newDocument: Boolean
-    ) {
-        val intent = buildLuaIntent(path, arg, newDocument)
-        launchLuaActivity(req, intent, newDocument, path)
-        overridePendingTransition(false, `in`, out)
-    }
-
+    ) = navigationHelper.newActivity(req, path, `in`, out, arg, newDocument)
+    
     /**
      * 结束活动
      *
      * @param finishTask 是否结束任务
      */
-    fun finish(finishTask: Boolean) {
-        if (finishTask && (intent?.flags?.and(Intent.FLAG_ACTIVITY_NEW_DOCUMENT) != 0))
-            finishAndRemoveTask()
-        else
-            super.finish()
-    }
-
-    fun getUriForPath(path: String): Uri? {
-        return FileProvider.getUriForFile(this, "$packageName.fileprovider", File(path))
-    }
-
-    fun getUriForFile(path: File): Uri? {
-        return FileProvider.getUriForFile(this, "$packageName.fileprovider", path)
-    }
-
-    fun getPathFromUri(uri: Uri?): String? {
-        var path: String? = null
-        uri?.let { u ->
-            val p = arrayOf(MediaStore.Images.Media.DATA)
-            when (u.scheme) {
-                "content" -> {
-                    val cursor = contentResolver.query(u, p, null, null, null)
-                    cursor?.use {
-                        val idx = it.getColumnIndexOrThrow(MediaStore.Images.Media.DATA)
-                        if (idx >= 0) {
-                            it.moveToFirst()
-                            path = it.getString(idx)
-                        }
-                    }
-                }
-
-                "file" -> {
-                    path = u.path
-                }
-            }
-        }
-        return path
-    }
-
-    private fun getType(file: File): String {
-        val lastDot = file.getName().lastIndexOf(46.toChar())
-        if (lastDot >= 0) {
-            val extension = file.getName().substring(lastDot + 1)
-            val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
-            if (mime != null) {
-                return mime
-            }
-        }
-        return "application/octet-stream"
-    }
-
+    fun finish(finishTask: Boolean) = navigationHelper.finish(finishTask)
+    
+    fun getUriForPath(path: String): Uri? = filesHelper.getUriForPath(path)
+    
+    fun getUriForFile(path: File): Uri? = filesHelper.getUriForFile(path)
+    
+    fun getPathFromUri(uri: Uri?): String? = filesHelper.getPathFromUri(uri)
+    
     @JvmOverloads
-    fun openFile(path: String, callback: LuaFunction? = null) {
-        val file = File(path)
-        // 创建Intent并设置相关标志和类型
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
-                    Intent.FLAG_ACTIVITY_NEW_TASK
-            setDataAndType(getUriForFile(file), getType(file))
-        }
-        if (callback != null) {
-            if (intent.resolveActivity(packageManager) != null) {
-                startActivity(intent)
-            } else {
-                callback.call()
-            }
-        } else startActivity(intent)
-    }
-
-    fun startPackage(pkg: String): Boolean {
-        return packageManager.getLaunchIntentForPackage(pkg)
-            ?.let { startActivity(it); true } == true
-    }
-
-    fun installApk(path: String) {
-        val share = Intent(Intent.ACTION_VIEW)
-        val file = File(path)
-        share.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        share.setDataAndType(getUriForFile(file), getType(file))
-        share.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        startActivity(share)
-    }
-
-    fun shareFile(path: String) {
-        val share = Intent(Intent.ACTION_SEND)
-        val file = File(path)
-        share.setType("*/*")
-        share.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        share.putExtra(Intent.EXTRA_STREAM, getUriForFile(file))
-        startActivity(
-            Intent.createChooser(share, file.getName()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        )
-    }
-
-    fun isNightMode() =
-        (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-
-    fun getFilter(color: Int): ColorFilter {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            BlendModeColorFilter(color, BlendMode.SRC_ATOP)
-        } else {
-            PorterDuffColorFilter(color, PorterDuff.Mode.SRC_ATOP)
-        }
-    }
-
-    fun getImageLoader(): ImageLoader {
-        return imageLoader
-    }
-
-    fun syncLoadBitmap(data: Any?): Bitmap? {
-        val request = ImageRequest.Builder(this@LuaActivity)
-            .data(data)
-            .build()
-        val result = imageLoader.executeBlocking(request)
-        return result.image?.toBitmap()
-    }
-
-    fun syncLoadDrawable(data: Any?): Drawable? {
-        val request = ImageRequest.Builder(this@LuaActivity)
-            .data(data)
-            .build()
-        val result = imageLoader.executeBlocking(request)
-        return result.image?.asDrawable(resources)
-    }
-
-    fun loadBitmap(data: Any?, callback: LuaFunction) =
-        imageLoader.enqueue(
-            ImageRequest.Builder(this)
-                .data(data)
-                .target(BitmapTarget(this, callback))
-                .build()
-        )
-
-    fun loadImage(data: Any?, callback: LuaFunction) =
-        imageLoader.enqueue(
-            ImageRequest.Builder(this)
-                .data(data)
-                .target(SimpleTarget(this, callback))
-                .build()
-        )
-
-    fun loadImage(data: Any?, view: ImageView) = view.load(data)
-
-    fun loadImageWithCrossFade(data: Any?, view: ImageView) = view.load(data) {
-        crossfade(true)
-    }
-
-    fun dpToPx(dp: Float): Float {
-        return TypedValueCompat.dpToPx(dp, resources.displayMetrics)
-    }
-
-    fun spToPx(sp: Float): Float {
-        return TypedValueCompat.spToPx(sp, resources.displayMetrics)
-    }
-
-    fun addOnBackPressedCallback(callback: LuaFunction) {
-        onBackPressedDispatcher.addCallback(LuaBackPressedCallback(callback))
-    }
-
-    fun delay(time: Long, callback: LuaValue) = lifecycleScope.launch {
-        kotlinx.coroutines.delay(time)
-        runCatching { callback.call() }.onFailure { sendError("delay", it as Exception) }
-    }
-
-    fun measureTime(action: LuaValue) = measureTimeMillis {
-        action.call()
-    }
-
-    fun getMediaDir() = externalMediaDirs[0]!!
-
+    fun openFile(path: String, callback: LuaFunction? = null) = filesHelper.openFile(path, callback)
+    
+    fun startPackage(pkg: String): Boolean = filesHelper.startPackage(pkg)
+    
+    fun installApk(path: String) = filesHelper.installApk(path)
+    
+    fun shareFile(path: String) = filesHelper.shareFile(path)
+    
+    fun isNightMode() = themeHelper.isNightMode()
+    
+    fun getFilter(color: Int): ColorFilter = themeHelper.getFilter(color)
+    
+    fun getImageLoader(): ImageLoader = imageLoaderHelper.getImageLoader()
+    
+    fun syncLoadBitmap(data: Any?): Bitmap? = imageLoaderHelper.syncLoadBitmap(data)
+    
+    fun syncLoadDrawable(data: Any?): Drawable? = imageLoaderHelper.syncLoadDrawable(data)
+    
+    fun loadBitmap(data: Any?, callback: LuaFunction) = imageLoaderHelper.loadBitmap(data, callback)
+    
+    fun loadImage(data: Any?, callback: LuaFunction) = imageLoaderHelper.loadImage(data, callback)
+    
+    fun loadImage(data: Any?, view: ImageView) = imageLoaderHelper.loadImage(data, view)
+    
+    fun loadImageWithCrossFade(data: Any?, view: ImageView) = imageLoaderHelper.loadImageWithCrossFade(data, view)
+    
+    fun dpToPx(dp: Float): Float = utilsHelper.dpToPx(dp)
+    
+    fun spToPx(sp: Float): Float = utilsHelper.spToPx(sp)
+    
+    fun addOnBackPressedCallback(callback: LuaFunction) = utilsHelper.addOnBackPressedCallback(callback)
+    
+    fun delay(time: Long, callback: LuaValue) = utilsHelper.delay(time, callback)
+    
+    fun measureTime(action: LuaValue) = utilsHelper.measureTime(action)
+    
+    fun getMediaDir() = filesHelper.getMediaDir()
+    
     @SuppressLint("DiscouragedPrivateApi")
     @Suppress("PrivateApi")
-    fun loadXmlView(file: File) =
-        runCatching {
-            val cls = Class.forName("android.content.res.XmlBlock")
-            val declaredMethod = cls.getDeclaredMethod("newParser")
-            declaredMethod.isAccessible = true
-            layoutInflater.inflate(
-                declaredMethod.invoke(cls.getConstructor(ByteArray::class.java).apply {
-                    isAccessible = true
-                }.newInstance(file.readBytes())) as XmlResourceParser,
-                null
-            )
-        }.getOrNull()
-
-    private val dumpGlobals by lazy { JsePlatform.standardGlobals() }
-    private fun getByteArray(path: String?): ByteArray {
-        val closure = dumpGlobals.loadfile(path).checkfunction(1) as LuaClosure
-        val stream = ByteArrayOutputStream()
-        return try {
-            DumpState.dump(closure.c, stream, true)
-            stream.toByteArray()
-        } catch (e: Exception) {
-            throw LuaError(e)
-        }
-    }
-
-    fun dumpFile(input: String?, output: String?) {
-        try {
-            val fos = FileOutputStream(output)
-            fos.write(getByteArray(input))
-            fos.close()
-        } catch (e: IOException) {
-            sendError("dumpFile", e)
-        }
-    }
-
-    fun dynamicColor() {
-        when (val seedColor = getSharedData("theme_seed_color")) {
-            is Int -> dynamicColor(seedColor)
-            is Long -> dynamicColor(seedColor.toInt())
-            is String -> {
-                if (seedColor.isNotBlank()) {
-                    runCatching { Color.parseColor(seedColor) }
-                        .onSuccess { dynamicColor(it) }
-                        .onFailure { DynamicColors.applyToActivityIfAvailable(this) }
-                } else {
-                    DynamicColors.applyToActivityIfAvailable(this)
-                }
-            }
-            else -> DynamicColors.applyToActivityIfAvailable(this)
-        }
-    }
-
+    fun loadXmlView(file: File) = filesHelper.loadXmlView(file)
+    
+    fun dumpFile(input: String?, output: String?) = filesHelper.dumpFile(input, output)
+    
+    fun dynamicColor() = themeHelper.dynamicColor()
+    
     /**
      * Apply dynamic colors based on a seed color.
      * Generates a full Material 3 color scheme from the given seed color
@@ -1522,154 +911,63 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
      *
      * Usage in Lua: this.dynamicColor(0xFF6750A4)
      */
-    fun dynamicColor(seedColor: Int) {
-        val options = DynamicColorsOptions.Builder()
-            .setContentBasedSource(seedColor)
-            .build()
-        DynamicColors.applyToActivityIfAvailable(this, options)
-    }
-
+    fun dynamicColor(seedColor: Int) = themeHelper.dynamicColor(seedColor)
+    
     /**
      * Harmonize a color with the current theme's primary color.
      * Returns a new color that is visually harmonious with the theme.
      *
      * Usage in Lua: local harmonized = this.harmonizeColor(0xFFFF0000)
      */
-    fun harmonizeColor(color: Int): Int =
-        MaterialColors.harmonizeWithPrimary(this, color)
-
+    fun harmonizeColor(color: Int): Int = themeHelper.harmonizeColor(color)
+    
     /**
      * Harmonize two arbitrary colors.
      *
      * Usage in Lua: local result = this.harmonizeColor(color1, color2)
      */
-    fun harmonizeColor(color: Int, withColor: Int): Int =
-        MaterialColors.harmonize(color, withColor)
-
+    fun harmonizeColor(color: Int, withColor: Int): Int = themeHelper.harmonizeColor(color, withColor)
+    
     /**
      * Check if a color is considered light.
      *
      * Usage in Lua: local light = this.isColorLight(0xFFFFFFFF)
      */
-    fun isColorLight(color: Int): Boolean =
-        MaterialColors.isColorLight(color)
-
-    fun getVersionName(default: String): String {
-        return try {
-            packageManager.getPackageInfo(packageName, 0).versionName ?: default
-        } catch (e: PackageManager.NameNotFoundException) {
-            default
-        }
-    }
-
-    // Launcher 用于处理从 MANAGE_EXTERNAL_STORAGE 设置页返回的事件
-    private val manageStoragePermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-            // 当用户从设置页返回，我们检查权限的最终状态并回调Lua
-            val isGranted = checkStoragePermission()
-            runFunc(STORAGE_CALLBACK_FUNCTION, isGranted)
-        }
-
-    // Launcher 用于处理 READ/WRITE_EXTERNAL_STORAGE 权限申请的回调
-    private val requestLegacyPermissionsLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
-            // 检查所有请求的权限是否都已被授予
-            val isGranted = permissions.entries.all { it.value }
-            runFunc(STORAGE_CALLBACK_FUNCTION, isGranted)
-        }
-
+    fun isColorLight(color: Int): Boolean = themeHelper.isColorLight(color)
+    
+    fun getVersionName(default: String): String = utilsHelper.getVersionName(default)
+    
     /**
      * 内部会自动判断Android版本，发起正确的权限申请流程。
      * 结果将通过全局Lua函数 onPermissionResult(isGranted) 异步返回。
      */
     @CallLuaFunction
-    fun requestStoragePermission() {
-        if (checkStoragePermission()) {
-            // 如果已经有权限，直接同步回调成功
-            runFunc(STORAGE_CALLBACK_FUNCTION, true)
-            return
-        }
-
-        // 根据版本选择不同的申请策略
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            // Android 11+，申请 MANAGE_EXTERNAL_STORAGE
-            requestManageStoragePermission()
-        } else {
-            // Android 6-10，申请 READ/WRITE_EXTERNAL_STORAGE
-            requestLegacyStoragePermissions()
-        }
-    }
-
-    fun checkStoragePermission(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            // Android 11+
-            Environment.isExternalStorageManager()
-        } else {
-            // Android 10 及以下
-            val readPermission =
-                ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
-            val writePermission =
-                ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
-            readPermission == PackageManager.PERMISSION_GRANTED && writePermission == PackageManager.PERMISSION_GRANTED
-        }
-    }
-
-    /**
-     * 申请 Android 11+ 的 MANAGE_EXTERNAL_STORAGE 权限。
-     */
-    private fun requestManageStoragePermission() {
-        try {
-            val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
-            intent.data = Uri.parse("package:$packageName")
-            manageStoragePermissionLauncher.launch(intent)
-        } catch (e: Exception) {
-            val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
-            manageStoragePermissionLauncher.launch(intent)
-        }
-    }
-
-    /**
-     * 申请 Android 6-10 的 READ/WRITE 权限。
-     */
-    private fun requestLegacyStoragePermissions() {
-        val permissions = arrayOf(
-            Manifest.permission.READ_EXTERNAL_STORAGE,
-            Manifest.permission.WRITE_EXTERNAL_STORAGE
-        )
-        requestLegacyPermissionsLauncher.launch(permissions)
-    }
-
-    fun resultLauncher(callback: LuaFunction): ActivityResultLauncher<Intent> {
-        return registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            callback.call(result.toLuaValue())
-        }
-    }
-
-    fun permissionLauncher(callback: LuaFunction): ActivityResultLauncher<String> {
-        return registerForActivityResult(ActivityResultContracts.RequestPermission()) { result ->
-            callback.call(result.toLuaValue())
-        }
-    }
-
+    fun requestStoragePermission() = permissionsHelper.requestStoragePermission()
+    
+    fun checkStoragePermission(): Boolean = permissionsHelper.checkStoragePermission()
+    
+    fun resultLauncher(callback: LuaFunction): ActivityResultLauncher<Intent> = navigationHelper.resultLauncher(callback)
+    
+    fun permissionLauncher(callback: LuaFunction): ActivityResultLauncher<String> = navigationHelper.permissionLauncher(callback)
+    
     companion object {
-        private const val STORAGE_CALLBACK_FUNCTION = "onStorageRequestResult"
         private const val ARG = "arg"
         private const val DATA = "data"
         private const val NAME = "name"
-
+        
         @JvmField
         var logs = ArrayList<String?>()
-
+        
         @JvmField
         var sActivity: LuaActivity? = null
         private val sLuaActivityMap = HashMap<String?, LuaActivity?>()
-
+        
         @JvmStatic
         fun logError(title: String?, msg: Exception) {
             sActivity?.sendMsg(title + ": " + msg.message)
             logs.add("$title: $msg")
         }
-
+        
         @JvmStatic
         fun getActivity(name: String?): LuaActivity? {
             return sLuaActivityMap[name]
