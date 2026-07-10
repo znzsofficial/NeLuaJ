@@ -4,7 +4,6 @@ import "android.view.KeyEvent"
 import "android.view.WindowManager"
 import "android.view.View"
 import "android.graphics.drawable.ColorDrawable"
-local LuaFileUtil = luajava.bindClass "com.nekolaska.io.LuaFileUtil".INSTANCE
 local ColorUtil = this.themeUtil
 local res = res
 this.dynamicColor()
@@ -100,17 +99,12 @@ local data = {
 local adp = LuaAdapter(activity, data, item)
 lv.setAdapter(adp)
 
-local docCss = LuaFileUtil.read(activity.getLuaPath("res/doc", "doc.css"))
+webView.getSettings().setJavaScriptEnabled(true)
+webView.getSettings().setDomStorageEnabled(true)
+webView.getSettings().setAllowFileAccess(true)
 
 local function loadHtmlDocument(fileName)
-    local docDir = activity.getLuaPath("res/doc")
-    local html = LuaFileUtil.read(activity.getLuaPath("res/doc", fileName))
-    if docCss and #docCss > 0 then
-        html = html:gsub('<link rel="stylesheet" href="doc%.css" />', function()
-            return '<style>\n' .. docCss .. '\n</style>'
-        end)
-    end
-    webView.loadDataWithBaseURL("file://" .. docDir .. "/", html, "text/html", "UTF-8", nil)
+    webView.loadUrl("file://" .. activity.getLuaPath("res/doc", fileName))
 end
 
 lv.onItemClick = function(l, v, p, i)

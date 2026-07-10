@@ -108,6 +108,25 @@ h6 {
   font-size: 1rem !important;
 }
 
+h2,
+h3 {
+  scroll-margin-top: 18px;
+}
+
+.heading-anchor {
+  margin-left: 0.36em;
+  color: var(--muted-foreground) !important;
+  opacity: 0;
+  text-decoration: none !important;
+  font-weight: 650;
+}
+
+h2:hover .heading-anchor,
+h3:hover .heading-anchor,
+.heading-anchor:focus {
+  opacity: 1;
+}
+
 p,
 ul,
 ol,
@@ -166,11 +185,12 @@ code {
 }
 
 pre {
+  position: relative;
   border: 1px solid var(--border) !important;
   border-radius: 8px !important;
   background: var(--pre-background) !important;
   color: var(--pre-foreground) !important;
-  padding: 14px !important;
+  padding: 38px 14px 14px !important;
   overflow-x: auto !important;
   white-space: pre !important;
   box-shadow: var(--shadow);
@@ -183,6 +203,139 @@ pre code {
   color: inherit !important;
   padding: 0 !important;
   border-radius: 0 !important;
+}
+
+.tok-comment { color: #8fa6bd !important; }
+.tok-string { color: #9ed6a3 !important; }
+.tok-number { color: #f1bd7a !important; }
+.tok-keyword { color: #88b7ff !important; font-weight: 650; }
+.tok-builtin { color: #f0d683 !important; }
+.tok-operator { color: #f49ab0 !important; }
+
+.code-tools {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  left: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.code-language {
+  color: #aab8c8;
+  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0;
+}
+
+.copy-code,
+.back-to-top {
+  border: 1px solid rgba(170, 184, 200, 0.35);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #e6edf5;
+  font: inherit;
+  font-size: 0.78rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.copy-code {
+  padding: 6px 8px;
+  pointer-events: auto;
+}
+
+.copy-code:hover,
+.copy-code:focus {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.doc-toc {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+  margin: 0 0 18px !important;
+  padding: 8px 10px;
+}
+
+.doc-toc summary {
+  cursor: pointer;
+  color: var(--card-foreground);
+  font-weight: 700;
+  list-style-position: inside;
+}
+
+.doc-toc nav {
+  display: grid;
+  gap: 3px;
+  margin-top: 8px;
+}
+
+.doc-toc a {
+  border-radius: 6px;
+  color: var(--muted-foreground) !important;
+  padding: 3px 6px;
+  text-decoration: none !important;
+}
+
+.doc-toc a:hover,
+.doc-toc a:focus {
+  background: var(--accent);
+  color: var(--accent-foreground) !important;
+}
+
+.doc-toc .toc-h3 {
+  padding-left: 18px;
+  font-size: 0.93em;
+}
+
+.back-to-top {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 10;
+  width: 40px;
+  height: 40px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-color: transparent;
+  box-shadow: var(--shadow);
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.back-to-top.visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+@media (prefers-color-scheme: light) {
+  .tok-comment { color: #64748b !important; }
+  .tok-string { color: #247545 !important; }
+  .tok-number { color: #9a5b00 !important; }
+  .tok-keyword { color: #155bb8 !important; }
+  .tok-builtin { color: #7a5b00 !important; }
+  .tok-operator { color: #b3264b !important; }
+
+  .code-language { color: #64748b; }
+
+  .copy-code {
+    border-color: rgba(100, 116, 139, 0.35);
+    background: rgba(255, 255, 255, 0.76);
+    color: #1f2937;
+  }
+
+  .copy-code:hover,
+  .copy-code:focus {
+    background: #ffffff;
+  }
 }
 
 .table-wrapper {
@@ -242,6 +395,24 @@ svg {
   h3 { font-size: 1.1rem !important; }
 
   pre {
-    padding: 12px !important;
+    padding: 36px 12px 12px !important;
+  }
+
+  .heading-anchor { opacity: 1; }
+
+  .back-to-top {
+    right: 12px;
+    bottom: 12px;
+  }
+}
+
+@media (min-width: 1100px) {
+  main.markdown-export {
+    max-width: 980px !important;
+  }
+
+  .doc-toc {
+    position: sticky;
+    top: 12px;
   }
 }

@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="doc.css" />
+    <script src="doc.js" defer></script>
     <title>LuaActivity 完整文档</title>
   </head>
   <body>
@@ -46,14 +47,20 @@ function onCreateContextMenu(contextMenu, view, contextMenuInfo) end
 function onContextItemSelected(item) end
 </code></pre>
 <h3>Activity 结果</h3>
-<pre><code class="language-lua">-- 方式一：命名结果（推荐）
-this.newActivity(1, "other.lua", { "参数" })
+<p>Lua 页面之间返回数据推荐使用 <code>newActivity</code> + <code>onResult</code>。系统页面、文件选择、设置页等 Android Intent 推荐使用 <code>resultLauncher</code>。完整示例见“Activity 结果使用”。</p>
+<pre><code class="language-lua">-- 方式一：Lua 页面之间返回结果（推荐）
+this.newActivity(1001, "other.lua", { "参数" })
+
 function onResult(name, ...)
     print("返回自:", name)
+    print("返回值:", ...)
+    -- return true 可拦截后续 onActivityResult
 end
 
--- 方式二：原始回调
-function onActivityResult(requestCode, resultCode, data) end
+-- 兼容旧脚本和需要原始 Android 参数的场景
+function onActivityResult(requestCode, resultCode, data)
+    print(requestCode, resultCode, data)
+end
 </code></pre>
 <h3>错误处理</h3>
 <pre><code class="language-lua">--[[
@@ -112,6 +119,7 @@ this.newActivity("other.lua", android.R.anim.fade_in, android.R.anim.fade_out)
 
 -- 多文档模式（独立任务栈）
 this.newActivity("other.lua", true)
+-- 注意：多文档模式使用独立任务栈，不会返回 Activity 结果
 
 -- 返回结果给调用者
 this.result({ "返回数据" })
@@ -173,25 +181,47 @@ this.findResource("icon.png")   -- 获取资源 InputStream
 </code></pre>
 <hr>
 <h2>7. 权限管理</h2>
-<pre><code class="language-lua">-- 检查存储权限（已授权返回 true）
-if this.checkStoragePermission() then
-    -- 有权限
+<p>权限相关 API 分为三类：单个权限状态检查、批量检查并请求 Manifest 中声明的危险权限、存储权限专用流程。普通危险权限推荐用 <code>permissionLauncher</code> 或 <code>checkAllPermissions</code>；存储权限推荐用 <code>requestStoragePermission</code>。</p>
+<h3>单个权限检查</h3>
+<pre><code class="language-lua">-- 检查任意权限是否已授权
+local granted = this.checkPermission("android.permission.CAMERA")
+if granted then
+    print("相机权限已授权")
+else
+    print("相机权限未授权")
 end
-
--- 请求存储权限（结果回调 onStorageRequestResult）
-this.requestStoragePermission()
-function onStorageRequestResult(isGranted)
-    if isGranted then print("已授权") end
-end
-
--- 检查并请求所有 init.lua 中声明的危险权限
-this.checkAllPermissions()
-
--- 创建权限请求 Launcher
-local launcher = this.permissionLauncher(function(granted)
-    print("权限结果:", granted)
+</code></pre>
+<h3>请求单个权限</h3>
+<pre><code class="language-lua">-- 创建权限请求 Launcher
+local cameraPermission = this.permissionLauncher(function(granted)
+    print("相机权限结果:", granted)
 end)
-launcher.launch("android.permission.CAMERA")
+
+cameraPermission.launch("android.permission.CAMERA")
+</code></pre>
+<h3>检查并请求 Manifest 危险权限</h3>
+<p><code>checkAllPermissions</code> 会扫描应用 Manifest 中声明的危险权限，自动请求尚未授权的部分。返回 <code>true</code> 表示当前已经全部授权或没有需要请求的危险权限；返回 <code>false</code> 表示已经发起系统权限请求，结果会进入 <code>onRequestPermissionsResult</code>。</p>
+<pre><code class="language-lua">if this.checkAllPermissions() then
+    print("所有危险权限都已满足")
+else
+    print("已发起权限请求，等待用户选择")
+end
+
+function onRequestPermissionsResult(requestCode, permissions, grantResults)
+    print("权限请求完成:", requestCode)
+end
+</code></pre>
+<h3>存储权限</h3>
+<p><code>requestStoragePermission</code> 会根据 Android 版本选择正确流程：Android 11 及以上跳转所有文件访问权限设置页，Android 10 及以下请求传统外部存储读取权限。结果通过 <code>onStorageRequestResult(isGranted)</code> 返回。</p>
+<pre><code class="language-lua">if this.checkStoragePermission() then
+    print("已有存储权限")
+else
+    this.requestStoragePermission()
+end
+
+function onStorageRequestResult(isGranted)
+    print("存储权限结果:", isGranted)
+end
 </code></pre>
 <hr>
 <h2>8. 主题与颜色</h2>
@@ -315,20 +345,110 @@ local clazz = loader.loadClass("com.example.Plugin")
 local loaders = this.getClassLoaders()
 </code></pre>
 <hr>
-<h2>13. Activity 结果 Launcher</h2>
-<pre><code class="language-lua">-- 创建结果 Launcher（替代 startActivityForResult）
-local launcher = this.resultLauncher(function(result)
-    if result.getResultCode() == -1 then
+<h2>13. Activity 结果使用</h2>
+<p>结果回调分三类：Lua 页面之间返回值用 <code>newActivity</code> + <code>this.result</code> + <code>onResult</code>；启动系统页面或第三方 Activity 用 <code>resultLauncher</code>；单个权限请求用 <code>permissionLauncher</code>。旧式 <code>onActivityResult</code> 仍保留为兼容入口，但新代码优先使用前两种方式。</p>
+<h3>13.1 Lua 页面返回结果</h3>
+<p>调用方使用带请求码的 <code>newActivity</code> 打开另一个 Lua 文件，被打开页面调用 <code>this.result</code> 返回数组。返回后会先触发 <code>onResult</code>，如果 <code>onResult</code> 返回 <code>true</code>，则不会继续触发 <code>onActivityResult</code>。</p>
+<pre><code class="language-lua">-- main.lua：打开 other.lua，并等待返回值
+this.newActivity(1001, "other.lua", { "传给 other 的参数" })
+
+function onResult(name, ...)
+    print("返回页面:", name)       -- 通常是 "other.lua"
+    print("返回值:", ...)         -- this.result 传回的数组会展开
+    return true                  -- 已处理，拦截 onActivityResult
+end
+
+function onActivityResult(requestCode, resultCode, data)
+    print("原始结果:", requestCode, resultCode, data)
+end
+</code></pre>
+<pre><code class="language-lua">-- other.lua：返回结果并关闭当前页面
+function onCreate()
+    this.result({ "保存成功", 123, true })
+end
+</code></pre>
+<p><code>this.result</code> 会使用 <code>Activity.RESULT_OK</code> 作为返回码。只需要业务返回值时，直接处理 <code>onResult</code> 即可。</p>
+<h3>13.2 启动系统页面或第三方 Activity</h3>
+<p><code>resultLauncher</code> 是 Android Activity Result API 的封装，用于替代直接调用 <code>startActivityForResult</code>。推荐在 <code>onCreate</code> 或脚本初始化阶段创建 launcher，然后在按钮点击、菜单点击等交互中调用 <code>launch</code>。</p>
+<pre><code class="language-lua">-- 选择一张图片
+import "android.app.Activity"
+import "android.content.Intent"
+
+local pickImageLauncher = this.resultLauncher(function(result)
+    if result.getResultCode() == Activity.RESULT_OK then
         local data = result.getData()
-        print("返回数据:", data)
+        local uri = data and data.getData()
+        print("选择的图片:", uri)
+    else
+        print("用户取消选择")
     end
 end)
 
--- 使用
-import "android.content.Intent"
-local intent = Intent(Intent.ACTION_PICK)
-launcher.launch(intent)
+function pickImage()
+    local intent = Intent(Intent.ACTION_GET_CONTENT)
+    intent.setType("image/*")
+    pickImageLauncher.launch(intent)
+end
 </code></pre>
+<p>启动 Android 设置页、文档选择器、联系人选择器等都可以使用同一个模式：先创建 <code>Intent</code>，再调用 <code>launcher.launch(intent)</code>。</p>
+<pre><code class="language-lua">-- 打开应用详情设置页，返回后重新检查状态
+import "android.app.Activity"
+import "android.content.Intent"
+import "android.net.Uri"
+import "android.provider.Settings"
+
+local settingsLauncher = this.resultLauncher(function(result)
+    print("设置页已返回:", result.getResultCode())
+end)
+
+local intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+intent.setData(Uri.parse("package:" .. this.getPackageName()))
+settingsLauncher.launch(intent)
+</code></pre>
+<h3>13.3 权限请求</h3>
+<p>请求单个权限使用 <code>permissionLauncher</code>。如果需要存储权限，优先使用 <code>requestStoragePermission</code>，它会按 Android 版本自动选择正确流程。</p>
+<pre><code class="language-lua">-- 请求相机权限
+local cameraPermission = this.permissionLauncher(function(granted)
+    if granted then
+        print("相机权限已授权")
+    else
+        print("相机权限被拒绝")
+    end
+end)
+
+cameraPermission.launch("android.permission.CAMERA")
+</code></pre>
+<pre><code class="language-lua">-- 请求存储权限（推荐使用封装方法）
+this.requestStoragePermission()
+
+function onStorageRequestResult(granted)
+    print("存储权限:", granted)
+end
+</code></pre>
+<h3>13.4 旧式 onActivityResult 兼容</h3>
+<p>旧脚本如果直接调用 <code>startActivityForResult</code>，仍可通过 <code>onActivityResult</code> 接收结果。新代码不建议继续依赖这种方式，因为它需要手动维护 <code>requestCode</code>，也不如 launcher 方式清晰。</p>
+<pre><code class="language-lua">-- 兼容旧写法：能用，但新代码更推荐 resultLauncher
+import "android.content.Intent"
+
+local intent = Intent(Intent.ACTION_GET_CONTENT)
+intent.setType("image/*")
+this.startActivityForResult(intent, 2001)
+
+function onActivityResult(requestCode, resultCode, data)
+    if requestCode == 2001 then
+        print("旧式回调:", resultCode, data and data.getData())
+    end
+end
+</code></pre>
+<h3>13.5 常见注意点</h3>
+<ul>
+<li><code>onResult(name, ...)</code> 适合 Lua 页面之间传业务数据，参数来自被打开页面的 <code>this.result({ ... })</code>。</li>
+<li><code>onActivityResult(requestCode, resultCode, data)</code> 适合兼容旧脚本，或者确实需要原始 Android <code>Intent</code> 数据。</li>
+<li><code>onResult</code> 返回 <code>true</code> 表示结果已处理，会阻止继续调用 <code>onActivityResult</code>。</li>
+<li><code>this.newActivity("other.lua", true)</code> 是多文档模式，会创建独立任务栈，不会返回 Activity 结果。</li>
+<li><code>resultLauncher</code> 和 <code>permissionLauncher</code> 可以先保存为局部变量或全局变量，再在点击事件中调用 <code>launch</code>。</li>
+<li>启动系统页面时要根据 <code>result.getResultCode()</code> 判断用户是否完成操作；文件选择类结果通常从 <code>result.getData().getData()</code> 取 Uri。</li>
+</ul>
 <hr>
 <h2>14. 静态方法</h2>
 <pre><code class="language-lua">-- 获取其他 Activity 实例（按 Lua 文件名，不含扩展名）
