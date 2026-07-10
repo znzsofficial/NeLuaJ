@@ -37,66 +37,35 @@ class LuaActivityPermissions(private val activity: LuaActivity) {
         }
     
     fun checkAllPermissions(): Boolean {
-        if (activity.checkCallingOrSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-            try {
-                // 获取应用在 Manifest 中声明的所有权限
-                val requestedPermissions = activity.packageManager.getPackageInfo(
-                    activity.packageName,
-                    PackageManager.GET_PERMISSIONS
-                ).requestedPermissions
-                
-                // 筛选出需要请求的危险权限
-                val permissionsToRequest = requestedPermissions?.mapNotNull { permissionName ->
-                    try {
-                        val pInfo = activity.packageManager.getPermissionInfo(permissionName, 0)
-                        val protection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                            pInfo.protection
-                        } else {
-                            @Suppress("DEPRECATION")
-                            pInfo.protectionLevel and PermissionInfo.PROTECTION_MASK_BASE
-                        }
-                        if (protection == PermissionInfo.PROTECTION_DANGEROUS) {
-                            // 确认该权限当前是否尚未被授予
-                            if (activity.checkCallingOrSelfPermission(permissionName) != PackageManager.PERMISSION_GRANTED) {
-                                permissionName // 如果是需要请求的危险权限，则返回权限名
-                            } else {
-                                null // 如果已授予，则返回 null
-                            }
-                        } else {
-                            null // 如果不是危险权限，则返回 null
-                        }
-                    } catch (e: PackageManager.NameNotFoundException) {
-                        // 这个权限名在系统中找不到，忽略它
-                        e.printStackTrace()
-                        null
-                    }
-                } ?: emptyList() // 如果 requestedPermissions 为 null, 则返回一个空列表
-                
-                // 如果有需要请求的权限，则发起请求
-                if (permissionsToRequest.isNotEmpty()) {
-                    activity.requestPermissions(permissionsToRequest.toTypedArray(), 0)
-                    return false // 返回 false，表示权限请求已发出，等待用户响应
-                }
-                
-            } catch (e: Exception) {
-                // 捕获 getPackageInfo 可能抛出的异常
-                e.printStackTrace()
+        val permissionsToRequest = try {
+            val requestedPermissions = activity.packageManager.getPackageInfo(
+                activity.packageName,
+                PackageManager.GET_PERMISSIONS
+            ).requestedPermissions.orEmpty()
+            
+            requestedPermissions.filter { permissionName ->
+                isDangerousPermission(permissionName) && !checkPermission(permissionName)
             }
+        } catch (e: Exception) {
+            activity.sendError("checkAllPermissions", e)
+            emptyList()
         }
-        // 如果所有权限都已满足，或没有需要请求的权限，返回 true
+        
+        if (permissionsToRequest.isNotEmpty()) {
+            activity.requestPermissions(permissionsToRequest.toTypedArray(), 0)
+            return false
+        }
         return true
     }
     
-    fun checkPermission(permission: String?) {
-        if (activity.checkCallingOrSelfPermission(permission!!) != PackageManager.PERMISSION_GRANTED) {
-            // 注意：这里需要访问LuaActivity的permissions字段，但为了保持封装性，我们暂时不处理
-            // 实际上这个方法在原始代码中也没有被使用
-        }
+    fun checkPermission(permission: String?): Boolean {
+        if (permission.isNullOrBlank()) return false
+        return ContextCompat.checkSelfPermission(activity, permission) == PackageManager.PERMISSION_GRANTED
     }
     
     /**
      * 内部会自动判断Android版本，发起正确的权限申请流程。
-     * 结果将通过全局Lua函数 onPermissionResult(isGranted) 异步返回。
+     * 结果将通过全局Lua函数 onStorageRequestResult(isGranted) 异步返回。
      */
     @CallLuaFunction
     fun requestStoragePermission() {
@@ -148,10 +117,31 @@ class LuaActivityPermissions(private val activity: LuaActivity) {
      * 申请 Android 6-10 的 READ/WRITE 权限。
      */
     private fun requestLegacyStoragePermissions() {
-        val permissions = arrayOf(
-            Manifest.permission.READ_EXTERNAL_STORAGE,
-            Manifest.permission.WRITE_EXTERNAL_STORAGE
-        )
+        val permissions = buildList {
+            add(Manifest.permission.READ_EXTERNAL_STORAGE)
+            if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
+                add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            }
+        }.filter { !checkPermission(it) }.toTypedArray()
+        if (permissions.isEmpty()) {
+            activity.runFunc(STORAGE_CALLBACK_FUNCTION, true)
+            return
+        }
         requestLegacyPermissionsLauncher.launch(permissions)
+    }
+    
+    private fun isDangerousPermission(permissionName: String): Boolean {
+        return try {
+            val permissionInfo = activity.packageManager.getPermissionInfo(permissionName, 0)
+            val protection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                permissionInfo.protection
+            } else {
+                @Suppress("DEPRECATION")
+                permissionInfo.protectionLevel and PermissionInfo.PROTECTION_MASK_BASE
+            }
+            protection == PermissionInfo.PROTECTION_DANGEROUS
+        } catch (_: PackageManager.NameNotFoundException) {
+            false
+        }
     }
 }

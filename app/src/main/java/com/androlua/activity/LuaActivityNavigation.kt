@@ -1,15 +1,20 @@
 package com.androlua.activity
 
+import android.app.Activity
 import android.content.Intent
-import android.util.SparseArray
+import androidx.activity.result.ActivityResult
 import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContract
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.app.ActivityOptionsCompat
 import androidx.core.net.toUri
 import com.androlua.LuaActivity
 import com.androlua.LuaActivityX
 import com.nekolaska.ktx.overridePendingTransition
 import com.nekolaska.ktx.toLuaValue
+import org.luaj.LuaFunction
 import java.io.FileNotFoundException
+import java.util.ArrayDeque
 
 class LuaActivityNavigation(private val activity: LuaActivity) {
     
@@ -19,37 +24,32 @@ class LuaActivityNavigation(private val activity: LuaActivity) {
         private const val NAME = "name"
     }
     
-    private val pendingResults = SparseArray<String?>()
-    private var lastRequestCode = 0
+    private data class PendingLuaActivityResult(val requestCode: Int, val name: String?)
+    
+    private val pendingResults = ArrayDeque<PendingLuaActivityResult>()
+    private val pendingResultCallbacks = ArrayDeque<LuaFunction>()
+    private val pendingPermissionCallbacks = ArrayDeque<LuaFunction>()
+    private var launcherActivityResultDispatched = false
     
     @Suppress("DEPRECATION")
     private val activityLauncher: ActivityResultLauncher<Intent> =
         activity.registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            val requestCode = lastRequestCode
-            val name = pendingResults.get(requestCode)
-            pendingResults.remove(requestCode)
-            
-            val data = result.data
-            if (data != null) {
-                val res = when (val serializable = data.getSerializableExtra(DATA)) {
-                    is Array<*> -> serializable
-                    is List<*> -> serializable.toTypedArray()
-                    null -> null
-                    else -> arrayOf(serializable)
-                }
-                //val res = data.getSerializableExtra(DATA, Array<Any?>::class.java)
-                if (name != null) {
-                    if (res == null) activity.runFunc("onResult", name)
-                    else {
-                        val args = arrayOfNulls<Any>(res.size + 1)
-                        args[0] = name
-                        System.arraycopy(res, 0, args, 1, res.size)
-                        val handled = activity.runFunc("onResult", *args)
-                        if (handled is Boolean && handled) return@registerForActivityResult
-                    }
-                }
-            }
-            activity.runFunc("onActivityResult", requestCode, result.resultCode, data)
+            launcherActivityResultDispatched = true
+            val pending = pendingResults.pollFirst()
+            val requestCode = pending?.requestCode ?: 0
+            val name = pending?.name
+            dispatchActivityResult(requestCode, result.resultCode, result.data, name)
+        }
+    
+    private val sharedResultLauncher: ActivityResultLauncher<Intent> =
+        activity.registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            launcherActivityResultDispatched = true
+            pendingResultCallbacks.pollFirst()?.safeCall(result.toLuaValue())
+        }
+    
+    private val sharedPermissionLauncher: ActivityResultLauncher<String> =
+        activity.registerForActivityResult(ActivityResultContracts.RequestPermission()) { result ->
+            pendingPermissionCallbacks.pollFirst()?.safeCall(result.toLuaValue())
         }
     
     private fun buildLuaIntent(path: String, arg: Array<Any?>?, newDocument: Boolean): Intent {
@@ -80,10 +80,51 @@ class LuaActivityNavigation(private val activity: LuaActivity) {
         if (newDocument) {
             activity.startActivity(intent)
         } else {
-            lastRequestCode = req
-            pendingResults.put(req, pendingName)
-            activityLauncher.launch(intent)
+            check(pendingResults.isEmpty()) { "Previous Lua activity result is still pending" }
+            val pending = PendingLuaActivityResult(req, pendingName)
+            pendingResults.addLast(pending)
+            try {
+                activityLauncher.launch(intent)
+            } catch (e: RuntimeException) {
+                pendingResults.removeLastOccurrence(pending)
+                throw e
+            }
         }
+    }
+
+    fun resetLauncherActivityResultDispatched() {
+        launcherActivityResultDispatched = false
+    }
+    
+    fun wasLauncherActivityResultDispatched(): Boolean {
+        val dispatched = launcherActivityResultDispatched
+        launcherActivityResultDispatched = false
+        return dispatched
+    }
+    
+    fun dispatchLegacyActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        dispatchActivityResult(requestCode, resultCode, data, data?.getStringExtra(NAME))
+    }
+    
+    @Suppress("DEPRECATION")
+    private fun dispatchActivityResult(requestCode: Int, resultCode: Int, data: Intent?, name: String?) {
+        if (data != null && name != null) {
+            val res = when (val serializable = data.getSerializableExtra(DATA)) {
+                is Array<*> -> serializable
+                is List<*> -> serializable.toTypedArray()
+                null -> null
+                else -> arrayOf(serializable)
+            }
+            if (res == null) activity.runFunc("onResult", name)
+            else {
+                val args = arrayOfNulls<Any>(res.size + 1)
+                args[0] = name
+                System.arraycopy(res, 0, args, 1, res.size)
+                val handled = activity.runFunc("onResult", *args)
+                if (handled is Boolean && handled) return
+            }
+        }
+        activity.runFunc("onActivityResult", requestCode, resultCode, data)
     }
     
     /**
@@ -233,19 +274,55 @@ class LuaActivityNavigation(private val activity: LuaActivity) {
         val res = Intent()
         res.putExtra(NAME, activity.intent.getStringExtra(NAME))
         res.putExtra(DATA, data)
-        activity.setResult(0, res)
+        activity.setResult(Activity.RESULT_OK, res)
         activity.finish()
     }
     
-    fun resultLauncher(callback: org.luaj.LuaFunction): ActivityResultLauncher<Intent> {
-        return activity.registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            callback.call(result.toLuaValue())
+    fun resultLauncher(callback: LuaFunction): ActivityResultLauncher<Intent> {
+        return object : ActivityResultLauncher<Intent>() {
+            override val contract: ActivityResultContract<Intent, ActivityResult> =
+                ActivityResultContracts.StartActivityForResult()
+            
+            override fun launch(input: Intent, options: ActivityOptionsCompat?) {
+                check(pendingResultCallbacks.isEmpty()) { "Previous activity result is still pending" }
+                pendingResultCallbacks.addLast(callback)
+                try {
+                    sharedResultLauncher.launch(input, options)
+                } catch (e: RuntimeException) {
+                    pendingResultCallbacks.removeLastOccurrence(callback)
+                    throw e
+                }
+            }
+            
+            override fun unregister() = Unit
         }
     }
     
-    fun permissionLauncher(callback: org.luaj.LuaFunction): ActivityResultLauncher<String> {
-        return activity.registerForActivityResult(ActivityResultContracts.RequestPermission()) { result ->
-            callback.call(result.toLuaValue())
+    fun permissionLauncher(callback: LuaFunction): ActivityResultLauncher<String> {
+        return object : ActivityResultLauncher<String>() {
+            override val contract: ActivityResultContract<String, Boolean> =
+                ActivityResultContracts.RequestPermission()
+            
+            override fun launch(input: String, options: ActivityOptionsCompat?) {
+                check(pendingPermissionCallbacks.isEmpty()) { "Previous permission result is still pending" }
+                pendingPermissionCallbacks.addLast(callback)
+                try {
+                    sharedPermissionLauncher.launch(input, options)
+                } catch (e: RuntimeException) {
+                    pendingPermissionCallbacks.removeLastOccurrence(callback)
+                    throw e
+                }
+            }
+            
+            override fun unregister() = Unit
+        }
+    }
+    
+    private fun LuaFunction.safeCall(arg: org.luaj.LuaValue) {
+        try {
+            call(arg)
+        } catch (e: Exception) {
+            activity.sendError("activity result callback", e)
         }
     }
 }

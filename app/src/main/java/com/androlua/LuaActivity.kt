@@ -31,7 +31,6 @@ import android.os.StrictMode
 import android.os.StrictMode.ThreadPolicy
 import android.provider.MediaStore
 import android.provider.Settings
-import android.util.SparseArray
 import android.view.ContextMenu
 import android.view.ContextMenu.ContextMenuInfo
 import android.view.KeyEvent
@@ -153,12 +152,14 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     private lateinit var mLuaDexLoader: LuaDexLoader
     private val mGc = ArrayList<LuaGcable>()
     private var mReceiver: LuaBroadcastReceiver? = null
+    private val registeredReceivers = ArrayList<LuaBroadcastReceiver>()
     private var pageName = "main"
     private var mOnKeyShortcut: LuaValue? = null
     private var mOnKeyDown: LuaValue? = null
     private var mOnKeyUp: LuaValue? = null
     private var mOnKeyLongPress: LuaValue? = null
     private var mOnTouchEvent: LuaValue? = null
+    private var handlingError = false
     private val logEvents = MutableSharedFlow<String>(extraBufferCapacity = 128)
     
     // 创建辅助类实例
@@ -208,7 +209,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
             logEvents.collect { msg ->
                 showToast(msg)
                 logAdapter.add(msg)
-                logs.add(msg)
+                addLog(msg)
             }
         }
         initENV()
@@ -317,6 +318,16 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         runFunc("onRequestPermissionsResult", requestCode, permissions, grantResults)
+    }
+    
+    @Deprecated("Use Activity Result APIs instead.")
+    @CallLuaFunction
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        navigationHelper.resetLauncherActivityResultDispatched()
+        super.onActivityResult(requestCode, resultCode, data)
+        if (!navigationHelper.wasLauncherActivityResultDispatched()) {
+            navigationHelper.dispatchLegacyActivityResult(requestCode, resultCode, data)
+        }
     }
     
     @CallLuaFunction
@@ -448,7 +459,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     
     fun checkAllPermissions(): Boolean = permissionsHelper.checkAllPermissions()
     
-    private fun checkPermission(permission: String?) = permissionsHelper.checkPermission(permission)
+    fun checkPermission(permission: String?): Boolean = permissionsHelper.checkPermission(permission)
     
     @CallLuaFunction
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
@@ -611,11 +622,20 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     
     @CallLuaFunction
     override fun sendError(title: String?, exception: Exception) {
-        when (runFunc("onError", title, exception)?.toString()) {
-            "trace" -> sendMsg("$title: ${exception.message}\n${exception.stackTraceToString()}")
-            "message" -> sendMsg(exception.message)
-            "title" -> sendMsg(title)
-            "log", null -> sendMsg("$title: ${exception.message}")
+        if (handlingError) {
+            sendMsg("$title: ${exception.message}")
+            return
+        }
+        handlingError = true
+        try {
+            when (runFunc("onError", title, exception)?.toString()) {
+                "trace" -> sendMsg("$title: ${exception.message}\n${exception.stackTraceToString()}")
+                "message" -> sendMsg(exception.message)
+                "title" -> sendMsg(title)
+                "log", null -> sendMsg("$title: ${exception.message}")
+            }
+        } finally {
+            handlingError = false
         }
     }
     
@@ -645,32 +665,44 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     }
     
     fun registerReceiver(receiver: LuaBroadcastReceiver?, filter: IntentFilter): Intent? {
-        return ContextCompat.registerReceiver(
+        val result = ContextCompat.registerReceiver(
             this,
             receiver,
             filter,
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
+        if (receiver != null && !registeredReceivers.contains(receiver)) {
+            registeredReceivers.add(receiver)
+        }
+        return result
     }
     
     fun registerReceiver(ltr: OnReceiveListener?, filter: IntentFilter): Intent? {
-        return ContextCompat.registerReceiver(
+        val receiver = LuaBroadcastReceiver(ltr)
+        val result = ContextCompat.registerReceiver(
             this,
-            LuaBroadcastReceiver(ltr),
+            receiver,
             filter,
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
+        registeredReceivers.add(receiver)
+        return result
     }
     
     fun registerReceiver(filter: IntentFilter): Intent? {
-        if (mReceiver != null) unregisterReceiver(mReceiver)
+        mReceiver?.let {
+            runCatching { unregisterReceiver(it) }
+            registeredReceivers.remove(it)
+        }
         mReceiver = LuaBroadcastReceiver(this)
-        return ContextCompat.registerReceiver(
+        val result = ContextCompat.registerReceiver(
             this,
             mReceiver,
             filter,
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
+        registeredReceivers.add(mReceiver!!)
+        return result
     }
     
     @CallLuaFunction
@@ -693,7 +725,11 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
             runCatching { it.gc() }
         }
         mGc.clear()
-        if (mReceiver != null) unregisterReceiver(mReceiver)
+        registeredReceivers.forEach { receiver ->
+            runCatching { unregisterReceiver(receiver) }
+        }
+        registeredReceivers.clear()
+        mReceiver = null
         sLuaActivityMap.remove(pageName)
         if (equals(sActivity)) sActivity = null
         super.onDestroy()
@@ -939,7 +975,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
     
     /**
      * 内部会自动判断Android版本，发起正确的权限申请流程。
-     * 结果将通过全局Lua函数 onPermissionResult(isGranted) 异步返回。
+     * 结果将通过全局Lua函数 onStorageRequestResult(isGranted) 异步返回。
      */
     @CallLuaFunction
     fun requestStoragePermission() = permissionsHelper.requestStoragePermission()
@@ -954,9 +990,17 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         private const val ARG = "arg"
         private const val DATA = "data"
         private const val NAME = "name"
+        private const val MAX_LOGS = 5000
         
         @JvmField
         var logs = ArrayList<String?>()
+        
+        private fun addLog(msg: String?) {
+            logs.add(msg)
+            while (logs.size > MAX_LOGS) {
+                logs.removeAt(0)
+            }
+        }
         
         @JvmField
         var sActivity: LuaActivity? = null
