@@ -3,6 +3,7 @@ import "android.widget.ScrollView"
 import "com.google.android.material.textview.MaterialTextView"
 import "com.google.android.material.divider.MaterialDivider"
 import "com.google.android.material.card.MaterialCardView"
+import "com.google.android.material.materialswitch.MaterialSwitch"
 local View = luajava.bindClass "android.view.View"
 local GradientDrawable = luajava.bindClass "android.graphics.drawable.GradientDrawable"
 local themeUtil = this.themeUtil
@@ -112,6 +113,50 @@ local settingItem = function(id, title, subtitle)
     }
 end
 
+-- MD3 开关设置项
+local switchItem = function(id, title, subtitle)
+    return {
+        LinearLayout,
+        layout_width = "match",
+        layout_height = "wrap",
+        id = id,
+        clickable = true,
+        focusable = true,
+        backgroundResource = rippleRes,
+        gravity = "center_vertical",
+        paddingLeft = "16dp",
+        paddingRight = "16dp",
+        paddingTop = "12dp",
+        paddingBottom = "12dp",
+        {
+            LinearLayout,
+            orientation = "vertical",
+            layout_width = "0dp",
+            layout_weight = 1,
+            {
+                MaterialTextView,
+                textSize = "16sp",
+                text = title,
+                textColor = onSurfaceColor,
+            },
+            {
+                MaterialTextView,
+                textSize = "12sp",
+                text = subtitle or "",
+                textColor = onSurfaceVarColor,
+                Visibility = subtitle and 0 or 8,
+            },
+        },
+        {
+            MaterialSwitch,
+            id = id .. "Switch",
+            layout_marginLeft = "12dp",
+            clickable = false,
+            focusable = false,
+        },
+    }
+end
+
 local divider = function()
     return {
         MaterialDivider,
@@ -209,6 +254,15 @@ return {
         ),
 
         -- ── 编辑器 ──
+        sectionTitle(res.string.editor),
+        card(
+            settingItem("SymbolBarItem", res.string.symbol_bar, res.string.symbol_bar_desc),
+            divider(),
+            switchItem("SymbolBarTwoRowsItem", res.string.symbol_bar_two_rows, res.string.symbol_bar_two_rows_desc),
+            divider(),
+            switchItem("EditorMagnifierItem", res.string.editor_magnifier, res.string.editor_magnifier_desc)
+        ),
+
         sectionTitle(res.string.editor_highlight_color),
         card(
             colorItem("BaseWord", "标识符"),

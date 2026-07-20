@@ -73,6 +73,85 @@ local input_package = {
     },
 }
 
+local input_symbol_bar = {
+    LinearLayout,
+    orientation = "vertical",
+    layout_width = "match",
+    layout_height = "match",
+    paddingLeft = "20dp",
+    paddingTop = "20dp",
+    paddingRight = "20dp",
+    Focusable = true,
+    FocusableInTouchMode = true,
+    {
+        MaterialTextField,
+        layout_width = "fill",
+        layout_height = "wrap",
+        textSize = "14dp",
+        hint = res.string.symbol_bar_hint,
+        tintColor = ColorUtil.getColorPrimary(),
+        style = MDC_R.style.Widget_Material3_TextInputLayout_OutlinedBox,
+        singleLine = false,
+        minLines = 8,
+        id = "inputField",
+    },
+}
+
+local defaultSymbolBar = {
+    "fun", "(", ")", "[", "]", "{", "}",
+    "\"", "=", ":", ".", ",", ";", "_",
+    "+", "-", "*", "/", "\\", "%",
+    "#", "^", "$", "?", "&", "|",
+    "<", ">", "~", "'"
+}
+
+local defaultSymbolBarText = table.concat(defaultSymbolBar, "\n")
+
+local formatSymbolBarPreview = function(raw)
+    if type(raw) ~= "string" or raw == "" then
+        return res.string._default
+    end
+    local symbols = {}
+    for line in (raw .. "\n"):gmatch("(.-)\n") do
+        local symbol = line:match("^%s*(.-)%s*$")
+        if symbol and symbol ~= "" then
+            table.insert(symbols, symbol)
+        end
+    end
+    if #symbols == 0 then
+        return res.string._default
+    end
+    if #symbols > 8 then
+        local preview = {}
+        for i = 1, 8 do
+            preview[i] = symbols[i]
+        end
+        return table.concat(preview, " ") .. " …"
+    end
+    return table.concat(symbols, " ")
+end
+
+local normalizeSymbolBarText = function(raw)
+    if type(raw) ~= "string" then
+        return nil
+    end
+    local symbols = {}
+    for line in (raw .. "\n"):gmatch("(.-)\n") do
+        local symbol = line:match("^%s*(.-)%s*$")
+        if symbol and symbol ~= "" then
+            table.insert(symbols, symbol)
+        end
+    end
+    if #symbols == 0 then
+        return nil
+    end
+    return table.concat(symbols, "\n")
+end
+
+local resetSymbolBarDesc = function()
+    SymbolBarItemDesc.text = formatSymbolBarPreview(this.getSharedData("symbol_bar", nil))
+end
+
 local defaultMap = {
     BaseWord = 0xff4477e0,
     KeyWord = 0xffb4002d,
@@ -229,6 +308,48 @@ resetColor("Comment")
 resetColor("Global")
 resetColor("Local")
 resetColor("Upval")
+
+-- ── 符号栏 ──
+SymbolBarItem.onClick = function()
+    local views = {}
+    MaterialAlertDialogBuilder(this)
+        .setTitle(res.string.symbol_bar)
+        .setView(loadlayout(input_symbol_bar, views))
+        .setPositiveButton(android.R.string.ok, function()
+            local normalized = normalizeSymbolBarText(views.inputField.text)
+            this.setSharedData("symbol_bar", normalized)
+            resetSymbolBarDesc()
+        end)
+        .setNegativeButton(android.R.string.cancel, nil)
+        .setNeutralButton(res.string._default, function()
+            this.setSharedData("symbol_bar", nil)
+            resetSymbolBarDesc()
+        end)
+        .show()
+    views.inputField.text = this.getSharedData("symbol_bar", defaultSymbolBarText)
+end
+
+resetSymbolBarDesc()
+
+local function isSharedTruthy(value)
+    return value == true or value == "true" or value == 1
+end
+
+-- ── 双行符号栏 ──
+SymbolBarTwoRowsItemSwitch.checked = isSharedTruthy(this.getSharedData("symbol_bar_two_rows", false))
+SymbolBarTwoRowsItem.onClick = function()
+    local enabled = not SymbolBarTwoRowsItemSwitch.isChecked()
+    SymbolBarTwoRowsItemSwitch.checked = enabled
+    this.setSharedData("symbol_bar_two_rows", enabled)
+end
+
+-- ── 编辑器放大镜 ──
+EditorMagnifierItemSwitch.checked = isSharedTruthy(this.getSharedData("editor_magnifier", true))
+EditorMagnifierItem.onClick = function()
+    local enabled = not EditorMagnifierItemSwitch.isChecked()
+    EditorMagnifierItemSwitch.checked = enabled
+    this.setSharedData("editor_magnifier", enabled)
+end
 
 -- ── 调试应用 ──
 CustomApp.onClick = function()

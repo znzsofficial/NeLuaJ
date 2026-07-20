@@ -180,12 +180,17 @@ function _M.init()
     --设置字体
     mLuaEditor.setTypeface(res.font.code)
 
+    local function isMagnifierEnabled()
+        local value = this.getSharedData("editor_magnifier", true)
+        return value == true or value == "true" or value == 1
+    end
+
     --编辑器 放大镜 和 ActionMode
     mLuaEditor.OnSelectionChangedListener = function(status, start, end_)
         _M1.javaClassAnalyse(mLuaEditor, status)
         if not (_clipboardActionMode) and status then
             activity.startSupportActionMode(getActionMode(mLuaEditor))
-            MagnifierManager.Available = true
+            MagnifierManager.Available = isMagnifierEnabled()
         elseif _clipboardActionMode and not (status) then
             _clipboardActionMode.finish()
             _clipboardActionMode = nil
@@ -195,7 +200,7 @@ function _M.init()
     end
 
     mLuaEditor.setOnTouchListener(function(view, event)
-        if MagnifierManager.Available == true then
+        if MagnifierManager.Available == true and isMagnifierEnabled() then
             local action = event.action
             if action == MotionEvent.ACTION_DOWN or action == MotionEvent.ACTION_MOVE then
                 local relativeCaretX = view.getCaretX() - view.getScrollX()
