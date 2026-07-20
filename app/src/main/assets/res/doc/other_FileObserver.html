@@ -1,27 +1,31 @@
 ﻿<!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="doc.css" />
     <script src="doc.js" defer></script>
-    <title>FileObserver 示例</title>
+    <title>FileObserver</title>
   </head>
   <body>
     <main class="markdown-export">
-<h2>FileObserver 示例</h2>
-<pre><code class="language-lua">local FileObserver = luajava.bindClass "android.os.FileObserver"
-local MyObserver = FileObserver.override{
-  onEvent = function(super, event, path)
-    switch (event)
+      <h1>FileObserver</h1>
+      <p>使用 Android <code>FileObserver</code> 监听目录变化。NeLuaJ+ 可通过 <code>override</code> 覆盖 <code>onEvent</code> 实现。</p>
+
+      <h2>示例</h2>
+      <pre><code class="language-lua">local FileObserver = luajava.bindClass "android.os.FileObserver"
+
+local MyObserver = FileObserver.override {
+  onEvent = function(superCall, event, path)
+    switch event
      case FileObserver.CREATE
-      print("File created: ",super(), event, path)
-
+      print("created", path)
      case FileObserver.DELETE
-      print("File deleted: ",super(), event, path)
-
+      print("deleted", path)
      case FileObserver.MODIFY
-      print("File modified: ",super(), event, path)
+      print("modified", path)
+     default
+      print("event", event, path)
     end
   end
 }
@@ -30,12 +34,28 @@ local observer = MyObserver("/sdcard/Android")
 observer.startWatching()
 
 function onDestroy()
-  print("stop")
   observer.stopWatching()
 end
 </code></pre>
+
+      <h2>要点</h2>
+      <ul>
+        <li>必须在合适时机 <code>startWatching()</code>，并在 <code>onDestroy</code> 中 <code>stopWatching()</code>，避免泄漏。</li>
+        <li><code>path</code> 参数通常是相对被监听目录的名称，不一定是绝对路径。</li>
+        <li>事件在系统线程回调，更新 UI 时请切回主线程（如 <code>call</code> / Activity 方法）。</li>
+        <li>Android 10+ 对共享存储监听可能受限，优先监听应用可访问目录。</li>
+      </ul>
+
+      <h2>常见事件</h2>
+      <div class="table-wrapper"><table>
+        <thead><tr><th>常量</th><th>含义</th></tr></thead>
+        <tbody>
+          <tr><td><code>CREATE</code></td><td>创建</td></tr>
+          <tr><td><code>DELETE</code></td><td>删除</td></tr>
+          <tr><td><code>MODIFY</code></td><td>修改</td></tr>
+          <tr><td><code>MOVED_FROM</code> / <code>MOVED_TO</code></td><td>移动</td></tr>
+        </tbody>
+      </table></div>
     </main>
   </body>
 </html>
-
-

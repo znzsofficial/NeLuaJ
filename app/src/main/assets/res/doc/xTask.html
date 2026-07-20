@@ -1,37 +1,67 @@
 ﻿<!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="doc.css" />
     <script src="doc.js" defer></script>
-    <title>介绍</title>
+    <title>xTask 异步任务</title>
   </head>
   <body>
     <main class="markdown-export">
-<h2>介绍</h2>
-<p>NeLuaJ+ 实现了基于 kotlin 协程的异步函数。</p>
-<h3>使用</h3>
-<pre><code class="language-lua">xTask {
-    --dispatcher = "io",
-    task = function(coroutineContext)
-        return "ret"
-    end,
-    callback = function(result)
-        print(result)
-    end
+      <h1>xTask</h1>
+      <p><code>xTask</code> 是 NeLuaJ+ 基于 Kotlin 协程封装的异步任务 API，适合在后台做 IO / 计算，再回到主线程更新 UI。</p>
+
+      <h2>表参数写法（推荐）</h2>
+      <pre><code class="language-lua">xTask {
+  -- dispatcher = "io", -- 可选：使用 IO 调度器
+  task = function(coroutineContext)
+    -- 后台执行
+    local data = okhttp.get("https://example.com")
+    return data
+  end,
+  callback = function(result)
+    -- 主线程回调；成功时为返回值，失败时可能是错误信息
+    print(result)
+  end,
 }
--- 或
-xTask(function(coroutineContext)  end,
-function()  end
---,"io"
+</code></pre>
+
+      <h2>位置参数写法</h2>
+      <pre><code class="language-lua">xTask(
+  function(coroutineContext)
+    return "ok"
+  end,
+  function(result)
+    print(result)
+  end
+  -- , "io"  -- 可选 dispatcher
 )
 </code></pre>
-<p>dispatcher为"io"，使用io调度器</p>
-<p>回调函数的参数为异步函数的返回值或错误信息</p>
-<p>允许忽略回调函数</p>
+
+      <h2>参数说明</h2>
+      <div class="table-wrapper"><table>
+        <thead><tr><th>字段 / 参数</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td><code>task</code></td><td>后台执行的函数，可返回结果</td></tr>
+          <tr><td><code>callback</code></td><td>可选；任务结束后的回调</td></tr>
+          <tr><td><code>dispatcher</code></td><td>可选；传入 <code>"io"</code> 时使用 IO 调度器</td></tr>
+        </tbody>
+      </table></div>
+
+      <h2>注意</h2>
+      <ul>
+        <li>UI 操作应放在 <code>callback</code> 中，不要在 <code>task</code> 里直接改 View。</li>
+        <li>可以省略 <code>callback</code>，仅在后台执行副作用逻辑。</li>
+        <li>需要取消/更细粒度控制时，可结合返回的 job 封装（若当前版本暴露）自行管理。</li>
+      </ul>
+
+      <h2>与 task / thread 的区别</h2>
+      <ul>
+        <li><code>task</code>：传统异步任务封装。</li>
+        <li><code>thread</code>：直接开线程。</li>
+        <li><code>xTask</code>：协程调度，写法更接近结构化异步。</li>
+      </ul>
     </main>
   </body>
 </html>
-
-

@@ -1,23 +1,55 @@
 ﻿<!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="doc.css" />
     <script src="doc.js" defer></script>
-    <title>懒加载</title>
+    <title>lazy 懒加载</title>
   </head>
   <body>
     <main class="markdown-export">
-<h2>懒加载</h2>
-<pre><code class="language-lua">local v = lazy(this.getMediaDir)
-v = lazy(this.getLuaDir, "subdir")
-v = lazy(function() return "value" end)
-v = lazy(lambda () : "value")
-print(v.value)
+      <h1>lazy 懒加载</h1>
+      <p><code>lazy</code> 用于延迟计算：包装一个函数或带参数的调用，只有在读取 <code>.value</code> 时才真正执行，之后会缓存结果。</p>
+
+      <h2>基本用法</h2>
+      <pre><code class="language-lua">-- 无参方法
+local media = lazy(this.getMediaDir)
+
+-- 带参数方法：第二个参数起作为调用参数
+local sub = lazy(this.getLuaDir, "subdir")
+
+-- 匿名函数
+local v = lazy(function()
+  return heavyWork()
+end)
+
+-- LuaJ++ lambda
+local w = lazy(lambda(): "value")
+
+print(media.value) -- 首次访问时计算
+print(media.value) -- 直接使用缓存
 </code></pre>
+
+      <h2>行为说明</h2>
+      <ul>
+        <li>第一次访问 <code>.value</code> 时执行包装的逻辑。</li>
+        <li>结果会被缓存；再次访问不会重复执行（除非实现另行重置）。</li>
+        <li>适合初始化成本高、但未必每次都用到的路径、配置或对象。</li>
+      </ul>
+
+      <h2>适用场景</h2>
+      <ul>
+        <li>媒体目录、缓存目录等路径解析。</li>
+        <li>可选模块的延迟加载。</li>
+        <li>只在用户进入某页面时才需要的数据准备。</li>
+      </ul>
+
+      <h2>注意</h2>
+      <ul>
+        <li>包装的函数若依赖 UI 状态，应确保首次 <code>.value</code> 访问时上下文仍然有效。</li>
+        <li>若函数会抛错，错误会在首次访问时暴露，而不是创建 lazy 时。</li>
+      </ul>
     </main>
   </body>
 </html>
-
-

@@ -1,5 +1,5 @@
 ﻿<!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -9,17 +9,74 @@
   </head>
   <body>
     <main class="markdown-export">
-<h2>全局环境</h2>
-<h3>对象</h3>
-<div class="table-wrapper"><table><thead><tr><th align="left">变量名</th><th align="right">描述</th></tr></thead><tbody><tr><td align="left">this</td><td align="right">当前 LuaActivity 对象</td></tr><tr><td align="left">activity</td><td align="right">当前 LuaActivity 对象</td></tr><tr><td align="left">android</td><td align="right">JavaPackage 对象</td></tr><tr><td align="left">okHttp</td><td align="right">AsyncOkHttp 模块对象</td></tr><tr><td align="left">http</td><td align="right">同步网络模块对象</td></tr><tr><td align="left">saf</td><td align="right">存储访问框架模块对象</td></tr></tbody></table></div>
-<h3>类</h3>
-<div class="table-wrapper"><table><thead><tr><th align="left">变量名</th><th align="right">描述</th></tr></thead><tbody><tr><td align="left">Http</td><td align="right">异步网络模块</td></tr><tr><td align="left">R</td><td align="right">编辑器的 R 类</td></tr></tbody></table></div>
-<h3>表</h3>
-<div class="table-wrapper"><table><thead><tr><th align="left">变量名</th><th align="right">描述</th></tr></thead><tbody><tr><td align="left">okhttp</td><td align="right">同步网络模块</td></tr><tr><td align="left">json</td><td align="right">JSON 解析模块</td></tr><tr><td align="left">file</td><td align="right">文件操作模块</td></tr><tr><td align="left">res</td><td align="right">资源模块</td></tr><tr><td align="left">ext</td><td align="right">扩展模块</td></tr></tbody></table></div>
-<h3>函数</h3>
-<div class="table-wrapper"><table><thead><tr><th align="left">变量名</th><th align="right">描述</th></tr></thead><tbody><tr><td align="left">print</td><td align="right">打印</td></tr><tr><td align="left">printf</td><td align="right">带格式化的打印</td></tr><tr><td align="left">loadlayout</td><td align="right">布局加载</td></tr><tr><td align="left">task</td><td align="right">异步任务</td></tr><tr><td align="left">xTask</td><td align="right">基于协程的异步任务</td></tr><tr><td align="left">thread</td><td align="right">线程</td></tr><tr><td align="left">timer</td><td align="right">定时器</td></tr><tr><td align="left">call</td><td align="right">调用函数</td></tr><tr><td align="left">lazy</td><td align="right">懒加载</td></tr><tr><td align="left">dump</td><td align="right">序列化表</td></tr></tbody></table></div>
+      <h1>全局环境</h1>
+      <p>每个 <code>LuaActivity</code> 脚本都运行在统一的全局环境中。下列名称可直接使用，无需额外 <code>require</code>。</p>
+
+      <h2>对象</h2>
+      <div class="table-wrapper"><table>
+        <thead><tr><th>变量</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td><code>this</code> / <code>activity</code></td><td>当前 <code>LuaActivity</code> 实例</td></tr>
+          <tr><td><code>android</code></td><td><code>JavaPackage("android")</code>，用于访问 Android 包</td></tr>
+          <tr><td><code>okHttp</code></td><td>异步 OkHttp 封装对象</td></tr>
+          <tr><td><code>http</code></td><td>同步网络模块</td></tr>
+          <tr><td><code>saf</code></td><td>存储访问框架（SAF）模块</td></tr>
+        </tbody>
+      </table></div>
+
+      <h2>类</h2>
+      <div class="table-wrapper"><table>
+        <thead><tr><th>变量</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td><code>Http</code></td><td>异步网络相关 Java 类入口</td></tr>
+          <tr><td><code>R</code></td><td>应用资源 ID 类</td></tr>
+        </tbody>
+      </table></div>
+
+      <h2>模块表</h2>
+      <div class="table-wrapper"><table>
+        <thead><tr><th>变量</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td><code>okhttp</code></td><td>同步网络模块表</td></tr>
+          <tr><td><code>json</code></td><td>JSON 编解码</td></tr>
+          <tr><td><code>file</code></td><td>文件读写与目录操作</td></tr>
+          <tr><td><code>res</code></td><td>字符串、布局、字体等资源</td></tr>
+          <tr><td><code>ext</code></td><td>二进制 pack / unpack</td></tr>
+        </tbody>
+      </table></div>
+
+      <h2>函数</h2>
+      <div class="table-wrapper"><table>
+        <thead><tr><th>函数</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td><code>print</code></td><td>输出到日志 / Toast 体系</td></tr>
+          <tr><td><code>printf</code></td><td>格式化输出</td></tr>
+          <tr><td><code>loadlayout</code></td><td>加载布局表</td></tr>
+          <tr><td><code>task</code></td><td>异步任务</td></tr>
+          <tr><td><code>xTask</code></td><td>基于协程的异步任务</td></tr>
+          <tr><td><code>thread</code></td><td>后台线程</td></tr>
+          <tr><td><code>timer</code></td><td>定时器</td></tr>
+          <tr><td><code>call</code></td><td>主线程调用函数</td></tr>
+          <tr><td><code>lazy</code></td><td>懒加载包装</td></tr>
+          <tr><td><code>dump</code></td><td>序列化 Lua 表</td></tr>
+        </tbody>
+      </table></div>
+
+      <h2>示例</h2>
+      <pre><code class="language-lua">print(activity.getPackageName())
+print(this.getLuaDir())
+
+local body = okhttp.get("https://example.com")
+local t = json.decode('{"a":1}')
+file.save(this.getLuaPath("out.txt"), "hello")
+</code></pre>
+
+      <h2>相关文档</h2>
+      <ul>
+        <li><code>LuaActivity.html</code> — 宿主生命周期与页面能力</li>
+        <li><code>module_file.html</code> / <code>module_okhttp.html</code> / <code>module_res.html</code> — 各模块详情</li>
+        <li><code>LuaJ++.html</code> — 语法扩展</li>
+      </ul>
     </main>
   </body>
 </html>
-
-

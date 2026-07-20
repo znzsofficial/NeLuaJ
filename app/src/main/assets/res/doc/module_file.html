@@ -1,50 +1,73 @@
 ﻿<!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="doc.css" />
     <script src="doc.js" defer></script>
-    <title>介绍</title>
+    <title>file 模块</title>
   </head>
   <body>
     <main class="markdown-export">
-<h2>介绍</h2>
-<p>file 文件操作模块
-<br>
-所有函数均支持绝对路径和项目路径</p>
-<h3>readall</h3>
-<p>file.readall("main.lua")
-<br>
-file.readall("/sdcard/test.lua")
-<br>
-读取文件内容</p>
-<h3>list</h3>
-<p>file.list("/sdcard")
-<br>
-返回文件夹内容表 (使用astable实现，效率较低)</p>
-<h3>exists</h3>
-<p>file.exists(path)
-<br>
-判断文件是否存在</p>
-<h3>save</h3>
-<p>file.save(path, "print('hello world')")
-<br>
-保存文件</p>
-<h3>type</h3>
-<p>file.type(path)
-<br>
-返回 "dir" 或 "file"</p>
-<h3>info</h3>
-<p>file.info(path)
-<br>
-返回文件信息表</p>
-<h3>mkdir</h3>
-<p>file.mkdir("/sdcard/test")
-<br>
-创建文件夹及其父文件夹</p>
+      <h1>file 模块</h1>
+      <p><code>file</code> 提供常用文件与目录操作。路径支持绝对路径，也支持相对于工程 / 工作目录的路径（与当前运行上下文有关）。</p>
+
+      <h2>API</h2>
+
+      <h3>file.readall(path)</h3>
+      <pre><code class="language-lua">local text = file.readall("main.lua")
+local text2 = file.readall("/sdcard/test.lua")
+</code></pre>
+      <p>读取整个文件为字符串。</p>
+
+      <h3>file.save(path, content)</h3>
+      <pre><code class="language-lua">file.save("out.txt", "print('hello')")
+</code></pre>
+      <p>写入文件；必要时创建父目录（视实现而定）。</p>
+
+      <h3>file.exists(path)</h3>
+      <pre><code class="language-lua">if file.exists("init.lua") then
+  print("exists")
+end
+</code></pre>
+
+      <h3>file.type(path)</h3>
+      <pre><code class="language-lua">print(file.type("/sdcard")) -- "dir" 或 "file"
+</code></pre>
+
+      <h3>file.info(path)</h3>
+      <pre><code class="language-lua">local info = file.info("main.lua")
+-- 常见字段：name、path、size、isDirectory 等（以实际返回表为准）
+</code></pre>
+
+      <h3>file.list(path)</h3>
+      <pre><code class="language-lua">local names = file.list("/sdcard")
+for i, name in ipairs(names) do
+  print(i, name)
+end
+</code></pre>
+      <p>列出目录下名称；内部通过表转换实现，大目录可能偏慢。</p>
+
+      <h3>file.mkdir(path)</h3>
+      <pre><code class="language-lua">file.mkdir("/sdcard/NeLuaJ/demo")
+</code></pre>
+      <p>创建目录及其缺失的父目录。</p>
+
+      <h2>完整示例</h2>
+      <pre><code class="language-lua">local path = this.getLuaPath("cache/note.txt")
+file.mkdir(this.getLuaPath("cache"))
+file.save(path, "hello file module")
+if file.exists(path) then
+  print(file.readall(path))
+  print(file.type(path), file.info(path))
+end
+</code></pre>
+
+      <h2>相关</h2>
+      <ul>
+        <li><code>saf</code> — 分区存储下的持久化目录访问</li>
+        <li><code>this.getLuaPath</code> / <code>getMediaDir</code> — 推荐的应用内路径</li>
+      </ul>
     </main>
   </body>
 </html>
-
-

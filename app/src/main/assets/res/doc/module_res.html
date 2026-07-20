@@ -1,276 +1,195 @@
 ﻿<!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="doc.css" />
     <script src="doc.js" defer></script>
-    <title>NeLuaJ+ 的 res 模块介绍</title>
+    <title>res 模块</title>
   </head>
   <body>
     <main class="markdown-export">
-<h1>NeLuaJ+ 的 <code>res</code> 模块介绍</h1>
-<p><code>NeLuaJ+</code> 对 <code>LuaJ++</code> 的 <code>res</code> 模块进行了显著的增强和现代化改造，提供了类似原生 Android 资源系统的强大功能，并深度集成了多语言支持、暗黑模式、屏幕方向适配等高级特性。</p>
-<hr>
-<h2>功能概览</h2>
-<h3><strong>1. <code>res.string</code> (字符串资源)</strong></h3>
-<ul>
-<li><strong>主要功能</strong>: 管理多语言字符串资源，支持复杂的语言回退机制。</li>
-<li><strong>文件结构</strong>:
-<ul>
-<li><code>res/string/init.lua</code>: (可选) 存放所有语言通用的字符串。</li>
-<li><code>res/string/zh-rCN.lua</code>: (示例) 简体中文（中国）的特定字符串。</li>
-<li><code>res/string/zh.lua</code>: (示例) 所有中文地区的通用回退字符串。</li>
-<li><code>res/string/en.lua</code>: (示例) 英文的字符串。</li>
-<li><code>res/string/default.lua</code>: <strong>必须</strong>，用于指定当设备语言没有对应资源时的默认语言。返回一个字符串，如 <code>"en"</code>。</li>
-</ul>
-</li>
-<li><strong>加载逻辑</strong>:
-<ol>
-<li>加载 <code>init.lua</code>。</li>
-<li>根据设备当前 <code>Locale</code>，按以下优先级尝试加载语言文件：
-<ul>
-<li><strong>最具体</strong>: <code>语言-r国家/地区</code> (如 <code>zh-rCN</code>)</li>
-<li><strong>次具体</strong>: <code>语言</code> (如 <code>zh</code>)</li>
-<li><strong>默认</strong>: 由 <code>default.lua</code> 中指定的语言 (如 <code>en</code>)</li>
-</ul>
-</li>
-<li>一旦找到并加载成功，后续的回退步骤将被跳过。</li>
-</ol>
-</li>
-</ul>
-<hr>
-<h3><strong>2. <code>res.color</code> (颜色资源)</strong></h3>
-<ul>
-<li><strong>主要功能</strong>: 根据系统主题（白天/夜间模式）提供不同的颜色值。</li>
-<li><strong>文件结构</strong>:
-<ul>
-<li><code>res/color/init.lua</code>: (可选) 存放通用颜色值。</li>
-<li><code>res/color/day.lua</code>: 用于白天模式的颜色。</li>
-<li><code>res/color/night.lua</code>: 用于夜间（暗黑）模式的颜色。</li>
-</ul>
-</li>
-<li><strong>加载逻辑</strong>:
-<ol>
-<li>加载 <code>init.lua</code>。</li>
-<li>判断当前系统是否为夜间模式，自动加载 <code>night.lua</code> 或 <code>day.lua</code> 来覆盖或补充颜色值。</li>
-</ol>
-</li>
-</ul>
-<hr>
-<h3><strong>3. <code>res.dimen</code> (尺寸资源)</strong></h3>
-<ul>
-<li><strong>主要功能</strong>: 根据屏幕方向提供不同的尺寸值（如 dp, sp）。</li>
-<li><strong>文件结构</strong>:
-<ul>
-<li><code>res/dimen/init.lua</code>: (可选) 存放通用尺寸值。</li>
-<li><code>res/dimen/port.lua</code>: 用于竖屏 (<code>portrait</code>) 模式。</li>
-<li><code>res/dimen/land.lua</code>: 用于横屏 (<code>landscape</code>) 模式。</li>
-<li><code>res/dimen/undefined.lua</code>: (可选) 用于未定义方向。</li>
-</ul>
-</li>
-<li><strong>加载逻辑</strong>:
-<ol>
-<li>加载 <code>init.lua</code>。</li>
-<li>根据当前屏幕方向，自动加载对应的尺寸文件。</li>
-</ol>
-</li>
-</ul>
-<hr>
-<h3><strong>4. <code>res.drawable</code> 和 <code>res.bitmap</code> (图像资源)</strong></h3>
-<ul>
-<li>
-<p><strong>主要功能</strong>:</p>
-</li>
-<li>
-<p>从 <code>res/drawable/</code> 目录中加载图片资源。</p>
-</li>
-<li>
-<p><code>res.drawable</code>: 返回一个可以在视图中直接使用的 <code>Drawable</code> 对象。</p>
-</li>
-<li>
-<p><code>res.bitmap</code>: 返回一个 <code>Bitmap</code> 对象，用于更底层的图像操作。</p>
-</li>
-<li>
-<p><strong>支持的图片格式</strong>:</p>
-</li>
-<li>
-<p><code>png</code>, <code>jpg</code>, <code>gif</code>, <code>webp</code>, <code>jpeg</code>, <code>svg</code>, <code>bmp</code>, <code>heif</code>, <code>heic</code>, <code>avif</code></p>
-</li>
-<li>
-<p><strong>动态资源</strong>:</p>
-</li>
-<li>
-<p>如果存在同名的 <code>.lua</code> 文件（例如 <code>my_icon.lua</code>），则会执行该脚本并返回其结果，可以用于创建动态的 <code>Drawable</code>（例如 <code>ShapeDrawable</code>）。</p>
-</li>
-<li>
-<p><strong>用法</strong>:</p>
-</li>
-<li>
-<p><strong>作为 <code>table</code> 使用 (属性访问)</strong>: <code>res.drawable.my_icon</code>
-<br>
--   这是最基础的用法。它会查找 <code>my_icon</code> 对应的图片文件（如 <code>my_icon.png</code>）或 Lua 脚本 (<code>my_icon.lua</code>)，并返回一个 <code>Drawable</code> 对象。</p>
-</li>
-</ul>
-<pre><code>-   **示例**: `imageView.setImageDrawable(res.drawable.my_icon)`
+      <h1>res 模块</h1>
+      <p><code>res</code> 提供类似 Android 资源系统的访问方式，支持多语言、昼夜颜色、屏幕方向尺寸，以及 drawable / font / layout / raw 等资源加载。</p>
+      <p>在 Activity 脚本中通常可直接使用全局 <code>res</code>；也可 <code>require "res"</code>（模块会把表注入环境）。</p>
+
+      <h2>目录结构示例</h2>
+      <pre><code>res/
+  string/
+    init.lua
+    default.lua
+    zh.lua
+    zh-rCN.lua
+    en.lua
+  plurals/
+    init.lua
+    en.lua
+  color/
+    init.lua
+    day.lua
+    night.lua
+  dimen/
+    init.lua
+    port.lua
+    land.lua
+  drawable/
+    icon.png
+    badge.lua
+  font/
+    code.ttf
+  layout/
+    main.lua
+  raw/
+    config.json
 </code></pre>
-<ul>
-<li><strong>作为函数调用 (仅drawable)</strong>: <code>res.drawable(name, callback_or_color)</code>
-<br>
--   这种方式提供了更强大的动态处理能力，允许在加载 <code>Drawable</code> 后立即对其进行操作。它接受两个参数：</li>
-</ul>
-<pre><code>-   `name` (string, **必需**): 要加载的资源名称，与属性访问时的 `key` 相同。
+
+      <h2>1. res.string</h2>
+      <p>多语言字符串。加载顺序：</p>
+      <ol>
+        <li><code>res/string/init.lua</code>（可选，公共字符串）</li>
+        <li>设备语言：优先 <code>语言-r地区</code>（如 <code>zh-rCN</code>），再 <code>语言</code>（如 <code>zh</code>）</li>
+        <li><code>res/string/default.lua</code> 返回的默认语言标签（如 <code>"en"</code>）</li>
+        <li>最终兜底 <code>en</code></li>
+      </ol>
+
+      <pre><code class="language-lua">-- res/string/default.lua
+return "en"
+
+-- res/string/zh.lua
+hello = "你好"
+app_name = "示例"
+
+-- 使用
+print(res.string.hello)
+print(res.string.app_name)
 </code></pre>
-<pre><code>-   `callback_or_color` (function or number, **可选**):
-  -   如果是一个**函数**，该函数将在 `Drawable` 对象成功加载后被调用，并将 `Drawable` 作为其唯一参数。这非常适合执行回调操作。
-  -   如果是一个**整数**（颜色值），它会立即为加载到的 `Drawable` 应用一个颜色过滤器 (`setColorFilter`)。这是一种为图标动态着色的快捷方式。
+
+      <h2>2. res.language</h2>
+      <p>当前实际采用的语言标签字符串，例如 <code>"zh"</code>、<code>"zh-rCN"</code>、<code>"en"</code>。</p>
+      <pre><code class="language-lua">print(res.language)
+if res.language:find("zh") then
+  -- 中文环境
+end
 </code></pre>
-<ul>
-<li><strong>返回值</strong>:</li>
-</ul>
-<pre><code>-   两种用法最终都返回查找到的 `Drawable` 对象（经过可选操作处理后）。如果资源未找到，则返回 `nil`。
+
+      <h2>3. res.plurals</h2>
+      <p>按数量选择文案。语言选择跟随 <code>res.string</code>。俄语（语言标签以 <code>ru</code> 开头）会使用 one/few/many/other 规则。</p>
+      <pre><code class="language-lua">-- res/plurals/en.lua
+apple_count = {
+  zero = "No apples",
+  one = "1 apple",
+  other = "%d apples",
+}
+
+-- 使用：返回对应条目字符串（是否 sprintf 取决于你的资源写法）
+print(res.plurals.apple_count(0))
+print(res.plurals.apple_count(1))
+print(res.plurals.apple_count(5))
 </code></pre>
-<ul>
-<li><strong>函数调用示例</strong>:</li>
-</ul>
-<ol>
-<li><strong>使用颜色值进行着色</strong>:
-<pre><code class="language-lua">-- 加载 'user_icon' 并将其染成红色
-local red_icon = res.drawable("user_icon", 0xFFFF0000)
--- red_icon 现在是一个带红色滤镜的 Drawable
-some_view.setImageDrawable(red_icon)
+
+      <h2>4. res.color</h2>
+      <p>仅在 Activity 上下文可用。先加载 <code>res/color/init.lua</code>，再按是否夜间模式加载 <code>night.lua</code> 或 <code>day.lua</code>。</p>
+      <pre><code class="language-lua">-- res/color/day.lua
+primary = 0xFF1976D2
+bg = 0xFFFFFFFF
+
+-- res/color/night.lua
+primary = 0xFF90CAF9
+bg = 0xFF121212
+
+-- 使用
+view.setBackgroundColor(res.color.bg)
 </code></pre>
-</li>
-<li><strong>使用回调函数进行处理</strong>:
-<pre><code class="language-lua">-- 加载 'settings_icon' 并在加载后设置其尺寸
+
+      <h2>5. res.dimen</h2>
+      <p>仅在 Activity 上下文可用。先 <code>init.lua</code>，再按方向加载 <code>port.lua</code> / <code>land.lua</code>（或 undefined）。</p>
+      <pre><code class="language-lua">-- res/dimen/port.lua
+title_size = "20sp"
+padding = "16dp"
+
+-- 使用（具体值类型取决于你在文件中写的内容）
+print(res.dimen.title_size)
+</code></pre>
+
+      <h2>6. res.drawable</h2>
+      <p>从 <code>res/drawable/</code> 加载图片或同名 <code>.lua</code> 脚本。支持扩展名：png / jpg / jpeg / gif / webp / svg / bmp / heif / heic / avif。结果有缓存。</p>
+
+      <h3>属性访问</h3>
+      <pre><code class="language-lua">imageView.setImageDrawable(res.drawable.my_icon)
+-- 查找 res/drawable/my_icon.png 等，或 res/drawable/my_icon.lua
+</code></pre>
+
+      <h3>函数调用（可着色或回调）</h3>
+      <pre><code class="language-lua">-- 颜色整数：对 Drawable 应用 SRC_ATOP 颜色滤镜
+local redIcon = res.drawable("my_icon", 0xFFFF0000)
+imageView.setImageDrawable(redIcon)
+
+-- 回调：加载后处理 Drawable
 res.drawable("settings_icon", function(icon)
-    -- 在回调函数内部，'icon' 就是加载到的 Drawable 对象
-    icon.setBounds(0, 0, 100, 100)
-    my_layout.setBackground(icon)
+  icon.setBounds(0, 0, 100, 100)
+  someView.setBackground(icon)
 end)
 </code></pre>
-</li>
-</ol>
-<hr>
-<h3><strong>5. <code>res.font</code> (字体资源)</strong></h3>
-<ul>
-<li><strong>主要功能</strong>: 从 <code>res/font/</code> 目录加载自定义字体，实现了缓存机制。</li>
-<li><strong>支持的字体格式</strong>: <code>ttf</code>, <code>otf</code>。</li>
-<li><strong>返回值</strong>:
-<ul>
-<li>一个 <code>Typeface</code> 对象，可用于设置 <code>TextView</code> 等组件的字体。</li>
-</ul>
-</li>
-</ul>
-<hr>
-<h3><strong>6. <code>res.layout</code> (布局资源)</strong></h3>
-<ul>
-<li><strong>主要功能</strong>: 加载在 <code>.lua</code> 文件中定义的布局。</li>
-<li><strong>返回值</strong>:
-<ul>
-<li>返回一个描述布局结构的 Lua <code>table</code>。这个 <code>table</code> 可以被传递给 <code>loadlayout</code> 或其他视图构造函数。</li>
-</ul>
-</li>
-</ul>
-<hr>
-<h3><strong>7. <code>res.view</code> (视图资源)</strong></h3>
-<ul>
-<li><strong>主要功能</strong>: 直接加载一个布局文件并返回渲染后的视图对象。</li>
-<li><strong>返回值</strong>:
-<ul>
-<li>一个加载并解析完成的 Android 视图对象（通常是 <code>ViewGroup</code> 或 <code>View</code>），可以直接添加到界面上。</li>
-<li>相当于 <code>loadlayout(res.layout.xxx)</code> 的快捷方式。</li>
-</ul>
-</li>
-</ul>
-<hr>
-<h3><strong>8. <code>res.raw</code> (原始资源)</strong></h3>
-<ul>
-<li><strong>主要功能</strong>: 访问 <code>res/raw/</code> 目录下的任意原始文件，文件名大小写敏感，但访问时可以忽略扩展名。</li>
-<li><strong>用法</strong>:
-<ul>
-<li><code>res.raw.my_data</code>: 会自动查找 <code>my_data.json</code>, <code>my_data.txt</code> 等文件，并返回第一个匹配项的 Java <code>File</code> 对象。</li>
-<li><code>res.raw()</code> (作为函数调用): <code>res.raw("my_data")</code>, <code>res.raw("my_data", "GBK")</code> 会直接将文件内容作为字符串返回（默认UTF-8编码）。</li>
-</ul>
-</li>
-<li><strong>返回值</strong>:
-<ul>
-<li>通过属性访问 (<code>.</code>)：返回 <code>java.io.File</code> 对象。</li>
-<li>通过函数调用 (<code>()</code>): 返回文件内容的字符串。</li>
-</ul>
-</li>
-</ul>
-<hr>
-<h3><strong>9. <code>res.language</code> (当前语言)</strong></h3>
-<ul>
-<li><strong>主要功能</strong>: 获取当前 <code>res.string</code> 实际加载并使用的语言标签。</li>
-<li><strong>返回值</strong>:
-<ul>
-<li>一个字符串，例如 <code>"zh-rCN"</code>, <code>"zh"</code>, 或 <code>"en"</code>，反映了资源回退后的最终结果。这对于调试或在应用内显示当前语言非常有用。</li>
-</ul>
-</li>
-</ul>
-<hr>
-<h3><strong>10. <code>res.plurals</code> (复数资源)</strong></h3>
-<ul>
-<li><strong>主要功能</strong>: 根据数量返回适当的字符串形式，支持多语言和回退机制。</li>
-<li><strong>文件结构</strong>:
-<ul>
-<li><code>res/plurals/init.lua</code>: (可选) 存放所有语言通用的复数资源。</li>
-<li><code>res/plurals/zh-rCN.lua</code>: (示例) 简体中文（中国）的特定复数资源。</li>
-<li><code>res/plurals/zh.lua</code>: (示例) 所有中文地区的通用回退复数资源。</li>
-<li><code>res/plurals/en.lua</code>: (示例) 英文的复数资源。</li>
-</ul>
-</li>
-<li><strong>加载逻辑</strong>:
-<ol>
-<li>加载 <code>init.lua</code>。</li>
-<li>严格跟随 <code>res.string</code> 的语言检测结果，加载对应语言的复数资源文件。</li>
-</ol>
-</li>
-<li><strong>用法</strong>:
-<ul>
-<li><strong>获取复数字符串</strong>: <code>res.plurals.key(quantity)</code>
-<ul>
-<li><code>key</code> (string): 复数资源的键。</li>
-<li><code>quantity</code> (int): 数量，用于选择适当的字符串形式。</li>
-<li><strong>返回值</strong>: 对应数量的字符串形式。</li>
-</ul>
-</li>
-<li><strong>示例</strong>:
-<pre><code class="language-lua">local apples = res.plurals.apple_count(5)
-print(apples) -- 输出: "5 apples"
+      <p>未找到资源时返回 <code>nil</code>。</p>
+
+      <h2>7. res.bitmap</h2>
+      <p>与 drawable 相同查找路径，但返回 <code>Bitmap</code>（经 Coil 解码）。</p>
+      <pre><code class="language-lua">local bmp = res.bitmap.photo
+if bmp then
+  imageView.setImageBitmap(bmp)
+end
 </code></pre>
-</li>
-</ul>
-</li>
-<li><strong>资源文件示例</strong>:
-<pre><code class="language-lua">apple_count = {
-        zero = "No apples",
-        one = "1 apple",
-        other = "%d apples"
-}
+
+      <h2>8. res.font</h2>
+      <p>从 <code>res/font/</code> 加载 <code>.ttf</code> / <code>.otf</code>，返回 <code>Typeface</code>，带缓存。</p>
+      <pre><code class="language-lua">textView.setTypeface(res.font.code)
+-- 对应 res/font/code.ttf 或 code.otf
 </code></pre>
-<ul>
-<li><strong>俄语复数</strong>:
-<ul>
-<li>当当前语言标签以 <code>ru</code> 开头时，<code>res.plurals</code> 会按俄语规则选择 <code>one</code>、<code>few</code>、<code>many</code>、<code>other</code>。</li>
-<li>规则示例：<code>1</code> 使用 <code>one</code>，<code>2~4</code> 使用 <code>few</code>，<code>0</code>、<code>5~20</code> 使用 <code>many</code>，<code>21</code> 再次使用 <code>one</code>。</li>
-<li><strong>资源文件示例</strong>:</li>
-</ul>
-<pre><code class="language-lua">apple_count = {
-    one = "%d яблоко",
-    few = "%d яблока",
-    many = "%d яблок",
-    other = "%d яблока"
-}
+
+      <h2>9. res.layout</h2>
+      <p>加载 <code>res/layout/&lt;name&gt;.lua</code>，返回布局表（table），交给 <code>loadlayout</code> 使用。</p>
+      <pre><code class="language-lua">local layout = res.layout.main
+activity.setContentView(loadlayout(layout))
 </code></pre>
-</li>
-</ul>
-</li>
-</ul>
+
+      <h2>10. res.view</h2>
+      <p>加载并解析布局，直接返回 Android View，相当于 <code>loadlayout(res.layout.xxx)</code> 的快捷方式。</p>
+      <pre><code class="language-lua">local root = res.view.main
+activity.setContentView(root)
+</code></pre>
+
+      <h2>11. res.raw</h2>
+      <p>访问 <code>res/raw/</code> 下任意文件（按文件名不含扩展名匹配）。</p>
+      <pre><code class="language-lua">-- 属性访问：返回 java.io.File
+local f = res.raw.config
+print(f.getAbsolutePath())
+
+-- 函数调用：读取文本内容，默认 UTF-8
+local text = res.raw("config")
+local gbkText = res.raw("config", "GBK")
+print(text)
+</code></pre>
+
+      <h2>综合示例</h2>
+      <pre><code class="language-lua">activity.setTitle(res.string.app_name)
+activity.setContentView(res.view.main)
+
+titleView.setTextColor(res.color.primary)
+titleView.setTypeface(res.font.code)
+iconView.setImageDrawable(res.drawable("logo", res.color.primary))
+
+local cfg = res.raw("config")
+if cfg then
+  print(res.raw("config"))
+end
+</code></pre>
+
+      <h2>注意</h2>
+      <ul>
+        <li><code>res.color</code> / <code>res.dimen</code> 依赖 Activity 配置；非 Activity 上下文可能不可用。</li>
+        <li>drawable / bitmap / font / raw 都有缓存，同名资源热替换后可能需重启进程。</li>
+        <li>字符串与 plurals 的具体键名完全由你的资源文件定义。</li>
+      </ul>
     </main>
   </body>
 </html>
-
-

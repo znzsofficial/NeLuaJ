@@ -1,0 +1,226 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="doc.css" />
+    <script src="doc.js" defer></script>
+    <title>Java 互操作</title>
+  </head>
+  <body>
+    <main class="markdown-export">
+      <h1>Java 互操作</h1>
+      <p>本文汇总 NeLuaJ+ / LuaJ++ 中与 Java 交互的常用方式，内容提取自「便捷 API」与「LuaJ++」文档，便于单独查阅。</p>
+
+      <h2>1. 绑定类与创建实例</h2>
+      <pre><code class="language-lua">-- 绑定 Java 类
+local File = luajava.bindClass "java.io.File"
+local f = File("/sdcard/test.txt")
+
+-- 创建实例
+local list = luajava.newInstance("java.util.ArrayList")
+
+-- import 语法（LuaJ++）
+import "android.widget.TextView"
+import "java.util.*", "java.io.*"
+import str "java.lang.String"  -- 别名
+
+local tv = TextView(activity)
+</code></pre>
+
+      <h2>2. 表与数组转换</h2>
+      <pre><code class="language-lua">-- Java 集合 / 数组转 Lua 表
+local luaTable = luajava.astable(javaList)
+
+-- 创建 Java 数组
+local a = int[10]
+local b = int{1, 2, 3}
+local c = Integer[10]
+
+-- 数组长度与下标
+print(#a)
+print(a[1])      -- 或 a["1"] 视实现而定
+</code></pre>
+
+      <h2>3. 类扩展：array / new / class / override</h2>
+      <pre><code class="language-lua">Object.array{}     -- 创建数组
+print(Object.new)  -- 构造器
+print(Object.class) -- Class 对象
+Object.override{}  -- 覆盖方法（见下文）
+</code></pre>
+
+      <h2>4. 构造实例与接口实现</h2>
+      <pre><code class="language-lua">-- 直接 () 构造
+local b = ArrayList()
+local m = HashMap()
+
+-- 接口 / 抽象类表实现
+local i = interface {
+  methodName = function(arg)
+  end
+}
+local c = abstract {
+  methodName = function(super, arg)
+  end
+}
+
+-- 单方法接口可直接传函数
+local r1 = interface(function(arg)
+  print(arg)
+end)
+
+-- 已绑定的接口类同样支持
+Runnable(function()
+  print("run")
+end)
+</code></pre>
+
+      <h2>5. createProxy 代理</h2>
+      <pre><code class="language-lua">-- 字符串接口名 + 实现表
+local runnable = luajava.createProxy("java.lang.Runnable", {
+  run = function()
+    print("running")
+  end
+})
+
+-- 单方法接口可直接传函数
+local runnable2 = luajava.createProxy("java.lang.Runnable", function()
+  print("running")
+end)
+
+-- 已绑定的 Class
+local Runnable = luajava.bindClass("java.lang.Runnable")
+local runnable3 = luajava.createProxy(Runnable, function()
+  print("running")
+end)
+
+-- 多接口：最后一个参数为表或函数；按全部接口查找方法
+local proxy = luajava.createProxy(
+  Map,
+  Closeable,
+  {
+    get = function(key)
+      return key
+    end,
+    close = function()
+      print("closed")
+    end
+  }
+)
+</code></pre>
+      <p>未显式实现 <code>equals</code> / <code>hashCode</code> / <code>toString</code> 时，使用 Java 默认对象语义，避免作为 Map 键时匹配失败。</p>
+
+      <h2>6. override 覆盖方法</h2>
+      <p><code>override</code> 生成增强子类，只覆盖表中提供的方法。覆盖方法的第一个参数是 <code>superCall</code>，调用可执行父类原方法。</p>
+      <pre><code class="language-lua">local ArrayList = luajava.bindClass("java.util.ArrayList")
+
+local list = ArrayList.override {
+  add = function(superCall, value)
+    print("add:", value)
+    return superCall(value)
+  end
+}()
+
+-- 简写：类后直接跟实现表再构造
+list = ArrayList {
+  add = function(s, a)
+  end
+}
+
+-- 抽象类 / 普通类
+local MyObserver = FileObserver.override {
+  onEvent = function(superCall, event, path)
+    print(event, path)
+  end
+}
+local observer = MyObserver(path)
+</code></pre>
+      <p>未在表中提供的方法保持 Java 原有行为。<code>superCall(...)</code> 会按 Java 签名转换参数。</p>
+
+      <h2>7. 属性与 getter/setter 语法糖</h2>
+      <pre><code class="language-lua">-- set/get 可写成属性
+b.setText("")
+-- 等价
+b.text = ""
+
+t = b.getText()
+-- 等价
+t = b.text
+
+-- isXxx 简写
+view.isActivated()
+-- 可写作
+view.Activated
+
+-- 批量设置属性
+Button(this) {
+  text = "test",
+  enabled = false
+}
+</code></pre>
+
+      <h2>8. 监听器与函数式接口</h2>
+      <pre><code class="language-lua">-- 完整写法
+mBtn.setOnClickListener(View.OnClickListener {
+  onClick = function(v)
+    print(v)
+  end
+})
+
+-- 可省略接口类型
+mBtn.setOnClickListener({
+  onClick = function(v)
+    print(v)
+  end
+})
+
+-- 单方法接口可直接传函数
+mBtn.setOnClickListener(function(v)
+  print(v)
+end)
+
+-- 属性式
+mBtn.onClick = function(v)
+  print(v)
+end
+
+-- 非必要接口类型可省略
+mViewPager.addOnPageChangeListener {
+  onPageSelected = function(_)
+  end
+}
+
+obj.run(function()
+  -- do something
+end)
+</code></pre>
+
+      <h2>9. 元方法与其它</h2>
+      <pre><code class="language-lua">function Button:print()
+  print(self)
+end
+Button(this):print()
+
+-- Java 方法用 . 调用；(!) 表示无参等惯用法（视版本）
+b.add(!)
+
+-- 表键可用关键字字面量
+t = {}
+t.end = 123
+</code></pre>
+
+      <h2>10. 类型判断</h2>
+      <pre><code class="language-lua">if luajava.instanceof(view, ViewGroup) then
+  -- ...
+end
+</code></pre>
+
+      <h2>相关文档</h2>
+      <ul>
+        <li><code>LuaJ++.html</code> — 语法扩展（switch、lambda、import 等）</li>
+        <li><code>utility_api.html</code> — 文件、网络、对话框等便捷 API</li>
+        <li><code>global_env.html</code> — 全局对象与模块一览</li>
+      </ul>
+    </main>
+  </body>
+</html>
