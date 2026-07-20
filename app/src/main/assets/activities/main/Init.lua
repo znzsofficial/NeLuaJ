@@ -1,4 +1,4 @@
-﻿---@diagnostic disable: undefined-global
+---@diagnostic disable: undefined-global
 local _M = {}
 local Bean = Bean
 import "java.io.File"
@@ -51,12 +51,35 @@ local function requireOpenFile()
   return true
 end
 
+local DEFAULT_FUNCTION_TAB_TEXT_SIZE = 12
+local DEFAULT_SYMBOL_BAR_TEXT_SIZE = 12
+local MIN_BAR_TEXT_SIZE = 8
+local MAX_BAR_TEXT_SIZE = 24
+
+local function clampBarTextSize(value, defaultSize)
+  local n = tonumber(value)
+  if not n then return defaultSize end
+  n = math.floor(n + 0.5)
+  if n < MIN_BAR_TEXT_SIZE then return MIN_BAR_TEXT_SIZE end
+  if n > MAX_BAR_TEXT_SIZE then return MAX_BAR_TEXT_SIZE end
+  return n
+end
+
+local function getFunctionTabTextSize()
+  return clampBarTextSize(this.getSharedData("function_tab_text_size", DEFAULT_FUNCTION_TAB_TEXT_SIZE), DEFAULT_FUNCTION_TAB_TEXT_SIZE)
+end
+
+local function getSymbolBarTextSize()
+  return clampBarTextSize(this.getSharedData("symbol_bar_text_size", DEFAULT_SYMBOL_BAR_TEXT_SIZE), DEFAULT_SYMBOL_BAR_TEXT_SIZE)
+end
+
 local function addChip(parent, text, onClick)
+  local textSize = getFunctionTabTextSize()
   parent.addView(loadlayout {
     LinearLayout,
     {
       TextView,
-      TextSize = "5sp",
+      TextSize = textSize .. "sp",
       BackgroundResource = rippleRes,
       text = text,
       paddingLeft = "8dp",
@@ -90,19 +113,25 @@ local function pasteSymbol(symbol)
   end
 end
 
-local function createSymbolButton(symbol)
+local function createSymbolButton(symbol, textSize)
+  textSize = textSize or getSymbolBarTextSize()
+  -- 按钮尺寸随字号略放大，避免大字号被裁切
+  local side = math.max(36, math.floor(textSize * 2.4 + 0.5))
+  local height = math.max(32, math.floor(textSize * 2.2 + 0.5))
+  local sideDp = side .. "dp"
+  local heightDp = height .. "dp"
   return loadlayout {
     LinearLayout,
-    layout_width = "40dp",
-    layout_height = "36dp",
+    layout_width = sideDp,
+    layout_height = heightDp,
     {
       TextView,
-      layout_width = "40dp",
-      layout_height = "36dp",
+      layout_width = sideDp,
+      layout_height = heightDp,
       gravity = "center",
       clickable = true,
       focusable = true,
-      TextSize = "5sp",
+      TextSize = textSize .. "sp",
       BackgroundResource = rippleRes,
       text = symbol,
       onClick = function()
@@ -112,18 +141,18 @@ local function createSymbolButton(symbol)
   }
 end
 
-local function createSymbolRow()
+local function createSymbolRow(rowHeightDp)
   return loadlayout {
     LinearLayout,
     orientation = "horizontal",
     layout_width = "wrap",
-    layout_height = "36dp",
+    layout_height = (rowHeightDp or 36) .. "dp",
   }
 end
 
-local function fillSymbolRow(row, symbols, fromIndex, toIndex)
+local function fillSymbolRow(row, symbols, fromIndex, toIndex, textSize)
   for i = fromIndex, toIndex do
-    row.addView(createSymbolButton(symbols[i]))
+    row.addView(createSymbolButton(symbols[i], textSize))
   end
   return row
 end
@@ -339,6 +368,8 @@ end
 _M.initBar = function()
   local symbols = parseSymbolBar(this.getSharedData("symbol_bar", nil)) or DEFAULT_SYMBOL_BAR
   local twoRows = isSharedTruthy(this.getSharedData("symbol_bar_two_rows", false))
+  local textSize = getSymbolBarTextSize()
+  local rowHeight = math.max(32, math.floor(textSize * 2.2 + 0.5))
   local count = #symbols
 
   ps_bar.removeAllViews()
@@ -346,13 +377,13 @@ _M.initBar = function()
   if twoRows and count > 0 then
     ps_bar.orientation = ORIENTATION_VERTICAL
     local mid = math.ceil(count / 2)
-    ps_bar.addView(fillSymbolRow(createSymbolRow(), symbols, 1, mid))
+    ps_bar.addView(fillSymbolRow(createSymbolRow(rowHeight), symbols, 1, mid, textSize))
     if mid < count then
-      ps_bar.addView(fillSymbolRow(createSymbolRow(), symbols, mid + 1, count))
+      ps_bar.addView(fillSymbolRow(createSymbolRow(rowHeight), symbols, mid + 1, count, textSize))
     end
   else
     ps_bar.orientation = ORIENTATION_HORIZONTAL
-    fillSymbolRow(ps_bar, symbols, 1, count)
+    fillSymbolRow(ps_bar, symbols, 1, count, textSize)
   end
 
   return _M

@@ -1,4 +1,5 @@
 import "com.androlua.LuaEditor";
+import "com.androlua.LuaCodeMinimapView";
 import "android.widget.LinearLayout";
 import "android.widget.HorizontalScrollView";
 import "androidx.appcompat.widget.AppCompatImageView"
@@ -147,13 +148,32 @@ return {
             },
           },
           {
-            LuaEditor;
-            layout_height = "fill";
-            layout_width = "fill";
-            layout_gravity = "center",
-            id = "mLuaEditor";
+            LinearLayout,
+            layout_width = "match",
+            layout_height = "fill",
             layout_weight = 1,
-            -- clickable=true,
+            orientation = "horizontal",
+            {
+              LuaEditor;
+              layout_height = "fill";
+              layout_width = "fill";
+              layout_weight = 1,
+              id = "mLuaEditor";
+            };
+            {
+              MaterialDivider,
+              layout_width = "1dp",
+              layout_height = "fill",
+              id = "minimap_divider",
+              visibility = 8,
+            },
+            {
+              LuaCodeMinimapView,
+              layout_width = "52dp",
+              layout_height = "fill",
+              id = "mCodeMinimap",
+              visibility = 8,
+            };
           };
 
           {

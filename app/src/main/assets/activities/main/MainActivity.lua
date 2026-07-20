@@ -1,4 +1,4 @@
-﻿---@diagnostic disable: undefined-global
+---@diagnostic disable: undefined-global
 require "environment"
 import "java.io.File"
 import "android.view.View"
@@ -156,6 +156,8 @@ end
 
 function onResume()
   Init.initBar()
+  Init.initFunctionTab()
+  EditorUtil.refreshMinimap(false)
 end
 
 function onDestroy()

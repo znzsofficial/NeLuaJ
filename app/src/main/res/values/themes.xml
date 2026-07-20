@@ -40,7 +40,15 @@
 
     <style name="Theme.NeLuaJ.Material3.DynamicColors" parent="@style/Theme.Material3Expressive.DynamicColors.DayNight" />
 
+    <style name="Theme.NeLuaJ.Material3.DynamicColors.ActionOverlay" parent="@style/Theme.Material3Expressive.DynamicColors.DayNight">
+        <item name="windowActionModeOverlay">true</item>
+    </style>
+
     <style name="Theme.NeLuaJ.Material3.DynamicColors.NoActionBar" parent="@style/Theme.Material3Expressive.DynamicColors.DayNight.NoActionBar" />
+
+    <style name="Theme.NeLuaJ.Material3.DynamicColors.NoActionBar.ActionOverlay" parent="@style/Theme.Material3Expressive.DynamicColors.DayNight.NoActionBar">
+        <item name="windowActionModeOverlay">true</item>
+    </style>
 
     <style name="ThemeOverlay.Catalog.SideSheet.Modal.Detached" parent="@style/ThemeOverlay.Material3.SideSheetDialog">
         <item name="sideSheetModalStyle">@style/Widget.Material3.SideSheet.Modal.Detached</item>
@@ -67,6 +75,18 @@
         <item name="colorPrimaryVariant">@color/md2_primaryVariant</item>
         <item name="colorSecondary">@color/md2_secondary</item>
         <item name="colorSecondaryVariant">@color/md2_secondaryVariant</item>
+    </style>
+
+    <style name="Theme.NeLuaJ.MaterialComponent.NoActionBar" parent="@style/Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="android:statusBarColor">?attr/colorPrimaryVariant</item>
+        <item name="colorOnPrimary">@color/md2_onPrimary</item>
+        <item name="colorOnSecondary">@color/md2_onSecondary</item>
+        <item name="colorPrimary">@color/md2_primary</item>
+        <item name="colorPrimaryVariant">@color/md2_primaryVariant</item>
+        <item name="colorSecondary">@color/md2_secondary</item>
+        <item name="colorSecondaryVariant">@color/md2_secondaryVariant</item>
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
     </style>
 
     <style name="Theme.NeLuaJ.MaterialComponent.Dark" parent="@style/Theme.MaterialComponents">

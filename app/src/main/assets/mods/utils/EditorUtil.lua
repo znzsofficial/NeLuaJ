@@ -5,13 +5,105 @@ local MagnifierManager = require "mods.utils.MagnifierManager"
 local _M1 = require "mods.utils.EditorUtil$1"
 local ActionMode = bindClass "androidx.appcompat.view.ActionMode"
 local MotionEvent = bindClass "android.view.MotionEvent"
+local View = bindClass "android.view.View"
 local File = bindClass "java.io.File"
 local Color = bindClass "android.graphics.Color"
+local LuaCodeMinimapView = bindClass "com.androlua.LuaCodeMinimapView"
 local _M = {}
 _M.last_history = {}
 _M.fromRecy = false
 
 local _clipboardActionMode = nil
+local GONE = View.GONE
+local VISIBLE = View.VISIBLE
+
+local function isSharedTruthy(value)
+    return value == true or value == "true" or value == 1
+end
+
+local function isMinimapEnabled()
+    return isSharedTruthy(this.getSharedData("code_minimap", true))
+end
+
+local function buildMinimapConfig(editor)
+    local data = this.sharedData
+    local cfg = LuaCodeMinimapView.MinimapConfig()
+    cfg.lineHeight = 2.2
+    cfg.charWidthAscii = 1.05
+    cfg.verticalGap = 0.55
+    cfg.paddingLeft = 3
+    -- 半透明底，不挡视觉；代码条画在上面
+    cfg.backgroundColor = 0x66FFFFFF
+    cfg.outsideDimColor = 0x10000000
+    pcall(function()
+        local surface = this.themeUtil.getColorSurface()
+        cfg.backgroundColor = Color.argb(0x55, Color.red(surface), Color.green(surface), Color.blue(surface))
+        if this.isNightMode and this.isNightMode() then
+            cfg.outsideDimColor = 0x22000000
+        end
+    end)
+    -- 可视区域遮罩色（可自定义，支持 #AARRGGBB）
+    cfg.maskColor = 0x332196F3
+    if data["MinimapMask"] then
+        pcall(function()
+            cfg.maskColor = Color.parseColor(data["MinimapMask"])
+        end)
+    end
+    cfg.codeAlpha = 210
+    cfg.colorDefault = data["BaseWord"] and Color.parseColor(data["BaseWord"]) or 0xff4477e0
+    cfg.colorKeyword = data["KeyWord"] and Color.parseColor(data["KeyWord"]) or 0xffb4002d
+    cfg.colorString = data["String"] and Color.parseColor(data["String"]) or 0xffc2185b
+    cfg.colorComment = data["Comment"] and Color.parseColor(data["Comment"]) or 0xff71787E
+    cfg.colorNumber = data["UserWord"] and Color.parseColor(data["UserWord"]) or 0xff5c6bc0
+    cfg.colorId = data["Global"] and Color.parseColor(data["Global"]) or 0xff689f38
+    cfg.tileHeightPx = 1024
+    cfg.maxTileCount = 8
+    if editor then
+        pcall(function()
+            local size = editor.getTextSize()
+            if size and size > 0 then
+                cfg.charWidthAscii = math.max(0.7, size / 30)
+            end
+        end)
+    end
+    return cfg
+end
+
+local function readMinimapScale()
+    local v = this.getSharedData("code_minimap_scale", 1.0)
+    local n = tonumber(v)
+    if not n or n ~= n then return 1.0 end
+    if n < 0.55 then return 0.55 end
+    if n > 2.8 then return 2.8 end
+    return n
+end
+
+function _M.refreshMinimap(full)
+    if not mCodeMinimap then return end
+    if not isMinimapEnabled() then
+        mCodeMinimap.setVisibility(GONE)
+        if minimap_divider then minimap_divider.setVisibility(GONE) end
+        pcall(function() mCodeMinimap.detachEditor() end)
+        return
+    end
+    mCodeMinimap.setVisibility(VISIBLE)
+    -- 无分割线，更像悬浮缩略图
+    if minimap_divider then minimap_divider.setVisibility(GONE) end
+    mCodeMinimap.configure(buildMinimapConfig(mLuaEditor))
+    mCodeMinimap.setScale(readMinimapScale())
+    mCodeMinimap.setScaleListener(LuaCodeMinimapView.ScaleListener {
+        onScaleChanged = function(scale)
+            this.setSharedData("code_minimap_scale", scale)
+        end
+    })
+    mCodeMinimap.attachToEditor(mLuaEditor)
+    if full then
+        mCodeMinimap.scheduleCodeRefresh(0)
+    else
+        mCodeMinimap.scheduleCodeRefresh(120)
+    end
+    mCodeMinimap.syncVisibleRangeFromEditor(false)
+end
 
 local function getActionMode(view)
     return ActionMode.Callback {
@@ -100,6 +192,10 @@ local function initTab()
                 resetPageTitle(path)
                 --print"第一次被选择的tab，editor读取"
                 mLuaEditor.setText(LuaFileUtil.read(path))
+                if mCodeMinimap and isMinimapEnabled() then
+                    mCodeMinimap.scheduleCodeRefresh(60)
+                    mCodeMinimap.syncVisibleRangeFromEditor(false)
+                end
             end
         end;
         onTabReselected = function(tab)
@@ -181,8 +277,12 @@ function _M.init()
     mLuaEditor.setTypeface(res.font.code)
 
     local function isMagnifierEnabled()
-        local value = this.getSharedData("editor_magnifier", true)
-        return value == true or value == "true" or value == 1
+        return isSharedTruthy(this.getSharedData("editor_magnifier", true))
+    end
+
+    -- 代码缩略图（点击跳转由 Java 侧 attachToEditor 默认处理）
+    if mCodeMinimap then
+        _M.refreshMinimap(true)
     end
 
     --编辑器 放大镜 和 ActionMode
@@ -196,6 +296,9 @@ function _M.init()
             _clipboardActionMode = nil
             MagnifierManager.hide()
             MagnifierManager.Available = false
+        end
+        if mCodeMinimap and isMinimapEnabled() then
+            mCodeMinimap.syncVisibleRangeFromEditor(true)
         end
     end
 
@@ -214,6 +317,16 @@ function _M.init()
                 end
             elseif action == MotionEvent.ACTION_CANCEL or action == MotionEvent.ACTION_UP then
                 MagnifierManager.hide()
+            end
+        end
+        if mCodeMinimap and isMinimapEnabled() then
+            local action = event.action
+            if action == MotionEvent.ACTION_UP then
+                -- 输入/粘贴后松手时刷新缩略图内容
+                mCodeMinimap.scheduleCodeRefresh(350)
+            end
+            if action == MotionEvent.ACTION_MOVE or action == MotionEvent.ACTION_UP then
+                mCodeMinimap.syncVisibleRangeFromEditor(true)
             end
         end
     end)
@@ -312,6 +425,10 @@ function _M.load(path)
     end
     -- 销毁来自RV的标识
     _M.fromRecy = nil
+    if mCodeMinimap and isMinimapEnabled() then
+        mCodeMinimap.scheduleCodeRefresh(60)
+        mCodeMinimap.syncVisibleRangeFromEditor(false)
+    end
 end
 
 --[[
