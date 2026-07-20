@@ -41,7 +41,7 @@ public class LuaCodeMinimapView extends FrameLayout {
 
         /** Panel background; prefer translucent ARGB. */
         public int backgroundColor = 0x00000000;
-        /** Viewport highlight fill; keep low alpha so bars show through. */
+        /** Viewport highlight fill; semi-transparent light blue by default. */
         public int maskColor = 0x282196F3;
         /** Dim outside viewport; 0 to disable. */
         public int outsideDimColor = 0x14000000;
@@ -127,10 +127,13 @@ public class LuaCodeMinimapView extends FrameLayout {
         setWillNotDraw(false);
         setClickable(true);
         setFocusable(false);
-        // Allow translucent drawing over editor chrome if needed
+        // Overlay on editor: host must stay fully transparent
         setBackgroundColor(Color.TRANSPARENT);
+        setClipChildren(false);
+        setClipToPadding(false);
 
         contentView = new MinimapContent(context);
+        contentView.setBackgroundColor(Color.TRANSPARENT);
         addView(contentView, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
 
         scaleDetector = new ScaleGestureDetector(context, new ScaleGestureDetector.SimpleOnScaleGestureListener() {
@@ -163,6 +166,9 @@ public class LuaCodeMinimapView extends FrameLayout {
     public void configure(MinimapConfig config) {
         if (config == null) return;
         baseConfig = copyConfig(config);
+        // Allow translucent drawing over parent surface
+        setBackgroundColor(Color.TRANSPARENT);
+        setWillNotDraw(false);
         applyScaledConfig();
         configured = true;
     }
@@ -204,7 +210,8 @@ public class LuaCodeMinimapView extends FrameLayout {
         cfg.lineHeight = Math.max(1f, baseConfig.lineHeight * scale);
         cfg.charWidthAscii = Math.max(0.4f, baseConfig.charWidthAscii * scale);
         cfg.verticalGap = Math.max(0f, baseConfig.verticalGap * scale);
-        setBackgroundColor(cfg.backgroundColor);
+        // Keep host transparent; content draws translucent bg itself
+        setBackgroundColor(Color.TRANSPARENT);
         contentView.applyConfig(cfg);
     }
 
@@ -635,8 +642,16 @@ public class LuaCodeMinimapView extends FrameLayout {
             pBackgroundColor = config.backgroundColor;
             pOutsideDimColor = config.outsideDimColor;
             pCodeAlpha = clamp(config.codeAlpha, 0, 255);
-            maskPaint.setColor(config.maskColor);
-            outsidePaint.setColor(config.outsideDimColor);
+            maskPaint.setColor(Color.argb(
+                    Color.alpha(config.maskColor),
+                    Color.red(config.maskColor),
+                    Color.green(config.maskColor),
+                    Color.blue(config.maskColor)));
+            outsidePaint.setColor(Color.argb(
+                    Color.alpha(config.outsideDimColor),
+                    Color.red(config.outsideDimColor),
+                    Color.green(config.outsideDimColor),
+                    Color.blue(config.outsideDimColor)));
 
             applyBarColor(0, config.colorDefault);
             applyBarColor(1, config.colorKeyword);
@@ -655,13 +670,15 @@ public class LuaCodeMinimapView extends FrameLayout {
 
         private void applyBarColor(int idx, int color) {
             int a = pCodeAlpha;
-            int rgb = color & 0x00FFFFFF;
-            // Keep relative alpha from source if already translucent
+            int r = Color.red(color);
+            int g = Color.green(color);
+            int b = Color.blue(color);
             int srcA = Color.alpha(color);
             if (srcA > 0 && srcA < 255) {
                 a = (srcA * pCodeAlpha) / 255;
             }
-            paintCache[idx].setColor((a << 24) | rgb);
+            // Color.argb avoids long/int overload issues from packed ints
+            paintCache[idx].setColor(Color.argb(a, r, g, b));
         }
 
         int[] copyTokenMap() {
@@ -810,7 +827,7 @@ public class LuaCodeMinimapView extends FrameLayout {
 
         @Override
         protected void onDraw(Canvas c) {
-            // Translucent panel background
+            // 1) Panel background (keep very translucent)
             if (Color.alpha(pBackgroundColor) > 0) {
                 c.drawColor(pBackgroundColor);
             }
@@ -819,13 +836,31 @@ public class LuaCodeMinimapView extends FrameLayout {
             maskRect.right = getWidth();
             c.getClipBounds(clipRect);
 
+            float maskTop = maskRect.top - scrollOffsetY;
+            float maskBottom = maskRect.bottom - scrollOffsetY;
+            int w = getWidth();
+            int h = getHeight();
+
+            // 2) Viewport / outside dim UNDER code bars so bars are never covered
+            if (Color.alpha(pOutsideDimColor) > 0) {
+                if (maskTop > 0) {
+                    c.drawRect(0, 0, w, Math.min(h, maskTop), outsidePaint);
+                }
+                if (maskBottom < h) {
+                    c.drawRect(0, Math.max(0, maskBottom), w, h, outsidePaint);
+                }
+            }
+            if (maskBottom > maskTop && Color.alpha(maskPaint.getColor()) > 0) {
+                c.drawRect(0, maskTop, w, maskBottom, maskPaint);
+            }
+
+            // 3) Code bars on top (always fully visible)
             int contentTop = scrollOffsetY + clipRect.top;
             int contentBottom = scrollOffsetY + clipRect.bottom;
             int tH = tileHeightPx;
             int tileTopIndex = Math.max(0, contentTop / tH);
             int tileBottomIndex = Math.max(0, (Math.max(contentBottom, contentTop + 1) - 1) / tH);
 
-            // 1) Code bars (tiles)
             for (int ti = tileTopIndex; ti <= tileBottomIndex; ti++) {
                 Bitmap tile = tileCache.get(ti);
                 if (tile == null || tile.isRecycled()) {
@@ -835,26 +870,6 @@ public class LuaCodeMinimapView extends FrameLayout {
                 if (tile != null && !tile.isRecycled()) {
                     c.drawBitmap(tile, 0, ti * tH - scrollOffsetY, null);
                 }
-            }
-
-            float maskTop = maskRect.top - scrollOffsetY;
-            float maskBottom = maskRect.bottom - scrollOffsetY;
-            int w = getWidth();
-            int h = getHeight();
-
-            // 2) Soft dim outside viewport (does not paint over bars inside viewport)
-            if (Color.alpha(pOutsideDimColor) > 0) {
-                if (maskTop > 0) {
-                    c.drawRect(0, 0, w, Math.min(h, maskTop), outsidePaint);
-                }
-                if (maskBottom < h) {
-                    c.drawRect(0, Math.max(0, maskBottom), w, h, outsidePaint);
-                }
-            }
-
-            // 3) Translucent viewport fill — no border; low alpha so bars stay visible
-            if (maskBottom > maskTop && Color.alpha(maskPaint.getColor()) > 0) {
-                c.drawRect(0, maskTop, w, maskBottom, maskPaint);
             }
         }
 

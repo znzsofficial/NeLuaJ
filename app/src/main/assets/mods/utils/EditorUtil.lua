@@ -32,30 +32,48 @@ local function buildMinimapConfig(editor)
     cfg.charWidthAscii = 1.05
     cfg.verticalGap = 0.55
     cfg.paddingLeft = 3
-    -- 半透明底，不挡视觉；代码条画在上面
-    cfg.backgroundColor = 0x66FFFFFF
-    cfg.outsideDimColor = 0x10000000
-    pcall(function()
-        local surface = this.themeUtil.getColorSurface()
-        cfg.backgroundColor = Color.argb(0x55, Color.red(surface), Color.green(surface), Color.blue(surface))
-        if this.isNightMode and this.isNightMode() then
-            cfg.outsideDimColor = 0x22000000
-        end
-    end)
-    -- 可视区域遮罩色（可自定义，支持 #AARRGGBB）
-    cfg.maskColor = 0x332196F3
+    -- 悬浮叠层：面板背景默认全透明（透出编辑器代码）
+    cfg.backgroundColor = Color.argb(0, 0, 0, 0)
+    cfg.outsideDimColor = Color.argb(0, 0, 0, 0)
+    -- MinimapBg = 缩略图面板背景（可选）
+    if data["MinimapBg"] then
+        pcall(function()
+            cfg.backgroundColor = Color.parseColor(data["MinimapBg"])
+        end)
+    end
+    -- MinimapMask = 编辑器可视区域指示色（maskColor，不是 background）
+    -- 默认半透明浅蓝
+    cfg.maskColor = Color.argb(0x28, 0x21, 0x96, 0xF3)
     if data["MinimapMask"] then
         pcall(function()
             cfg.maskColor = Color.parseColor(data["MinimapMask"])
         end)
     end
-    cfg.codeAlpha = 210
-    cfg.colorDefault = data["BaseWord"] and Color.parseColor(data["BaseWord"]) or 0xff4477e0
-    cfg.colorKeyword = data["KeyWord"] and Color.parseColor(data["KeyWord"]) or 0xffb4002d
-    cfg.colorString = data["String"] and Color.parseColor(data["String"]) or 0xffc2185b
-    cfg.colorComment = data["Comment"] and Color.parseColor(data["Comment"]) or 0xff71787E
-    cfg.colorNumber = data["UserWord"] and Color.parseColor(data["UserWord"]) or 0xff5c6bc0
-    cfg.colorId = data["Global"] and Color.parseColor(data["Global"]) or 0xff689f38
+    -- 代码色条不透明度 0–255，默认 200
+    cfg.codeAlpha = 200
+    do
+        local raw = this.getSharedData("code_minimap_alpha", nil)
+        local n = tonumber(raw)
+        if n then
+            n = math.floor(n + 0.5)
+            if n < 0 then n = 0 end
+            if n > 255 then n = 255 end
+            cfg.codeAlpha = n
+        end
+    end
+    local function parseOr(key, fallback)
+        local raw = data[key]
+        if not raw then return fallback end
+        local ok, c = pcall(Color.parseColor, raw)
+        if ok then return c end
+        return fallback
+    end
+    cfg.colorDefault = parseOr("BaseWord", Color.argb(255, 0x44, 0x77, 0xe0))
+    cfg.colorKeyword = parseOr("KeyWord", Color.argb(255, 0xb4, 0x00, 0x2d))
+    cfg.colorString = parseOr("String", Color.argb(255, 0xc2, 0x18, 0x5b))
+    cfg.colorComment = parseOr("Comment", Color.argb(255, 0x71, 0x78, 0x7E))
+    cfg.colorNumber = parseOr("UserWord", Color.argb(255, 0x5c, 0x6b, 0xc0))
+    cfg.colorId = parseOr("Global", Color.argb(255, 0x68, 0x9f, 0x38))
     cfg.tileHeightPx = 1024
     cfg.maxTileCount = 8
     if editor then
@@ -87,8 +105,13 @@ function _M.refreshMinimap(full)
         return
     end
     mCodeMinimap.setVisibility(VISIBLE)
-    -- 无分割线，更像悬浮缩略图
+    -- 悬浮叠层：不要分割线
     if minimap_divider then minimap_divider.setVisibility(GONE) end
+    pcall(function()
+        mCodeMinimap.setBackgroundColor(0)
+        mCodeMinimap.setClickable(true)
+        mCodeMinimap.bringToFront()
+    end)
     mCodeMinimap.configure(buildMinimapConfig(mLuaEditor))
     mCodeMinimap.setScale(readMinimapScale())
     mCodeMinimap.setScaleListener(LuaCodeMinimapView.ScaleListener {

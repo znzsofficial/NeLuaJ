@@ -1,6 +1,7 @@
 import "com.androlua.LuaEditor";
 import "com.androlua.LuaCodeMinimapView";
 import "android.widget.LinearLayout";
+import "android.widget.FrameLayout";
 import "android.widget.HorizontalScrollView";
 import "androidx.appcompat.widget.AppCompatImageView"
 import "androidx.appcompat.widget.AppCompatEditText"
@@ -148,22 +149,23 @@ return {
             },
           },
           {
-            LinearLayout,
+            -- 编辑器全宽；缩略图叠在右侧，透明处可透出代码
+            FrameLayout,
             layout_width = "match",
             layout_height = "fill",
             layout_weight = 1,
-            orientation = "horizontal",
             {
               LuaEditor;
               layout_height = "fill";
               layout_width = "fill";
-              layout_weight = 1,
               id = "mLuaEditor";
             };
             {
               MaterialDivider,
               layout_width = "1dp",
               layout_height = "fill",
+              layout_gravity = "end",
+              layout_marginRight = "52dp",
               id = "minimap_divider",
               visibility = 8,
             },
@@ -171,6 +173,7 @@ return {
               LuaCodeMinimapView,
               layout_width = "52dp",
               layout_height = "fill",
+              layout_gravity = "end",
               id = "mCodeMinimap",
               visibility = 8,
             };
