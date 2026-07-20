@@ -14,10 +14,9 @@ import "android.graphics.Bitmap"
 import "android.graphics.Canvas"
 import "android.graphics.Paint"
 import "android.graphics.drawable.BitmapDrawable"
-import "android.graphics.drawable.LayerDrawable"
-import "android.util.TypedValue"
 import "vinx.material.textfield.MaterialTextField"
 import "com.google.android.material.textview.MaterialTextView"
+import "com.google.android.material.card.MaterialCardView"
 this.dynamicColor()
 local ColorUtil = this.themeUtil
 local barColor = ColorUtil.getColorBackground()
@@ -109,22 +108,32 @@ local input = {
         Focusable = true,
         FocusableInTouchMode = true,
         {
-            FrameLayout,
+            MaterialCardView,
             id = "colorPreviewHost",
             layout_width = "match",
             layout_height = "56dp",
             layout_marginBottom = "12dp",
+            radius = "12dp",
+            CardElevation = 0,
+            strokeWidth = "1dp",
+            strokeColor = ColorUtil.getColorOutline(),
+            CardBackgroundColor = Color.argb(0, 0, 0, 0),
             {
-                View,
-                id = "colorPreviewChecker",
+                FrameLayout,
                 layout_width = "match",
                 layout_height = "match",
-            },
-            {
-                View,
-                id = "colorPreview",
-                layout_width = "match",
-                layout_height = "match",
+                {
+                    View,
+                    id = "colorPreviewChecker",
+                    layout_width = "match",
+                    layout_height = "match",
+                },
+                {
+                    View,
+                    id = "colorPreview",
+                    layout_width = "match",
+                    layout_height = "match",
+                },
             },
         },
         sliderRow("H", "seekH", "valueH"),
@@ -257,7 +266,8 @@ local defaultMap = {
     Global = 0xff689f38,
     Local = 0xffb4b484,
     Upval = 0xff8080c0,
-    MinimapMask = 0x332196F3,
+    MinimapMask = Color.argb(0x28, 0x21, 0x96, 0xF3),
+    MinimapBg = Color.argb(0, 0, 0, 0),
 }
 
 local themeColorPresets = {
@@ -288,8 +298,9 @@ local function getCheckerBitmap()
     local canvas = Canvas(bmp)
     local paint = Paint()
     paint.setAntiAlias(false)
-    local light = 0xFFE0E0E0
-    local dark = 0xFFBDBDBD
+    -- 用 Color.argb，避免 0xFF...... 大整数被当成 long 调到 setColor(long)
+    local light = Color.argb(255, 224, 224, 224)
+    local dark = Color.argb(255, 189, 189, 189)
     for y = 0, 7 do
         for x = 0, 7 do
             paint.setColor(((x + y) % 2 == 0) and light or dark)
@@ -301,9 +312,7 @@ local function getCheckerBitmap()
 end
 
 local function setPreviewColor(views, color)
-    local radius = this.dpToPx(12)
-    local outline = ColorUtil.getColorOutline()
-    local stroke = math.floor(this.dpToPx(1) + 0.5)
+    -- 圆角/描边由 MaterialCardView 宿主负责，子层铺满即可，避免直角棋盘漏出
     if views.colorPreviewChecker then
         local checker = BitmapDrawable(this.getResources(), getCheckerBitmap())
         local TileMode = luajava.bindClass "android.graphics.Shader$TileMode"
@@ -312,9 +321,7 @@ local function setPreviewColor(views, color)
     end
     if views.colorPreview then
         local fill = GradientDrawable()
-        fill.setCornerRadius(radius)
         fill.setColor(color)
-        fill.setStroke(stroke, outline)
         views.colorPreview.background = fill
     end
 end
@@ -502,73 +509,89 @@ local function bindColorPicker(views, initialColor)
     return currentColor
 end
 
+local function hideAlphaRow(views)
+    -- sliderRow: vertical LinearLayout → [label row, SeekBar]
+    -- seekA 的 parent 就是 A 行本身，绝不能再 getParent()（那是整块内容）
+    pcall(function()
+        views.seekA.progress = 1000
+        views.seekA.setEnabled(false)
+        local row = views.seekA.getParent()
+        if row and row.setVisibility then
+            row.setVisibility(View.GONE)
+        else
+            views.seekA.setVisibility(View.GONE)
+            if views.valueA then views.valueA.setVisibility(View.GONE) end
+        end
+    end)
+end
+
 --- options: { hideAlpha = bool, defaultLabel = string }
 local function showColorPickerDialog(title, initialColor, onOk, onDefault, options)
     options = options or {}
     local views = {}
+    local content = loadlayout(input, views)
+
+    local startColor = initialColor
+    if type(startColor) ~= "number" then
+        startColor = ColorUtil.getColorPrimary()
+    end
+    if type(startColor) ~= "number" then
+        startColor = Color.argb(255, 103, 80, 164)
+    end
+    if options.hideAlpha then
+        local _, r, g, b = colorToArgb(startColor)
+        startColor = argbToColor(255, r, g, b)
+    end
+
     local getColor
+    local okBind, errBind = pcall(function()
+        getColor = bindColorPicker(views, startColor)
+        if options.hideAlpha then
+            hideAlphaRow(views)
+        end
+    end)
+    if not okBind then
+        print("color picker bind failed: " .. tostring(errBind))
+        -- 至少保证输入框有初值
+        pcall(function()
+            views.inputField.text = colorToHex(startColor)
+        end)
+        getColor = function()
+            return startColor
+        end
+    end
+
     local builder = MaterialAlertDialogBuilder(this)
         .setTitle(title)
-        .setView(loadlayout(input, views))
-        .setPositiveButton(android.R.string.ok, nil)
+        .setView(content)
+        .setPositiveButton(android.R.string.ok, function()
+            local text = tostring(views.inputField.text or "")
+            local trimmed = (text:match("^%s*(.-)%s*$") or "")
+            local color = parseHexColor(trimmed)
+            if trimmed ~= "" and not color then
+                print(res.string.invalid_format)
+                return
+            end
+            if not color and getColor then
+                color = getColor()
+            end
+            if not color then
+                print(res.string.invalid_format)
+                return
+            end
+            if options.hideAlpha then
+                local _, r, g, b = colorToArgb(color)
+                color = argbToColor(255, r, g, b)
+            end
+            if onOk then onOk(color, colorToHex(color)) end
+        end)
         .setNegativeButton(android.R.string.cancel, nil)
     if onDefault then
         builder.setNeutralButton(options.defaultLabel or res.string._default, function()
             onDefault()
         end)
     end
-    local dialog = builder.create()
-    dialog.setOnShowListener({
-        onShow = function(d)
-            local startColor = initialColor or 0xFF000000
-            if options.hideAlpha then
-                local _, r, g, b = colorToArgb(startColor)
-                startColor = argbToColor(255, r, g, b)
-            end
-            getColor = bindColorPicker(views, startColor)
-            if options.hideAlpha then
-                pcall(function()
-                    views.seekA.setEnabled(false)
-                    views.seekA.setVisibility(View.GONE)
-                    if views.valueA then views.valueA.setVisibility(View.GONE) end
-                    -- 隐藏 A 行：找到 seekA 的父容器
-                    local parent = views.seekA.getParent()
-                    if parent and parent.getParent then
-                        local row = parent.getParent()
-                        if row and row.setVisibility then
-                            row.setVisibility(View.GONE)
-                        end
-                    end
-                    views.seekA.progress = 1000
-                end)
-            end
-            local DialogInterface = luajava.bindClass "android.content.DialogInterface"
-            local positive = dialog.getButton(DialogInterface.BUTTON_POSITIVE)
-            positive.onClick = function()
-                local text = tostring(views.inputField.text or "")
-                local trimmed = (text:match("^%s*(.-)%s*$") or "")
-                local color = parseHexColor(trimmed)
-                if trimmed ~= "" and not color then
-                    print(res.string.invalid_format)
-                    return
-                end
-                if not color and getColor then
-                    color = getColor()
-                end
-                if not color then
-                    print(res.string.invalid_format)
-                    return
-                end
-                if options.hideAlpha then
-                    local _, r, g, b = colorToArgb(color)
-                    color = argbToColor(255, r, g, b)
-                end
-                if onOk then onOk(color, colorToHex(color)) end
-                dialog.dismiss()
-            end
-        end
-    })
-    dialog.show()
+    builder.show()
 end
 
 local resetThemeColor = function()
@@ -607,6 +630,7 @@ GlobalItem.setOnClickListener(click)
 LocalItem.setOnClickListener(click)
 UpvalItem.setOnClickListener(click)
 MinimapMaskItem.setOnClickListener(click)
+MinimapBgItem.setOnClickListener(click)
 
 local function applyThemeSeedColor(color)
     if color == nil then
@@ -623,7 +647,15 @@ end
 
 local function openThemeHsvPicker()
     local seedColor = this.getSharedData("theme_seed_color", nil)
-    local initial = resolveColorValue(seedColor) or ColorUtil.getColorPrimary()
+    local initial = resolveColorValue(seedColor)
+    if not initial then
+        pcall(function()
+            initial = ColorUtil.getColorPrimary()
+        end)
+    end
+    if type(initial) ~= "number" then
+        initial = Color.argb(255, 103, 80, 164)
+    end
     showColorPickerDialog(
         "主题色",
         initial,
@@ -650,7 +682,13 @@ ThemeColorItem.onClick = function()
         .setTitle("主题色")
         .setItems(items, function(dialog, which)
             if which == 0 then
-                openThemeHsvPicker()
+                -- 列表对话框 dismiss 后再开，避免嵌套被吞；多延迟一帧更稳
+                local decor = activity.getWindow().getDecorView()
+                decor.post(function()
+                    decor.post(function()
+                        openThemeHsvPicker()
+                    end)
+                end)
                 return
             end
             if which == 1 then
@@ -658,8 +696,10 @@ ThemeColorItem.onClick = function()
                 return
             end
             local seedColor = themeColorPresets[which - 1][2]
-            local color = Color.parseColor(seedColor)
-            applyThemeSeedColor(color)
+            local ok, color = pcall(Color.parseColor, seedColor)
+            if ok then
+                applyThemeSeedColor(color)
+            end
         end)
         .setNegativeButton(android.R.string.cancel, nil)
         .show()
@@ -675,6 +715,7 @@ resetColor("Global")
 resetColor("Local")
 resetColor("Upval")
 resetColor("MinimapMask")
+resetColor("MinimapBg")
 
 -- ── 符号栏 ──
 SymbolBarItem.onClick = function()
@@ -710,10 +751,10 @@ SymbolBarTwoRowsItem.onClick = function()
     this.setSharedData("symbol_bar_two_rows", enabled)
 end
 
-local BAR_TEXT_SIZE_MIN = 8
+local BAR_TEXT_SIZE_MIN = 3
 local BAR_TEXT_SIZE_MAX = 24
-local DEFAULT_SYMBOL_BAR_TEXT_SIZE = 12
-local DEFAULT_FUNCTION_TAB_TEXT_SIZE = 12
+local DEFAULT_SYMBOL_BAR_TEXT_SIZE = 5
+local DEFAULT_FUNCTION_TAB_TEXT_SIZE = 5
 
 local function clampBarTextSize(value, defaultSize)
     local n = tonumber(value)
@@ -799,6 +840,91 @@ CodeMinimapItem.onClick = function()
     CodeMinimapItemSwitch.checked = enabled
     this.setSharedData("code_minimap", enabled)
 end
+
+local DEFAULT_MINIMAP_CODE_ALPHA = 200
+
+local function clampCodeAlpha(value)
+    local n = tonumber(value)
+    if not n then return DEFAULT_MINIMAP_CODE_ALPHA end
+    n = math.floor(n + 0.5)
+    if n < 0 then return 0 end
+    if n > 255 then return 255 end
+    return n
+end
+
+local function formatCodeAlphaDesc(value)
+    local a = clampCodeAlpha(value)
+    return string.format("%d%% (%d)", math.floor(a * 100 / 255 + 0.5), a)
+end
+
+local function refreshMinimapCodeAlphaDesc()
+    MinimapCodeAlphaItemDesc.text = formatCodeAlphaDesc(
+        this.getSharedData("code_minimap_alpha", DEFAULT_MINIMAP_CODE_ALPHA)
+    )
+end
+
+local input_code_alpha = {
+    LinearLayout,
+    orientation = "vertical",
+    layout_width = "match",
+    layout_height = "wrap",
+    paddingLeft = "20dp",
+    paddingRight = "20dp",
+    paddingTop = "12dp",
+    paddingBottom = "8dp",
+    {
+        MaterialTextView,
+        id = "alphaValueLabel",
+        textSize = "14sp",
+        textColor = onSurfaceColor,
+        text = "78%",
+    },
+    {
+        SeekBar,
+        id = "alphaSeek",
+        layout_width = "match",
+        layout_height = "wrap",
+        layout_marginTop = "8dp",
+        max = 255,
+    },
+    {
+        MaterialTextView,
+        text = "0 = 全透明 · 255 = 不透明 · 默认 200",
+        textSize = "12sp",
+        textColor = onSurfaceVarColor,
+        paddingTop = "8dp",
+    },
+}
+
+MinimapCodeAlphaItem.onClick = function()
+    local views = {}
+    local current = clampCodeAlpha(this.getSharedData("code_minimap_alpha", DEFAULT_MINIMAP_CODE_ALPHA))
+    MaterialAlertDialogBuilder(this)
+        .setTitle(res.string.minimap_code_alpha)
+        .setView(loadlayout(input_code_alpha, views))
+        .setPositiveButton(android.R.string.ok, function()
+            local a = clampCodeAlpha(views.alphaSeek.getProgress())
+            this.setSharedData("code_minimap_alpha", a)
+            refreshMinimapCodeAlphaDesc()
+        end)
+        .setNegativeButton(android.R.string.cancel, nil)
+        .setNeutralButton(res.string._default, function()
+            this.setSharedData("code_minimap_alpha", nil)
+            refreshMinimapCodeAlphaDesc()
+        end)
+        .show()
+    views.alphaSeek.progress = current
+    views.alphaValueLabel.text = formatCodeAlphaDesc(current)
+    views.alphaSeek.setOnSeekBarChangeListener {
+        onProgressChanged = function(seekBar, progress, fromUser)
+            views.alphaValueLabel.text = formatCodeAlphaDesc(progress)
+        end,
+        onStartTrackingTouch = function() end,
+        onStopTrackingTouch = function() end,
+    }
+end
+
+refreshMinimapCodeAlphaDesc()
 
 -- ── 调试应用 ──
 CustomApp.onClick = function()

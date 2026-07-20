@@ -266,7 +266,9 @@ return {
             divider(),
             switchItem("EditorMagnifierItem", res.string.editor_magnifier, res.string.editor_magnifier_desc),
             divider(),
-            switchItem("CodeMinimapItem", res.string.code_minimap, res.string.code_minimap_desc)
+            switchItem("CodeMinimapItem", res.string.code_minimap, res.string.code_minimap_desc),
+            divider(),
+            settingItem("MinimapCodeAlphaItem", res.string.minimap_code_alpha, res.string.minimap_code_alpha_desc)
         ),
 
         sectionTitle(res.string.editor_highlight_color),
@@ -287,7 +289,9 @@ return {
             divider(),
             colorItem("Upval", "上值"),
             divider(),
-            colorItem("MinimapMask", res.string.minimap_mask_desc)
+            colorItem("MinimapMask", res.string.minimap_mask_desc),
+            divider(),
+            colorItem("MinimapBg", res.string.minimap_bg_desc)
         ),
 
         -- ── 调试 ──
