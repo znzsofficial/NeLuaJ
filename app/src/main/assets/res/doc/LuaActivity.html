@@ -228,13 +228,15 @@ end
 <h3>主题设置</h3>
 <p>Activity 启动时会自动读取 <code>init.lua</code> 中的主题配置：</p>
 <pre><code class="language-lua">-- init.lua 中设置（推荐，自动生效）
-NeLuaJ_Theme = "Theme_NeLuaJ_Material3"                        -- 应用自带主题
-NeLuaJ_Theme = "Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay" -- 无 ActionBar
+NeLuaJ_Theme = "Theme_NeLuaJ_Material3"                                    -- MD3 + ActionBar
+NeLuaJ_Theme = "Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay"         -- 无 ActionBar（推荐）
+NeLuaJ_Theme = "Theme_NeLuaJ_Material3_DynamicColors_NoActionBar_ActionOverlay" -- 动态取色
 
--- 或使用 Android 系统主题
+-- 或使用 Android 系统主题（已弃用字段 theme）
 theme = "Theme_Material3_DayNight"   -- 字符串：从 android.R.style 查找
 theme = 0x01030224                    -- 整数：直接使用样式 ID
 </code></pre>
+<p>全部可用值见 <code>init_lua_zh.html</code>（含 DynamicColors / Compat / MaterialComponent）。</p>
 <p>如果需要在运行时动态切换，可在 <code>main.lua</code> 中手动调用（必须在 <code>setContentView</code> 之前）：</p>
 <pre><code class="language-lua">activity.setTheme(R.style.Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay)
 </code></pre>

@@ -80,10 +80,34 @@
 <h2><strong>8. <code>NeLuaJ_Theme</code></strong></h2>
 <ul>
 <li><strong>Type</strong>: <code>string</code></li>
-<li><strong>Description</strong>: Defines the application's theme name. This theme should match a theme field defined in the <code>R.style</code> class.</li>
+<li><strong>Description</strong>: Defines the application's theme name. This theme should match a theme field defined in the <code>R.style</code> class. Applied automatically when the Activity starts; no need to call <code>activity.setTheme()</code> in <code>main.lua</code>.</li>
 </ul>
+<h3>Available values:</h3>
+<div class="table-wrapper"><table><thead><tr><th>Value</th><th>Description</th></tr></thead><tbody>
+<tr><td colspan="2"><strong>Material 3 (recommended)</strong></td></tr>
+<tr><td><code>Theme_NeLuaJ_Material3</code></td><td>MD3 with ActionBar; light/dark from system</td></tr>
+<tr><td><code>Theme_NeLuaJ_Material3_ActionOverlay</code></td><td>MD3 + ActionBar + ActionMode overlay</td></tr>
+<tr><td><code>Theme_NeLuaJ_Material3_NoActionBar</code></td><td>MD3 without ActionBar (custom Toolbar)</td></tr>
+<tr><td><code>Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay</code></td><td>MD3 without ActionBar + ActionMode overlay (recommended)</td></tr>
+<tr><td colspan="2"><strong>Material 3 Dynamic Colors</strong></td></tr>
+<tr><td><code>Theme_NeLuaJ_Material3_DynamicColors</code></td><td>MD3 dynamic colors with ActionBar</td></tr>
+<tr><td><code>Theme_NeLuaJ_Material3_DynamicColors_ActionOverlay</code></td><td>Dynamic colors + ActionBar + ActionMode overlay</td></tr>
+<tr><td><code>Theme_NeLuaJ_Material3_DynamicColors_NoActionBar</code></td><td>Dynamic colors without ActionBar</td></tr>
+<tr><td><code>Theme_NeLuaJ_Material3_DynamicColors_NoActionBar_ActionOverlay</code></td><td>Dynamic colors without ActionBar + ActionMode overlay</td></tr>
+<tr><td colspan="2"><strong>AppCompat</strong></td></tr>
+<tr><td><code>Theme_NeLuaJ_Compat</code></td><td>AppCompat DayNight with ActionBar</td></tr>
+<tr><td><code>Theme_NeLuaJ_Compat_NoActionBar</code></td><td>AppCompat DayNight without ActionBar</td></tr>
+<tr><td colspan="2"><strong>Material Components (MD2)</strong></td></tr>
+<tr><td><code>Theme_NeLuaJ_MaterialComponent</code></td><td>MD2 DayNight with ActionBar</td></tr>
+<tr><td><code>Theme_NeLuaJ_MaterialComponent_NoActionBar</code></td><td>MD2 DayNight without ActionBar</td></tr>
+<tr><td><code>Theme_NeLuaJ_MaterialComponent_Light</code></td><td>MD2 fixed light with ActionBar</td></tr>
+<tr><td><code>Theme_NeLuaJ_MaterialComponent_Light_NoActionBar</code></td><td>MD2 fixed light without ActionBar</td></tr>
+<tr><td><code>Theme_NeLuaJ_MaterialComponent_Dark</code></td><td>MD2 fixed dark with ActionBar</td></tr>
+<tr><td><code>Theme_NeLuaJ_MaterialComponent_Dark_NoActionBar</code></td><td>MD2 fixed dark without ActionBar</td></tr>
+</tbody></table></div>
+<p>Use <code>_</code> instead of <code>.</code> in the string (matches <code>R.style</code> field names). Dynamic Colors themes work best with <code>activity.dynamicColor()</code> or the settings seed color.</p>
 <h3>Example:</h3>
-<pre><code class="language-lua">NeLuaJ_Theme = "Theme_NeLuaJ_Material3"
+<pre><code class="language-lua">NeLuaJ_Theme = "Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay"
 </code></pre>
 <hr>
 <h2><strong>9. <code>theme</code></strong> <em>(Deprecated)</em></h2>

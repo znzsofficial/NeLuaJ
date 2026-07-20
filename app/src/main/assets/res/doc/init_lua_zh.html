@@ -83,7 +83,29 @@
 <li><strong>描述</strong>: 定义应用程序的主题名称，该主题应为 <code>R.style</code> 类中已定义的主题字段。Activity 启动时会自动应用此主题，无需在 <code>main.lua</code> 中手动调用 <code>activity.setTheme()</code>。</li>
 </ul>
 <h3>可用值：</h3>
-<div class="table-wrapper"><table><thead><tr><th>值</th><th>说明</th></tr></thead><tbody><tr><td><code>Theme_NeLuaJ_Material3</code></td><td>带 ActionBar（默认）</td></tr><tr><td><code>Theme_NeLuaJ_Material3_ActionOverlay</code></td><td>带 ActionBar + ActionMode 覆盖</td></tr><tr><td><code>Theme_NeLuaJ_Material3_NoActionBar</code></td><td>无 ActionBar</td></tr><tr><td><code>Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay</code></td><td>无 ActionBar + ActionMode 覆盖（推荐）</td></tr></tbody></table></div>
+<div class="table-wrapper"><table><thead><tr><th>值</th><th>说明</th></tr></thead><tbody>
+<tr><td colspan="2"><strong>Material 3（推荐）</strong></td></tr>
+<tr><td><code>Theme_NeLuaJ_Material3</code></td><td>MD3，带 ActionBar；随系统日/夜切换色板</td></tr>
+<tr><td><code>Theme_NeLuaJ_Material3_ActionOverlay</code></td><td>MD3 + ActionBar + ActionMode 覆盖</td></tr>
+<tr><td><code>Theme_NeLuaJ_Material3_NoActionBar</code></td><td>MD3，无 ActionBar（自定义 Toolbar）</td></tr>
+<tr><td><code>Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay</code></td><td>MD3，无 ActionBar + ActionMode 覆盖（推荐）</td></tr>
+<tr><td colspan="2"><strong>Material 3 Dynamic Colors</strong></td></tr>
+<tr><td><code>Theme_NeLuaJ_Material3_DynamicColors</code></td><td>MD3 动态取色，带 ActionBar</td></tr>
+<tr><td><code>Theme_NeLuaJ_Material3_DynamicColors_ActionOverlay</code></td><td>动态取色 + ActionBar + ActionMode 覆盖</td></tr>
+<tr><td><code>Theme_NeLuaJ_Material3_DynamicColors_NoActionBar</code></td><td>动态取色，无 ActionBar</td></tr>
+<tr><td><code>Theme_NeLuaJ_Material3_DynamicColors_NoActionBar_ActionOverlay</code></td><td>动态取色，无 ActionBar + ActionMode 覆盖</td></tr>
+<tr><td colspan="2"><strong>AppCompat 兼容</strong></td></tr>
+<tr><td><code>Theme_NeLuaJ_Compat</code></td><td>AppCompat DayNight，带 ActionBar</td></tr>
+<tr><td><code>Theme_NeLuaJ_Compat_NoActionBar</code></td><td>AppCompat DayNight，无 ActionBar</td></tr>
+<tr><td colspan="2"><strong>Material Components（MD2 兼容）</strong></td></tr>
+<tr><td><code>Theme_NeLuaJ_MaterialComponent</code></td><td>MD2 DayNight，带 ActionBar</td></tr>
+<tr><td><code>Theme_NeLuaJ_MaterialComponent_NoActionBar</code></td><td>MD2 DayNight，无 ActionBar</td></tr>
+<tr><td><code>Theme_NeLuaJ_MaterialComponent_Light</code></td><td>MD2 固定浅色，带 ActionBar</td></tr>
+<tr><td><code>Theme_NeLuaJ_MaterialComponent_Light_NoActionBar</code></td><td>MD2 固定浅色，无 ActionBar</td></tr>
+<tr><td><code>Theme_NeLuaJ_MaterialComponent_Dark</code></td><td>MD2 固定深色，带 ActionBar</td></tr>
+<tr><td><code>Theme_NeLuaJ_MaterialComponent_Dark_NoActionBar</code></td><td>MD2 固定深色，无 ActionBar</td></tr>
+</tbody></table></div>
+<p>说明：字符串中的 <code>.</code> 需写成 <code>_</code>（对应 <code>R.style</code> 字段名）。Dynamic Colors 主题配合 <code>activity.dynamicColor()</code> / 设置页种子色使用效果最佳。</p>
 <h3>示例：</h3>
 <pre><code class="language-lua">NeLuaJ_Theme = "Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay"
 </code></pre>

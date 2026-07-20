@@ -36,7 +36,22 @@ activity.dynamicColor()  -- 启用 Material You 动态取色
 <p><strong>注意</strong>：全局主题色种子会影响后续所有调用 <code>activity.dynamicColor()</code> / <code>this.dynamicColor()</code> 的页面。若要临时覆盖，建议仅在当前 Activity 内显式传入自己的 seed color。</p>
 </blockquote>
 <h3>可用主题</h3>
-<div class="table-wrapper"><table><thead><tr><th>NeLuaJ_Theme 值</th><th>说明</th></tr></thead><tbody><tr><td><code>Theme_NeLuaJ_Material3</code></td><td>带 ActionBar（默认）</td></tr><tr><td><code>Theme_NeLuaJ_Material3_ActionOverlay</code></td><td>带 ActionBar + ActionMode 覆盖</td></tr><tr><td><code>Theme_NeLuaJ_Material3_NoActionBar</code></td><td>无 ActionBar</td></tr><tr><td><code>Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay</code></td><td>无 ActionBar + ActionMode 覆盖（推荐）</td></tr></tbody></table></div>
+<div class="table-wrapper"><table><thead><tr><th>NeLuaJ_Theme 值</th><th>说明</th></tr></thead><tbody>
+<tr><td colspan="2"><strong>Material 3</strong></td></tr>
+<tr><td><code>Theme_NeLuaJ_Material3</code></td><td>带 ActionBar；日/夜色板</td></tr>
+<tr><td><code>Theme_NeLuaJ_Material3_ActionOverlay</code></td><td>ActionBar + ActionMode 覆盖</td></tr>
+<tr><td><code>Theme_NeLuaJ_Material3_NoActionBar</code></td><td>无 ActionBar</td></tr>
+<tr><td><code>Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay</code></td><td>无 ActionBar + ActionMode 覆盖（推荐）</td></tr>
+<tr><td colspan="2"><strong>Dynamic Colors</strong></td></tr>
+<tr><td><code>Theme_NeLuaJ_Material3_DynamicColors</code></td><td>动态取色 + ActionBar</td></tr>
+<tr><td><code>Theme_NeLuaJ_Material3_DynamicColors_ActionOverlay</code></td><td>动态取色 + ActionBar + ActionMode 覆盖</td></tr>
+<tr><td><code>Theme_NeLuaJ_Material3_DynamicColors_NoActionBar</code></td><td>动态取色，无 ActionBar</td></tr>
+<tr><td><code>Theme_NeLuaJ_Material3_DynamicColors_NoActionBar_ActionOverlay</code></td><td>动态取色，无 ActionBar + ActionMode 覆盖</td></tr>
+<tr><td colspan="2"><strong>兼容主题</strong></td></tr>
+<tr><td><code>Theme_NeLuaJ_Compat</code> / <code>_NoActionBar</code></td><td>AppCompat DayNight</td></tr>
+<tr><td><code>Theme_NeLuaJ_MaterialComponent*</code></td><td>MD2 兼容（含 Light/Dark/DayNight）</td></tr>
+</tbody></table></div>
+<p>完整列表见 <code>init_lua_zh.html</code> 的 <code>NeLuaJ_Theme</code> 章节。</p>
 <hr>
 <h2>2. 颜色系统</h2>
 <p>MD3 使用基于色调的颜色系统。通过 <code>this.themeUtil</code> 获取：</p>

@@ -37,7 +37,12 @@ end
 <hr>
 <h2>2. 主题迁移</h2>
 <h3>推荐主题</h3>
-<div class="table-wrapper"><table><thead><tr><th>主题</th><th>说明</th></tr></thead><tbody><tr><td><code>Theme_NeLuaJ_Material3</code></td><td>带 ActionBar，适合简单页面</td></tr><tr><td><code>Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay</code></td><td>无 ActionBar，适合自定义 Toolbar 的页面</td></tr></tbody></table></div>
+<div class="table-wrapper"><table><thead><tr><th>主题</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>Theme_NeLuaJ_Material3</code></td><td>带 ActionBar，适合简单页面</td></tr>
+<tr><td><code>Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay</code></td><td>无 ActionBar，适合自定义 Toolbar</td></tr>
+<tr><td><code>Theme_NeLuaJ_Material3_DynamicColors_NoActionBar_ActionOverlay</code></td><td>动态取色 + 无 ActionBar</td></tr>
+</tbody></table></div>
+<p>更多主题（Compat / MaterialComponent 等）见 <code>init_lua_zh.html</code>。</p>
 <h3>主题设置方式</h3>
 <p><strong>方式一（推荐）</strong>：在 <code>init.lua</code> 中配置，Activity 自动应用：</p>
 <pre><code class="language-lua">-- init.lua
