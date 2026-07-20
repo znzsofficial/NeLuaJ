@@ -51,9 +51,9 @@ local function requireOpenFile()
   return true
 end
 
-local DEFAULT_FUNCTION_TAB_TEXT_SIZE = 12
-local DEFAULT_SYMBOL_BAR_TEXT_SIZE = 12
-local MIN_BAR_TEXT_SIZE = 8
+local DEFAULT_FUNCTION_TAB_TEXT_SIZE = 5
+local DEFAULT_SYMBOL_BAR_TEXT_SIZE = 5
+local MIN_BAR_TEXT_SIZE = 5
 local MAX_BAR_TEXT_SIZE = 24
 
 local function clampBarTextSize(value, defaultSize)
@@ -115,9 +115,12 @@ end
 
 local function createSymbolButton(symbol, textSize)
   textSize = textSize or getSymbolBarTextSize()
-  -- 按钮尺寸随字号略放大，避免大字号被裁切
-  local side = math.max(36, math.floor(textSize * 2.4 + 0.5))
-  local height = math.max(32, math.floor(textSize * 2.2 + 0.5))
+  -- 小字号保持原先 40×36；字号变大时再略放大
+  local side = math.max(40, math.floor(textSize * 3.2 + 0.5))
+  local height = math.max(36, math.floor(textSize * 2.8 + 0.5))
+  if textSize <= 6 then
+    side, height = 40, 36
+  end
   local sideDp = side .. "dp"
   local heightDp = height .. "dp"
   return loadlayout {
@@ -233,13 +236,18 @@ function Actions.openHelp()
   ActivityUtil.new("help")
 end
 
+function Actions.openSetting()
+  ActivityUtil.new("setting")
+end
+
 function Actions.openResource()
   ActivityUtil.new("resource")
 end
 
 function Actions.openJavaAnalysis()
   if not requireOpenFile() then return end
-  ActivityUtil.new("java", Bean.Path.this_file)
+  -- 导入分析 → FixActivity；Java 编辑器走 openJavaEditor
+  ActivityUtil.new("fix", Bean.Path.this_file)
 end
 
 function Actions.openBuild()
@@ -317,6 +325,7 @@ local function buildFunctionActions()
     { title = res.string.search, onClick = Actions.showSearchBar },
     { title = res.string.build, onClick = Actions.openBuild },
     { title = res.string.create_project, onClick = Actions.createProject },
+    { title = res.string.setting, onClick = Actions.openSetting },
     { title = res.string.help, onClick = Actions.openHelp },
   }
 end
@@ -369,7 +378,7 @@ _M.initBar = function()
   local symbols = parseSymbolBar(this.getSharedData("symbol_bar", nil)) or DEFAULT_SYMBOL_BAR
   local twoRows = isSharedTruthy(this.getSharedData("symbol_bar_two_rows", false))
   local textSize = getSymbolBarTextSize()
-  local rowHeight = math.max(32, math.floor(textSize * 2.2 + 0.5))
+  local rowHeight = (textSize <= 6) and 36 or math.max(36, math.floor(textSize * 2.8 + 0.5))
   local count = #symbols
 
   ps_bar.removeAllViews()

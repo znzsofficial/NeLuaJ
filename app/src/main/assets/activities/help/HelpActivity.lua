@@ -8,8 +8,7 @@ import "androidx.appcompat.widget.AppCompatEditText"
 import "com.google.android.material.textview.MaterialTextView"
 import "com.google.android.material.card.MaterialCardView"
 import "com.google.android.material.divider.MaterialDivider"
-import "android.webkit.WebViewClient"
-import "android.webkit.WebChromeClient"
+
 
 local ColorUtil = this.themeUtil
 local res = res
@@ -158,6 +157,12 @@ local function openDoc(item)
   setWebLoading(true)
   vpg.setCurrentItem(1)
   webView.loadUrl("file://" .. activity.getLuaPath("res/doc", item.file))
+  -- 兜底：client 回调缺失时也能关掉 loading
+  pcall(function()
+    webView.postDelayed(function()
+      setWebLoading(false)
+    end, 800)
+  end)
 end
 
 local function backToHome()
@@ -512,7 +517,7 @@ pcall(function()
   }
 end)
 
--- WebView
+-- WebView：保留默认 client（LuaWebView 内置），勿塞 android.webkit.WebViewClient
 local settings = webView.getSettings()
 settings.setJavaScriptEnabled(true)
 settings.setDomStorageEnabled(true)
@@ -524,23 +529,6 @@ pcall(function()
   settings.setLoadWithOverviewMode(true)
   settings.setUseWideViewPort(true)
 end)
-
-webView.setWebViewClient(WebViewClient {
-  onPageFinished = function(view, url)
-    setWebLoading(false)
-  end,
-  onReceivedError = function(view, errorCode, description, failingUrl)
-    setWebLoading(false)
-  end,
-})
-
-webView.setWebChromeClient(WebChromeClient {
-  onProgressChanged = function(view, progress)
-    if progress >= 100 then
-      setWebLoading(false)
-    end
-  end,
-})
 
 function onOptionsItemSelected(m)
   if m.getItemId() == android.R.id.home then
