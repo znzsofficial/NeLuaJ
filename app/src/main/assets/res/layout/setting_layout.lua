@@ -260,7 +260,13 @@ return {
             divider(),
             switchItem("SymbolBarTwoRowsItem", res.string.symbol_bar_two_rows, res.string.symbol_bar_two_rows_desc),
             divider(),
-            switchItem("EditorMagnifierItem", res.string.editor_magnifier, res.string.editor_magnifier_desc)
+            settingItem("SymbolBarTextSizeItem", res.string.symbol_bar_text_size, res.string.symbol_bar_text_size_desc),
+            divider(),
+            settingItem("FunctionTabTextSizeItem", res.string.function_tab_text_size, res.string.function_tab_text_size_desc),
+            divider(),
+            switchItem("EditorMagnifierItem", res.string.editor_magnifier, res.string.editor_magnifier_desc),
+            divider(),
+            switchItem("CodeMinimapItem", res.string.code_minimap, res.string.code_minimap_desc)
         ),
 
         sectionTitle(res.string.editor_highlight_color),
@@ -279,7 +285,9 @@ return {
             divider(),
             colorItem("Local", "局部变量"),
             divider(),
-            colorItem("Upval", "上值")
+            colorItem("Upval", "上值"),
+            divider(),
+            colorItem("MinimapMask", res.string.minimap_mask_desc)
         ),
 
         -- ── 调试 ──
@@ -291,7 +299,9 @@ return {
         -- ── 关于 ──
         sectionTitle(res.string.about),
         card(
-            settingItem("AboutItem", "NeLuaJ+", this.getVersionName("unknown"))
+            settingItem("AboutItem", "NeLuaJ+", this.getVersionName("unknown")),
+            divider(),
+            settingItem("CopyrightItem", res.string.copyright_title, res.string.copyright)
         ),
     },
 }
