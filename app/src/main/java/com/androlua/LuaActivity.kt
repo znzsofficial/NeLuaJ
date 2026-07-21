@@ -329,6 +329,16 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
             navigationHelper.dispatchLegacyActivityResult(requestCode, resultCode, data)
         }
     }
+
+    /**
+     * Shared element / activity reenter callback.
+     * Lua: function onActivityReenter(resultCode, data) end
+     */
+    @CallLuaFunction
+    override fun onActivityReenter(resultCode: Int, data: Intent?) {
+        super.onActivityReenter(resultCode, data)
+        runFunc("onActivityReenter", resultCode, data)
+    }
     
     @CallLuaFunction
     override fun onKeyShortcut(keyCode: Int, event: KeyEvent?): Boolean {

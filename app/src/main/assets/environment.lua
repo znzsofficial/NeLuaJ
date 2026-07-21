@@ -31,17 +31,17 @@ ClassesNames.reader = classNamesReader
 MDC_R = bindClass "com.google.android.material.R"
 Compat_R = bindClass "androidx.appcompat.R"
 
--- 模块加载
-MainActivity = {}
-MainActivity.Public = require "activities.main.MainActivity$1"
-MainActivity.RecyclerView = require "activities.main.MainActivity$RecyclerView"
+-- Bean 必须先于主界面模块（后者会 import PathManager 并访问 Bean）
 Bean = {}
 Bean.Path = require "mods.bean.PathBean"
 Bean.Project = require "mods.bean.ProjectBean"
 
--- 工具类
 LuaFileUtil = bindClass "com.nekolaska.io.LuaFileUtil".INSTANCE
 PathManager = require "mods.utils.PathManager"
+
+MainActivity = {}
+MainActivity.Public = require "activities.main.MainActivity$1"
+MainActivity.RecyclerView = require "activities.main.MainActivity$RecyclerView"
 
 -- 备份目录检查（只在需要时创建目录）
 local File = bindClass "java.io.File"

@@ -20,6 +20,7 @@ object LuaFileUtil {
         if (runCatching { Class.forName("java.nio.file.Files") }.isSuccess) NioImpl() else OkioImpl()
 
     fun create(path: String, content: String) {
+        ensureParent(path)
         impl.create(path)
         impl.write(path, content)
     }
@@ -31,6 +32,30 @@ object LuaFileUtil {
     fun write(path: String, content: String, file: File): Boolean {
         if (!file.exists()) return false
         return impl.write(path, content)
+    }
+
+    /**
+     * 写入文件；不存在则创建（含父目录）。
+     * 解决 write() 在文件不存在时直接返回 false 的问题。
+     */
+    fun writeOrCreate(path: String, content: String): Boolean {
+        return try {
+            ensureParent(path)
+            val file = File(path)
+            if (!file.exists()) {
+                impl.create(path)
+            }
+            impl.write(path, content)
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun ensureParent(path: String) {
+        val parent = File(path).parentFile ?: return
+        if (!parent.exists()) {
+            parent.mkdirs()
+        }
     }
 
     fun read(path: String): String {
