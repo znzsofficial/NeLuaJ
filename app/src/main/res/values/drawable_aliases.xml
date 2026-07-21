@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 重复矢量图别名：只保留一份 path，其它名称指向规范资源 -->
+<resources>
+    <!-- 文档 -->
+    <item name="file" type="drawable">@drawable/file_text</item>
+    <!-- 代码 / XML 共用 <> -->
+    <item name="file_xml" type="drawable">@drawable/file_code</item>
+    <item name="ic_code" type="drawable">@drawable/file_code</item>
+    <!-- Java 蒸汽杯：工具栏 / 文件 / 目录 -->
+    <item name="file_java" type="drawable">@drawable/ic_java</item>
+    <item name="folder_java" type="drawable">@drawable/ic_java</item>
+    <!-- 文件夹 -->
+    <item name="ic_folder" type="drawable">@drawable/folder</item>
+    <!-- 构建：锤子 -->
+    <item name="folder_build" type="drawable">@drawable/ic_build</item>
+    <!-- 资源箱 -->
+    <item name="folder_assets" type="drawable">@drawable/ic_inventory</item>
+</resources>
