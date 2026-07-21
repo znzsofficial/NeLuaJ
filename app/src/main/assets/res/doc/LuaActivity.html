@@ -61,6 +61,12 @@ end
 function onActivityResult(requestCode, resultCode, data)
     print(requestCode, resultCode, data)
 end
+
+-- 共享元素返回 / Activity reenter（API 21+）
+-- 从带共享元素动画的二级页返回时调用，可在此读取 data 并重新映射过渡
+function onActivityReenter(resultCode, data)
+    print(resultCode, data)
+end
 </code></pre>
 <h3>错误处理</h3>
 <pre><code class="language-lua">--[[
@@ -81,6 +87,7 @@ end
 function onNightModeChanged(mode)                 end  -- 深色模式切换
 function onStorageRequestResult(isGranted)        end  -- 存储权限结果
 function onConfigurationChanged(newConfig)        end  -- 屏幕旋转等
+function onActivityReenter(resultCode, data)      end  -- 共享元素返回 / reenter
 function onContentChanged()                       end  -- 内容视图变化
 function onReceive(context, intent)               end  -- 广播接收
 function onServiceConnected(componentName, service) end
@@ -252,13 +259,9 @@ if this.isNightMode() then
 end
 </code></pre>
 <h3>主题颜色工具</h3>
-<pre><code class="language-lua">-- 详见 LuaThemeUtil 文档
-local ColorUtil = this.themeUtil
-local primary = ColorUtil.primary.main
-local surface = ColorUtil.surface.container
-
--- 颜色滤镜（自动适配 API 级别）
-local filter = this.getFilter(0xFFFF0000)
+<pre><code class="language-lua">-- 取色：布局用 ?attr/，运行时用 themeUtil（见 color_api.html）
+local t = this.themeUtil
+local filter = this.getFilter(t.primary.main)
 drawable.setColorFilter(filter)
 </code></pre>
 <hr>
@@ -446,6 +449,7 @@ end
 <ul>
 <li><code>onResult(name, ...)</code> 适合 Lua 页面之间传业务数据，参数来自被打开页面的 <code>this.result({ ... })</code>。</li>
 <li><code>onActivityResult(requestCode, resultCode, data)</code> 适合兼容旧脚本，或者确实需要原始 Android <code>Intent</code> 数据。</li>
+<li><code>onActivityReenter(resultCode, data)</code> 在共享元素过渡返回本页时调用（API 21+），可在此读取 <code>data</code> 并配合 <code>ActivityOptions</code> 做 reenter 映射；与 <code>onActivityResult</code> 独立，不是替代关系。</li>
 <li><code>onResult</code> 返回 <code>true</code> 表示结果已处理，会阻止继续调用 <code>onActivityResult</code>。</li>
 <li><code>this.newActivity("other.lua", true)</code> 是多文档模式，会创建独立任务栈，不会返回 Activity 结果。</li>
 <li><code>resultLauncher</code> 和 <code>permissionLauncher</code> 可以先保存为局部变量或全局变量，再在点击事件中调用 <code>launch</code>。</li>

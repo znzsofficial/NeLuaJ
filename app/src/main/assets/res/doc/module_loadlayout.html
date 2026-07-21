@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -73,7 +73,16 @@ local view = loadlayout({
 <li><code>styleRes</code>：构造函数的 <code>defStyleRes</code>，可与 <code>styleAttr</code> 组合使用。</li>
 </ul>
 <p>支持的资源写法：</p>
-<div class="table-wrapper"><table><thead><tr><th>写法</th><th>说明</th></tr></thead><tbody><tr><td><code>?attr/name</code></td><td>当前主题中的属性，例如 <code>?attr/materialButtonOutlinedStyle</code></td></tr><tr><td><code>?android:attr/name</code></td><td>Android 系统 attr</td></tr><tr><td><code>@attr/name</code></td><td>应用 attr 资源</td></tr><tr><td><code>@style/name</code></td><td>应用 style 资源</td></tr><tr><td><code>@android:style/name</code></td><td>Android 系统 style</td></tr><tr><td>数字资源 ID</td><td>直接使用 <code>R.attr.xxx</code> / <code>R.style.xxx</code> / <code>MDC_R.attr.xxx</code></td></tr></tbody></table></div>
+<div class="table-wrapper"><table><thead><tr><th>写法</th><th>说明</th></tr></thead><tbody><tr><td><code>?attr/name</code></td><td>当前主题中的属性，例如 <code>?attr/materialButtonOutlinedStyle</code>、<code>?attr/colorPrimary</code></td></tr><tr><td><code>?android:attr/name</code></td><td>Android 系统 attr</td></tr><tr><td><code>@attr/name</code></td><td>应用 attr 资源</td></tr><tr><td><code>@style/name</code></td><td>应用 style 资源</td></tr><tr><td><code>@android:style/name</code></td><td>Android 系统 style</td></tr><tr><td>数字资源 ID</td><td>直接使用 <code>R.attr.xxx</code> / <code>R.style.xxx</code> / <code>MDC_R.attr.xxx</code></td></tr></tbody></table></div>
+<h3>颜色属性</h3>
+<p>颜色字段推荐 <code>"?attr/colorPrimary"</code> 等（默认模板）。</p>
+<pre><code class="language-lua">{ MaterialTextView, textColor = "?attr/colorPrimary" }
+</code></pre>
+<nav class="doc-nav" aria-label="相关文档">
+  <span class="doc-nav-label">取色</span>
+  <a class="doc-link" href="color_api.html">颜色与主题</a>
+  <a class="doc-link" href="layout_reference.html">布局属性</a>
+</nav>
 <h3>示例</h3>
 <p>旧写法仍然可用：</p>
 <pre><code class="language-lua">import "com.google.android.material.button.MaterialButton"

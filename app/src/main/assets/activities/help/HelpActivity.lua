@@ -41,65 +41,68 @@ local ui = __helpUi
 local docLanguage = tostring(res.language or ""):find("zh") and "zh" or "en"
 local searchQuery = ""
 
+-- 文档分工（避免重复）：
+-- color_api = 取色入口；LuaThemeUtil = 字段表；md3_design = 组件/设计；
+-- layout_reference = 属性大全；module_loadlayout = 加载器机制
 local catalog = {
   {
-    title = "入门指南",
-    subtitle = "从迁移、主题到常用 API",
+    title = "入门",
+    subtitle = "迁移、工程配置与设计约定",
     items = {
-      { title = res.string.migration_guide, desc = "从旧版 AndroLua / NeLuaJ 迁移到当前版本", file = "migration_" .. docLanguage .. ".html", tags = "迁移 升级 兼容" },
-      { title = res.string.md3_design, desc = "Material 3 配色、组件与布局约定", file = "md3_design.html", tags = "主题 颜色 MD3 Material" },
-      { title = res.string.layout_reference, desc = "loadlayout 属性、单位与常用控件", file = "layout_reference.html", tags = "布局 控件 单位 dp" },
-      { title = res.string.utility_api, desc = "常用工具 API 速查", file = "utility_api.html", tags = "工具 便捷 API" },
-      { title = "Color API", desc = "动态取色、主题色与颜色工具", file = "color_api.html", tags = "颜色 动态取色 seed" },
+      { title = res.string.migration_guide, desc = "从旧版 AndroLua / NeLuaJ 迁移", file = "migration_" .. docLanguage .. ".html", tags = "迁移 升级 兼容" },
+      { title = "init.lua", desc = "包名、SDK、主题名与权限", file = "init_lua_" .. docLanguage .. ".html", tags = "配置 权限 SDK 主题" },
+      { title = res.string.md3_design, desc = "MD3 组件与间距圆角约定（取色见 Color）", file = "md3_design.html", tags = "MD3 组件 设计" },
+      { title = "颜色与主题", desc = "dynamicColor、?attr/、themeUtil 怎么选", file = "color_api.html", tags = "颜色 动态取色 attr 主题" },
+      { title = res.string.layout_reference, desc = "布局属性、单位与控件示例", file = "layout_reference.html", tags = "布局 控件 单位 dp" },
     },
   },
   {
     title = "语言与环境",
-    subtitle = "运行时、全局对象与语法扩展",
+    subtitle = "运行时、全局对象与语法",
     items = {
-      { title = "init.lua", desc = "工程配置：包名、SDK、主题与权限", file = "init_lua_" .. docLanguage .. ".html", tags = "配置 权限 SDK 主题" },
-      { title = res.string.global, desc = "this / activity / 全局模块与函数一览", file = "global_env.html", tags = "全局 this activity" },
-      { title = "LuaJ++", desc = "扩展语法：switch、lambda、import、try 等", file = "LuaJ++.html", tags = "语法 switch lambda import" },
-      { title = "Java 互操作", desc = "bindClass、proxy、override、属性与监听器语法糖", file = "java_interop.html", tags = "java luajava proxy override" },
-      { title = res.string.backup_crash, desc = "崩溃日志路径与自动代码备份", file = "backup_crash.html", tags = "崩溃 备份 日志" },
+      { title = res.string.global, desc = "this / activity / 全局模块", file = "global_env.html", tags = "全局 this activity" },
+      { title = "LuaJ++", desc = "switch、lambda、import、try 等", file = "LuaJ++.html", tags = "语法 switch lambda import" },
+      { title = "Java 互操作", desc = "bindClass、proxy、override", file = "java_interop.html", tags = "java luajava proxy override" },
+      { title = res.string.backup_crash, desc = "崩溃日志与代码备份", file = "backup_crash.html", tags = "崩溃 备份 日志" },
+      { title = res.string.utility_api, desc = "常用工具速查（详文见各模块）", file = "utility_api.html", tags = "工具 速查" },
     },
   },
   {
-    title = "核心模块",
-    subtitle = "文件、网络、布局与异步能力",
+    title = "模块",
+    subtitle = "资源、布局、文件与网络",
     items = {
-      { title = "res", desc = "字符串、布局、字体与资源加载", file = "module_res.html", tags = "资源 字符串 布局" },
-      { title = "loadlayout", desc = "表驱动布局加载器", file = "module_loadlayout.html", tags = "布局 loadlayout" },
-      { title = "file", desc = "读写、目录、路径与文件信息", file = "module_file.html", tags = "文件 读写" },
-      { title = "okhttp", desc = "同步 / 异步网络请求", file = "module_okhttp.html", tags = "网络 http 请求" },
-      { title = "saf", desc = "存储访问框架与持久化目录授权", file = "module_saf.html", tags = "存储 SAF 授权" },
+      { title = "res", desc = "string / drawable / layout / raw", file = "module_res.html", tags = "资源 字符串 布局" },
+      { title = "loadlayout", desc = "表驱动布局与 style / ?attr", file = "module_loadlayout.html", tags = "布局 loadlayout" },
+      { title = "file", desc = "读写与目录", file = "module_file.html", tags = "文件 读写" },
+      { title = "okhttp", desc = "同步 / 异步 HTTP", file = "module_okhttp.html", tags = "网络 http" },
+      { title = "saf", desc = "存储访问框架", file = "module_saf.html", tags = "存储 SAF" },
       { title = "ext", desc = "二进制 pack / unpack", file = "module_ext.html", tags = "二进制 pack" },
-      { title = "lazy", desc = "延迟求值，首次访问才执行", file = "lazy.html", tags = "延迟 lazy" },
-      { title = "xTask", desc = "基于协程的异步任务", file = "xTask.html", tags = "异步 协程 任务" },
+      { title = "lazy", desc = "延迟求值", file = "lazy.html", tags = "延迟 lazy" },
+      { title = "xTask", desc = "协程异步任务", file = "xTask.html", tags = "异步 协程" },
     },
   },
   {
     title = "组件",
-    subtitle = "Activity、Fragment、列表与主题",
+    subtitle = "Activity、列表与 UI 封装",
     items = {
-      { title = "LuaActivity", desc = "宿主 Activity：生命周期、结果回调、权限", file = "LuaActivity.html", tags = "Activity 生命周期 权限" },
-      { title = "LuaFragment", desc = "Lua 驱动的 Fragment", file = "LuaFragment.html", tags = "Fragment" },
-      { title = "LuaFragmentAdapter", desc = "ViewPager2 Fragment 适配器", file = "LuaFragmentAdapter.html", tags = "ViewPager2 适配器" },
-      { title = "LuaPagerAdapter", desc = "ViewPager / 页面适配器", file = "LuaPagerAdapter.html", tags = "ViewPager 适配器" },
-      { title = "LuaRecyclerAdapter", desc = "数据表驱动的 RecyclerView 适配器", file = "LuaRecyclerAdapter.html", tags = "RecyclerView 列表" },
-      { title = "LuaCustRecyclerAdapter", desc = "贴近原生的自定义 RecyclerView 适配器", file = "LuaCustRecyclerAdapter.html", tags = "RecyclerView 自定义" },
-      { title = "LuaPreferenceFragment", desc = "设置页 Preference 封装", file = "LuaPreferenceFragment.html", tags = "设置 Preference" },
-      { title = "LuaThemeUtil", desc = "主题色与 Material 颜色读取", file = "LuaThemeUtil.html", tags = "主题 颜色" },
-      { title = "MaterialTextField", desc = "Material 文本输入框封装", file = "MaterialTextField.html", tags = "输入框 TextField" },
-      { title = "Coil", desc = "图片加载：网络、本地与变换", file = "Coil.html", tags = "图片 加载 Coil" },
+      { title = "LuaActivity", desc = "生命周期、结果、权限", file = "LuaActivity.html", tags = "Activity 权限" },
+      { title = "LuaFragment", desc = "Lua Fragment", file = "LuaFragment.html", tags = "Fragment" },
+      { title = "LuaFragmentAdapter", desc = "ViewPager2 Fragment 适配器", file = "LuaFragmentAdapter.html", tags = "ViewPager2" },
+      { title = "LuaPagerAdapter", desc = "ViewPager 适配器", file = "LuaPagerAdapter.html", tags = "ViewPager" },
+      { title = "LuaRecyclerAdapter", desc = "表驱动 RecyclerView", file = "LuaRecyclerAdapter.html", tags = "RecyclerView" },
+      { title = "LuaCustRecyclerAdapter", desc = "自定义 RecyclerView", file = "LuaCustRecyclerAdapter.html", tags = "RecyclerView 自定义" },
+      { title = "LuaPreferenceFragment", desc = "Preference 设置页", file = "LuaPreferenceFragment.html", tags = "Preference" },
+      { title = "LuaThemeUtil", desc = "themeUtil 字段表（用法见颜色与主题）", file = "LuaThemeUtil.html", tags = "themeUtil 字段" },
+      { title = "MaterialTextField", desc = "Material 输入框", file = "MaterialTextField.html", tags = "输入框" },
+      { title = "Coil", desc = "图片加载", file = "Coil.html", tags = "图片 Coil" },
     },
   },
   {
-    title = "工具与其它",
-    subtitle = "系统能力与第三方集成示例",
+    title = "其它",
+    subtitle = "系统能力",
     items = {
-      { title = "FileObserver", desc = "监听目录文件创建 / 修改 / 删除", file = "other_FileObserver.html", tags = "监听 文件" },
-      { title = "FastScrollerBuilder", desc = "RecyclerView 快速滚动条", file = "other_FastScrollerBuilder.html", tags = "滚动条 RecyclerView" },
+      { title = "FileObserver", desc = "目录文件变更监听", file = "other_FileObserver.html", tags = "监听 文件" },
+      { title = "FastScrollerBuilder", desc = "列表快速滚动条", file = "other_FastScrollerBuilder.html", tags = "滚动条" },
     },
   },
 }
@@ -169,6 +172,11 @@ local function backToHome()
   vpg.setCurrentItem(0)
   activity.setTitle(homeTitle)
   setWebLoading(false)
+  -- 清掉文档历史，避免下次误走 goBack
+  pcall(function()
+    webView.clearHistory()
+    webView.loadUrl("about:blank")
+  end)
 end
 
 local function buildDocRow(item, showDivider)
@@ -402,26 +410,6 @@ local function buildHeader()
         paddingTop = "6dp",
         alpha = 0.9,
       },
-      {
-        MaterialCardView,
-        layout_width = "wrap",
-        layout_height = "wrap",
-        layout_marginTop = "12dp",
-        radius = "999dp",
-        CardElevation = 0,
-        strokeWidth = "0dp",
-        CardBackgroundColor = ui.surfaceColor,
-        {
-          MaterialTextView,
-          text = string.format("%d 篇 · %d 类", countDocs(catalog), #catalog),
-          textSize = "12sp",
-          textColor = ui.onSurface,
-          paddingLeft = "12dp",
-          paddingRight = "12dp",
-          paddingTop = "5dp",
-          paddingBottom = "5dp",
-        },
-      },
     },
   })
 
@@ -541,12 +529,9 @@ function onOptionsItemSelected(m)
 end
 
 this.addOnBackPressedCallback(function()
+  -- 与顶栏返回一致：文档页直接回帮助首页，不沿 WebView 历史切文档
   if vpg.getCurrentItem() ~= 0 then
-    if webView.canGoBack() then
-      webView.goBack()
-    else
-      backToHome()
-    end
+    backToHome()
   else
     activity.finish()
   end

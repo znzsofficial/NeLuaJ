@@ -208,6 +208,92 @@ a {
   text-underline-offset: 0.16em;
 }
 
+/* 文档跳转按钮（内部 .html 链接） */
+a.doc-link,
+main.markdown-export a[href$=".html"]:not(.heading-anchor) {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 0.28em;
+  margin: 0.2em 0.28em 0.2em 0 !important;
+  padding: 0.42em 0.85em !important;
+  border-radius: 999px !important;
+  border: 1px solid var(--border) !important;
+  background: var(--secondary) !important;
+  color: var(--secondary-foreground) !important;
+  font-size: 0.9em !important;
+  font-weight: 600 !important;
+  line-height: 1.25 !important;
+  text-decoration: none !important;
+  box-shadow: var(--shadow);
+  vertical-align: middle;
+  transition: background 0.12s ease, border-color 0.12s ease, transform 0.08s ease;
+}
+
+a.doc-link::before,
+main.markdown-export a[href$=".html"]:not(.heading-anchor)::before {
+  content: "↗";
+  font-size: 0.92em;
+  opacity: 0.75;
+  font-weight: 700;
+}
+
+a.doc-link:active,
+main.markdown-export a[href$=".html"]:not(.heading-anchor):active {
+  transform: scale(0.98);
+}
+
+a.doc-link:hover,
+main.markdown-export a[href$=".html"]:not(.heading-anchor):hover {
+  background: var(--accent) !important;
+  border-color: var(--ring) !important;
+  color: var(--accent-foreground) !important;
+}
+
+/* 相关文档导航条 */
+.doc-nav {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  gap: 0.35rem 0.15rem !important;
+  margin: 12px 0 18px !important;
+  padding: 12px 14px !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 14px !important;
+  background: var(--card) !important;
+  box-shadow: var(--shadow);
+}
+
+.doc-nav-label {
+  display: inline-block !important;
+  margin: 0 0.5em 0 0 !important;
+  padding: 0 !important;
+  color: var(--muted-foreground) !important;
+  font-size: 0.82em !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  flex: 0 0 auto;
+}
+
+.doc-nav a.doc-link,
+.doc-nav a[href$=".html"] {
+  margin: 0.12em 0.2em 0.12em 0 !important;
+}
+
+.doc-nav-primary a.doc-link,
+.doc-nav-primary a[href$=".html"] {
+  background: var(--primary) !important;
+  border-color: transparent !important;
+  color: var(--primary-foreground) !important;
+}
+
+.doc-nav-primary a.doc-link:hover,
+.doc-nav-primary a[href$=".html"]:hover {
+  filter: brightness(1.06);
+  background: var(--primary) !important;
+  color: var(--primary-foreground) !important;
+}
+
 ul,
 ol {
   padding-left: 1.35rem !important;
@@ -435,6 +521,16 @@ svg {
   }
 
   .heading-anchor { opacity: 1; }
+
+  .doc-nav {
+    padding: 10px 12px !important;
+  }
+
+  a.doc-link,
+  main.markdown-export a[href$=".html"]:not(.heading-anchor) {
+    padding: 0.48em 0.9em !important;
+    font-size: 0.88em !important;
+  }
 
   .back-to-top {
     right: 12px;

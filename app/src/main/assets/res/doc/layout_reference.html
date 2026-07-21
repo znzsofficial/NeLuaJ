@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -10,7 +10,13 @@
   <body>
     <main class="markdown-export">
 <h1>布局表属性参考</h1>
-<p><code>loadlayout</code> 将 Lua 表转换为 Android 视图。本文档列出所有支持的属性。</p>
+<p><code>loadlayout</code> 将 Lua 表转换为 Android 视图。本文档列出属性与单位（布局颜色优先 <code>?attr/</code>）。</p>
+<nav class="doc-nav" aria-label="相关文档">
+  <span class="doc-nav-label">相关文档</span>
+  <a class="doc-link" href="module_loadlayout.html">loadlayout 机制</a>
+  <a class="doc-link" href="color_api.html">颜色与主题</a>
+  <a class="doc-link" href="md3_design.html">MD3 组件</a>
+</nav>
 <hr>
 <h2>1. 基本结构</h2>
 <pre><code class="language-lua">return {
@@ -181,19 +187,19 @@ import "com.google.android.material.textview.MaterialTextView"
 import "com.google.android.material.button.MaterialButton"
 import "com.google.android.material.card.MaterialCardView"
 
-local ColorUtil = this.themeUtil
-
+-- 布局取色推荐 ?attr/…（运行时需要 int 再用 this.themeUtil）
 return {
     LinearLayout,
     orientation = "vertical",
     layout_width = "match",
     layout_height = "match",
+    BackgroundColor = "?attr/colorBackground",
     {
         MaterialToolbar,
         id = "toolbar",
         layout_width = "match",
         layout_height = "?attr/actionBarSize",
-        BackgroundColor = ColorUtil.getColorBackground(),
+        BackgroundColor = "?attr/colorBackground",
     },
     {
         ScrollView,
@@ -212,7 +218,8 @@ return {
                 radius = "16dp",
                 CardElevation = 0,
                 strokeWidth = "1dp",
-                strokeColor = ColorUtil.outline.variant,
+                strokeColor = "?attr/colorOutlineVariant",
+                CardBackgroundColor = "?attr/colorSurfaceContainer",
                 {
                     LinearLayout,
                     orientation = "vertical",
@@ -223,13 +230,13 @@ return {
                         MaterialTextView,
                         text = "欢迎",
                         textSize = "24sp",
-                        textColor = ColorUtil.surface.on,
+                        textColor = "?attr/colorOnSurface",
                     },
                     {
                         MaterialTextView,
                         text = "这是一个示例卡片",
                         textSize = "14sp",
-                        textColor = ColorUtil.surface.onVariant,
+                        textColor = "?attr/colorOnSurfaceVariant",
                         layout_marginTop = "8dp",
                     },
                     {

@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
@@ -14,7 +14,8 @@
       <p>在 Activity 脚本中通常可直接使用全局 <code>res</code>；也可 <code>require "res"</code>（模块会把表注入环境）。</p>
 
       <h2>目录结构示例</h2>
-      <pre><code>res/
+      <pre><code>项目或 App assets:
+res/
   string/
     init.lua
     default.lua
@@ -32,7 +33,7 @@
     init.lua
     port.lua
     land.lua
-  drawable/
+  drawable/          -- 项目 assets 位图（png 等）或 .lua 脚本
     icon.png
     badge.lua
   font/
@@ -41,6 +42,13 @@
     main.lua
   raw/
     config.json
+
+App 原生资源（与 assets 并列）:
+app/src/main/res/drawable/
+  ic_save.xml        -- Material 矢量，可 tint
+  file_code.xml
+  folder.xml
+  …
 </code></pre>
 
       <h2>1. res.string</h2>
@@ -81,7 +89,6 @@ apple_count = {
   other = "%d apples",
 }
 
--- 使用：返回对应条目字符串（是否 sprintf 取决于你的资源写法）
 print(res.plurals.apple_count(0))
 print(res.plurals.apple_count(1))
 print(res.plurals.apple_count(5))
@@ -89,51 +96,74 @@ print(res.plurals.apple_count(5))
 
       <h2>4. res.color</h2>
       <p>仅在 Activity 上下文可用。先加载 <code>res/color/init.lua</code>，再按是否夜间模式加载 <code>night.lua</code> 或 <code>day.lua</code>。</p>
+      <p>MD3 主题色不要写进 <code>res.color</code>：布局用 <code>?attr/</code>，运行时用 <code>themeUtil</code>。</p>
+      <nav class="doc-nav" aria-label="相关文档">
+        <span class="doc-nav-label">取色</span>
+        <a class="doc-link" href="color_api.html">颜色与主题</a>
+      </nav>
       <pre><code class="language-lua">-- res/color/day.lua
-primary = 0xFF1976D2
-bg = 0xFFFFFFFF
+accent = 0xFF1976D2
+chip_bg = 0xFFE3F2FD
 
--- res/color/night.lua
-primary = 0xFF90CAF9
-bg = 0xFF121212
-
--- 使用
-view.setBackgroundColor(res.color.bg)
+view.setBackgroundColor(res.color.chip_bg)
 </code></pre>
 
       <h2>5. res.dimen</h2>
-      <p>仅在 Activity 上下文可用。先 <code>init.lua</code>，再按方向加载 <code>port.lua</code> / <code>land.lua</code>（或 undefined）。</p>
+      <p>仅在 Activity 上下文可用。先 <code>init.lua</code>，再按方向加载 <code>port.lua</code> / <code>land.lua</code>。</p>
       <pre><code class="language-lua">-- res/dimen/port.lua
 title_size = "20sp"
 padding = "16dp"
 
--- 使用（具体值类型取决于你在文件中写的内容）
 print(res.dimen.title_size)
 </code></pre>
 
       <h2>6. res.drawable</h2>
-      <p>从 <code>res/drawable/</code> 加载图片或同名 <code>.lua</code> 脚本。支持扩展名：png / jpg / jpeg / gif / webp / svg / bmp / heif / heic / avif。结果有缓存。</p>
+      <p>加载图标 / 图片。结果有缓存。支持两种来源（优先级如下）。</p>
+
+      <h3>查找顺序（当前实现）</h3>
+      <ol>
+        <li><strong>Android 原生资源</strong> <code>R.drawable.&lt;name&gt;</code>，再试 <code>R.drawable.ic_&lt;name&gt;</code>（矢量 XML，可 tint）</li>
+        <li><strong>项目 assets</strong> <code>res/drawable/&lt;name&gt;.&lt;ext&gt;</code>（png / jpg / jpeg / gif / webp / svg / bmp / heif / heic / avif）</li>
+        <li><strong>同名 Lua</strong> <code>res/drawable/&lt;name&gt;.lua</code></li>
+      </ol>
+      <p>因此同名时，<code>app/src/main/res/drawable/file_code.xml</code> 会优先于 assets 里的 <code>file_code.png</code>。App 内置图标建议用 vector XML；项目自定义位图仍可放 assets。</p>
 
       <h3>属性访问</h3>
       <pre><code class="language-lua">imageView.setImageDrawable(res.drawable.my_icon)
--- 查找 res/drawable/my_icon.png 等，或 res/drawable/my_icon.lua
+-- 依次尝试 R.drawable.my_icon / ic_my_icon，再 assets 图片 / .lua
 </code></pre>
 
-      <h3>函数调用（可着色或回调）</h3>
-      <pre><code class="language-lua">-- 颜色整数：对 Drawable 应用 SRC_ATOP 颜色滤镜
-local redIcon = res.drawable("my_icon", 0xFFFF0000)
-imageView.setImageDrawable(redIcon)
+      <h3>函数调用（着色或回调）</h3>
+      <pre><code class="language-lua">local t = this.themeUtil
+
+-- 颜色整数：对 Drawable 着色（vector 用 DrawableCompat tint；位图用 SRC_ATOP 滤镜）
+local icon = res.drawable("save", t.primary.main)
+imageView.setImageDrawable(icon)
+
+-- 文件列表常用：按类型 tint
+local folderIcon = res.drawable("folder", t.primary.main)
+local codeIcon = res.drawable("file_code", t.secondary.main)
 
 -- 回调：加载后处理 Drawable
-res.drawable("settings_icon", function(icon)
+res.drawable("settings", function(icon)
   icon.setBounds(0, 0, 100, 100)
   someView.setBackground(icon)
 end)
 </code></pre>
-      <p>未找到资源时返回 <code>nil</code>。</p>
+      <p>未找到资源时返回 <code>nil</code>。带着色参数时不会污染未着色缓存实例。</p>
+
+      <h3>内置矢量命名约定</h3>
+      <div class="table-wrapper"><table>
+        <thead><tr><th>用途</th><th>name 示例</th><th>资源</th></tr></thead>
+        <tbody>
+          <tr><td>工具栏</td><td><code>save</code> / <code>search</code> / <code>settings</code></td><td><code>ic_save.xml</code> 等（自动加 <code>ic_</code> 前缀）</td></tr>
+          <tr><td>文件类型</td><td><code>file_code</code> / <code>file_json</code> / <code>folder</code></td><td>同名 <code>file_code.xml</code></td></tr>
+          <tr><td>通用操作</td><td><code>delete</code> / <code>play</code> / <code>undo</code></td><td>同名 XML</td></tr>
+        </tbody>
+      </table></div>
 
       <h2>7. res.bitmap</h2>
-      <p>与 drawable 相同查找路径，但返回 <code>Bitmap</code>（经 Coil 解码）。</p>
+      <p>与 drawable 相同的 assets 查找路径，返回 <code>Bitmap</code>（Coil 解码）。不走 Android vector 回退。</p>
       <pre><code class="language-lua">local bmp = res.bitmap.photo
 if bmp then
   imageView.setImageBitmap(bmp)
@@ -143,40 +173,45 @@ end
       <h2>8. res.font</h2>
       <p>从 <code>res/font/</code> 加载 <code>.ttf</code> / <code>.otf</code>，返回 <code>Typeface</code>，带缓存。</p>
       <pre><code class="language-lua">textView.setTypeface(res.font.code)
--- 对应 res/font/code.ttf 或 code.otf
 </code></pre>
 
       <h2>9. res.layout</h2>
-      <p>加载 <code>res/layout/&lt;name&gt;.lua</code>，返回布局表（table），交给 <code>loadlayout</code> 使用。</p>
+      <p>加载 <code>res/layout/&lt;name&gt;.lua</code>，返回布局表，交给 <code>loadlayout</code> 使用。</p>
       <pre><code class="language-lua">local layout = res.layout.main
 activity.setContentView(loadlayout(layout))
+-- 或
+activity.setContentView(res.layout.main)
 </code></pre>
+      <p>布局取色用 <code>"?attr/…"</code>；图标 tint 用 <code>res.drawable("save", this.themeUtil.primary.main)</code>。</p>
+      <nav class="doc-nav" aria-label="相关文档">
+        <span class="doc-nav-label">相关</span>
+        <a class="doc-link" href="color_api.html">颜色与主题</a>
+        <a class="doc-link" href="module_loadlayout.html">loadlayout</a>
+      </nav>
 
       <h2>10. res.view</h2>
-      <p>加载并解析布局，直接返回 Android View，相当于 <code>loadlayout(res.layout.xxx)</code> 的快捷方式。</p>
-      <pre><code class="language-lua">local root = res.view.main
-activity.setContentView(root)
+      <p>加载并解析布局，直接返回 Android View，相当于 <code>loadlayout(res.layout.xxx)</code>。</p>
+      <pre><code class="language-lua">activity.setContentView(res.view.main)
 </code></pre>
 
       <h2>11. res.raw</h2>
-      <p>访问 <code>res/raw/</code> 下任意文件（按文件名不含扩展名匹配）。</p>
-      <pre><code class="language-lua">-- 属性访问：返回 java.io.File
-local f = res.raw.config
-print(f.getAbsolutePath())
-
--- 函数调用：读取文本内容，默认 UTF-8
-local text = res.raw("config")
-local gbkText = res.raw("config", "GBK")
-print(text)
+      <p>访问 <code>res/raw/</code> 下文件（按不含扩展名的文件名匹配）。</p>
+      <pre><code class="language-lua">local f = res.raw.config          -- java.io.File
+local text = res.raw("config")    -- 文本，默认 UTF-8
+local gbk = res.raw("config", "GBK")
 </code></pre>
 
       <h2>综合示例</h2>
-      <pre><code class="language-lua">activity.setTitle(res.string.app_name)
+      <pre><code class="language-lua">require "import"
+activity.dynamicColor()
+
+local t = this.themeUtil
+activity.setTitle(res.string.app_title or "App")
 activity.setContentView(res.view.main)
 
-titleView.setTextColor(res.color.primary)
+titleView.setTextColor(t.primary.main)
 titleView.setTypeface(res.font.code)
-iconView.setImageDrawable(res.drawable("logo", res.color.primary))
+iconView.setImageDrawable(res.drawable("logo", t.primary.main))
 
 local cfg = res.raw("config")
 if cfg then
@@ -187,9 +222,14 @@ end
       <h2>注意</h2>
       <ul>
         <li><code>res.color</code> / <code>res.dimen</code> 依赖 Activity 配置；非 Activity 上下文可能不可用。</li>
-        <li>drawable / bitmap / font / raw 都有缓存，同名资源热替换后可能需重启进程。</li>
-        <li>字符串与 plurals 的具体键名完全由你的资源文件定义。</li>
+        <li>drawable / bitmap / font / raw 有缓存；同名资源热替换后可能需重启进程。</li>
+        <li>字符串与 plurals 的键名完全由你的资源文件定义。</li>
       </ul>
+      <nav class="doc-nav" aria-label="相关文档">
+        <span class="doc-nav-label">相关文档</span>
+        <a class="doc-link" href="color_api.html">颜色与主题</a>
+        <a class="doc-link" href="module_loadlayout.html">loadlayout</a>
+      </nav>
     </main>
   </body>
 </html>

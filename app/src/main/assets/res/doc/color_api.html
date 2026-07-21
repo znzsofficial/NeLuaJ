@@ -1,216 +1,147 @@
-﻿<!doctype html>
-<html lang="en">
+<!doctype html>
+<html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="doc.css" />
     <script src="doc.js" defer></script>
-    <title>颜色与主题 API</title>
+    <title>颜色与主题</title>
   </head>
   <body>
     <main class="markdown-export">
-<h1>颜色与主题 API</h1>
-<p>NeLuaJ+ 提供了一套完整的 Material 3 颜色 API，支持动态主题色、颜色协调、颜色角色查询等功能。</p>
-<hr>
-<h2>dynamicColor — 动态主题色</h2>
-<p>NeLuaJ+ 会优先读取全局主题色种子 <code>theme_seed_color</code>。如果已设置，调用 <code>this.dynamicColor()</code> 的页面会自动按该种子色生成色板；如果未设置，则继续使用系统壁纸动态取色。</p>
-<h3>跟随系统壁纸</h3>
-<pre><code class="language-lua">-- 使用系统壁纸动态取色（Android 12+）
-this.dynamicColor()
-</code></pre>
-<p>调用后 Activity 的主题色会跟随系统壁纸颜色。<code>themeUtil</code> 获取的所有颜色会自动更新。</p>
-<h3>自定义 Seed Color</h3>
-<pre><code class="language-lua">-- 传入种子色，生成完整的 Material 3 色板并应用到 Activity
-this.dynamicColor(0xFF6750A4)
-</code></pre>
-<p>传入任意颜色值作为种子色，Material 3 算法会自动生成完整的 primary / secondary / tertiary / neutral / error 色板并应用到当前 Activity。</p>
-<p>调用后 <code>themeUtil</code> 会反映新的色板：</p>
-<pre><code class="language-lua">this.dynamicColor(0xFF1B6B3A) -- 绿色种子
+      <h1>颜色与主题</h1>
+      <p>本文是<strong>取色与动态主题</strong>的唯一入口。</p>
+      <nav class="doc-nav" aria-label="相关文档">
+        <span class="doc-nav-label">相关文档</span>
+        <a class="doc-link" href="md3_design.html">MD3 设计指南</a>
+        <a class="doc-link" href="LuaThemeUtil.html">themeUtil 字段</a>
+        <a class="doc-link" href="module_loadlayout.html">loadlayout</a>
+        <a class="doc-link" href="init_lua_zh.html">init.lua 主题</a>
+      </nav>
 
--- themeUtil 现在返回基于绿色生成的完整色板
-local primary = this.themeUtil.getColorPrimary()
-local secondary = this.themeUtil.getColorSecondary()
-local surface = this.themeUtil.surface.container
-</code></pre>
-<h3>全局主题色设置</h3>
-<p>设置页提供主题色选择器，用户可以直接从预设色板中选择，或进入自定义颜色输入。保存后会把值写入 <code>theme_seed_color</code>，随后应用内所有调用 <code>this.dynamicColor()</code> / <code>activity.dynamicColor()</code> 的 Activity 都会自动使用这个种子色。</p>
-<p>当前 <code>theme_seed_color</code> 以整数 ARGB 保存，读取时可以直接传给 <code>this.dynamicColor(seedColor)</code>；旧版本留下的字符串颜色值也仍然兼容。</p>
-<pre><code class="language-lua">-- 读取当前保存的主题色种子
-local seedColor = this.getSharedData("theme_seed_color")
+      <h2>怎么选写法</h2>
+      <div class="table-wrapper"><table>
+        <thead><tr><th>场景</th><th>推荐</th><th>例子</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>布局表颜色属性</td>
+            <td><code>"?attr/…"</code></td>
+            <td><code>textColor = "?attr/colorPrimary"</code></td>
+          </tr>
+          <tr>
+            <td>运行时需要颜色 int</td>
+            <td><code>this.themeUtil</code></td>
+            <td><code>t.primary.main</code>、图标 tint</td>
+          </tr>
+          <tr>
+            <td>启用动态色板</td>
+            <td><code>this.dynamicColor()</code></td>
+            <td>在 <code>setContentView</code> 之前</td>
+          </tr>
+        </tbody>
+      </table></div>
 
--- 如果存在，建议直接用该值恢复全局主题
-if seedColor then
-    this.dynamicColor(seedColor)
-else
-    this.dynamicColor()
-end
-</code></pre>
-<blockquote>
-<p><strong>注意</strong>：<code>dynamicColor</code> 必须在 <code>setContentView</code> 之前调用，否则已创建的 View 不会更新。典型用法是在 <code>main.lua</code> 最开头调用。</p>
-</blockquote>
-<blockquote>
-<p><strong>注意</strong>：如果项目已经保存了 <code>theme_seed_color</code>，建议不要在同一个 Activity 里手动再调用一次 <code>dynamicColor(seedColor)</code> 叠加其他种子色，以免覆盖用户设置。</p>
-</blockquote>
-<h3>完整示例</h3>
-<pre><code class="language-lua">-- 根据用户选择的颜色动态切换主题
-local seedColor = 0xFF2196F3 -- 蓝色
+      <h2>1. dynamicColor</h2>
+      <p>优先使用设置页保存的全局种子 <code>theme_seed_color</code>；未设置则跟系统壁纸（Android 12+）。</p>
+      <pre><code class="language-lua">-- main.lua 开头
+activity.dynamicColor()
+-- 或临时种子（一般不必，会覆盖用户全局设置）
+-- activity.dynamicColor(0xFF6750A4)
 
--- 应用种子色主题
-this.dynamicColor(seedColor)
+activity.setContentView(res.layout.main)
+</code></pre>
+      <ul>
+        <li>必须在 <code>setContentView</code> 之前调用。</li>
+        <li>已设 <code>theme_seed_color</code> 时，页面只需 <code>dynamicColor()</code>，无需再读 SharedData 手动套种子。</li>
+      </ul>
 
--- 后续所有 UI 都会使用基于蓝色生成的色板
-local ColorUtil = this.themeUtil
-activity.setContentView(loadlayout({
-    LinearLayout,
-    orientation = "vertical",
-    layout_width = "match",
-    layout_height = "match",
-    BackgroundColor = ColorUtil.getColorBackground(),
-    {
-        MaterialButton,
-        text = "Hello",
-        -- 按钮自动使用新的 primary 色
-    },
-}))
+      <h2>2. 布局：?attr/…</h2>
+      <p><code>loadlayout</code> 在创建 View 时解析主题属性，写法接近 Android XML。默认工程模板即如此。</p>
+      <pre><code class="language-lua">return {
+  LinearLayout,
+  BackgroundColor = "?attr/colorBackground",
+  {
+    MaterialTextView,
+    textColor = "?attr/colorPrimary",
+  },
+  {
+    MaterialCardView,
+    CardBackgroundColor = "?attr/colorSurfaceContainer",
+    strokeColor = "?attr/colorOutlineVariant",
+    strokeWidth = "1dp",
+    radius = "16dp",
+  },
+}
 </code></pre>
-<hr>
-<h2>harmonizeColor — 颜色协调</h2>
-<p>将一个自定义颜色与当前主题色进行协调，使其在视觉上与主题和谐统一。</p>
-<h3>与主题 Primary 协调</h3>
-<pre><code class="language-lua">-- 将红色与当前主题的 primary 色协调
-local red = 0xFFFF0000
-local harmonized = this.harmonizeColor(red)
--- harmonized 是一个偏向主题色调的红色
-</code></pre>
-<h3>两个颜色互相协调</h3>
-<pre><code class="language-lua">-- 将 color1 向 color2 的色调偏移
-local result = this.harmonizeColor(color1, color2)
-</code></pre>
-<h3>使用场景</h3>
-<pre><code class="language-lua">-- 错误色与主题协调
-local errorRed = 0xFFB3261E
-local themedError = this.harmonizeColor(errorRed)
+      <p>常用 attr：</p>
+      <div class="table-wrapper"><table>
+        <thead><tr><th>attr</th><th>用途</th></tr></thead>
+        <tbody>
+          <tr><td><code>colorPrimary</code> / <code>colorOnPrimary</code></td><td>主色 / 其上内容</td></tr>
+          <tr><td><code>colorPrimaryContainer</code> / <code>colorOnPrimaryContainer</code></td><td>主色容器</td></tr>
+          <tr><td><code>colorSecondary</code> / <code>colorSecondaryContainer</code></td><td>次色</td></tr>
+          <tr><td><code>colorSurface</code> / <code>colorOnSurface</code></td><td>表面 / 正文</td></tr>
+          <tr><td><code>colorOnSurfaceVariant</code></td><td>次要文字</td></tr>
+          <tr><td><code>colorSurfaceContainer</code>（及 Low / High / Highest）</td><td>卡片、列表</td></tr>
+          <tr><td><code>colorBackground</code> / <code>colorOnBackground</code></td><td>页面背景</td></tr>
+          <tr><td><code>colorOutline</code> / <code>colorOutlineVariant</code></td><td>描边</td></tr>
+          <tr><td><code>colorError</code></td><td>错误态</td></tr>
+          <tr><td><code>actionBarSize</code></td><td>工具栏高度（非颜色）</td></tr>
+        </tbody>
+      </table></div>
+      <p>也支持 <code>?android:attr/…</code>。</p>
+      <nav class="doc-nav" aria-label="相关文档">
+        <span class="doc-nav-label">样式</span>
+        <a class="doc-link" href="module_loadlayout.html">loadlayout · style / ?attr</a>
+      </nav>
 
--- 自定义标签色与主题协调
-local tagColors = {0xFFE91E63, 0xFF9C27B0, 0xFF2196F3, 0xFF4CAF50}
-for i, color in ipairs(tagColors) do
-    tagColors[i] = this.harmonizeColor(color)
-end
+      <h2>3. 运行时：themeUtil</h2>
+      <p>需要 <code>int</code> 时用（图标 tint、动态 <code>setBackgroundColor</code>、条件着色等）。</p>
+      <pre><code class="language-lua">local t = this.themeUtil
+res.drawable("save", t.primary.main)
+view.setBackgroundColor(t.surface.container)
+
+-- 分组速览（完整表 → LuaThemeUtil.html）
+-- t.primary / secondary / tertiary / error
+-- t.surface / background / outline / text
 </code></pre>
-<hr>
-<h2>isColorLight — 颜色明暗判断</h2>
-<p>判断一个颜色是浅色还是深色，常用于决定文字颜色。</p>
-<pre><code class="language-lua">local bg = 0xFFE8DEF8
+      <p>旧写法 <code>t.getColorPrimary()</code> 仍可用，新代码请用 <code>t.primary.main</code>。</p>
+      <pre><code class="language-lua">-- 任意 attr
+local c = t.getAnyColor(MDC_R.attr.colorTertiaryContainer)
+</code></pre>
+
+      <h2>4. 其它工具</h2>
+      <pre><code class="language-lua">-- 与主题 primary 协调
+local themed = this.harmonizeColor(0xFFFF0000)
+-- 两色互相靠近
+local mixed = this.harmonizeColor(c1, c2)
+
+-- 明暗（决定文字黑/白）
 if this.isColorLight(bg) then
-    textView.setTextColor(0xFF000000) -- 浅色背景用深色文字
+  text.setTextColor(0xFF000000)
 else
-    textView.setTextColor(0xFFFFFFFF) -- 深色背景用浅色文字
+  text.setTextColor(0xFFFFFFFF)
 end
 </code></pre>
-<hr>
-<h2>themeUtil — 主题色获取</h2>
-<p><code>this.themeUtil</code> 提供当前主题的所有 Material 3 颜色。调用 <code>dynamicColor()</code> 后会自动反映新色板。</p>
-<h3>结构化访问</h3>
-<pre><code class="language-lua">local t = this.themeUtil
 
--- Primary 色组
-t.primary.main           -- 主色
-t.primary.on             -- 主色上的内容色
-t.primary.container      -- 主色容器
-t.primary.onContainer    -- 主色容器上的内容色
-t.primary.inverse        -- 反色主色
-t.primary.fixed          -- 固定主色
-t.primary.fixedDim       -- 固定主色（暗）
-t.primary.onFixed        -- 固定主色上的内容色
-t.primary.onFixedVariant -- 固定主色变体上的内容色
-
--- Secondary 色组
-t.secondary.main / .on / .container / .onContainer
-t.secondary.fixed / .fixedDim / .onFixed / .onFixedVariant
-
--- Tertiary 色组
-t.tertiary.main / .on / .container / .onContainer
-t.tertiary.fixed / .fixedDim / .onFixed / .onFixedVariant
-
--- Error 色组
-t.error.main / .on / .container / .onContainer
-
--- Surface 色组
-t.surface.main           -- 表面色
-t.surface.on             -- 表面上的内容色
-t.surface.variant        -- 表面变体
-t.surface.onVariant      -- 表面变体上的内容色
-t.surface.inverse        -- 反色表面
-t.surface.onInverse      -- 反色表面上的内容色
-t.surface.bright         -- 亮表面
-t.surface.dim            -- 暗表面
-t.surface.container      -- 表面容器
-t.surface.containerLow   -- 表面容器（低）
-t.surface.containerLowest-- 表面容器（最低）
-t.surface.containerHigh  -- 表面容器（高）
-t.surface.containerHighest-- 表面容器（最高）
-
--- Background 色组
-t.background.main / .on
-
--- Text 色组
-t.text.primary / .hint / .highlight / .title / .subtitle
-
--- Outline 色组
-t.outline.main / .variant
-</code></pre>
-<h3>兼容方法</h3>
-<pre><code class="language-lua">local t = this.themeUtil
-
-t.getColorPrimary()
-t.getColorOnPrimary()
-t.getColorPrimaryContainer()
-t.getColorOnPrimaryContainer()
-t.getColorSecondary()
-t.getColorSecondaryContainer()
-t.getColorTertiary()
-t.getColorError()
-t.getColorSurface()
-t.getColorOnSurface()
-t.getColorSurfaceVariant()
-t.getColorOnSurfaceVariant()
-t.getColorSurfaceContainer()
-t.getColorSurfaceContainerHigh()
-t.getColorSurfaceContainerHighest()
-t.getColorBackground()
-t.getColorOnBackground()
-t.getColorOutline()
-t.getColorOutlineVariant()
--- ... 更多见 LuaThemeUtil 源码
-</code></pre>
-<h3>获取任意主题属性颜色</h3>
-<pre><code class="language-lua">-- 通过 attr 资源 ID 获取任意主题颜色
-local color = this.themeUtil.getAnyColor(MDC_R.attr.colorTertiaryContainer)
-</code></pre>
-<hr>
-<h2>Java 类直接调用</h2>
-<p>以上 API 底层使用的 Java 类也可以在 Lua 中直接调用：</p>
-<pre><code class="language-lua">import "com.google.android.material.color.MaterialColors"
-import "com.google.android.material.color.ColorRoles"
-
--- 从任意颜色生成 4 个角色色
-local roles = MaterialColors.getColorRoles(activity, 0xFF6750A4)
-local accent = roles.getAccent()
-local onAccent = roles.getOnAccent()
-local accentContainer = roles.getAccentContainer()
-local onAccentContainer = roles.getOnAccentContainer()
-
--- 颜色叠加
-local layered = MaterialColors.layer(bgColor, overlayColor, 0.5)
-
--- 带透明度合成
-local composite = MaterialColors.compositeARGBWithAlpha(color, 128)
-</code></pre>
-<hr>
-<h2>API 速查表</h2>
-<div class="table-wrapper"><table><thead><tr><th>方法</th><th>说明</th><th>返回值</th></tr></thead><tbody><tr><td><code>this.dynamicColor()</code></td><td>跟随系统壁纸取色</td><td>void</td></tr><tr><td><code>this.dynamicColor(seedColor)</code></td><td>从种子色生成完整色板</td><td>void</td></tr><tr><td><code>this.harmonizeColor(color)</code></td><td>与主题 primary 协调</td><td>int (颜色值)</td></tr><tr><td><code>this.harmonizeColor(color, withColor)</code></td><td>两色互相协调</td><td>int (颜色值)</td></tr><tr><td><code>this.isColorLight(color)</code></td><td>判断颜色明暗</td><td>boolean</td></tr><tr><td><code>this.themeUtil.*</code></td><td>获取当前主题色</td><td>int (颜色值)</td></tr><tr><td><code>this.themeUtil.getAnyColor(attrId)</code></td><td>获取任意主题属性色</td><td>int (颜色值)</td></tr></tbody></table></div>
+      <h2>5. 速查</h2>
+      <div class="table-wrapper"><table>
+        <thead><tr><th>API</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td><code>this.dynamicColor()</code> / <code>(seed)</code></td><td>应用动态色板</td></tr>
+          <tr><td><code>"?attr/color…"</code></td><td>布局声明式取色</td></tr>
+          <tr><td><code>this.themeUtil.*</code></td><td>运行时颜色 int</td></tr>
+          <tr><td><code>this.harmonizeColor</code></td><td>颜色协调</td></tr>
+          <tr><td><code>this.isColorLight</code></td><td>明暗判断</td></tr>
+        </tbody>
+      </table></div>
+      <nav class="doc-nav doc-nav-primary" aria-label="相关文档">
+        <span class="doc-nav-label">继续阅读</span>
+        <a class="doc-link" href="md3_design.html">MD3 设计</a>
+        <a class="doc-link" href="LuaThemeUtil.html">themeUtil 字段</a>
+        <a class="doc-link" href="module_loadlayout.html">loadlayout</a>
+        <a class="doc-link" href="init_lua_zh.html">init.lua 主题</a>
+      </nav>
     </main>
   </body>
 </html>
-
-

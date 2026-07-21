@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -36,25 +36,26 @@ print(obj.name)  -- "test"
 </code></pre>
 <hr>
 <h2>3. file — 文件模块</h2>
-<pre><code class="language-lua">-- 读写
-file.write("test.txt", "内容")
+<pre><code class="language-lua">file.write("test.txt", "内容")
 local content = file.read("test.txt")
-
--- 目录操作
 file.mkdir("newdir")
-file.list(".")  -- 列出文件
+file.list(".")
 </code></pre>
+<nav class="doc-nav" aria-label="相关文档">
+  <span class="doc-nav-label">详文</span>
+  <a class="doc-link" href="module_file.html">file 模块</a>
+</nav>
 <hr>
-<h2>4. res — 资源模块</h2>
-<pre><code class="language-lua">-- 字符串资源（自动根据语言选择）
-local title = res.string.app_title
-
--- 布局资源
-local layout = res.layout.main
-
--- 当前语言
-local lang = res.language  -- "zh", "en", "ja" 等
+<h2>4. res / loadlayout</h2>
+<pre><code class="language-lua">local title = res.string.app_title
+activity.setContentView(res.layout.main)
 </code></pre>
+<nav class="doc-nav" aria-label="相关文档">
+  <span class="doc-nav-label">详文</span>
+  <a class="doc-link" href="module_res.html">res</a>
+  <a class="doc-link" href="module_loadlayout.html">loadlayout</a>
+  <a class="doc-link" href="color_api.html">颜色与主题</a>
+</nav>
 <hr>
 <h2>5. okhttp / Http — 网络模块</h2>
 <h3>同步请求</h3>

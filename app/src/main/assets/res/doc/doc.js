@@ -255,11 +255,56 @@
     update();
   }
 
+  function isDocHref(href) {
+    if (!href) return false;
+    return /\.html($|#)/i.test(href) && href.indexOf("://") === -1;
+  }
+
+  /** 将内部文档链接标成按钮，并把「相关文档」段落收成导航条 */
+  function setupDocLinks() {
+    var main = document.querySelector("main.markdown-export") || document.body;
+    main.querySelectorAll('a[href]').forEach(function (a) {
+      if (!isDocHref(a.getAttribute("href"))) return;
+      if (a.classList.contains("heading-anchor")) return;
+      a.classList.add("doc-link");
+    });
+
+    main.querySelectorAll("p").forEach(function (p) {
+      if (p.closest(".doc-nav")) return;
+      var links = Array.prototype.filter.call(p.querySelectorAll("a.doc-link"), function (a) {
+        return isDocHref(a.getAttribute("href"));
+      });
+      if (links.length < 1) return;
+
+      // 段落里几乎只有文档链接（允许 · / 、 见 相关 等提示文字）
+      var clone = p.cloneNode(true);
+      clone.querySelectorAll("a.doc-link").forEach(function (a) { a.remove(); });
+      var leftover = (clone.textContent || "")
+        .replace(/[\s·•、，,。:：→\-–—|/\\相关文档见详文完整说明列表]/g, "");
+      if (leftover.length > 8 && links.length < 2) return;
+
+      var nav = document.createElement("nav");
+      nav.className = "doc-nav";
+      nav.setAttribute("aria-label", "相关文档");
+
+      var label = document.createElement("span");
+      label.className = "doc-nav-label";
+      label.textContent = "相关文档";
+      nav.appendChild(label);
+
+      links.forEach(function (a) {
+        nav.appendChild(a);
+      });
+      p.parentNode.replaceChild(nav, p);
+    });
+  }
+
   function initDocs() {
     applyHighlighting();
     setupHeadings();
     setupToc();
     setupCodeTools();
+    setupDocLinks();
     setupBackToTop();
   }
 
