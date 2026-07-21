@@ -1,5 +1,5 @@
 ---@diagnostic disable: undefined-global
-require "environment"
+require "mods.bootstrap"
 import "java.io.File"
 import "java.io.FileOutputStream"
 import "android.view.View"
@@ -18,7 +18,7 @@ import "vinx.material.textfield.MaterialTextField"
 
 -- 必须用 INSTANCE；import 类会覆盖 environment 里的单例
 local LuaFileUtil = luajava.bindClass("com.nekolaska.io.LuaFileUtil").INSTANCE
-local InitLuaUtil = require "mods.utils.InitLuaUtil"
+local InitLuaUtil = require "mods.project.InitLuaUtil"
 local ActivityUtil = require "mods.utils.ActivityUtil"
 
 this.dynamicColor()

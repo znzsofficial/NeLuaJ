@@ -1,4 +1,4 @@
-require "environment"
+require "mods.bootstrap"
 import "android.widget.LinearLayout"
 import "android.widget.ScrollView"
 import "android.widget.FrameLayout"

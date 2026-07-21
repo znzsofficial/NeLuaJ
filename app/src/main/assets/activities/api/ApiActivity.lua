@@ -1,4 +1,4 @@
-require "environment"
+require "mods.bootstrap"
 import "android.widget.ArrayAdapter"
 import "android.widget.Toast"
 import "android.content.Context"

@@ -1,4 +1,4 @@
-require "environment"
+require "mods.bootstrap"
 import "android.content.Context"
 import "android.widget.LinearLayout"
 import "android.widget.ImageView"

@@ -1,4 +1,4 @@
-require "environment"
+require "mods.bootstrap"
 import "android.content.ClipData"
 import "android.content.Context"
 import "android.widget.ListView"

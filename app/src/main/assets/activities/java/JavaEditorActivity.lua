@@ -1,5 +1,5 @@
 ---@diagnostic disable: undefined-global
-require "environment"
+require "mods.bootstrap"
 import "res"
 local ColorUtil = this.themeUtil
 local LuaFileUtil = luajava.bindClass "com.nekolaska.io.LuaFileUtil".INSTANCE

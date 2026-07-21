@@ -1,4 +1,4 @@
-require "environment"
+require "mods.bootstrap"
 import "android.view.View"
 import "android.view.WindowManager"
 import "android.graphics.Color"

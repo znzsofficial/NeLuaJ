@@ -41,13 +41,16 @@ local Anim
 local suffix_image = setmetatable({
     lua = "file_code",
     luac = "file_c_code",
-    java = "file_code",
+    java = "file_java",
     kt = "file_code",
+    kts = "file_code",
     xml = "file_xml",
     apk = "file_apk",
     aab = "file_apk",
     class = "file_java",
     jar = "file_java",
+    jad = "file_java",
+    smali = "file_java",
     dex = "file_dex",
     alp = "file_zip",
     zip = "file_zip",
@@ -79,7 +82,6 @@ local suffix_image = setmetatable({
     log = "file_text",
     properties = "file_text",
     gradle = "file_code",
-    kts = "file_code",
     toml = "file_json",
     cfg = "file_json",
     ini = "file_json",
@@ -317,43 +319,67 @@ _M.init = function()
                     return FileItemHolder(view)
                 end,
                 onViewRecycled = function(holder)
+                    local t = holder.Tag
+                    if t and t.coil_disposable then
+                        pcall(function() t.coil_disposable.dispose() end)
+                        t.coil_disposable = nil
+                    end
                     holder.unbind()
                 end,
                 onBindViewHolder = function(holder, position)
                     local view = holder.bind()
                     local v = FileList[position + 1]
                     local v_path = v.path
+                    local bind_token = v_path .. "\0" .. tostring(v.img) .. "\0" .. tostring(v.file_name)
+                    local tag = holder.Tag
+
+                    -- 取消上一绑定时的 Coil 请求，避免异步回调写到复用后的 item
+                    if tag and tag.coil_disposable then
+                        pcall(function() tag.coil_disposable.dispose() end)
+                        tag.coil_disposable = nil
+                    end
+                    if tag then tag.bind_token = bind_token end
 
                     view.name.setText(v.file_name)
-                    -- 重置图标，防止 ViewHolder 复用时显示旧的异步加载结果
                     view.name.setCompoundDrawables(nil, nil, nil, nil)
 
-                    if v.img == "Project" then
-                        imageLoader.enqueue(
+                    local function setIcon(drawable)
+                        if drawable then
+                            view.name.setCompoundDrawables(drawable, nil, nil, nil)
+                        end
+                    end
+
+                    -- 「...」上级目录：始终 folder_up
+                    if v.img == "folder_up" or v.file_name == "..." then
+                        setIcon(iconOf("folder_up"))
+                    elseif v.img == "Project" then
+                        setIcon(error_project)
+                        local ok, disposable = pcall(function()
+                            return imageLoader.enqueue(
                                 ImageRequestBuilder(activity)
-                                             .data(v_path .. "/icon.png")
-                                             .target(LuaTarget(this, LuaTarget.Listener {
-                                    onError = function()
-                                        pcall(function()
-                                            view.name.setCompoundDrawables(error_project, nil, nil, nil)
-                                        end)
-                                    end,
-                                    onSuccess = function(drawable)
-                                        pcall(function()
+                                    .data(v_path .. "/icon.png")
+                                    .target(LuaTarget(this, LuaTarget.Listener {
+                                        onError = function()
+                                            if not tag or tag.bind_token ~= bind_token then return end
+                                            setIcon(error_project)
+                                        end,
+                                        onSuccess = function(drawable)
+                                            if not tag or tag.bind_token ~= bind_token then return end
                                             drawable.setBounds(0, 0, size, size)
-                                            view.name.setCompoundDrawables(drawable, nil, nil, nil)
-                                        end)
-                                    end
-                                }))          .build()
-                        )
-                    else
-                        pcall(function()
-                            view.name.setCompoundDrawables(iconOf(v.img), nil, nil, nil)
+                                            setIcon(drawable)
+                                        end
+                                    })).build()
+                            )
                         end)
+                        if ok and tag then
+                            tag.coil_disposable = disposable
+                        end
+                    else
+                        setIcon(iconOf(v.img))
                     end
 
                     view.contents.onLongClick = function()
-                        if v.img == "folder_up" then
+                        if v.img == "folder_up" or v.is_up or v.file_name == "..." then
                             return
                         elseif v.isDirectory then
                             MainActivity.Public.dirMenu(v_path, v.file_name)
@@ -496,7 +522,7 @@ local getList = function()
     local list = {}
     local idx = 0
 
-    -- 非根目录时插入返回上级项
+    -- 非根目录时插入返回上级项（固定 folder_up，不受 isProjectDir 影响）
     if not isRoot then
         idx = 1
         list[1] = {
@@ -504,6 +530,7 @@ local getList = function()
             file_name = "...",
             path = dir.getParent(),
             img = "folder_up",
+            is_up = true,
         }
     end
 
@@ -511,6 +538,7 @@ local getList = function()
     for i = 1, dirCount do
         idx = idx + 1
         local d = dirs[i]
+        -- 工程根列表里工程文件夹用 Project；「...」已单独插入，不会进这里
         d.img = resolveFolderIcon(d.file_name, isProjectDir)
         list[idx] = d
     end
