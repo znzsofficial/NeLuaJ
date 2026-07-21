@@ -276,14 +276,15 @@ end
 
 function _M.setHighLight(view)
     local data = this.sharedData
-    view.basewordColor = data["BaseWord"] and Color.parseColor(data["BaseWord"]) or 0xff4477e0
-    view.keywordColor = data["KeyWord"] and Color.parseColor(data["KeyWord"]) or 0xffb4002d
-    view.stringColor = data["String"] and Color.parseColor(data["String"]) or 0xffc2185b
-    view.userwordColor = data["UserWord"] and Color.parseColor(data["UserWord"]) or 0xff5c6bc0
-    view.commentColor = data["Comment"] and Color.parseColor(data["Comment"]) or 0xff71787E
-    view.globalColor = data["Global"] and Color.parseColor(data["Global"]) or 0xff689f38
-    view.localColor = data["Local"] and Color.parseColor(data["Local"]) or 0xffb4b484
-    view.upvalColor = data["Upval"] and Color.parseColor(data["Upval"]) or 0xff8080c0
+    -- 默认色用 Color.argb，避免 0xff...... 在 LuaJ 中传 Java 出错
+    view.basewordColor = data["BaseWord"] and Color.parseColor(data["BaseWord"]) or Color.argb(255, 0x44, 0x77, 0xe0)
+    view.keywordColor = data["KeyWord"] and Color.parseColor(data["KeyWord"]) or Color.argb(255, 0xb4, 0x00, 0x2d)
+    view.stringColor = data["String"] and Color.parseColor(data["String"]) or Color.argb(255, 0xc2, 0x18, 0x5b)
+    view.userwordColor = data["UserWord"] and Color.parseColor(data["UserWord"]) or Color.argb(255, 0x5c, 0x6b, 0xc0)
+    view.commentColor = data["Comment"] and Color.parseColor(data["Comment"]) or Color.argb(255, 0x71, 0x78, 0x7e)
+    view.globalColor = data["Global"] and Color.parseColor(data["Global"]) or Color.argb(255, 0x68, 0x9f, 0x38)
+    view.localColor = data["Local"] and Color.parseColor(data["Local"]) or Color.argb(255, 0xb4, 0xb4, 0x84)
+    view.upvalColor = data["Upval"] and Color.parseColor(data["Upval"]) or Color.argb(255, 0x80, 0x80, 0xc0)
 end
 
 function _M.init()

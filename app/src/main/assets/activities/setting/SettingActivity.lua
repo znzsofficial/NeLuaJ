@@ -259,16 +259,17 @@ local resetSymbolBarDesc = function()
     SymbolBarItemDesc.text = formatSymbolBarPreview(this.getSharedData("symbol_bar", nil))
 end
 
+-- 必须用 Color.argb：0xff...... 在 LuaJ 里是超大 number，传给 Java Color.* 会错
 local defaultMap = {
-    BaseWord = 0xff4477e0,
-    KeyWord = 0xffb4002d,
-    String = 0xffc2185b,
-    UserWord = 0xff5c6bc0,
-    Comment = 0xff71787E,
-    Global = 0xff689f38,
-    Local = 0xffb4b484,
-    Upval = 0xff8080c0,
-    MinimapMask = Color.argb(0x28, 0x21, 0x96, 0xF3),
+    BaseWord = Color.argb(255, 0x44, 0x77, 0xe0),
+    KeyWord = Color.argb(255, 0xb4, 0x00, 0x2d),
+    String = Color.argb(255, 0xc2, 0x18, 0x5b),
+    UserWord = Color.argb(255, 0x5c, 0x6b, 0xc0),
+    Comment = Color.argb(255, 0x71, 0x78, 0x7e),
+    Global = Color.argb(255, 0x68, 0x9f, 0x38),
+    Local = Color.argb(255, 0xb4, 0xb4, 0x84),
+    Upval = Color.argb(255, 0x80, 0x80, 0xc0),
+    MinimapMask = Color.argb(0x28, 0x21, 0x96, 0xf3),
     MinimapBg = Color.argb(0, 0, 0, 0),
 }
 
@@ -334,11 +335,30 @@ local resolveColorValue = function(value)
     end
     if type(value) == "string" and value ~= "" then
         local ok, color = pcall(Color.parseColor, value)
-        if ok then
+        if ok and type(color) == "number" then
             return color
         end
     end
     return nil
+end
+
+--- 当前 SharedData 颜色；未设置 / 无效时用 defaultMap（打开取色器的初值）
+local function getColorOrDefault(tag)
+    local raw
+    pcall(function()
+        raw = this.getSharedData(tag, nil)
+    end)
+    if raw == nil then
+        local data = this.getSharedData()
+        if data then
+            pcall(function() raw = data[tag] end)
+        end
+    end
+    local color = resolveColorValue(raw)
+    if color ~= nil then
+        return color
+    end
+    return defaultMap[tag] or Color.argb(255, 0, 0, 0)
 end
 
 local function colorToArgb(color)
@@ -604,16 +624,14 @@ local resetThemeColor = function()
 end
 
 local resetColor = function(tag)
-    local data = this.getSharedData()
-    local color = resolveColorValue(data[tag]) or defaultMap[tag] or 0xFF000000
-    setCircleColor(_G[tag .. "Circle"], color)
+    setCircleColor(_G[tag .. "Circle"], getColorOrDefault(tag))
 end
 
 local click = View.OnClickListener {
     onClick = function(view)
         local tag = view.tag
-        local data = this.getSharedData()
-        local initial = resolveColorValue(data[tag]) or defaultMap[tag] or 0xFF000000
+        -- 未自定义时 initial = defaultMap，取色器滑块/预览/hex 均为默认色
+        local initial = getColorOrDefault(tag)
         showColorPickerDialog(tag, initial, function(color, hex)
             this.setSharedData(tag, hex)
             resetColor(tag)
@@ -650,7 +668,8 @@ end
 local function openThemeHsvPicker()
     local seedColor = this.getSharedData("theme_seed_color", nil)
     local initial = resolveColorValue(seedColor)
-    if not initial then
+    -- 默认主题色：当前 Material primary（与圆点预览一致）
+    if type(initial) ~= "number" then
         pcall(function()
             initial = ColorUtil.getColorPrimary()
         end)
@@ -1148,13 +1167,36 @@ end
 
 refreshMinimapCodeAlphaDesc()
 
--- ── 调试应用 ──
--- ── 小窗运行 ──
-RunInWindowItemSwitch.checked = isSharedTruthy(this.getSharedData("run_in_window", false))
-RunInWindowItem.onClick = function()
-    local enabled = not RunInWindowItemSwitch.isChecked()
-    RunInWindowItemSwitch.checked = enabled
-    this.setSharedData("run_in_window", enabled)
+-- ── 运行窗口模式（与 Init 共用 RunWindowConfig）──
+local RunWindowConfig = require "mods.utils.RunWindowConfig"
+
+local function refreshRunWindowModeDesc()
+    pcall(function()
+        local mode = RunWindowConfig.getMode(this)
+        RunWindowModeItemDesc.setText(
+            RunWindowConfig.label(mode) .. " · " .. (res.string.run_window_mode_desc or "")
+        )
+    end)
+end
+
+refreshRunWindowModeDesc()
+
+RunWindowModeItem.onClick = function()
+    local current = RunWindowConfig.getMode(this)
+    local labels = RunWindowConfig.labels()
+    local checked = RunWindowConfig.indexOf(current) - 1
+    MaterialAlertDialogBuilder(this)
+        .setTitle(res.string.run_window_mode)
+        .setSingleChoiceItems(labels, checked, function(_, which)
+            checked = which
+        end)
+        .setPositiveButton(android.R.string.ok, function()
+            local mode = RunWindowConfig.MODES[checked + 1] or RunWindowConfig.MODE_OFF
+            RunWindowConfig.setMode(this, mode)
+            refreshRunWindowModeDesc()
+        end)
+        .setNegativeButton(android.R.string.cancel, nil)
+        .show()
 end
 
 CustomApp.onClick = function()
