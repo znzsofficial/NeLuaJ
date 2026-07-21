@@ -5,8 +5,11 @@ import android.app.Activity
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Typeface
+import android.graphics.drawable.Drawable
+import androidx.core.content.ContextCompat
 import androidx.core.graphics.BlendModeColorFilterCompat
 import androidx.core.graphics.BlendModeCompat
+import androidx.core.graphics.drawable.DrawableCompat
 import coil3.asDrawable
 import coil3.executeBlocking
 import coil3.imageLoader
@@ -313,14 +316,33 @@ class res(private val context: LuaContext) : TwoArgFunction() {
             "avif"
         )
 
+        private fun loadAndroidDrawable(
+            activity: LuaContext,
+            name: String
+        ): Drawable? {
+            val ctx = activity.context
+            // 优先同名 res/drawable/*.xml；其次 ic_ 前缀（矢量工具栏图标）
+            val candidates = arrayOf(name, "ic_$name")
+            for (n in candidates) {
+                val id = ctx.resources.getIdentifier(n, "drawable", ctx.packageName)
+                if (id != 0) {
+                    return ContextCompat.getDrawable(ctx, id)?.mutate()
+                }
+            }
+            return null
+        }
+
         private fun loadImageValue(
             activity: LuaContext,
             globals: Globals,
             arg: String,
             isBitmap: Boolean
         ): LuaValue {
+            // 优先 Android vector/XML（可 tint）；再 assets 位图
+            if (!isBitmap) {
+                loadAndroidDrawable(activity, arg)?.let { return it.toLuaValue() }
+            }
             val p = activity.getLuaPath("res/drawable", arg)
-            // 查找图片文件
             imageExtensions.forEach {
                 File("$p.$it").ifExists {
                     val imageResult = activity.context.imageLoader.executeBlocking(
@@ -333,11 +355,9 @@ class res(private val context: LuaContext) : TwoArgFunction() {
                         image?.toBitmap().toLuaValue()
                     } else {
                         image?.asDrawable(activity.context.resources).toLuaValue()
-                        //(drawable as? Animatable)?.start()
                     }
                 }
             }
-            // 查找 Lua 文件
             if (File("$p.lua").exists()) return globals.loadfile("$p.lua", globals).call()
             return NIL
         }
@@ -359,13 +379,24 @@ class res(private val context: LuaContext) : TwoArgFunction() {
 
         override fun call(arg1: LuaValue, arg2: LuaValue): LuaValue {
             if (arg1.isnil()) return NIL
-            val drawable = get(arg1)
-            if (drawable.isnil()) return NIL
+            // 带着色时不走共享 cache，避免污染未着色实例
+            val base = if (arg2.isnil()) {
+                get(arg1)
+            } else {
+                loadImageValue(activity, globals, arg1.tojstring(), isBitmap = false)
+            }
+            if (base.isnil()) return NIL
             arg2.ifNotNil()?.let {
                 if (it.isfunction()) {
-                    it.call(drawable)
+                    it.call(base)
                 } else if (it.isint()) {
-                    drawable["setColorFilter"].jcall(
+                    val raw = base.touserdata()
+                    if (raw is Drawable) {
+                        val d = DrawableCompat.wrap(raw.mutate())
+                        DrawableCompat.setTint(d, it.toint())
+                        return d.toLuaValue()
+                    }
+                    base["setColorFilter"].jcall(
                         BlendModeColorFilterCompat.createBlendModeColorFilterCompat(
                             it.toint(),
                             BlendModeCompat.SRC_ATOP
@@ -373,7 +404,7 @@ class res(private val context: LuaContext) : TwoArgFunction() {
                     )
                 }
             }
-            return drawable
+            return base
         }
 
     }

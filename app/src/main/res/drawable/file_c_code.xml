@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Material chevron_left -->
+<!-- 编译字节码（.luac 等）：与 file_code 区分的「数组/字节」形 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
@@ -8,5 +8,5 @@
     android:tint="?attr/colorControlNormal">
     <path
         android:fillColor="@android:color/white"
-        android:pathData="M15.41,7.41L14,6l-6,6 6,6 1.41,-1.41L10.83,12z" />
+        android:pathData="M4,9h2v6H4V9zM7,7h2v10H7V7zM10,5h2v14h-2V5zM13,7h2v10h-2V7zM16,9h2v6h-2V9zM19,11h2v2h-2v-2z" />
 </vector>
