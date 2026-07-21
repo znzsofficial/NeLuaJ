@@ -157,9 +157,6 @@ dependencies {
     //Zip4J
     implementation(libs.zip4j)
 
-    //drawer
-    implementation(libs.drawer)
-
     //Okhttp
     implementation(libs.okhttp)
 

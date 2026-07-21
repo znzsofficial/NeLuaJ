@@ -418,6 +418,9 @@ function _M.load(path)
     if mLuaEditor.getVisibility() == 4 then
         mLuaEditor.setVisibility(0)
     end
+    pcall(function()
+        if editor_empty_state then editor_empty_state.setVisibility(8) end
+    end)
     --更新当前文件
     PathManager.updateFile(path)
     --判断Tab操作

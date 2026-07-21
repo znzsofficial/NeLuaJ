@@ -28,7 +28,45 @@
         <item name="colorSurfaceInverse">@color/md_theme_dark_inverseSurface</item>
         <item name="colorOnSurfaceInverse">@color/md_theme_dark_inverseOnSurface</item>
         <item name="colorPrimaryInverse">@color/md_theme_dark_inversePrimary</item>
+        <item name="android:statusBarColor">?attr/colorSurface</item>
+        <item name="android:navigationBarColor">?attr/colorSurface</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
     </style>
+
+    <style name="Theme.NeLuaJ.Material3.NoActionBar" parent="Theme.Material3Expressive.DayNight.NoActionBar">
+        <item name="android:statusBarColor">?attr/colorSurface</item>
+        <item name="android:navigationBarColor">?attr/colorSurface</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+
+    <style name="Theme.NeLuaJ.Material3.NoActionBar.ActionOverlay" parent="Theme.NeLuaJ.Material3.NoActionBar">
+        <item name="windowActionModeOverlay">true</item>
+    </style>
+
+    <style name="Theme.NeLuaJ.Material3.DynamicColors" parent="@style/Theme.Material3Expressive.DynamicColors.DayNight">
+        <item name="android:statusBarColor">?attr/colorSurface</item>
+        <item name="android:navigationBarColor">?attr/colorSurface</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+
+    <style name="Theme.NeLuaJ.Material3.DynamicColors.ActionOverlay" parent="Theme.NeLuaJ.Material3.DynamicColors">
+        <item name="windowActionModeOverlay">true</item>
+    </style>
+
+    <style name="Theme.NeLuaJ.Material3.DynamicColors.NoActionBar" parent="@style/Theme.Material3Expressive.DynamicColors.DayNight.NoActionBar">
+        <item name="android:statusBarColor">?attr/colorSurface</item>
+        <item name="android:navigationBarColor">?attr/colorSurface</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+
+    <style name="Theme.NeLuaJ.Material3.DynamicColors.NoActionBar.ActionOverlay" parent="Theme.NeLuaJ.Material3.DynamicColors.NoActionBar">
+        <item name="windowActionModeOverlay">true</item>
+    </style>
+
     <style name="Theme.NeLuaJ.MaterialComponent" parent="@style/Theme.MaterialComponents.DayNight.DarkActionBar">
         <item name="android:statusBarColor">?attr/colorPrimaryVariant</item>
         <item name="colorOnPrimary">@color/md2_onPrimaryDark</item>

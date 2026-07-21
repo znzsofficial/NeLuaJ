@@ -113,6 +113,104 @@ local openAction = {
     file        = "external",
 }
 
+-- 文件夹名（小写）→ 图标类型
+local folder_icon_by_name = {
+    mods = "folder_mod",
+    mod = "folder_mod",
+    modules = "folder_mod",
+    ["module"] = "folder_mod", -- module 在 LuaJ 中不可作裸标识符
+    plugins = "folder_mod",
+    plugin = "folder_mod",
+    extensions = "folder_mod",
+    extension = "folder_mod",
+    libs = "folder_lib",
+    lib = "folder_lib",
+    library = "folder_lib",
+    libraries = "folder_lib",
+    dependencies = "folder_lib",
+    vendor = "folder_lib",
+    node_modules = "folder_lib",
+    src = "folder_src",
+    source = "folder_src",
+    sources = "folder_src",
+    java = "folder_java",
+    kotlin = "folder_java",
+    kotlin_src = "folder_java",
+    main = "folder_src",
+    res = "folder_res",
+    resources = "folder_res",
+    resource = "folder_res",
+    drawable = "folder_res",
+    mipmap = "folder_res",
+    layout = "folder_res",
+    values = "folder_res",
+    raw = "folder_res",
+    assets = "folder_assets",
+    asset = "folder_assets",
+    ["static"] = "folder_assets",
+    ["public"] = "folder_assets",
+    build = "folder_build",
+    builds = "folder_build",
+    out = "folder_build",
+    output = "folder_build",
+    outputs = "folder_build",
+    bin = "folder_build",
+    dist = "folder_build",
+    target = "folder_build",
+    release = "folder_build",
+    debug = "folder_build",
+    intermediate = "folder_build",
+    intermediates = "folder_build",
+    [".git"] = "folder_git",
+    git = "folder_git",
+    github = "folder_git",
+    gitlab = "folder_git",
+    vcs = "folder_git",
+    test = "folder_test",
+    tests = "folder_test",
+    testing = "folder_test",
+    androidtest = "folder_test",
+    unittest = "folder_test",
+    spec = "folder_test",
+    specs = "folder_test",
+    doc = "folder_doc",
+    docs = "folder_doc",
+    documentation = "folder_doc",
+    javadoc = "folder_doc",
+    help = "folder_doc",
+    wiki = "folder_doc",
+    config = "folder_config",
+    configs = "folder_config",
+    configuration = "folder_config",
+    conf = "folder_config",
+    settings = "folder_config",
+    gradle = "folder_config",
+    meta_inf = "folder_config",
+    ["meta-inf"] = "folder_config",
+    properties = "folder_config",
+    [".gradle"] = "folder_config",
+    [".idea"] = "folder_config",
+    [".vscode"] = "folder_config",
+    [".github"] = "folder_git",
+}
+
+local function resolveFolderIcon(name, isProjectRootListing)
+    if isProjectRootListing then
+        return "Project"
+    end
+    if not name or name == "" then
+        return "folder"
+    end
+    local key = string.lower(name)
+    local mapped = folder_icon_by_name[key]
+    if mapped then return mapped end
+    -- 常见后缀 / 模糊匹配
+    if key:find("test", 1, true) then return "folder_test" end
+    if key:find("build", 1, true) or key:find("output", 1, true) then return "folder_build" end
+    if key:sub(1, 1) == "." then return "folder_hidden" end
+    return "folder"
+end
+
 _M.init = function()
     Bean_Path = Bean.Path
 
@@ -129,12 +227,67 @@ _M.init = function()
            .build()
 
     local res_drawable = res.drawable
-
     local imageLoader = this.getImageLoader()
-    local error_project = res_drawable("android_studio", ColorUtil.getColorSecondary())
-
     local size = this.dpToPx(28)
-    error_project.setBounds(0, 0, size, size)
+
+    -- 主题色：矢量图标按类型 tint（不再依赖 PNG 写死颜色）
+    local cPrimary = ColorUtil.getColorPrimary()
+    local cSecondary = ColorUtil.getColorSecondary()
+    local cOnSurface = ColorUtil.getColorOnSurface()
+    local cOnSurfaceVar = ColorUtil.getColorOnSurfaceVariant()
+    local cTertiary = cPrimary
+    pcall(function()
+        if ColorUtil.getColorTertiary then
+            cTertiary = ColorUtil.getColorTertiary()
+        end
+    end)
+
+    local iconColor = {
+        folder = cPrimary,
+        folder_up = cOnSurfaceVar,
+        folder_mod = cSecondary,
+        folder_lib = cSecondary,
+        folder_src = cPrimary,
+        folder_res = cTertiary,
+        folder_assets = cTertiary,
+        folder_build = 0xFFFF9800,
+        folder_git = 0xFFE91E63,
+        folder_test = 0xFF4CAF50,
+        folder_doc = cOnSurfaceVar,
+        folder_config = cOnSurfaceVar,
+        folder_java = 0xFFFF9800,
+        folder_hidden = cOnSurfaceVar,
+        Project = cSecondary,
+        android_studio = cSecondary,
+        file_code = cPrimary,
+        file_c_code = cSecondary,
+        file_xml = cTertiary,
+        file_json = 0xFFF9A825,
+        file_text = cOnSurfaceVar,
+        file_img = 0xFF4CAF50,
+        file_audio = 0xFF9C27B0,
+        file_video = 0xFFE91E63,
+        file_zip = cOnSurfaceVar,
+        file_apk = 0xFF8BC34A,
+        file_java = 0xFFFF9800,
+        file_dex = 0xFFFF5722,
+        file_sig = cOnSurfaceVar,
+        file = cOnSurfaceVar,
+    }
+    setmetatable(iconColor, {
+        __index = function() return cOnSurfaceVar end
+    })
+
+    local function iconOf(name, color)
+        local d = res_drawable(name, color or iconColor[name] or cOnSurfaceVar)
+        if d then
+            d.setBounds(0, 0, size, size)
+        end
+        return d
+    end
+
+    local error_project = iconOf("android_studio", cSecondary)
+
     -- 清空文件列表
     FileList = {}
 
@@ -193,17 +346,9 @@ _M.init = function()
                                     end
                                 }))          .build()
                         )
-                    elseif (v.isDirectory and (v.file_name == "mods" or v.file_name == "libs")) then
-                        pcall(function()
-                            local drawable = res_drawable["folder_mod"]
-                            drawable.setBounds(0, 0, size, size)
-                            view.name.setCompoundDrawables(drawable, nil, nil, nil)
-                        end)
                     else
                         pcall(function()
-                            local drawable = res_drawable[v.img]
-                            drawable.setBounds(0, 0, size, size)
-                            view.name.setCompoundDrawables(drawable, nil, nil, nil)
+                            view.name.setCompoundDrawables(iconOf(v.img), nil, nil, nil)
                         end)
                     end
 
@@ -237,9 +382,17 @@ _M.init = function()
                         if action == "editor" then
                             EditorUtil.fromRecy = true
                             EditorUtil.load(v_path)
-                            drawer.closeDrawer(GravityCompat.START)
+                            -- 平板常驻侧栏时保持打开
+                            local keepOpen = false
+                            pcall(function()
+                                local Init = require "activities.main.Init"
+                                keepOpen = Init.isTabletMode and Init.isTabletMode()
+                            end)
+                            if not keepOpen then
+                                drawer.closeDrawer(GravityCompat.START)
+                            end
                         elseif action == "image" then
-                            ActivityUtil.new("photo", v_path)
+                            ActivityUtil.open("photo", v_path)
                         elseif action == "dex" then
                             MainActivity.Public.dexDialog(v_path)
                         elseif action == "install" then
@@ -354,11 +507,11 @@ local getList = function()
         }
     end
 
-    -- 目录优先
+    -- 目录优先（按名称映射更多文件夹类型）
     for i = 1, dirCount do
         idx = idx + 1
         local d = dirs[i]
-        d.img = isProjectDir and "Project" or "folder"
+        d.img = resolveFolderIcon(d.file_name, isProjectDir)
         list[idx] = d
     end
 

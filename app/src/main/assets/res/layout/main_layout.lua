@@ -16,7 +16,7 @@ import "com.google.android.material.navigation.NavigationView";
 import "com.google.android.material.divider.MaterialDivider";
 import "com.google.android.material.tabs.TabLayout"
 import "com.google.android.material.textview.MaterialTextView"
-import "com.nekolaska.internal.MyFullDraggableContainer"
+import "com.google.android.material.button.MaterialButton"
 import "github.daisukiKaffuChino.LuaFileTabView"
 --import "vinx.material.textfield.MaterialTextField"
 
@@ -52,48 +52,209 @@ return {
       {
         MaterialCardView,
         id = "mSearch";
-        radius = "36dp",
+        radius = "20dp",
         strokeWidth = "0dp",
         layout_width = "match",
-        layout_height = "56dp",
-        layout_marginLeft = "8dp",
-        layout_marginRight = "8dp",
+        layout_height = "wrap",
+        layout_marginLeft = "10dp",
+        layout_marginRight = "10dp",
+        layout_marginBottom = "6dp",
         CardBackgroundColor = ColorUtil.getColorSurfaceVariant(),
         {
           LinearLayout,
           layout_width = "match",
-          layout_height = "match",
-          orientation = "horizontal";
-          gravity = "center",
+          layout_height = "wrap",
+          orientation = "vertical",
+          paddingLeft = "10dp",
+          paddingRight = "6dp",
+          paddingTop = "8dp",
+          paddingBottom = "8dp",
+          -- 查找行
           {
-            AppCompatEditText,
-            layout_width = "64%w",
-            layout_height = "match",
-            layout_marginLeft = "12dp",
-            background = 0,
-            --Hint = "Search Code",
-            id = "mSearchEdit",
-            --style = MDC_R.style.Widget_Material3_TextInputLayout_FilledBox,
-            TintColor = ColorUtil.getColorPrimary(),
-            singleLine = true,
+            LinearLayout,
+            layout_width = "match",
+            layout_height = "40dp",
+            orientation = "horizontal",
+            gravity = "center_vertical",
+            {
+              AppCompatImageView,
+              layout_width = "22dp",
+              layout_height = "22dp",
+              layout_marginRight = "6dp",
+              src = res.drawable("search", ColorUtil.getColorOnSurfaceVariant()),
+            },
+            {
+              AppCompatEditText,
+              id = "mSearchEdit",
+              layout_width = "0dp",
+              layout_height = "match",
+              layout_weight = 1,
+              background = 0,
+              singleLine = true,
+              textSize = "15sp",
+              hint = res.string.search_hint,
+              TintColor = ColorUtil.getColorPrimary(),
+              imeOptions = "actionSearch",
+            },
+            {
+              MaterialTextView,
+              id = "search_count",
+              layout_width = "wrap",
+              layout_height = "wrap",
+              layout_marginLeft = "4dp",
+              layout_marginRight = "4dp",
+              textSize = "12sp",
+              text = "0/0",
+              textColor = ColorUtil.getColorOnSurfaceVariant(),
+            },
+            {
+              AppCompatImageView,
+              id = "search_clear",
+              layout_width = "36dp",
+              layout_height = "36dp",
+              padding = "7dp",
+              src = res.drawable("clear", ColorUtil.getColorOnSurfaceVariant()),
+              BackgroundResource = rippleRes,
+              clickable = true,
+            },
+            {
+              AppCompatImageView,
+              id = "search_up",
+              layout_width = "36dp",
+              layout_height = "36dp",
+              padding = "7dp",
+              src = res.drawable("s_up", ColorUtil.getColorOnSurface()),
+              BackgroundResource = rippleRes,
+              clickable = true,
+            },
+            {
+              AppCompatImageView,
+              id = "search_down",
+              layout_width = "36dp",
+              layout_height = "36dp",
+              padding = "7dp",
+              src = res.drawable("s_down", ColorUtil.getColorOnSurface()),
+              BackgroundResource = rippleRes,
+              clickable = true,
+            },
+            {
+              AppCompatImageView,
+              id = "search_close",
+              layout_width = "36dp",
+              layout_height = "36dp",
+              padding = "7dp",
+              src = res.drawable("close", ColorUtil.getColorOnSurface()),
+              BackgroundResource = rippleRes,
+              clickable = true,
+            },
           },
+          -- 替换行（默认隐藏，展开后显示）
           {
-            AppCompatImageView,
-            id = "search_up",
-            layout_width = "14%w",
-            layout_height = "14%w",
-            src = activity.getLuaPath("res/drawable/s_up.png"),
-            BackgroundResource = rippleRes,
-            clickable = true,
+            LinearLayout,
+            id = "search_replace_row",
+            layout_width = "match",
+            layout_height = "wrap",
+            minHeight = "44dp",
+            orientation = "horizontal",
+            gravity = "center_vertical",
+            visibility = 8,
+            {
+              AppCompatImageView,
+              layout_width = "22dp",
+              layout_height = "22dp",
+              layout_marginRight = "6dp",
+              src = res.drawable("replace", ColorUtil.getColorOnSurfaceVariant()),
+            },
+            {
+              AppCompatEditText,
+              id = "mReplaceEdit",
+              layout_width = "0dp",
+              layout_height = "wrap",
+              layout_weight = 1,
+              minHeight = "40dp",
+              background = 0,
+              singleLine = true,
+              textSize = "15sp",
+              hint = res.string.replace_hint,
+              TintColor = ColorUtil.getColorPrimary(),
+            },
+            {
+              MaterialButton,
+              id = "search_replace_one",
+              layout_width = "wrap",
+              layout_height = "40dp",
+              minHeight = "40dp",
+              text = res.string.replace,
+              textSize = "12sp",
+              paddingLeft = "12dp",
+              paddingRight = "12dp",
+              insetTop = 0,
+              insetBottom = 0,
+            },
+            {
+              MaterialButton,
+              id = "search_replace_all",
+              layout_width = "wrap",
+              layout_height = "40dp",
+              minHeight = "40dp",
+              layout_marginLeft = "4dp",
+              text = res.string.replace_all,
+              textSize = "12sp",
+              paddingLeft = "12dp",
+              paddingRight = "12dp",
+              insetTop = 0,
+              insetBottom = 0,
+            },
           },
+          -- 选项行
           {
-            AppCompatImageView,
-            id = "search_down",
-            layout_width = "14%w",
-            layout_height = "14%w",
-            src = activity.getLuaPath("res/drawable/s_down.png"),
-            BackgroundResource = rippleRes,
-            clickable = true,
+            LinearLayout,
+            layout_width = "match",
+            layout_height = "wrap",
+            orientation = "horizontal",
+            gravity = "center_vertical",
+            layout_marginTop = "4dp",
+            {
+              MaterialButton,
+              id = "search_toggle_replace",
+              layout_width = "wrap",
+              layout_height = "36dp",
+              minHeight = "36dp",
+              text = res.string.replace,
+              textSize = "12sp",
+              paddingLeft = "10dp",
+              paddingRight = "10dp",
+              insetTop = 0,
+              insetBottom = 0,
+            },
+            {
+              MaterialButton,
+              id = "search_opt_case",
+              layout_width = "wrap",
+              layout_height = "36dp",
+              minHeight = "36dp",
+              layout_marginLeft = "4dp",
+              text = res.string.search_match_case,
+              textSize = "12sp",
+              paddingLeft = "10dp",
+              paddingRight = "10dp",
+              insetTop = 0,
+              insetBottom = 0,
+            },
+            {
+              MaterialButton,
+              id = "search_opt_word",
+              layout_width = "wrap",
+              layout_height = "36dp",
+              minHeight = "36dp",
+              layout_marginLeft = "4dp",
+              text = res.string.search_whole_word,
+              textSize = "12sp",
+              paddingLeft = "10dp",
+              paddingRight = "10dp",
+              insetTop = 0,
+              insetBottom = 0,
+            },
           },
         },
       },
@@ -128,19 +289,32 @@ return {
       layout_height = "match_parent";
       layout_width = "match_parent";
       {
-        MyFullDraggableContainer,
-        Swipeable = false,
+        -- 主内容：手机=全宽编辑区；平板=左侧 side_host 插文件栏 + 右侧编辑区
+        LinearLayout;
+        layout_height = "fill";
+        layout_width = "fill";
+        orientation = "horizontal";
+        id = "workspace";
+        {
+          FrameLayout;
+          id = "side_host";
+          layout_width = "0dp";
+          layout_height = "fill";
+          visibility = 8;
+        };
         {
           LinearLayout;
           gravity = "center";
           layout_height = "fill";
-          layout_width = "fill";
+          layout_width = "0dp";
+          layout_weight = 1;
           orientation = "vertical";
+          id = "editor_content";
           {
             HorizontalScrollView,
             horizontalScrollBarEnabled = false,
             layout_width = "match",
-            visibility = 8, -- 默认隐藏，有候选结果时显示
+            visibility = 8,
             id = "select_hint_scroll",
             {
               LinearLayout,
@@ -149,7 +323,6 @@ return {
             },
           },
           {
-            -- 编辑器全宽；缩略图叠在右侧，透明处可透出代码
             FrameLayout,
             layout_width = "match",
             layout_height = "fill",
@@ -159,6 +332,32 @@ return {
               layout_height = "fill";
               layout_width = "fill";
               id = "mLuaEditor";
+            };
+            {
+              LinearLayout;
+              id = "editor_empty_state";
+              layout_width = "match";
+              layout_height = "match";
+              orientation = "vertical";
+              gravity = "center";
+              clickable = true;
+              focusable = true;
+              {
+                MaterialTextView,
+                layout_width = "wrap",
+                layout_height = "wrap",
+                text = res.string.no_file,
+                textSize = "16sp",
+                gravity = "center",
+                layout_marginBottom = "16dp",
+              };
+              {
+                MaterialButton,
+                id = "open_drawer_btn";
+                layout_width = "wrap";
+                layout_height = "wrap";
+                text = res.string.open_file_drawer,
+              };
             };
             {
               MaterialDivider,
@@ -211,38 +410,53 @@ return {
       };
 
       {
+        -- 手机：抽屉面板；平板：reparent 到 side_host
         LinearLayout;
         backgroundColor = ColorBackground;
         layout_gravity = "start";
-        orientation = "vertical";
-        layout_width = "match_parent";
+        orientation = "horizontal";
+        layout_width = "280dp";
         layout_height = "match_parent";
         id = "head";
         {
-          LuaFileTabView,
-          id = "filetab",
-          layout_width = "match",
-          layout_height = "48dp",
-          tabMode = 0,
-          selectedTabIndicatorHeight = 0,
-          inlineLabel = true,
-          clipToPadding = false,
-        },
-        {
-          SwipeRefreshLayout;
-          layout_gravity = "start";
-          layout_width = "match_parent";
-          layout_height = "match_parent";
-          id = "swipeRefresh";
-          ProgressBackgroundColorSchemeColor = ColorBackground,
-          ColorSchemeColors = { ColorUtil.getColorPrimary() },
+          LinearLayout;
+          orientation = "vertical";
+          layout_width = "0dp";
+          layout_height = "match";
+          layout_weight = 1;
           {
-            RecyclerView,
-            layout_width = "match_parent",
-            layout_height = "match_parent",
-            dividerHeight = 0,
-            id = "mRecycler",
+            LuaFileTabView,
+            id = "filetab",
+            layout_width = "match",
+            layout_height = "48dp",
+            tabMode = 0,
+            selectedTabIndicatorHeight = 0,
+            inlineLabel = true,
+            clipToPadding = false,
           },
+          {
+            SwipeRefreshLayout;
+            layout_width = "match_parent";
+            layout_height = "0dp";
+            layout_weight = 1;
+            id = "swipeRefresh";
+            ProgressBackgroundColorSchemeColor = ColorBackground,
+            ColorSchemeColors = { ColorUtil.getColorPrimary() },
+            {
+              RecyclerView,
+              layout_width = "match_parent",
+              layout_height = "match_parent",
+              dividerHeight = 0,
+              id = "mRecycler",
+            },
+          };
+        };
+        {
+          MaterialDivider,
+          id = "side_divider",
+          layout_width = "1dp",
+          layout_height = "fill",
+          visibility = 8,
         };
       }
     };

@@ -13,7 +13,6 @@ core-ktx = "1.19.0"
 customview = "1.2.0"
 documentfile = "1.1.0"
 draganddrop = "1.0.0"
-drawer = "1.0.3"
 drawerlayout = "1.2.0"
 dynamicanimation = "1.1.0"
 emoji2 = "1.6.0"
@@ -81,7 +80,6 @@ coil-gif = { module = "io.coil-kt.coil3:coil-gif", version.ref = "coil" }
 coil-svg = { module = "io.coil-kt.coil3:coil-svg", version.ref = "coil" }
 collapsingtoolbarlayout-subtitle = { module = "com.hendraanggrian.material:collapsingtoolbarlayout-subtitle", version.ref = "collapsingtoolbarlayout-subtitle" }
 core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "core-ktx" }
-drawer = { module = "com.drakeet.drawer:drawer", version.ref = "drawer" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-test-ext-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidx-test-ext-junit" }
 espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espresso-core" }

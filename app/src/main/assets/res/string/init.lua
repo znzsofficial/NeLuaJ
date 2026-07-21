@@ -467,35 +467,243 @@ end
 setmetatable(_M, _M)
 
 return _M]]
-mcode = [[local ColorUtil = this.themeUtil
-
--- 主题已在 init.lua 中配置，启用动态取色
+mcode = [[-- 动态取色
 activity.dynamicColor()
+
 activity.setContentView(res.layout.main)
   .setSupportActionBar(toolbar)
   .getSupportActionBar() {
-  Title = res.string.app_title,
-  Elevation = 0,
+    Title = res.string.app_title,
+  }
+
+function onCreateOptionsMenu(menu)
+  menu.add(res.string.about or "About").onMenuItemClick = function()
+    print("Hello NeLuaJ+ · " .. (res.string.app_title or ""))
+  end
+end
+]]
+mcode_minimal = [[activity.dynamicColor()
+
+activity.setContentView(res.layout.main)
+  .setSupportActionBar(toolbar)
+  .getSupportActionBar() {
+    Title = res.string.app_title,
+  }
+]]
+-- 带系统 ActionBar 的主题：不 setSupportActionBar，布局无 Toolbar
+mcode_ab = [[activity.dynamicColor()
+activity.setTitle(res.string.app_title)
+activity.setContentView(res.layout.main)
+
+function onCreateOptionsMenu(menu)
+  menu.add(res.string.about or "About").onMenuItemClick = function()
+    print("Hello NeLuaJ+ · " .. (res.string.app_title or ""))
+  end
+end
+]]
+mcode_ab_minimal = [[activity.dynamicColor()
+activity.setTitle(res.string.app_title)
+activity.setContentView(res.layout.main)
+]]
+lcode_ab = [[import "com.google.android.material.textview.MaterialTextView"
+import "com.google.android.material.button.MaterialButton"
+import "com.google.android.material.card.MaterialCardView"
+import "android.widget.LinearLayout"
+import "android.widget.ScrollView"
+
+return {
+  ScrollView,
+  layout_width = "match",
+  layout_height = "match",
+  BackgroundColor = "?attr/colorBackground",
+  {
+    LinearLayout,
+    orientation = "vertical",
+    layout_width = "match",
+    layout_height = "wrap",
+    gravity = "center_horizontal",
+    padding = "24dp",
+    {
+      MaterialTextView,
+      text = res.string.app_title,
+      textSize = "28sp",
+      textStyle = "bold",
+      textColor = "?attr/colorPrimary",
+      gravity = "center",
+    },
+    {
+      MaterialTextView,
+      text = "Powered by NeLuaJ+",
+      textSize = "14sp",
+      textColor = "?attr/colorOnSurfaceVariant",
+      gravity = "center",
+      layout_marginTop = "8dp",
+    },
+    {
+      MaterialCardView,
+      layout_width = "match",
+      layout_height = "wrap",
+      layout_marginTop = "28dp",
+      radius = "16dp",
+      CardElevation = 0,
+      strokeWidth = "1dp",
+      strokeColor = "?attr/colorOutlineVariant",
+      CardBackgroundColor = "?attr/colorSurfaceContainer",
+      {
+        LinearLayout,
+        orientation = "vertical",
+        layout_width = "match",
+        padding = "20dp",
+        gravity = "center",
+        {
+          MaterialTextView,
+          text = "Hello NeLuaJ+",
+          textSize = "20sp",
+          textColor = "?attr/colorOnSurface",
+        },
+        {
+          MaterialButton,
+          id = "hello_btn",
+          text = "Click Me",
+          layout_marginTop = "16dp",
+          onClick = function()
+            print("Hello World from " .. (res.string.app_title or "NeLuaJ+"))
+          end,
+        },
+      },
+    },
+  },
 }
 ]]
-lcode = [[import "com.google.android.material.appbar.MaterialToolbar"
-import "com.google.android.material.textview.MaterialTextView"
-import "com.google.android.material.button.MaterialButton"
+lcode_ab_minimal = [[import "com.google.android.material.textview.MaterialTextView"
 import "android.widget.LinearLayout"
-
-local ColorUtil = this.themeUtil
 
 return {
   LinearLayout,
   orientation = "vertical",
   layout_width = "match",
   layout_height = "match",
+  gravity = "center",
+  padding = "24dp",
+  BackgroundColor = "?attr/colorBackground",
+  {
+    MaterialTextView,
+    text = res.string.app_title,
+    textSize = "22sp",
+    textColor = "?attr/colorPrimary",
+  },
+}
+]]
+lcode = [[import "com.google.android.material.appbar.MaterialToolbar"
+import "com.google.android.material.textview.MaterialTextView"
+import "com.google.android.material.button.MaterialButton"
+import "com.google.android.material.card.MaterialCardView"
+import "android.widget.LinearLayout"
+import "android.widget.ScrollView"
+
+-- 布局取色推荐 ?attr/…（loadlayout 解析主题属性）
+-- 运行时需要 int 颜色时再用 this.themeUtil
+return {
+  LinearLayout,
+  orientation = "vertical",
+  layout_width = "match",
+  layout_height = "match",
+  BackgroundColor = "?attr/colorBackground",
   {
     MaterialToolbar,
     id = "toolbar",
     layout_width = "match",
     layout_height = "?attr/actionBarSize",
-    BackgroundColor = ColorUtil.getColorBackground(),
+    BackgroundColor = "?attr/colorBackground",
+  },
+  {
+    ScrollView,
+    layout_width = "match",
+    layout_height = "match",
+    {
+      LinearLayout,
+      orientation = "vertical",
+      layout_width = "match",
+      layout_height = "wrap",
+      gravity = "center_horizontal",
+      padding = "24dp",
+      {
+        MaterialTextView,
+        text = res.string.app_title,
+        textSize = "28sp",
+        textStyle = "bold",
+        textColor = "?attr/colorPrimary",
+        gravity = "center",
+      },
+      {
+        MaterialTextView,
+        text = "Powered by NeLuaJ+",
+        textSize = "14sp",
+        textColor = "?attr/colorOnSurfaceVariant",
+        gravity = "center",
+        layout_marginTop = "8dp",
+      },
+      {
+        MaterialCardView,
+        layout_width = "match",
+        layout_height = "wrap",
+        layout_marginTop = "28dp",
+        radius = "16dp",
+        CardElevation = 0,
+        strokeWidth = "1dp",
+        strokeColor = "?attr/colorOutlineVariant",
+        CardBackgroundColor = "?attr/colorSurfaceContainer",
+        {
+          LinearLayout,
+          orientation = "vertical",
+          layout_width = "match",
+          padding = "20dp",
+          gravity = "center",
+          {
+            MaterialTextView,
+            text = "Hello NeLuaJ+",
+            textSize = "20sp",
+            textColor = "?attr/colorOnSurface",
+          },
+          {
+            MaterialTextView,
+            text = "Edit res/layout/main.lua to design UI",
+            textSize = "13sp",
+            textColor = "?attr/colorOnSurfaceVariant",
+            layout_marginTop = "6dp",
+            gravity = "center",
+          },
+          {
+            MaterialButton,
+            id = "hello_btn",
+            text = "Click Me",
+            layout_marginTop = "16dp",
+            onClick = function()
+              print("Hello World from " .. (res.string.app_title or "NeLuaJ+"))
+            end,
+          },
+        },
+      },
+    },
+  },
+}
+]]
+lcode_minimal = [[import "com.google.android.material.appbar.MaterialToolbar"
+import "com.google.android.material.textview.MaterialTextView"
+import "android.widget.LinearLayout"
+
+return {
+  LinearLayout,
+  orientation = "vertical",
+  layout_width = "match",
+  layout_height = "match",
+  BackgroundColor = "?attr/colorBackground",
+  {
+    MaterialToolbar,
+    id = "toolbar",
+    layout_width = "match",
+    layout_height = "?attr/actionBarSize",
+    BackgroundColor = "?attr/colorBackground",
   },
   {
     LinearLayout,
@@ -503,22 +711,16 @@ return {
     layout_width = "match",
     layout_height = "match",
     gravity = "center",
+    padding = "24dp",
     {
       MaterialTextView,
-      text = "Hello NeLuaJ+",
-      textSize = "24sp",
-      textColor = ColorUtil.getColorPrimary(),
-    },
-    {
-      MaterialButton,
-      text = "Click Me",
-      layout_marginTop = "16dp",
-      onClick = function()
-        print("Hello World!")
-      end,
+      text = res.string.app_title,
+      textSize = "22sp",
+      textColor = "?attr/colorPrimary",
     },
   },
-}]]
+}
+]]
 icode = [[
 ver_name = "1.0"
 ver_code = "1"
@@ -528,4 +730,5 @@ debug_mode = true
 NeLuaJ_Theme = "Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay"
 user_permission = {
   "INTERNET",
-}]]
+}
+]]

@@ -17,7 +17,12 @@ local _exit = 0
 local ColorUtil = this.themeUtil
 local res = res
 
+local SHOW_AS_ACTION_NEVER = 0
+local SHOW_AS_ACTION_IF_ROOM = 1
 local SHOW_AS_ACTION_ALWAYS = 2
+local SHOW_AS_ACTION_WITH_TEXT = 4
+local SHOW_AS_ACTION_IF_ROOM_TEXT = 5 -- IF_ROOM | WITH_TEXT
+local SHOW_AS_ACTION_ALWAYS_TEXT = 6 -- ALWAYS | WITH_TEXT
 local VISIBLE = Init.VISIBLE
 local INVISIBLE = Init.INVISIBLE
 local GONE = Init.GONE
@@ -43,17 +48,33 @@ local function setupWindow()
   end
 end
 
-local function addAction(menu, title, icon, onClick)
-  local item = menu.add(title).setShowAsAction(SHOW_AS_ACTION_ALWAYS)
-  if icon then
-    item.setIcon(icon)
+local function addAction(menu, title, icon, onClick, flags)
+  local item = menu.add(title)
+  -- 必须先 setIcon 再 showAsAction，否则 Toolbar 可能不显示 action
+  if icon ~= nil then
+    pcall(function() item.setIcon(icon) end)
+  end
+  pcall(function()
+    item.setShowAsAction(flags or SHOW_AS_ACTION_ALWAYS)
+  end)
+  item.onMenuItemClick = onClick
+  return item
+end
+
+local function addItem(menu, title, onClick, flags, icon)
+  local item = menu.add(title)
+  if icon ~= nil then
+    pcall(function() item.setIcon(icon) end)
+  end
+  if flags then
+    pcall(function() item.setShowAsAction(flags) end)
   end
   item.onMenuItemClick = onClick
   return item
 end
 
-local function addItem(menu, title, onClick)
-  menu.add(title).onMenuItemClick = onClick
+local function isTabletUi()
+  return Init.isTabletMode and Init.isTabletMode()
 end
 
 local function showRunMenu()
@@ -154,10 +175,53 @@ function onStorageRequestResult(isGranted)
   initFiles()
 end
 
+local function handleNavAction(action, path)
+  if (action == "open_file" or action == "open_init") and type(path) == "string" and path ~= "" then
+    if File(path).isFile() then
+      EditorUtil.fromRecy = true
+      EditorUtil.load(path)
+      return true
+    end
+  end
+  return false
+end
+
 function onResume()
   Init.initBar()
   Init.initFunctionTab()
+  Init.applyTabletMode()
   EditorUtil.refreshMinimap(false)
+  pcall(function() activity.invalidateOptionsMenu() end)
+  -- 消费 ActivityUtil 兜底 pending（finishWith 同时写 SharedData）
+  pcall(function()
+    local ActivityUtil = require "mods.utils.ActivityUtil"
+    local pending = ActivityUtil.takePending()
+    if pending then
+      handleNavAction(pending.action, pending.payload)
+    end
+  end)
+end
+
+-- 子页 this.result / ActivityUtil.finishWith 回传
+function onResult(name, action, path)
+  if handleNavAction(action, path) then
+    -- 已由 result 消费，清掉兜底 pending，避免 onResume 再打开一次
+    pcall(function()
+      require("mods.utils.ActivityUtil").takePending()
+    end)
+    return true
+  end
+end
+
+function onConfigurationChanged(config)
+  -- 旋转/分屏后重新量侧栏与避让
+  if Init.applyTabletMode then
+    drawer.post(function()
+      Init.applyTabletMode()
+      EditorUtil.refreshMinimap(false)
+      pcall(function() activity.invalidateOptionsMenu() end)
+    end)
+  end
 end
 
 function onDestroy()
@@ -166,6 +230,10 @@ end
 
 function onOptionsItemSelected(item)
   if item.getItemId() == android.R.id.home then
+    -- 平板常驻侧栏时不切换抽屉
+    if Init.isTabletMode and Init.isTabletMode() then
+      return
+    end
     if not drawer.isDrawerOpen(GravityCompat.START) then
       EditorUtil.save()
       drawer.openDrawer(GravityCompat.START)
@@ -177,40 +245,80 @@ end
 
 function onCreateOptionsMenu(menu)
   local colorTitle = ColorUtil.getColorOnBackground()
+  local tablet = isTabletUi()
+  local icon = function(name)
+    local d = nil
+    pcall(function()
+      d = res.drawable(name, colorTitle)
+    end)
+    -- 失败时再试无着色 / ic_ 前缀
+    if d == nil then
+      pcall(function() d = res.drawable(name) end)
+    end
+    if d == nil then
+      pcall(function() d = res.drawable("ic_" .. name, colorTitle) end)
+    end
+    return d
+  end
 
-  addAction(menu, res.string.run_code, res.drawable("play", colorTitle), showRunMenu)
-  addAction(menu, res.string.undo, res.drawable("undo", colorTitle), function() mLuaEditor.undo() end)
-  addAction(menu, res.string.redo, res.drawable("redo", colorTitle), function() mLuaEditor.redo() end)
+  -- 核心：始终显示
+  addAction(menu, res.string.run_code, icon("play"), showRunMenu, SHOW_AS_ACTION_ALWAYS)
+  addAction(menu, res.string.undo, icon("undo"), function() mLuaEditor.undo() end, SHOW_AS_ACTION_ALWAYS)
+  addAction(menu, res.string.redo, icon("redo"), function() mLuaEditor.redo() end, SHOW_AS_ACTION_ALWAYS)
 
+  if tablet then
+    -- 平板：常用项 ALWAYS 上顶栏（有图标才会显示）
+    addAction(menu, res.string.save_file, icon("save"), Actions.saveCurrentFile, SHOW_AS_ACTION_ALWAYS)
+    addAction(menu, res.string.search, icon("search"), Actions.showSearchBar, SHOW_AS_ACTION_ALWAYS)
+    addAction(menu, res.string.format, icon("format"), Actions.formatCode, SHOW_AS_ACTION_IF_ROOM)
+    addAction(menu, res.string.layout_helper, icon("layout_helper"), Actions.openLayoutHelper, SHOW_AS_ACTION_IF_ROOM)
+    addAction(menu, res.string.setting, icon("settings"), Actions.openSetting, SHOW_AS_ACTION_IF_ROOM)
+    addAction(menu, res.string.help, icon("help"), Actions.openHelp, SHOW_AS_ACTION_IF_ROOM)
+  end
+
+  -- 分组子菜单
   local fileMenu = menu.addSubMenu(res.string.file .. "…")
-  addItem(fileMenu, res.string.save_file, Actions.saveCurrentFile)
-  addItem(fileMenu, res.string.compile, Actions.compileCurrentFile)
+  if not tablet then
+    addItem(fileMenu, res.string.save_file, Actions.saveCurrentFile, nil, icon("save"))
+  end
+  addItem(fileMenu, res.string.compile, Actions.compileCurrentFile, nil, icon("memory"))
 
   local codeMenu = menu.addSubMenu(res.string.code .. "…")
-  addItem(codeMenu, res.string.format, Actions.formatCode)
-  addItem(codeMenu, res.string.check_error, Actions.checkError)
-  addItem(codeMenu, res.string.search, Actions.showSearchBar)
-  addItem(codeMenu, "Java" .. res.string.editor, Actions.openJavaEditor)
-  addItem(codeMenu, res.string.analysis_import, Actions.openJavaAnalysis)
+  if not tablet then
+    addItem(codeMenu, res.string.format, Actions.formatCode, nil, icon("format"))
+    addItem(codeMenu, res.string.search, Actions.showSearchBar, nil, icon("search"))
+  end
+  addItem(codeMenu, res.string.check_error, Actions.checkError, nil, icon("bug_report"))
+  addItem(codeMenu, "Java" .. res.string.editor, Actions.openJavaEditor, nil, icon("java"))
+  addItem(codeMenu, res.string.analysis_import, Actions.openJavaAnalysis, nil, icon("code"))
 
   local projectMenu = menu.addSubMenu(res.string.project .. "…")
-  addItem(projectMenu, res.string.build, Actions.openBuild)
-  addItem(projectMenu, res.string.create_project, Actions.createProject)
-  addItem(projectMenu, res.string.backup, Actions.backupCurrentProject)
+  addItem(projectMenu, res.string.build, Actions.openBuild, nil, icon("build"))
+  addItem(projectMenu, res.string.create_project, Actions.createProject, nil, icon("add_box"))
+  addItem(projectMenu, res.string.project_settings, Actions.openProjectSettings, nil, icon("settings"))
+  addItem(projectMenu, res.string.backup, Actions.backupCurrentProject, nil, icon("backup"))
 
   local toolsMenu = menu.addSubMenu(res.string.tools .. "…")
-  addItem(toolsMenu, res.string.logs, function() ActivityUtil.showLog(activity) end)
-  addItem(toolsMenu, res.string.api_title, Actions.openApi)
-  addItem(toolsMenu, res.string.resource_browser, Actions.openResource)
-  addAction(toolsMenu, res.string.layout_helper, nil, Actions.openLayoutHelper)
-  addItem(toolsMenu, res.string.request_permission, requestCommonPermissions)
+  addItem(toolsMenu, res.string.logs, function() ActivityUtil.showLog(activity) end, nil, icon("article"))
+  addItem(toolsMenu, res.string.api_title, Actions.openApi, nil, icon("menu_book"))
+  addItem(toolsMenu, res.string.resource_browser, Actions.openResource, nil, icon("inventory"))
+  if not tablet then
+    addItem(toolsMenu, res.string.layout_helper, Actions.openLayoutHelper, nil, icon("layout_helper"))
+  end
+  addItem(toolsMenu, res.string.request_permission, requestCommonPermissions, nil, icon("security"))
 
   local moreMenu = menu.addSubMenu(res.string.more .. "…")
-  addItem(moreMenu, "NeLuaJ+ " .. res.string.help, Actions.openHelp)
-  addItem(moreMenu, res.string.about, showAbout)
-  addItem(moreMenu, res.string.setting, function() ActivityUtil.new("setting") end)
+  if not tablet then
+    addItem(moreMenu, "NeLuaJ+ " .. res.string.help, Actions.openHelp, nil, icon("help"))
+  end
+  addItem(moreMenu, res.string.about, showAbout, nil, icon("info"))
+  if not tablet then
+    addItem(moreMenu, res.string.setting, Actions.openSetting, nil, icon("settings"))
+  end
 
-  addItem(menu, res.string.exit, function() activity.finish(true) end)
+  addItem(menu, res.string.exit, function() activity.finish(true) end, nil, icon("exit"))
+
+  return true
 end
 
 function onPause()
@@ -225,7 +333,7 @@ this.addOnBackPressedCallback(function()
     return
   end
 
-  if drawer.isDrawerOpen(GravityCompat.START) then
+  if (not (Init.isTabletMode and Init.isTabletMode())) and drawer.isDrawerOpen(GravityCompat.START) then
     drawer.closeDrawer(GravityCompat.START)
     return
   end

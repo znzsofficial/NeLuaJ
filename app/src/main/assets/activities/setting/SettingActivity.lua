@@ -10,6 +10,8 @@ import "android.widget.LinearLayout"
 import "android.widget.FrameLayout"
 import "android.widget.SeekBar"
 import "android.widget.ScrollView"
+import "android.widget.CheckBox"
+import "android.widget.Button"
 import "android.graphics.Bitmap"
 import "android.graphics.Canvas"
 import "android.graphics.Paint"
@@ -739,8 +741,228 @@ end
 
 resetSymbolBarDesc()
 
+-- ── 功能栏自定义（轻量模块，勿 require activities.main.Init）──
+local FunctionBarConfig = require "mods.utils.FunctionBarConfig"
+
+local function formatFunctionBarPreview(raw)
+    local catalog = FunctionBarConfig.getCatalog()
+    local titleOf = {}
+    for _, item in ipairs(catalog) do
+        titleOf[item.id] = item.title
+    end
+    local ids = FunctionBarConfig.parseIds(raw)
+    if not ids then
+        ids = FunctionBarConfig.getDefaultIds()
+    end
+    if #ids == 0 then
+        return res.string._default
+    end
+    local labels = {}
+    for i = 1, math.min(6, #ids) do
+        labels[i] = titleOf[ids[i]] or ids[i]
+    end
+    local text = table.concat(labels, " · ")
+    if #ids > 6 then
+        text = text .. " …"
+    end
+    return text
+end
+
+local function resetFunctionBarDesc()
+    FunctionBarItemDesc.text = formatFunctionBarPreview(this.getSharedData("function_bar", nil))
+end
+
+FunctionBarItem.onClick = function()
+    local catalog = FunctionBarConfig.getCatalog()
+    local defaultIds = FunctionBarConfig.getDefaultIds()
+    local currentIds = FunctionBarConfig.parseIds(this.getSharedData("function_bar", nil)) or defaultIds
+
+    local titleOf = {}
+    local catalogIds = {}
+    for _, item in ipairs(catalog) do
+        titleOf[item.id] = item.title
+        catalogIds[#catalogIds + 1] = item.id
+    end
+
+    local selected = {}
+    for _, id in ipairs(currentIds) do
+        selected[id] = true
+    end
+
+    -- 列表顺序：已启用项按当前顺序，其余按目录顺序接在后面
+    local order = {}
+    local inOrder = {}
+    for _, id in ipairs(currentIds) do
+        if titleOf[id] and not inOrder[id] then
+            inOrder[id] = true
+            order[#order + 1] = id
+        end
+    end
+    for _, id in ipairs(catalogIds) do
+        if not inOrder[id] then
+            inOrder[id] = true
+            order[#order + 1] = id
+        end
+    end
+
+    local scrollViews = {}
+    local listHost
+
+    local function swap(i, j)
+        order[i], order[j] = order[j], order[i]
+    end
+
+    local function rebuildList()
+        if not listHost then return end
+        listHost.removeAllViews()
+        for i, id in ipairs(order) do
+            local idx = i
+            local itemId = id
+            listHost.addView(loadlayout({
+                LinearLayout,
+                orientation = "horizontal",
+                layout_width = "match",
+                layout_height = "wrap",
+                gravity = "center_vertical",
+                paddingTop = "4dp",
+                paddingBottom = "4dp",
+                {
+                    CheckBox,
+                    layout_width = "wrap",
+                    layout_height = "wrap",
+                    checked = selected[itemId] == true,
+                    onClick = function(v)
+                        selected[itemId] = v.isChecked()
+                    end,
+                },
+                {
+                    MaterialTextView,
+                    text = titleOf[itemId] or itemId,
+                    textSize = "15sp",
+                    textColor = onSurfaceColor,
+                    layout_width = "0dp",
+                    layout_weight = 1,
+                    paddingLeft = "4dp",
+                    paddingRight = "4dp",
+                },
+                {
+                    Button,
+                    text = "↑",
+                    layout_width = "40dp",
+                    layout_height = "40dp",
+                    minWidth = 0,
+                    minHeight = 0,
+                    onClick = function()
+                        if idx > 1 then
+                            swap(idx, idx - 1)
+                            rebuildList()
+                        end
+                    end,
+                },
+                {
+                    Button,
+                    text = "↓",
+                    layout_width = "40dp",
+                    layout_height = "40dp",
+                    minWidth = 0,
+                    minHeight = 0,
+                    onClick = function()
+                        if idx < #order then
+                            swap(idx, idx + 1)
+                            rebuildList()
+                        end
+                    end,
+                },
+            }))
+        end
+    end
+
+    local content = loadlayout({
+        LinearLayout,
+        orientation = "vertical",
+        layout_width = "match",
+        layout_height = "wrap",
+        paddingLeft = "12dp",
+        paddingRight = "12dp",
+        paddingTop = "8dp",
+        {
+            MaterialTextView,
+            text = res.string.function_bar_hint,
+            textSize = "12sp",
+            textColor = onSurfaceVarColor,
+            paddingBottom = "8dp",
+        },
+        {
+            ScrollView,
+            layout_width = "match",
+            layout_height = "360dp",
+            {
+                LinearLayout,
+                orientation = "vertical",
+                layout_width = "match",
+                layout_height = "wrap",
+                id = "listHost",
+            },
+        },
+    }, scrollViews)
+
+    listHost = scrollViews.listHost
+    rebuildList()
+
+    MaterialAlertDialogBuilder(this)
+        .setTitle(res.string.function_bar)
+        .setView(content)
+        .setPositiveButton(android.R.string.ok, function()
+            local out = {}
+            for _, id in ipairs(order) do
+                if selected[id] then
+                    out[#out + 1] = id
+                end
+            end
+            if #out == 0 then
+                this.setSharedData("function_bar", nil)
+            else
+                this.setSharedData("function_bar", table.concat(out, "\n"))
+            end
+            resetFunctionBarDesc()
+        end)
+        .setNegativeButton(android.R.string.cancel, nil)
+        .setNeutralButton(res.string._default, function()
+            this.setSharedData("function_bar", nil)
+            resetFunctionBarDesc()
+        end)
+        .show()
+end
+
+resetFunctionBarDesc()
+
 local function isSharedTruthy(value)
     return value == true or value == "true" or value == 1
+end
+
+-- ── 平板模式 ──
+local function isLargeScreenDevice()
+    local ok, large = pcall(function()
+        local dm = this.getResources().getDisplayMetrics()
+        local sw = math.min(dm.widthPixels, dm.heightPixels) / dm.density
+        return sw >= 600
+    end)
+    return ok and large
+end
+
+TabletModeItemSwitch.checked = isSharedTruthy(this.getSharedData("tablet_mode", false))
+-- 大屏设备补充说明
+pcall(function()
+    if isLargeScreenDevice() then
+        TabletModeItemDesc.text = res.string.tablet_mode_desc .. " · " .. res.string.tablet_mode_large_hint
+    end
+end)
+TabletModeItem.onClick = function()
+    local enabled = not TabletModeItemSwitch.isChecked()
+    TabletModeItemSwitch.checked = enabled
+    this.setSharedData("tablet_mode", enabled)
+    print(enabled and res.string.tablet_mode_on_hint or res.string.tablet_mode_off_hint)
+    -- 主界面 onResume 会 invalidateOptionsMenu 刷新工具栏
 end
 
 -- ── 双行符号栏 ──
@@ -927,6 +1149,14 @@ end
 refreshMinimapCodeAlphaDesc()
 
 -- ── 调试应用 ──
+-- ── 小窗运行 ──
+RunInWindowItemSwitch.checked = isSharedTruthy(this.getSharedData("run_in_window", false))
+RunInWindowItem.onClick = function()
+    local enabled = not RunInWindowItemSwitch.isChecked()
+    RunInWindowItemSwitch.checked = enabled
+    this.setSharedData("run_in_window", enabled)
+end
+
 CustomApp.onClick = function()
     local views = {}
     MaterialAlertDialogBuilder(this)

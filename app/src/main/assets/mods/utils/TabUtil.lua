@@ -39,6 +39,15 @@ local function resetEmptyState()
     activity.getSupportActionBar().setSubtitle(res.string.no_file)
     Bean.Project.this_project = ""
     mLuaEditor.setVisibility(4)
+    pcall(function()
+        local Init = package.loaded["activities.main.Init"]
+        if Init and Init.syncEditorEmptyState then
+            Init.syncEditorEmptyState()
+        elseif editor_empty_state then
+            editor_empty_state.setVisibility(0)
+            editor_empty_state.bringToFront()
+        end
+    end)
 end
 
 local function closeTabs(paths)
