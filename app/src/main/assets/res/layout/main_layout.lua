@@ -446,7 +446,6 @@ return {
               RecyclerView,
               layout_width = "match_parent",
               layout_height = "match_parent",
-              dividerHeight = 0,
               id = "mRecycler",
             },
           };
