@@ -44,46 +44,45 @@ end
 </tbody></table></div>
 <p>更多主题（Compat / MaterialComponent 等）见 <code>init_lua_zh.html</code>。</p>
 <h3>主题设置方式</h3>
-<p><strong>方式一（推荐）</strong>：在 <code>init.lua</code> 中配置，Activity 自动应用：</p>
+<p><strong>方式一</strong>：在 <code>init.lua</code> 中写主题名，Activity 启动时会自动应用：</p>
 <pre><code class="language-lua">-- init.lua
 NeLuaJ_Theme = "Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay"
 </code></pre>
-<p><strong>方式二</strong>：在 <code>main.lua</code> 中手动设置（必须在 <code>setContentView</code> 之前）：</p>
+<p><strong>方式二</strong>：在 <code>main.lua</code> 里调用 <code>setTheme</code>。主题要在内容视图创建之前生效，因此通常写在 <code>setContentView</code> 前面：</p>
 <pre><code class="language-lua">activity.setTheme(R.style.Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay)
 </code></pre>
 <blockquote>
-<p>如果 <code>init.lua</code> 已设置 <code>NeLuaJ_Theme</code>，则无需在 <code>main.lua</code> 中重复调用。</p>
+<p><code>init.lua</code> 里已经写了 <code>NeLuaJ_Theme</code> 时，一般不必再在 <code>main.lua</code> 里设一遍。</p>
 </blockquote>
 <h3>动态颜色</h3>
-<p>推荐在 <code>onCreate</code> 中调用 <code>activity.dynamicColor()</code> 启用 Material You 动态取色：</p>
+<p>需要 Material You / 种子色板时，可在页面入口调用：</p>
 <pre><code class="language-lua">activity.dynamicColor()
 </code></pre>
 <hr>
-<h2>3. 布局组件迁移</h2>
-<h3>推荐使用 Material 3 组件</h3>
-<div class="table-wrapper"><table><thead><tr><th>旧组件</th><th>新组件</th><th>说明</th></tr></thead><tbody><tr><td><code>TextView</code></td><td><code>MaterialTextView</code></td><td>支持 MD3 文字样式</td></tr><tr><td><code>Button</code></td><td><code>MaterialButton</code></td><td>自动应用 MD3 按钮样式</td></tr><tr><td><code>EditText</code></td><td><code>TextInputEditText</code> + <code>TextInputLayout</code></td><td>MD3 输入框</td></tr><tr><td><code>CardView</code></td><td><code>MaterialCardView</code></td><td>支持描边、圆角等 MD3 属性</td></tr><tr><td><code>Toolbar</code></td><td><code>MaterialToolbar</code></td><td>MD3 工具栏</td></tr></tbody></table></div>
-<h3>颜色获取</h3>
-<p>使用 <code>LuaThemeUtil</code> 获取主题颜色，而非硬编码：</p>
+<h2>3. 布局组件对照</h2>
+<h3>Material 3 组件与旧组件</h3>
+<div class="table-wrapper"><table><thead><tr><th>常见旧写法</th><th>MD3 常见写法</th><th>说明</th></tr></thead><tbody><tr><td><code>TextView</code></td><td><code>MaterialTextView</code></td><td>文字样式与主题更贴近 MD3</td></tr><tr><td><code>Button</code></td><td><code>MaterialButton</code></td><td>按钮样式随 Material 主题</td></tr><tr><td><code>EditText</code></td><td><code>TextInputEditText</code> + <code>TextInputLayout</code>，或工程内的 <code>MaterialTextField</code></td><td>轮廓/填充输入框</td></tr><tr><td><code>CardView</code></td><td><code>MaterialCardView</code></td><td>描边、圆角等属性更完整</td></tr><tr><td><code>Toolbar</code></td><td><code>MaterialToolbar</code></td><td>工具栏外观与 MD3 一致</td></tr></tbody></table></div>
+<h3>颜色</h3>
+<p>布局里常用 <code>"?attr/…"</code>；代码里需要 int 时可用 <code>this.themeUtil</code>：</p>
 <pre><code class="language-lua">local ColorUtil = this.themeUtil
 
--- 推荐：结构化访问
 local primary = ColorUtil.primary.main
 local surface = ColorUtil.surface.main
 local onSurface = ColorUtil.text.primary
 
--- 兼容：传统方法
-local primary = ColorUtil.getColorPrimary()
+-- 也可用方法形式
+local primary2 = ColorUtil.getColorPrimary()
 local background = ColorUtil.getColorBackground()
 </code></pre>
 <h3>尺寸单位</h3>
 <ul>
-<li>文字大小使用 <strong><code>sp</code></strong>（会跟随系统字体缩放）</li>
-<li>间距和尺寸使用 <strong><code>dp</code></strong></li>
-<li>❌ 不要对文字大小使用 <code>dp</code></li>
+<li>文字大小常用 <strong><code>sp</code></strong>，会随系统字体缩放变化。</li>
+<li>间距、宽高等布局尺寸常用 <strong><code>dp</code></strong>。</li>
+<li>文字若写成 <code>dp</code>，不会跟随系统字体缩放（与 Android 常规做法不同）。</li>
 </ul>
 <hr>
-<h2>4. init.lua 配置更新</h2>
-<h3>推荐配置</h3>
+<h2>4. init.lua 配置</h2>
+<h3>示例配置</h3>
 <pre><code class="language-lua">app_name = "我的应用"
 package_name = "com.example.myapp"
 ver_name = "1.0"

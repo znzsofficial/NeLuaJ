@@ -12,7 +12,7 @@
 <h2>📘 <code>LuaPreferenceFragment</code></h2>
 <p><code>LuaPreferenceFragment</code> 基于 <code>androidx.preference.PreferenceFragmentCompat</code> 实现。</p>
 <h3>📦 引入</h3>
-<p>在使用前，请确保已正确引入该类及其相关依赖，例如：</p>
+<p>常见引入方式：</p>
 <pre><code class="language-lua">import "com.androlua.LuaPreferenceFragment"
 import "androidx.preference.*"
 </code></pre>
@@ -20,12 +20,12 @@ import "androidx.preference.*"
 <pre><code class="language-lua">fragment = LuaPreferenceFragment(preferenceTable)
 </code></pre>
 <ul>
-<li><code>preferenceTable</code>：一个 LuaTable 表，定义所有 Preference 项。</li>
+<li><code>preferenceTable</code>：Lua 表，描述各 Preference 项。</li>
 </ul>
 <p>示例结构：</p>
 <pre><code class="language-lua">local prefs = {
   {
-    PreferenceCategory,  -- 第一项必须是 Preference 类
+    PreferenceCategory,  -- 每一项的第一个元素是 Preference 类
     title = "设置分类"
   },
   {

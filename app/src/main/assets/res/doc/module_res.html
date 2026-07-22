@@ -96,7 +96,7 @@ print(res.plurals.apple_count(5))
 
       <h2>4. res.color</h2>
       <p>仅在 Activity 上下文可用。先加载 <code>res/color/init.lua</code>，再按是否夜间模式加载 <code>night.lua</code> 或 <code>day.lua</code>。</p>
-      <p>MD3 主题色不要写进 <code>res.color</code>：布局用 <code>?attr/</code>，运行时用 <code>themeUtil</code>。</p>
+      <p>Material 主题色一般通过布局里的 <code>?attr/…</code> 或运行时的 <code>themeUtil</code> 获取；<code>res.color</code> 更适合工程自定义色值（见 <a class="doc-link" href="color_api.html">颜色与主题</a>）。</p>
       <nav class="doc-nav" aria-label="相关文档">
         <span class="doc-nav-label">取色</span>
         <a class="doc-link" href="color_api.html">颜色与主题</a>

@@ -10,32 +10,41 @@
   <body>
     <main class="markdown-export">
       <h1>异常捕获与代码备份</h1>
-      <p>编辑器与运行时会自动保留崩溃信息与保存前的代码快照，方便排查问题与找回误改内容。</p>
+      <p>编辑器在保存代码时会留下快照；未处理的崩溃会写入日志文件。这些内容都在应用的媒体目录（以及可选的工程 ZIP 备份目录）中，方便事后查看和恢复。</p>
 
-      <h2>异常捕获</h2>
-      <p>未被捕获的异常会写入应用媒体目录：</p>
+      <h2>崩溃日志</h2>
+      <p>未捕获异常默认写入：</p>
       <pre><code>/sdcard/Android/media/github.znzsofficial.neluaj/crash/</code></pre>
       <ul>
-        <li>文件名通常包含时间戳，便于按时间查找。</li>
-        <li>内容包含异常类型、消息与堆栈，可用于定位脚本行号。</li>
-        <li>若应用已授予媒体目录访问权限，可直接用系统文件管理器打开该路径。</li>
+        <li>文件名里通常带有时间信息，便于按时间排序。</li>
+        <li>内容一般包括异常类型、消息和堆栈，有助于对应到脚本行号。</li>
+        <li>在系统文件管理器中打开上述路径即可浏览（设备与权限情况因机而异）。</li>
       </ul>
-      <p>脚本内可用 <code>onError</code> 自定义处理；返回特定值可控制默认日志输出方式。详见 <code>LuaActivity</code> 文档中的错误处理章节。</p>
+      <p>脚本里可以定义 <code>onError</code>，自定义如何处理错误；返回值还会影响默认日志展示方式。说明见 <a class="doc-link" href="LuaActivity.html">LuaActivity</a> 中的错误处理部分。</p>
 
-      <h2>代码备份</h2>
-      <p>编辑器每次成功保存时，会在下列目录再写一份备份：</p>
-      <pre><code>/sdcard/Android/media/github.znzsofficial.neluaj/backup/</code></pre>
+      <h2>保存时的代码备份</h2>
+      <p>编辑器每次成功保存后，会在下面目录再写一份副本（按日期分子目录）：</p>
+      <pre><code>/sdcard/Android/media/github.znzsofficial.neluaj/backups/</code></pre>
       <ul>
-        <li>用于误覆盖、误删后的内容恢复。</li>
-        <li>备份与工程内正式文件相互独立，清理工程不会自动清空备份目录。</li>
-        <li>若磁盘空间紧张，可定期清理较早的备份文件。</li>
+        <li>适合误覆盖、误删后对照恢复。</li>
+        <li>与工程目录相互独立：删除工程文件夹不会自动清空这里的备份。</li>
+        <li>占用空间会随时间增长，需要时可以自行清理较旧的文件。</li>
       </ul>
 
-      <h2>建议</h2>
+      <h2>在 IDE 中浏览</h2>
+      <p>主界面菜单 <strong>工具 → Media 浏览器</strong> 可直接打开相关目录，例如：</p>
       <ul>
-        <li>正式发布前检查 <code>crash/</code> 是否还有未处理崩溃。</li>
-        <li>重要改动前可再手动备份整个工程目录。</li>
-        <li>调试阶段可在 <code>onError</code> 中打印更完整的上下文（当前文件路径、关键变量等）。</li>
+        <li><code>crash/</code> — 崩溃日志，以及 vConsole 导出的文本</li>
+        <li><code>backups/</code> — 保存时的代码快照</li>
+        <li><code>/sdcard/LuaJ/Backup/</code> — 菜单「备份」生成的工程 ZIP</li>
+      </ul>
+      <p>浏览器支持查看路径、预览文本、复制路径、分享和删除等操作。</p>
+
+      <h2>使用上的提示</h2>
+      <ul>
+        <li>发布或打包前，可以打开 <code>crash/</code> 看是否还有近期未处理的崩溃记录。</li>
+        <li>大改代码前，可以用菜单「备份」再存一份完整工程 ZIP。</li>
+        <li>调试时，在 <code>onError</code> 里补充当前文件路径、关键变量等上下文，日志会更好读。</li>
       </ul>
     </main>
   </body>

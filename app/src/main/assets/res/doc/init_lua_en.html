@@ -5,131 +5,113 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="doc.css" />
     <script src="doc.js" defer></script>
-    <title>init.lua Configuration File Documentation</title>
+    <title>init.lua configuration</title>
   </head>
   <body>
     <main class="markdown-export">
-<h1><code>init.lua</code> Configuration File Documentation</h1>
-<p>The <code>init.lua</code> file is used to configure the application's environment parameters. It is a Lua script containing various variables that control settings such as the application name, version, debug mode, theme, and more. It is recommended to use the official builder to generate the script to avoid manually editing <code>init.lua</code>.</p>
-<h2>Structure of <code>init.lua</code></h2>
-<p>The file should define variables to configure the application's behavior. Below is a description of the supported variables:</p>
+<h1><code>init.lua</code> configuration</h1>
+<p><code>init.lua</code> lives in the project root and describes app name, package, version, theme, permissions, and related environment fields. The host Activity reads these values at startup. You can also generate the file with the official builder and adjust it as needed.</p>
+<p>Each field below includes its type, meaning, and a short example.</p>
 <hr>
-<h2><strong>1. <code>app_name</code></strong></h2>
+<h2>1. <code>app_name</code></h2>
 <ul>
-<li><strong>Type</strong>: <code>string</code></li>
-<li><strong>Description</strong>: Specifies the name of the application, which will be displayed as the application window title.</li>
+<li><strong>Type</strong>: string</li>
+<li><strong>Meaning</strong>: Display name of the app; also used as a default window title source.</li>
 </ul>
-<h3>Example:</h3>
 <pre><code class="language-lua">app_name = "Sample Application"
 </code></pre>
 <hr>
-<h2><strong>2. <code>package_name</code></strong></h2>
+<h2>2. <code>package_name</code></h2>
 <ul>
-<li><strong>Type</strong>: <code>string</code></li>
-<li><strong>Description</strong>: Defines the application's package name, which is used to uniquely identify the application. Ensure the package name follows standard naming conventions, such as <code>com.example.myapp</code>.</li>
+<li><strong>Type</strong>: string</li>
+<li><strong>Meaning</strong>: Application id / package name used to identify the app. Common form: <code>com.example.myapp</code> (lowercase, dot-separated).</li>
 </ul>
-<h3>Example:</h3>
 <pre><code class="language-lua">package_name = "com.example.myapp"
 </code></pre>
 <hr>
-<h2><strong>3. <code>ver_name</code></strong></h2>
+<h2>3. <code>ver_name</code></h2>
 <ul>
-<li><strong>Type</strong>: <code>string</code></li>
-<li><strong>Description</strong>: The version name of the application, typically shown to users, such as <code>1.0.0</code>.</li>
+<li><strong>Type</strong>: string</li>
+<li><strong>Meaning</strong>: User-visible version label, e.g. <code>1.0.0</code>.</li>
 </ul>
-<h3>Example:</h3>
 <pre><code class="language-lua">ver_name = "1.0.0"
 </code></pre>
 <hr>
-<h2><strong>4. <code>ver_code</code></strong></h2>
+<h2>4. <code>ver_code</code></h2>
 <ul>
-<li><strong>Type</strong>: <code>integer</code></li>
-<li><strong>Description</strong>: The version code of the application, usually an incrementing integer used to identify the build version.</li>
+<li><strong>Type</strong>: integer</li>
+<li><strong>Meaning</strong>: Internal version code, usually increasing with each release so builds can be compared.</li>
 </ul>
-<h3>Example:</h3>
 <pre><code class="language-lua">ver_code = 101
 </code></pre>
 <hr>
-<h2><strong>5. <code>debug_mode</code></strong></h2>
+<h2>5. <code>debug_mode</code></h2>
 <ul>
-<li><strong>Type</strong>: <code>boolean</code></li>
-<li><strong>Description</strong>: Enables or disables debug mode. When debug mode is enabled, the application may produce additional debug logs to help developers troubleshoot issues.</li>
+<li><strong>Type</strong>: boolean</li>
+<li><strong>Meaning</strong>: When <code>true</code>, the runtime may surface more debug information (for example via Toast).</li>
+<li><strong>vConsole</strong>: The floating debugger is a separate module. Load it with <code>require "vConsole"</code> when you need it. If you enable the vConsole module while creating a project, the file is copied to the project root and <code>main.lua</code> gets the matching <code>require</code>.</li>
 </ul>
-<h3>Example:</h3>
 <pre><code class="language-lua">debug_mode = true
 </code></pre>
 <hr>
-<h2><strong>6. <code>target_sdk</code></strong></h2>
+<h2>6. <code>target_sdk</code></h2>
 <ul>
-<li><strong>Type</strong>: <code>integer</code></li>
-<li><strong>Description</strong>: Specifies the target SDK version, indicating the version of the SDK the application is designed to run on. It is recommended to align this with the project's build configuration.</li>
+<li><strong>Type</strong>: integer</li>
+<li><strong>Meaning</strong>: Target Android SDK level the app is designed for. This is usually aligned with the target used when packaging, e.g. <code>33</code>.</li>
 </ul>
-<h3>Example:</h3>
 <pre><code class="language-lua">target_sdk = 33
 </code></pre>
 <hr>
-<h2><strong>7. <code>min_sdk</code></strong></h2>
+<h2>7. <code>min_sdk</code></h2>
 <ul>
-<li><strong>Type</strong>: <code>integer</code></li>
-<li><strong>Description</strong>: Specifies the minimum SDK version, indicating the lowest version of Android supported by the application.</li>
+<li><strong>Type</strong>: integer</li>
+<li><strong>Meaning</strong>: Lowest Android SDK level the app declares support for. Devices below this level may not install or run the app.</li>
 </ul>
-<h3>Example:</h3>
 <pre><code class="language-lua">min_sdk = 24
 </code></pre>
 <hr>
-<h2><strong>8. <code>NeLuaJ_Theme</code></strong></h2>
+<h2>8. <code>NeLuaJ_Theme</code></h2>
 <ul>
-<li><strong>Type</strong>: <code>string</code></li>
-<li><strong>Description</strong>: Defines the application's theme name. This theme should match a theme field defined in the <code>R.style</code> class. Applied automatically when the Activity starts; no need to call <code>activity.setTheme()</code> in <code>main.lua</code>.</li>
+<li><strong>Type</strong>: string</li>
+<li><strong>Meaning</strong>: Activity theme name matching a field on the app’s <code>R.style</code>. Applied when the Activity starts, so <code>activity.setTheme()</code> in <code>main.lua</code> is usually unnecessary.</li>
 </ul>
-<h3>Available values:</h3>
+<p>Dots in style names become underscores in the string, e.g. <code>Theme.NeLuaJ.Material3</code> → <code>Theme_NeLuaJ_Material3</code>.</p>
 <div class="table-wrapper"><table><thead><tr><th>Value</th><th>Description</th></tr></thead><tbody>
-<tr><td colspan="2"><strong>Material 3 (recommended)</strong></td></tr>
-<tr><td><code>Theme_NeLuaJ_Material3</code></td><td>MD3 with ActionBar; light/dark from system</td></tr>
+<tr><td colspan="2"><strong>Material 3</strong></td></tr>
+<tr><td><code>Theme_NeLuaJ_Material3</code></td><td>MD3 with ActionBar; light/dark follows the system</td></tr>
 <tr><td><code>Theme_NeLuaJ_Material3_ActionOverlay</code></td><td>MD3 + ActionBar + ActionMode overlay</td></tr>
 <tr><td><code>Theme_NeLuaJ_Material3_NoActionBar</code></td><td>MD3 without ActionBar (custom Toolbar)</td></tr>
-<tr><td><code>Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay</code></td><td>MD3 without ActionBar + ActionMode overlay (recommended)</td></tr>
+<tr><td><code>Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay</code></td><td>MD3 without ActionBar + ActionMode overlay</td></tr>
 <tr><td colspan="2"><strong>Material 3 Dynamic Colors</strong></td></tr>
-<tr><td><code>Theme_NeLuaJ_Material3_DynamicColors</code></td><td>MD3 dynamic colors with ActionBar</td></tr>
-<tr><td><code>Theme_NeLuaJ_Material3_DynamicColors_ActionOverlay</code></td><td>Dynamic colors + ActionBar + ActionMode overlay</td></tr>
-<tr><td><code>Theme_NeLuaJ_Material3_DynamicColors_NoActionBar</code></td><td>Dynamic colors without ActionBar</td></tr>
-<tr><td><code>Theme_NeLuaJ_Material3_DynamicColors_NoActionBar_ActionOverlay</code></td><td>Dynamic colors without ActionBar + ActionMode overlay</td></tr>
-<tr><td colspan="2"><strong>AppCompat</strong></td></tr>
-<tr><td><code>Theme_NeLuaJ_Compat</code></td><td>AppCompat DayNight with ActionBar</td></tr>
-<tr><td><code>Theme_NeLuaJ_Compat_NoActionBar</code></td><td>AppCompat DayNight without ActionBar</td></tr>
-<tr><td colspan="2"><strong>Material Components (MD2)</strong></td></tr>
-<tr><td><code>Theme_NeLuaJ_MaterialComponent</code></td><td>MD2 DayNight with ActionBar</td></tr>
-<tr><td><code>Theme_NeLuaJ_MaterialComponent_NoActionBar</code></td><td>MD2 DayNight without ActionBar</td></tr>
-<tr><td><code>Theme_NeLuaJ_MaterialComponent_Light</code></td><td>MD2 fixed light with ActionBar</td></tr>
-<tr><td><code>Theme_NeLuaJ_MaterialComponent_Light_NoActionBar</code></td><td>MD2 fixed light without ActionBar</td></tr>
-<tr><td><code>Theme_NeLuaJ_MaterialComponent_Dark</code></td><td>MD2 fixed dark with ActionBar</td></tr>
-<tr><td><code>Theme_NeLuaJ_MaterialComponent_Dark_NoActionBar</code></td><td>MD2 fixed dark without ActionBar</td></tr>
+<tr><td><code>Theme_NeLuaJ_Material3_DynamicColors</code> (and variants)</td><td>MD3 with wallpaper/user seed colors</td></tr>
+<tr><td colspan="2"><strong>AppCompat / Material Components (MD2)</strong></td></tr>
+<tr><td><code>Theme_NeLuaJ_Compat…</code> / <code>Theme_NeLuaJ_MaterialComponent…</code></td><td>Legacy DayNight or fixed light/dark themes</td></tr>
 </tbody></table></div>
-<p>Use <code>_</code> instead of <code>.</code> in the string (matches <code>R.style</code> field names). Dynamic Colors themes work best with <code>activity.dynamicColor()</code> or the settings seed color.</p>
-<h3>Example:</h3>
+<p>Dynamic color themes work well with <code>activity.dynamicColor()</code> or the seed color in settings. See <a class="doc-link" href="color_api.html">Colors and theme</a>.</p>
 <pre><code class="language-lua">NeLuaJ_Theme = "Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay"
 </code></pre>
 <hr>
-<h2><strong>9. <code>theme</code></strong> <em>(Deprecated)</em></h2>
+<h2>9. <code>theme</code> (legacy)</h2>
 <ul>
-<li><strong>Type</strong>: <code>integer</code> or <code>string</code></li>
-<li><strong>Description</strong>: Configures the application's theme. This field is marked as deprecated, and it is recommended to use <code>NeLuaJ_Theme</code> instead. If a number is provided, it directly represents the theme resource ID. If a string is provided, it should match a theme field name in the <code>android.R.style</code> class.</li>
+<li><strong>Type</strong>: integer or string</li>
+<li><strong>Meaning</strong>: Older theme field. Prefer <code>NeLuaJ_Theme</code> for app <code>R.style</code> themes (including Material 3). If you still use <code>theme</code>: a number is a style resource id; a string is looked up on <strong><code>android.R.style</code></strong> only—platform themes such as <code>Theme_DeviceDefault_DayNight</code> or <code>Theme_Material_Light</code>, not Material 3 names.</li>
 </ul>
-<h3>Example:</h3>
-<pre><code class="language-lua">theme = "Theme_Material_Light"
+<pre><code class="language-lua">theme = "Theme_DeviceDefault_DayNight"
+-- theme = "Theme_Material_Light"
 </code></pre>
 <hr>
-<h2><strong>10. <code>user_permission</code></strong></h2>
+<h2>10. <code>user_permission</code></h2>
 <ul>
-<li><strong>Type</strong>: <code>table</code> (array format)</li>
-<li><strong>Description</strong>: Defines the list of permissions required by the application. These permissions should be listed as strings and comply with Android's standard permission definitions.</li>
+<li><strong>Type</strong>: table (array of strings)</li>
+<li><strong>Meaning</strong>: Android permission names the app may need. Packaging and runtime permission handling use this list. Names match Android’s permission constants, e.g. <code>android.permission.INTERNET</code>.</li>
 </ul>
-<h3>Example:</h3>
-<pre><code class="language-lua">user_permission = { "android.permission.INTERNET", "android.permission.CAMERA" }
+<pre><code class="language-lua">user_permission = {
+  "android.permission.INTERNET",
+  "android.permission.CAMERA",
+}
 </code></pre>
 <hr>
-<h2>Example <code>init.lua</code> File</h2>
-<p>Below is a sample configuration file demonstrating how to define all supported variables:</p>
+<h2>Full example</h2>
 <pre><code class="language-lua">app_name = "Sample Application"
 package_name = "com.example.myapp"
 ver_name = "1.0.0"
@@ -138,18 +120,18 @@ debug_mode = true
 target_sdk = 33
 min_sdk = 24
 NeLuaJ_Theme = "Theme_NeLuaJ_Material3"
-theme = "Theme_Material_Light" -- Deprecated
-user_permission = { "android.permission.INTERNET", "android.permission.CAMERA" }
+user_permission = {
+  "android.permission.INTERNET",
+  "android.permission.CAMERA",
+}
 </code></pre>
 <hr>
 <h2>Notes</h2>
-<ol>
-<li><strong>Project Directory Requirement</strong>: Ensure the <code>init.lua</code> file is located in the root directory of the project.</li>
-<li><strong>Syntax Accuracy</strong>: Syntax errors in the <code>init.lua</code> file may result in loading failures. It is recommended to verify the file's syntax after editing.</li>
-<li><strong>Permission Configuration</strong>: Permissions in <code>user_permission</code> must adhere to Android's standard permission definitions to ensure proper functionality.</li>
-</ol>
+<ul>
+<li><code>init.lua</code> is normally next to <code>main.lua</code> at the project root; the runtime looks for configuration there.</li>
+<li>The file is a simple Lua assignment script; syntax errors prevent loading and usually appear in the log.</li>
+<li>Permission strings that do not match Android’s names may not be requested or packaged as expected.</li>
+</ul>
     </main>
   </body>
 </html>
-
-

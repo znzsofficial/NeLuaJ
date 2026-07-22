@@ -40,10 +40,10 @@ end
 
       <h2>要点</h2>
       <ul>
-        <li>必须在合适时机 <code>startWatching()</code>，并在 <code>onDestroy</code> 中 <code>stopWatching()</code>，避免泄漏。</li>
+        <li>开始监听时调用 <code>startWatching()</code>；页面结束时调用 <code>stopWatching()</code>，可避免继续占用系统资源。</li>
         <li><code>path</code> 参数通常是相对被监听目录的名称，不一定是绝对路径。</li>
-        <li>事件在系统线程回调，更新 UI 时请切回主线程（如 <code>call</code> / Activity 方法）。</li>
-        <li>Android 10+ 对共享存储监听可能受限，优先监听应用可访问目录。</li>
+        <li>回调往往在非 UI 线程；更新界面时可通过 <code>call</code> 或 Activity 提供的主线程入口执行。</li>
+        <li>Android 10 及更高版本对共享存储的监听可能受限，应用可访问的目录通常更稳定。</li>
       </ul>
 
       <h2>常见事件</h2>

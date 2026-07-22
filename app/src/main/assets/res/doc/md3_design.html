@@ -64,11 +64,12 @@ activity.dynamicColor()
     layout_width = "match",
     layout_height = "wrap",
     layout_margin = "8dp",
-    radius = "16dp",           -- 圆角
-    strokeWidth = "1dp",       -- 描边宽度
+    radius = "16dp",           -- 专用键 → setRadius（支持 dp）
+    strokeWidth = "1dp",
     strokeColor = "?attr/colorOutlineVariant",
     CardBackgroundColor = "?attr/colorSurfaceContainerLow",
-    CardElevation = 0,         -- MD3 推荐 0 高度
+    cardElevation = 0,         -- 专用键；MD3 推荐 0
+    checkable = false,         -- 可选：可选中卡片
     {
         -- 卡片内容
     }
@@ -195,6 +196,7 @@ dialog.show()
 <li>使用 <strong>8dp 网格</strong>：4dp, 8dp, 12dp, 16dp, 24dp, 32dp</li>
 <li>卡片内边距：<strong>16dp</strong></li>
 <li>列表项内边距：水平 <strong>16dp</strong>，垂直 <strong>12dp</strong></li>
+<li>水平边距优先 <code>paddingStart</code> / <code>paddingEnd</code>、<code>layout_marginStart</code> / <code>layout_marginEnd</code>（RTL 安全；见 <a class="doc-link" href="layout_reference.html">布局属性 · 间距</a>）</li>
 </ul>
 <h3>圆角</h3>
 <ul>
@@ -203,12 +205,12 @@ dialog.show()
 <li>对话框：<strong>28dp</strong></li>
 <li>底部弹出：<strong>28dp</strong>（顶部）</li>
 </ul>
-<h3>文字大小（必须用 sp）</h3>
+<h3>文字大小参考（常用 sp，随系统字体缩放）</h3>
 <ul>
-<li>标题：<strong>24sp</strong></li>
-<li>副标题：<strong>16sp</strong></li>
-<li>正文：<strong>14sp</strong></li>
-<li>标签/说明：<strong>12sp</strong></li>
+<li>标题：约 <strong>24sp</strong></li>
+<li>副标题：约 <strong>16sp</strong></li>
+<li>正文：约 <strong>14sp</strong></li>
+<li>标签/说明：约 <strong>12sp</strong></li>
 </ul>
 <h3>颜色使用</h3>
 <ul>

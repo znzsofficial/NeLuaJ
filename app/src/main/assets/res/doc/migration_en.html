@@ -44,42 +44,44 @@ end
 </tbody></table></div>
 <p>Full list (Compat / MaterialComponent, etc.) is in <code>init_lua_en.html</code>.</p>
 <h3>Theme Setup</h3>
-<p><strong>Option 1 (Recommended)</strong>: Set in <code>init.lua</code>, applied automatically:</p>
+<p><strong>Option 1</strong>: Put the theme name in <code>init.lua</code>; the Activity applies it at startup:</p>
 <pre><code class="language-lua">-- init.lua
 NeLuaJ_Theme = "Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay"
 </code></pre>
-<p><strong>Option 2</strong>: Set manually in <code>main.lua</code> (must be before <code>setContentView</code>):</p>
+<p><strong>Option 2</strong>: Call <code>setTheme</code> in <code>main.lua</code>. Themes take effect for content created afterward, so this is usually written before <code>setContentView</code>:</p>
 <pre><code class="language-lua">activity.setTheme(R.style.Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay)
 </code></pre>
-<h3>Dynamic Colors</h3>
-<p>Call <code>activity.dynamicColor()</code> in <code>onCreate</code> to enable Material You dynamic theming:</p>
+<blockquote>
+<p>If <code>NeLuaJ_Theme</code> is already set in <code>init.lua</code>, a second call in <code>main.lua</code> is usually unnecessary.</p>
+</blockquote>
+<h3>Dynamic colors</h3>
+<p>To enable Material You / seed colors, you can call at the page entry:</p>
 <pre><code class="language-lua">activity.dynamicColor()
 </code></pre>
 <hr>
-<h2>3. Component Migration</h2>
-<h3>Recommended Material 3 Components</h3>
-<div class="table-wrapper"><table><thead><tr><th>Old</th><th>New</th><th>Notes</th></tr></thead><tbody><tr><td><code>TextView</code></td><td><code>MaterialTextView</code></td><td>MD3 text styles</td></tr><tr><td><code>Button</code></td><td><code>MaterialButton</code></td><td>MD3 button styles</td></tr><tr><td><code>EditText</code></td><td><code>TextInputEditText</code> + <code>TextInputLayout</code></td><td>MD3 input fields</td></tr><tr><td><code>CardView</code></td><td><code>MaterialCardView</code></td><td>Stroke, corner radius</td></tr><tr><td><code>Toolbar</code></td><td><code>MaterialToolbar</code></td><td>MD3 toolbar</td></tr></tbody></table></div>
-<h3>Color Access</h3>
-<p>Use <code>LuaThemeUtil</code> instead of hardcoded colors:</p>
+<h2>3. Components</h2>
+<h3>Material 3 vs older widgets</h3>
+<div class="table-wrapper"><table><thead><tr><th>Older</th><th>Common MD3 choice</th><th>Notes</th></tr></thead><tbody><tr><td><code>TextView</code></td><td><code>MaterialTextView</code></td><td>Text styles closer to MD3</td></tr><tr><td><code>Button</code></td><td><code>MaterialButton</code></td><td>Button styles follow Material theme</td></tr><tr><td><code>EditText</code></td><td><code>TextInputEditText</code> + <code>TextInputLayout</code>, or <code>MaterialTextField</code></td><td>Outlined / filled fields</td></tr><tr><td><code>CardView</code></td><td><code>MaterialCardView</code></td><td>Stroke, radius, etc.</td></tr><tr><td><code>Toolbar</code></td><td><code>MaterialToolbar</code></td><td>Toolbar look matches MD3</td></tr></tbody></table></div>
+<h3>Colors</h3>
+<p>In layouts, <code>"?attr/…"</code> is common. In code, when you need an int, <code>this.themeUtil</code> is available:</p>
 <pre><code class="language-lua">local ColorUtil = this.themeUtil
 
--- Recommended: structured access
 local primary = ColorUtil.primary.main
 local surface = ColorUtil.surface.main
 
--- Legacy: method access
-local primary = ColorUtil.getColorPrimary()
+-- Method-style access also works
+local primary2 = ColorUtil.getColorPrimary()
 local background = ColorUtil.getColorBackground()
 </code></pre>
-<h3>Size Units</h3>
+<h3>Size units</h3>
 <ul>
-<li>Use <strong><code>sp</code></strong> for text sizes (respects system font scaling)</li>
-<li>Use <strong><code>dp</code></strong> for spacing and dimensions</li>
-<li>❌ Never use <code>dp</code> for text sizes</li>
+<li>Text size is commonly written in <strong><code>sp</code></strong> so it follows system font scaling.</li>
+<li>Spacing and most layout sizes are commonly written in <strong><code>dp</code></strong>.</li>
+<li>Text sized in <code>dp</code> does not scale with the user’s font size setting.</li>
 </ul>
 <hr>
-<h2>4. init.lua Configuration Update</h2>
-<h3>Recommended Configuration</h3>
+<h2>4. init.lua</h2>
+<h3>Example configuration</h3>
 <pre><code class="language-lua">app_name = "My App"
 package_name = "com.example.myapp"
 ver_name = "1.0"

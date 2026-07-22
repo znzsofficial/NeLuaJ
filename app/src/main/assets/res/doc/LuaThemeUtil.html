@@ -57,7 +57,7 @@ local primary = t.primary.main
       <p><code>getColorPrimary()</code> ≡ <code>primary.main</code>；亦支持 <code>colorPrimary</code> 简写。任意 attr：</p>
       <pre><code class="language-lua">t.getAnyColor(MDC_R.attr.colorTertiaryContainer)
 </code></pre>
-      <p>新代码请用结构化字段，不要新增 <code>getColorXxx()</code> 调用。</p>
+      <p>结构化字段（如 <code>primary.main</code>）与 <code>getColorXxx()</code> 指向同一套色值；两种写法都可以，新示例多采用结构化字段。</p>
     </main>
   </body>
 </html>

@@ -18,7 +18,7 @@ loadlayout(layout, _G)
 loadlayout(layout, _G, FrameLayout.LayoutParams)
 </code></pre>
 <h2>基本结构</h2>
-<p>布局表的第一个元素必须是 View 类，后续键值会作为属性写入 View，数字索引用作子视图。</p>
+<p>布局表的第一个元素是 View 类（例如 <code>LinearLayout</code>、<code>MaterialTextView</code>）。后面的字符串键表示属性，数字键表示子视图。</p>
 <pre><code class="language-lua">return {
 	LinearLayout,
 	orientation = "vertical",
@@ -39,8 +39,47 @@ local view = loadlayout(layout, binding)
 print(binding.title) -- id = "title" 的 View
 </code></pre>
 <h2>常用属性</h2>
-<div class="table-wrapper"><table><thead><tr><th>属性</th><th>说明</th><th>示例</th></tr></thead><tbody><tr><td><code>id</code></td><td>设置 View ID，并写入绑定表</td><td><code>id = "button"</code></td></tr><tr><td><code>layout_width</code> / <code>layout_height</code></td><td>宽高</td><td><code>"match"</code>, <code>"wrap"</code>, <code>"120dp"</code>, <code>"50%"</code></td></tr><tr><td><code>padding</code> / <code>paddingLeft</code> 等</td><td>内边距</td><td><code>"16dp"</code></td></tr><tr><td><code>layout_margin</code> / <code>layout_marginTop</code> 等</td><td>外边距</td><td><code>"8dp"</code></td></tr><tr><td><code>text</code> / <code>hint</code> / <code>textSize</code></td><td>文本属性</td><td><code>text = "OK"</code>, <code>textSize = "14sp"</code></td></tr><tr><td><code>textStyle</code></td><td>文字样式</td><td><code>"bold"</code>, <code>"italic"</code>, `"bold</td></tr><tr><td><code>background</code></td><td>背景颜色、Drawable 或图片路径</td><td><code>"#FF0000"</code>, <code>drawable</code>, <code>"bg.png"</code></td></tr><tr><td><code>src</code></td><td>ImageView 图片源</td><td>Bitmap、Drawable、文件路径、URL</td></tr><tr><td><code>items</code></td><td>ListView/Spinner 简单字符串列表</td><td><code>{ "A", "B" }</code></td></tr><tr><td><code>pages</code> / <code>pagesWithTitle</code></td><td>ViewPager 页面</td><td><code>{ page1, page2 }</code></td></tr></tbody></table></div>
+<div class="table-wrapper"><table><thead><tr><th>属性</th><th>说明</th><th>示例</th></tr></thead><tbody><tr><td><code>id</code></td><td>设置 View ID，并写入绑定表</td><td><code>id = "button"</code></td></tr><tr><td><code>layout_width</code> / <code>layout_height</code></td><td>宽高</td><td><code>"match"</code>, <code>"wrap"</code>, <code>"120dp"</code>, <code>"50%"</code></td></tr><tr><td><code>padding</code> / <code>paddingLeft</code> / <code>paddingStart</code> 等</td><td>内边距（含 RTL Start/End）</td><td><code>paddingStart = "16dp"</code></td></tr><tr><td><code>layout_margin</code> / <code>layout_marginStart</code> 等</td><td>外边距（含 RTL Start/End）</td><td><code>layout_marginEnd = "8dp"</code></td></tr><tr><td><code>text</code> / <code>hint</code> / <code>textSize</code></td><td>文本属性</td><td><code>text = "OK"</code>, <code>textSize = "14sp"</code></td></tr><tr><td><code>textStyle</code></td><td>文字样式</td><td><code>"bold"</code>, <code>"italic"</code>, <code>"bold|italic"</code></td></tr><tr><td><code>background</code></td><td>背景颜色、Drawable 或图片路径</td><td><code>"#FF0000"</code>, <code>drawable</code>, <code>"bg.png"</code></td></tr><tr><td><code>src</code></td><td>ImageView 图片源</td><td>Bitmap、Drawable、文件路径、URL</td></tr><tr><td><code>items</code></td><td>ListView/Spinner 简单字符串列表</td><td><code>{ "A", "B" }</code></td></tr><tr><td><code>pages</code> / <code>pagesWithTitle</code></td><td>ViewPager 页面</td><td><code>{ page1, page2 }</code></td></tr>
+<tr><td><code>visibility</code></td><td><code>visible</code> / <code>invisible</code> / <code>gone</code> 或 int</td><td><code>"gone"</code></td></tr>
+<tr><td><code>singleLine</code> / <code>maxLines</code> / <code>maxLength</code></td><td>TextView 文本约束</td><td><code>singleLine = true</code>, <code>maxLines = 3</code></td></tr>
+<tr><td><code>inputType</code> / <code>imeOptions</code></td><td>枚举表解析，支持 <code>|</code></td><td><code>"textMultiLine"</code>, <code>"actionSearch"</code></td></tr>
+<tr><td><code>elevation</code></td><td>View 高度（支持 <code>dp</code>）</td><td><code>"4dp"</code></td></tr>
+<tr><td><code>cardElevation</code> / <code>CardElevation</code></td><td>MaterialCardView 卡片高度</td><td><code>0</code>, <code>"2dp"</code></td></tr>
+<tr><td><code>radius</code> / <code>cornerRadius</code></td><td>MaterialCardView 圆角</td><td><code>"16dp"</code></td></tr>
+<tr><td><code>Checked</code> / <code>checked</code></td><td>Chip / Switch / CheckBox / checkable Card</td><td><code>true</code></td></tr>
+<tr><td><code>checkable</code> / <code>Checkable</code></td><td>Chip / MaterialCardView / MaterialButton…</td><td><code>true</code></td></tr>
+<tr><td><code>textColor</code> / <code>hintTextColor</code></td><td>int / <code>#AARRGGBB</code> / <code>?attr/</code></td><td><code>"?attr/colorOnSurface"</code></td></tr>
+<tr><td><code>BackgroundColor</code> / <code>backgroundColor</code></td><td>纯色背景</td><td><code>"?attr/colorSurface"</code></td></tr>
+<tr><td><code>BackgroundTintList</code> / <code>backgroundTint</code></td><td>View 背景 tint</td><td>int 或 ColorStateList</td></tr>
+<tr><td><code>TintColor</code> / <code>tintColor</code></td><td>按控件类型：Image 图色、CompoundButton 按钮色、ProgressBar、MaterialButton 背景+图标、Chip 图标、FAB、TextInputLayout 描边/图标、EditText 背景下划线</td><td><code>ColorUtil.getColorPrimary()</code></td></tr>
+<tr><td><code>strokeWidth</code> / <code>strokeColor</code></td><td>Card / Button / Chip 描边</td><td><code>"1dp"</code>, <code>"?attr/colorOutlineVariant"</code></td></tr>
+</tbody></table></div>
 <p>尺寸字符串支持 <code>dp</code>、<code>sp</code>、<code>px</code>、<code>pt</code>、<code>in</code>、<code>mm</code>，以及 <code>%</code>、<code>%w</code>、<code>%h</code>。</p>
+<h3>padding / margin 与 Start·End</h3>
+<p><code>LuaLayout</code> 在属性循环结束后统一解析间距（不会当作普通 setter 漏设）：</p>
+<div class="table-wrapper"><table><thead><tr><th>写法</th><th>实现</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>padding</code> 与 <code>paddingLeft/Top/Right/Bottom</code></td><td><code>View.setPadding</code></td><td>物理方向；单边可覆盖 <code>padding</code></td></tr>
+<tr><td>含 <code>paddingStart</code> 或 <code>paddingEnd</code></td><td><code>View.setPaddingRelative</code></td><td>RTL 感知；缺省边回退 Left/Right/<code>padding</code></td></tr>
+<tr><td><code>layout_margin</code> 与 Left/Top/Right/Bottom</td><td><code>LayoutParams.setMargins</code></td><td>四边外边距</td></tr>
+<tr><td><code>layout_marginStart</code> / <code>layout_marginEnd</code></td><td><code>setMarginStart</code> / <code>setMarginEnd</code></td><td>在 <code>setMargins</code> <strong>之后</strong>写入，避免被覆盖</td></tr>
+</tbody></table></div>
+<pre><code class="language-lua">return {
+  LinearLayout,
+  orientation = "vertical",
+  paddingStart = "16dp",
+  paddingEnd = "16dp",
+  {
+    MaterialButton,
+    text = "确定",
+    layout_marginStart = "8dp",
+    layout_marginEnd = "8dp",
+  },
+}
+</code></pre>
+<nav class="doc-nav" aria-label="相关文档">
+  <span class="doc-nav-label">完整属性表</span>
+  <a class="doc-link" href="layout_reference.html">布局表属性参考 · 间距</a>
+</nav>
 <h2>事件监听</h2>
 <p>所有以 <code>on</code> 开头的属性会按监听器处理。属性值可以是函数，也可以是绑定表中的函数名字符串。</p>
 <pre><code class="language-lua">local binding = {
@@ -128,22 +167,28 @@ return {
 </code></pre>
 <h3>说明</h3>
 <ul>
-<li><code>style</code> 继续兼容旧布局。</li>
-<li>对 Material 组件，推荐优先使用 <code>styleAttr</code> / <code>styleRes</code>，必要时再叠加 <code>theme</code>。</li>
-<li>字符串资源引用会被缓存；大量 RecyclerView item 中仍推荐直接使用数字资源 ID。</li>
-<li>无效资源会在运行时输出更明确的错误提示，方便排查 Lua 布局问题。</li>
+<li><code>style</code> 仍可用于既有布局。</li>
+<li>Material 组件上 <code>styleAttr</code> / <code>styleRes</code> 较常见；也可再叠加 <code>theme</code>。</li>
+<li>字符串形式的资源引用会做缓存；列表项很多时，直接传数字资源 ID 通常更省开销。</li>
+<li>资源名无效时，运行日志里会给出较明确的提示，便于对照布局表排查。</li>
 </ul>
 <h2>CoordinatorLayout 特殊属性</h2>
 <p><code>loadlayout</code> 对部分 Material/CoordinatorLayout 布局参数做了特殊处理：</p>
 <div class="table-wrapper"><table><thead><tr><th>属性</th><th>说明</th><th>示例</th></tr></thead><tbody><tr><td><code>layout_behavior</code></td><td>设置 CoordinatorLayout Behavior</td><td><code>"@string/appbar_scrolling_view_behavior"</code></td></tr><tr><td><code>layout_anchor</code></td><td>锚定到已定义 id 的 View</td><td><code>"fab"</code></td></tr><tr><td><code>layout_scrollFlags</code></td><td>AppBar 滚动标志</td><td>`"scroll</td></tr><tr><td><code>layout_collapseMode</code></td><td>CollapsingToolbar 折叠模式</td><td><code>"pin"</code>, <code>"parallax"</code></td></tr><tr><td><code>layout_collapseParallaxMultiplier</code></td><td>视差系数</td><td><code>0.5</code></td></tr></tbody></table></div>
 <p>相对布局规则也支持字符串 id 引用，例如 <code>layout_below = "title"</code>。被引用的 id 需要在当前 View 之前定义。</p>
-<h2>注意事项</h2>
+<h2>补充说明</h2>
 <ul>
-<li>布局表第一个元素必须是 View 类；如果是 <code>nil</code>，通常是忘记 <code>import</code> 或类名拼写错误。</li>
-<li><code>id</code> 会生成 Android View ID，并将 View 写入绑定表。</li>
-<li><code>style</code>、<code>styleAttr</code>、<code>styleRes</code>、<code>theme</code> 是构造期字段，不会作为普通属性再次写入 View。</li>
-<li>普通 Java setter 通常可直接用属性名调用，例如 <code>alpha = 0.5</code>、<code>enabled = false</code>。</li>
-<li>子视图会递归调用 <code>loadlayout</code> 创建；如果子项是字符串，会先通过 Lua <code>require</code> 加载。</li>
+<li>第一个元素若是 <code>nil</code>，常见原因是尚未 <code>import</code> 对应类，或类名写错。</li>
+<li><code>id = "title"</code> 会给 View 分配 Android ID，并把该 View 放进绑定表（如 <code>binding.title</code>）。</li>
+<li><code>style</code> / <code>styleAttr</code> / <code>styleRes</code> / <code>theme</code> 只在构造 View 时生效，不会再当普通属性写一遍。</li>
+<li><code>padding*</code> 与 <code>layout_margin*</code>（含 Start/End）在整表属性扫完后统一应用，详见上文「padding / margin 与 Start·End」。</li>
+<li>多数 Java <code>setXxx</code> 可以用同名属性写，例如 <code>alpha = 0.5</code>、<code>enabled = false</code>。MaterialButton 等若默认 style 盖住了 tint，可在 <code>loadlayout</code> 返回后再调用一次 <code>setBackgroundTintList</code>。</li>
+<li>属性名对不上任何 setter / public field 时，会通过错误日志提示（例如拼写错误）。专用键如 <code>id</code>、<code>padding*</code>、<code>pages</code>、<code>style*</code> 按各自逻辑处理；<code>onClick</code> 这类监听器按约定绑定。</li>
+<li>字符串枚举按属性分别解析：<code>gravity</code>、<code>inputType</code>、<code>imeOptions</code>、<code>visibility</code> 等各有一套取值。多个 flag 可用 <code>|</code> 连接，例如 <code>gravity = "center|end"</code>。尺寸关键字 <code>match</code> / <code>wrap</code> / <code>fill</code> 在宽高里通用。</li>
+<li><code>textSize</code>：带 <code>sp</code>/<code>dp</code> 等单位时按单位换算；纯数字按 sp 理解，再以像素写入。</li>
+<li><code>minWidth</code> / <code>minHeight</code> 支持带 <code>dp</code> 的字符串。</li>
+<li><code>layout_width</code> / <code>layout_height</code> 支持 match/wrap 与尺寸字符串；外边距写入 LayoutParams 的 margin 字段；单边 margin 只改写到的边。</li>
+<li>子节点可以是嵌套表，也可以是字符串路径（会先 <code>require</code> 再加载）。</li>
 </ul>
     </main>
   </body>

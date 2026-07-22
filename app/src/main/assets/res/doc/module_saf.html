@@ -43,7 +43,7 @@
 <h2>2. 目录树操作 (Tree Mode)</h2>
 <p>此类方法用于在<strong>当前授权的目录</strong>下进行操作。
 <br>
-<em>前提：必须先通过 <code>saf.select</code> 获取权限（<code>saf.get()</code> 不为 nil）。若未授权，调用此类方法会自动触发授权流程。</em></p>
+<em>目录树操作依赖已授权的目录（可用 <code>saf.select</code> 选择；<code>saf.get()</code> 可查看当前 Uri）。尚未授权时，部分方法会拉起授权流程。</em></p>
 <h3>文件读写</h3>
 <h4><strong><code>saf.list(callback)</code></strong></h4>
 <ul>

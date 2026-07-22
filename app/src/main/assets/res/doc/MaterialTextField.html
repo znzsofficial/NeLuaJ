@@ -292,27 +292,27 @@ activity.setContentView(loadlayout({
 <hr>
 <h2>与原生写法对比</h2>
 <h3>原生写法（LuaLayout 中不可用）</h3>
-<pre><code class="language-lua">-- ❌ LuaLayout 无法正确处理嵌套关系
--- text/textSize 等属性会被设置到 TextInputLayout 而非 EditText
+<pre><code class="language-lua">-- 直接嵌套时：部分属性会落在外层 TextInputLayout 上
+-- text / textSize 等可能到不了内部 EditText
 {
     TextInputLayout,
     hint = "用户名",
     {
         TextInputEditText,
-        text = "Hello",     -- 不会生效
-        textSize = "14sp",  -- 不会生效
+        text = "Hello",
+        textSize = "14sp",
     },
 }
 </code></pre>
 <h3>MaterialTextField 写法</h3>
-<pre><code class="language-lua">-- ✅ 属性自动代理到内部 EditText
+<pre><code class="language-lua">-- 单组件写法：text / textSize / singleLine 等会代理到内部 EditText
 {
     MaterialTextField,
     hint = "用户名",
-    text = "Hello",         -- 正确设置到 EditText
-    textSize = "14sp",      -- 正确设置到 EditText
-    singleLine = true,      -- 正确设置到 EditText
-    tintColor = primary,    -- 一键设置主题色
+    text = "Hello",
+    textSize = "14sp",
+    singleLine = true,
+    tintColor = primary,
     style = MDC_R.style.Widget_Material3_TextInputLayout_OutlinedBox,
 }
 </code></pre>

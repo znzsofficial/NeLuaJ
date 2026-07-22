@@ -51,9 +51,9 @@
 
       <h2>注意</h2>
       <ul>
-        <li>UI 操作应放在 <code>callback</code> 中，不要在 <code>task</code> 里直接改 View。</li>
-        <li>可以省略 <code>callback</code>，仅在后台执行副作用逻辑。</li>
-        <li>需要取消/更细粒度控制时，可结合返回的 job 封装（若当前版本暴露）自行管理。</li>
+        <li><code>task</code> 里适合做耗时计算或 IO；改 View、弹 Toast 等界面操作放在 <code>callback</code> 中更安全（主线程）。</li>
+        <li><code>callback</code> 可以省略，只在后台执行逻辑。</li>
+        <li>若当前版本返回可取消的 job，可据此做更细的生命周期管理。</li>
       </ul>
 
       <h2>与 task / thread 的区别</h2>

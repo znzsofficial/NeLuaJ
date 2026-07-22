@@ -19,44 +19,44 @@
         <a class="doc-link" href="init_lua_zh.html">init.lua 主题</a>
       </nav>
 
-      <h2>怎么选写法</h2>
+      <h2>常见写法对照</h2>
       <div class="table-wrapper"><table>
-        <thead><tr><th>场景</th><th>推荐</th><th>例子</th></tr></thead>
+        <thead><tr><th>场景</th><th>常用写法</th><th>例子</th></tr></thead>
         <tbody>
           <tr>
-            <td>布局表颜色属性</td>
-            <td><code>"?attr/…"</code></td>
+            <td>布局表里的颜色属性</td>
+            <td>主题属性字符串 <code>"?attr/…"</code></td>
             <td><code>textColor = "?attr/colorPrimary"</code></td>
           </tr>
           <tr>
-            <td>运行时需要颜色 int</td>
+            <td>代码里需要颜色 int</td>
             <td><code>this.themeUtil</code></td>
-            <td><code>t.primary.main</code>、图标 tint</td>
+            <td><code>t.primary.main</code>、给图标设 tint</td>
           </tr>
           <tr>
             <td>启用动态色板</td>
             <td><code>this.dynamicColor()</code></td>
-            <td>在 <code>setContentView</code> 之前</td>
+            <td>在设置内容视图之前调用</td>
           </tr>
         </tbody>
       </table></div>
 
       <h2>1. dynamicColor</h2>
-      <p>优先使用设置页保存的全局种子 <code>theme_seed_color</code>；未设置则跟系统壁纸（Android 12+）。</p>
-      <pre><code class="language-lua">-- main.lua 开头
+      <p>会优先使用设置页保存的全局种子 <code>theme_seed_color</code>；若未设置，则在支持的系统上跟随壁纸取色（Android 12+）。</p>
+      <pre><code class="language-lua">-- 通常在 main.lua 里、setContentView 之前
 activity.dynamicColor()
--- 或临时种子（一般不必，会覆盖用户全局设置）
+-- 也可以传入临时种子色（会覆盖用户在设置里选的全局种子）
 -- activity.dynamicColor(0xFF6750A4)
 
 activity.setContentView(res.layout.main)
 </code></pre>
       <ul>
-        <li>必须在 <code>setContentView</code> 之前调用。</li>
-        <li>已设 <code>theme_seed_color</code> 时，页面只需 <code>dynamicColor()</code>，无需再读 SharedData 手动套种子。</li>
+        <li>在 <code>setContentView</code> 之前调用时，后续布局才能用到新的动态色板。</li>
+        <li>设置里已经保存了 <code>theme_seed_color</code> 时，页面里调用 <code>dynamicColor()</code> 即可，一般不必再自己读 SharedData 拼种子。</li>
       </ul>
 
       <h2>2. 布局：?attr/…</h2>
-      <p><code>loadlayout</code> 在创建 View 时解析主题属性，写法接近 Android XML。默认工程模板即如此。</p>
+      <p><code>loadlayout</code> 创建 View 时会解析主题属性，写法接近 Android XML。工程模板里的布局也多采用这种方式。</p>
       <pre><code class="language-lua">return {
   LinearLayout,
   BackgroundColor = "?attr/colorBackground",
