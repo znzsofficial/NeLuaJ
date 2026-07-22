@@ -297,9 +297,11 @@ function onCreateOptionsMenu(menu)
   addItem(projectMenu, res.string.create_project, Actions.createProject, nil, icon("add_box"))
   addItem(projectMenu, res.string.project_settings, Actions.openProjectSettings, nil, icon("settings"))
   addItem(projectMenu, res.string.backup, Actions.backupCurrentProject, nil, icon("backup"))
+  addItem(projectMenu, res.string.vconsole_inject, Actions.injectVConsole, nil, icon("bug_report"))
 
   local toolsMenu = menu.addSubMenu(res.string.tools .. "…")
   addItem(toolsMenu, res.string.logs, function() ActivityUtil.showLog(activity) end, nil, icon("article"))
+  addItem(toolsMenu, res.string.media_browser, Actions.openMedia, nil, icon("folder"))
   addItem(toolsMenu, res.string.api_title, Actions.openApi, nil, icon("menu_book"))
   addItem(toolsMenu, res.string.resource_browser, Actions.openResource, nil, icon("inventory"))
   if not tablet then

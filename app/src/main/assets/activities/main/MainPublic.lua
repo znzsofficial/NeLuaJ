@@ -5,6 +5,7 @@ import "android.net.Uri"
 import "com.google.android.material.snackbar.Snackbar"
 import "com.google.android.material.dialog.MaterialAlertDialogBuilder"
 local BottomSheetDialog = bindClass "com.google.android.material.bottomsheet.BottomSheetDialog"
+local BottomSheetBehavior = bindClass "com.google.android.material.bottomsheet.BottomSheetBehavior"
 local LuaUtil = bindClass "com.androlua.LuaUtil"
 local TabUtil = require "mods.utils.TabUtil"
 import "mods.utils.EditorUtil"
@@ -12,6 +13,96 @@ import "mods.utils.PathManager"
 local res = res
 
 local _M = {}
+
+-- 部分机型 BottomSheet 停在半展开，需手动上拉。
+-- 在 OnShowListener 里拿 design_bottom_sheet 再设 Behavior，比 content.post 更稳。
+local function resolveSheetContainer(dialog, content)
+  local sheet
+  pcall(function()
+    local mid = activity.getResources().getIdentifier(
+      "design_bottom_sheet", "id", activity.getPackageName())
+    if mid == 0 then
+      mid = activity.getResources().getIdentifier(
+        "design_bottom_sheet", "id", "com.google.android.material")
+    end
+    if mid ~= 0 then sheet = dialog.findViewById(mid) end
+  end)
+  if not sheet and content then
+    pcall(function() sheet = content.getParent() end)
+  end
+  return sheet
+end
+
+local function expandBottomSheet(dialog, content)
+  if not dialog then return end
+  pcall(function()
+    local sheet = resolveSheetContainer(dialog, content)
+    if not sheet then return end
+
+    -- wrap_content：按内容高度撑开，避免固定半屏
+    pcall(function()
+      local lp = sheet.getLayoutParams()
+      if lp then
+        lp.height = -2 -- WRAP_CONTENT
+        sheet.setLayoutParams(lp)
+      end
+    end)
+
+    local behavior
+    pcall(function() behavior = dialog.getBehavior() end)
+    if not behavior then
+      behavior = BottomSheetBehavior.from(sheet)
+    end
+    if not behavior then return end
+
+    pcall(function() behavior.setFitToContents(true) end)
+    pcall(function() behavior.setSkipCollapsed(true) end)
+    pcall(function() behavior.setDraggable(true) end)
+    -- 提高半展开比例，减少停在中间档的概率（Material 1.x+）
+    pcall(function() behavior.setHalfExpandedRatio(0.92) end)
+    pcall(function() behavior.setExpandedOffset(0) end)
+
+    local h = 0
+    pcall(function()
+      h = content and content.getMeasuredHeight() or 0
+      if (not h or h <= 0) and sheet.getMeasuredHeight then
+        h = sheet.getMeasuredHeight()
+      end
+    end)
+    if h and h > 0 then
+      pcall(function() behavior.setPeekHeight(h) end)
+    else
+      -- 尚未 measure 时给够高的 peek，避免只露一截
+      pcall(function()
+        local dm = activity.getResources().getDisplayMetrics()
+        behavior.setPeekHeight(math.floor(dm.heightPixels * 0.7))
+      end)
+    end
+    behavior.setState(BottomSheetBehavior.STATE_EXPANDED)
+  end)
+end
+
+local function showBottomSheet(dialog, content)
+  pcall(function() dialog.dismissWithAnimation = true end)
+  dialog.setContentView(content)
+  -- show 之后系统可能把 state 改回 collapsed/half；用 OnShow 再强制一次
+  pcall(function()
+    dialog.setOnShowListener(function()
+      expandBottomSheet(dialog, content)
+      if content then
+        pcall(function()
+          content.post(function()
+            expandBottomSheet(dialog, content)
+          end)
+        end)
+      end
+    end)
+  end)
+  dialog.show()
+  -- 无 OnShow 回调的兼容路径
+  expandBottomSheet(dialog, content)
+  return dialog
+end
 
 -- public method
 function _M.snack(arg)
@@ -271,6 +362,14 @@ function _M.createProject(name)
 
             local initBody = buildInitLua(appname, packagename, themeName, useInternet, debugMode)
 
+            local useVConsole = false
+            pcall(function() useVConsole = binding.module_vconsole.isChecked() end)
+            if useVConsole then
+                local body = tostring(mainTpl or "")
+                if body ~= "" and not body:find("\n$") then body = body .. "\n" end
+                mainTpl = body .. 'require "vConsole"\n'
+            end
+
             LuaFileUtil
                     .create(base_path .. "/main.lua", mainTpl)
                     .create(base_path .. "/init.lua", initBody)
@@ -289,6 +388,12 @@ function _M.createProject(name)
                     .create(base_path .. "/res/color/night.lua", "-- night\n")
                     .create(base_path .. "/res/layout/main.lua", layoutTpl)
 
+            if useVConsole then
+                -- 工程根目录，供 require "vConsole" 解析
+                pcall(function()
+                    LuaUtil.copyFile(this.getLuaDir("vConsole.lua"), base_path .. "/vConsole.lua")
+                end)
+            end
             if binding.module_time and binding.module_time.isChecked() then
                 LuaFileUtil.create(base_path .. "/mods/TimeMeter.lua", res.string.code_time)
             end
@@ -332,8 +437,8 @@ function _M.fileMenu(path, name)
     local sublayout = {}
     -- 顺便把name传进来，省得再获取一次
     local fileDialog = BottomSheetDialog(activity)
-    fileDialog.setContentView(loadlayout(res.layout.file_menu, layout)).show()
-    fileDialog.dismissWithAnimation = true
+    local fileContent = loadlayout(res.layout.file_menu, layout)
+    showBottomSheet(fileDialog, fileContent)
     layout.pathText.setText(path)
     layout.nameText.setText(name)
     layout.button_delete.onClick = function(v)
@@ -463,8 +568,8 @@ function _M.projectMenu(path, name)
     local layout = {}
     local sublayout = {}
     local dialog = BottomSheetDialog(activity)
-    dialog.setContentView(loadlayout(res.layout.project_menu, layout)).show()
-    dialog.dismissWithAnimation = true
+    local projectContent = loadlayout(res.layout.project_menu, layout)
+    showBottomSheet(dialog, projectContent)
 
     local init = readProjectInit(path)
     local appName = initField(init, "app_name", initField(init, "appname", name))
@@ -664,8 +769,8 @@ function _M.dirMenu(path, name)
     local layout = {}
     local sublayout = {}
     local dirDialog = BottomSheetDialog(activity)
-    dirDialog.setContentView(loadlayout(res.layout.dir_menu, layout)).show()
-    dirDialog.dismissWithAnimation = true
+    local dirContent = loadlayout(res.layout.dir_menu, layout)
+    showBottomSheet(dirDialog, dirContent)
     layout.pathText.setText(path)
     layout.nameText.setText(name)
     layout.button_delete.onClick = function()

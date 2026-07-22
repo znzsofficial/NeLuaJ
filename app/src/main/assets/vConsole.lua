@@ -1,0 +1,2941 @@
+--[[
+  vConsole — 调试悬浮窗（对接 LuaActivity 日志）
+
+  require "vConsole"  -- 建议放在 setContentView 之后
+  UI：AppCompatDialog + ViewPager
+  颜色：内置 LIGHT / DARK 固定色（isNightMode 切换），不读主题 attr / dynamicColor
+  结构：单文件 + vc 表挂载（压低 main chunk local，规避 Luaj 200 上限）
+
+  Tabs: Prints / Vars / Logcat / Text / Control
+  Hooks: print, printf, error, assert, onError
+  Control: Device / Memory / Intent / Views / Paths / GC / Pause / Screen / Hist
+]]
+
+if rawget(_G, "__vConsole_installed") then return true end
+_G.__vConsole_installed = true
+
+local bindClass = luajava.bindClass
+local activity, this = activity, this
+local utf8 = utf8 or require "utf8"
+
+local vc = {
+  J = {},
+  c = {},
+  S = {},
+  api = {},
+  ui = {},
+  LIGHT = {
+    primary = 0xFF1565C0,
+    onPrimary = 0xFFFFFFFF,
+    primaryContainer = 0xFFD1E4FF,
+    onPrimaryContainer = 0xFF001D36,
+    secondaryContainer = 0xFFD7E3F7,
+    onSecondaryContainer = 0xFF101C2B,
+    surface = 0xFFF8F9FF,
+    surfaceContainer = 0xFFECEDF3,
+    surfaceContainerHigh = 0xFFE6E8EE,
+    surfaceContainerLow = 0xFFF2F3F9,
+    onSurface = 0xFF191C20,
+    onSurfaceVariant = 0xFF43474E,
+    outline = 0xFFC3C6CF,
+    error = 0xFFB3261E,
+    errorContainer = 0xFFF9DEDC,
+    onErrorContainer = 0xFF410E0B,
+    success = 0xFF2E7D32,
+    warning = 0xFFE65100,
+  },
+  DARK = {
+    primary = 0xFF9ECAFF,
+    onPrimary = 0xFF003258,
+    primaryContainer = 0xFF00497D,
+    onPrimaryContainer = 0xFFD1E4FF,
+    secondaryContainer = 0xFF3E4759,
+    onSecondaryContainer = 0xFFD7E3F7,
+    surface = 0xFF111418,
+    surfaceContainer = 0xFF1D2024,
+    surfaceContainerHigh = 0xFF282A2F,
+    surfaceContainerLow = 0xFF191C20,
+    onSurface = 0xFFE1E2E8,
+    onSurfaceVariant = 0xFFC3C6CF,
+    outline = 0xFF8D9199,
+    error = 0xFFF2B8B5,
+    errorContainer = 0xFF8C1D18,
+    onErrorContainer = 0xFFF9DEDC,
+    success = 0xFF81C784,
+    warning = 0xFFFFB74D,
+  },
+}
+
+-- 短别名：main chunk 仅这几个 local（函数体通过 upvalue 使用）
+local J, S, api, c, ui = vc.J, vc.S, vc.api, vc.c, vc.ui
+
+J.Gravity = bindClass "android.view.Gravity"
+J.MotionEvent = bindClass "android.view.MotionEvent"
+J.ViewConfiguration = bindClass "android.view.ViewConfiguration"
+J.WindowManager = bindClass "android.view.WindowManager"
+J.PixelFormat = bindClass "android.graphics.PixelFormat"
+J.System = bindClass "java.lang.System"
+J.Runtime = bindClass "java.lang.Runtime"
+J.Build = bindClass "android.os.Build"
+J.Context = bindClass "android.content.Context"
+J.Intent = bindClass "android.content.Intent"
+J.TypedValue = bindClass "android.util.TypedValue"
+J.GradientDrawable = bindClass "android.graphics.drawable.GradientDrawable"
+J.FrameLayout = bindClass "android.widget.FrameLayout"
+J.LinearLayout = bindClass "android.widget.LinearLayout"
+J.ListView = bindClass "android.widget.ListView"
+J.ScrollView = bindClass "android.widget.ScrollView"
+J.HorizontalScrollView = bindClass "android.widget.HorizontalScrollView"
+J.TextView = bindClass "androidx.appcompat.widget.AppCompatTextView"
+J.EditText = bindClass "androidx.appcompat.widget.AppCompatEditText"
+J.Button = bindClass "androidx.appcompat.widget.AppCompatButton"
+J.ViewPager = bindClass "androidx.viewpager.widget.ViewPager"
+J.AppCompatDialog = bindClass "androidx.appcompat.app.AppCompatDialog"
+J.ColorDrawable = bindClass "android.graphics.drawable.ColorDrawable"
+J.HapticFeedbackConstants = bindClass "android.view.HapticFeedbackConstants"
+J.ClipData = bindClass "android.content.ClipData"
+J.Spannable = bindClass "android.text.Spannable"
+J.SpannableStringBuilder = bindClass "android.text.SpannableStringBuilder"
+J.ForegroundColorSpan = bindClass "android.text.style.ForegroundColorSpan"
+J.BackgroundColorSpan = bindClass "android.text.style.BackgroundColorSpan"
+J.SimpleDateFormat = bindClass "java.text.SimpleDateFormat"
+J.File = bindClass "java.io.File"
+J.FileOutputStream = bindClass "java.io.FileOutputStream"
+J.LuaAdapter = bindClass "com.androlua.adapter.LuaAdapter"
+J.Toast = bindClass "android.widget.Toast"
+J.View = bindClass "android.view.View"
+J.LuaActivityClass = bindClass "com.androlua.LuaActivity"
+
+S.MAX_PRINT = 500
+S.MAX_LOGCAT = 300
+S.MAX_EVAL_HISTORY = 12
+S.themeReady = false
+S.dm = activity.getResources().getDisplayMetrics()
+S.printStore = {}
+S.printData = {}
+S.printFull = {}
+S.printAdp = nil
+S.printFilter = "all"
+S.printQuery = ""
+S.logcatFull = {}
+S.logcatData = {}
+S.logcatAdp = nil
+S.logcatPos = 1
+S.variablePath = {}
+S.variableKv = {}
+S.variableNode = {}
+S.variableData = {}
+S.variableAdp = nil
+S.variableSpanCache = {}
+S.spanFlags = J.Spannable.SPAN_INCLUSIVE_INCLUSIVE
+S.dateFmt = J.SimpleDateFormat("HH:mm:ss.SSS")
+S.fileStampFmt = J.SimpleDateFormat("yyyyMMdd_HHmmss")
+S.sheet = nil
+S.hasError = false
+S.hostLogsCursor = 0
+S.suppressHostMirror = false
+S.lastCrashPath = nil
+S.loggingPaused = false
+S.keepScreenOn = false
+S.evalHistory = {}
+S.logcatTypes = { "", "lua:* *:S", "tcc:* *:S", "*:E", "*:W", "*:I", "*:D", "*:V" }
+S.logcatLabels = { "All", "Lua", "Tcc", "E", "W", "I", "D", "V" }
+S.printFilterIds = {
+  { "pf_all", "All", "all" },
+  { "pf_error", "Error", "error" },
+  { "pf_warn", "Warn", "warn" },
+  { "pf_info", "Info", "info" },
+  { "pf_log", "Log", "log" },
+}
+S.hostPrint = print
+S.hostPrintf = printf
+S.hostError = error
+S.hostAssert = assert
+S.bubbleHost = nil
+S.bubbleLp = nil
+S.contentRoot = nil
+S.wm = activity.getSystemService(J.Context.WINDOW_SERVICE)
+S.bubbleIds = {}
+S.bubbleAttached = false
+S.bubble = nil
+S.touchSlop = J.ViewConfiguration.get(activity).getScaledTouchSlop()
+S.drag = { downX = 0, downY = 0, startX = 0, startY = 0, moved = false, dragging = false }
+S.colorKey = nil
+S.colorArrow = nil
+S.colorTable = nil
+S.bootDone = false
+S.ERROR_NEEDLES = {
+  "vm error:", "syntax error", "stack traceback", "Error:", "Runtime error",
+}
+S.WARN_NEEDLES = {
+  "no matching overload", "exception in Java", "attempt to call",
+  "bad argument", "Warning",
+}
+S.VC_HIDDEN_GLOBALS = {
+  __vConsole_installed = true,
+  log = true,
+  safe_error = true,
+  explain = true,
+  info = true,
+  warning = true,
+  paintLogcatBadges = true,
+  print = true,
+  printf = true,
+  error = true,
+  assert = true,
+  onError = true,
+}
+S.logcatChipIds = {
+  "lc_all", "lc_lua", "lc_tcc", "lc_e", "lc_w", "lc_i", "lc_d", "lc_v",
+}
+S.tabIds = { "tab_prints", "tab_vars", "tab_logcat", "tab_text", "tab_control" }
+
+if not table.clear then
+  function table.clear(t)
+    if t then for k in pairs(t) do t[k] = nil end end
+  end
+end
+
+function api.chainGlobal(name, handler)
+  local prev = rawget(_G, name)
+  _G[name] = function(...)
+    local r = handler(...)
+    if type(prev) == "function" then pcall(prev, ...) end
+    return r
+  end
+end
+
+function api.isNight()
+  local ok, night = pcall(function()
+    if this.isNightMode then return this.isNightMode() end
+    return false
+  end)
+  if ok and night then return true end
+  local ok2, mode = pcall(function()
+    return activity.getResources().getConfiguration().uiMode
+  end)
+  -- UI_MODE_NIGHT_MASK=0x30, NIGHT_YES=0x20
+  if ok2 and type(mode) == "number" then
+    return math.floor(mode / 16) % 4 == 2
+  end
+  return false
+end
+
+function api.resolveTheme(force)
+  if S.themeReady and not force then return end
+  local src = api.isNight() and vc.DARK or vc.LIGHT
+  for k, v in pairs(src) do c[k] = v end
+  c.muted = c.onSurfaceVariant
+  pcall(function() S.dm = activity.getResources().getDisplayMetrics() end)
+  S.themeReady = true
+end
+
+-- 启动时用固定色板
+api.resolveTheme(true)
+
+function api.dp(n)
+  return J.TypedValue.applyDimension(J.TypedValue.COMPLEX_UNIT_DIP, n, S.dm)
+end
+
+function api.roundBg(color, radiusDp, strokeColor, strokeDp)
+  local d = J.GradientDrawable()
+  d.setShape(0)
+  local fill = type(color) == "number" and color or c.surface
+  d.setColor(fill)
+  d.setCornerRadius(api.dp(radiusDp or 16))
+  if type(strokeColor) == "number" then
+    d.setStroke(math.max(1, math.floor(api.dp(strokeDp or 1))), strokeColor)
+  end
+  return d
+end
+
+function api.applyRound(view, color, radiusDp, strokeColor, strokeDp)
+  if not view then return end
+  pcall(function()
+    view.setBackground(api.roundBg(color, radiusDp, strokeColor, strokeDp))
+    view.setClipToOutline(true)
+  end)
+end
+
+function api.vibrate(v)
+  pcall(function()
+    v.performHapticFeedback(
+      J.HapticFeedbackConstants.CONTEXT_CLICK,
+      J.HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING)
+  end)
+end
+
+function api.activityAlive()
+  local ok, finishing = pcall(function() return activity.isFinishing() end)
+  if not ok or finishing then return false end
+  local ok2, destroyed = pcall(function() return activity.isDestroyed() end)
+  return not (ok2 and destroyed)
+end
+
+function api.toast(msg)
+  pcall(function()
+    J.Toast.makeText(activity, tostring(msg), J.Toast.LENGTH_SHORT).show()
+  end)
+end
+
+function api.clipboard()
+  return activity.getSystemService(J.Context.CLIPBOARD_SERVICE)
+end
+
+function api.clipboardSet(text)
+  pcall(function()
+    api.clipboard().setPrimaryClip(J.ClipData.newPlainText("vConsole", tostring(text or "")))
+  end)
+end
+
+function api.clipboardGet()
+  local ok, text = pcall(function()
+    local clip = api.clipboard().getPrimaryClip()
+    if clip and clip.getItemCount() > 0 then
+      return tostring(clip.getItemAt(0).coerceToText(activity))
+    end
+    return ""
+  end)
+  return ok and text or ""
+end
+
+function api.dumpValue(v)
+  if type(v) == "table" and type(dump) == "function" then
+    local ok, s = pcall(dump, v)
+    if ok and s then return s end
+  end
+  return tostring(v)
+end
+
+function api.truncate(s, n)
+  s, n = tostring(s or ""), n or 120
+  local ok, len = pcall(function() return utf8.len(s) end)
+  if ok and len and len > n then
+    local ok2, sub = pcall(function() return utf8.sub(s, 1, n) end)
+    if ok2 and sub then return sub .. "…" end
+  end
+  if #s > n then return s:sub(1, n) .. "…" end
+  return s
+end
+
+-- 日志级别 needles → S.ERROR_NEEDLES / S.WARN_NEEDLES
+
+function api.messageHas(msg, needles)
+  for i = 1, #needles do
+    if msg:find(needles[i], 1, true) then return true end
+  end
+  return false
+end
+
+function api.levelForMessage(msg)
+  msg = tostring(msg or "")
+  if api.messageHas(msg, S.ERROR_NEEDLES) or msg:find("Runtime%s-error") then
+    return "error"
+  end
+  if msg:find("xTask", 1, true) == 1 or api.messageHas(msg, S.WARN_NEEDLES) then
+    return "warn"
+  end
+  return "log"
+end
+
+function api.colorForLevel(level)
+  api.resolveTheme()
+  if level == "error" then return c.error end
+  if level == "warn" then return c.warning end
+  if level == "info" then return c.success end
+  return c.onSurface
+end
+
+function api.colorForMessage(msg)
+  return api.colorForLevel(api.levelForMessage(msg))
+end
+
+function api.readlog(filter)
+  local ok, out = pcall(function()
+    local p = io.popen("logcat -d -v long " .. (filter or ""))
+    if not p then return "" end
+    local s = p:read("*a") or ""
+    p:close()
+    s = s:gsub("%-+ beginning of[^\n]*\n", "")
+    if #s == 0 then s = "<empty logcat>" end
+    return s
+  end)
+  return ok and out or "<logcat unavailable>"
+end
+
+function api.clearlog()
+  pcall(function()
+    local p = io.popen("logcat -c")
+    if p then p:close() end
+  end)
+end
+
+function api.sendHostMsg(msg)
+  if S.suppressHostMirror then return end
+  pcall(function() activity.sendMsg(tostring(msg or "")) end)
+end
+
+-- ─── 悬浮钮（延迟创建，等 dynamicColor 后再 loadlayout） ─
+
+function api.paintBubble(err)
+  if not S.bubble then return end
+  api.resolveTheme()
+  local fill = err and c.errorContainer or c.primaryContainer
+  local stroke = err and c.error or c.outline
+  local fg = err and c.onErrorContainer or c.onPrimaryContainer
+  api.applyRound(S.bubbleIds.card, fill, 24, stroke, 1.25)
+  api.applyRound(S.bubbleIds.badge, c.error, 4.5)
+  pcall(function()
+    S.bubbleIds.label.setTextColor(fg)
+    S.bubbleIds.label.setText(err and "!" or "VC")
+    S.bubbleIds.badge.setVisibility(err and J.View.VISIBLE or J.View.GONE)
+  end)
+  pcall(function()
+    S.bubble.setElevation(api.dp(10))
+    S.bubble.setTranslationZ(api.dp(4))
+    if S.bubbleIds.card then
+      S.bubbleIds.card.setElevation(api.dp(10))
+      S.bubbleIds.card.setTranslationZ(api.dp(4))
+    end
+  end)
+  pcall(function()
+    S.bubble.setAlpha(0.96)
+  end)
+end
+
+function api.ensureBubble()
+  if S.bubble then return true end
+  api.resolveTheme(true)
+  S.bubbleIds = {}
+  local ok, view = pcall(function()
+    return loadlayout({
+      J.FrameLayout,
+      id = "card",
+      layout_width = "48dp",
+      layout_height = "48dp",
+      clickable = true,
+      focusable = true,
+      {
+        J.TextView,
+        id = "label",
+        layout_gravity = "center",
+        text = "VC",
+        textSize = "13sp",
+        textStyle = "bold",
+        textColor = c.onPrimaryContainer,
+        gravity = "center",
+      },
+      {
+        J.View,
+        id = "badge",
+        layout_width = "9dp",
+        layout_height = "9dp",
+        layout_gravity = "top|end",
+        layout_marginTop = "4dp",
+        layout_marginEnd = "4dp",
+        visibility = "gone",
+      },
+    }, S.bubbleIds)
+  end)
+  if ok and view then
+    S.bubble = view
+    api.paintBubble(false)
+    if api.wireBubbleTouch then api.wireBubbleTouch() end
+    return true
+  end
+  return false
+end
+
+function api.setBubbleError(on)
+  S.hasError = on and true or false
+  api.paintBubble(S.hasError)
+end
+
+function api.removeBubble()
+  if not S.bubbleAttached or not S.bubble then return end
+  pcall(function()
+    if S.bubbleHost == "wm" then
+      S.wm.removeView(S.bubble)
+    elseif S.bubble.getParent() then
+      S.bubble.getParent().removeView(S.bubble)
+    end
+  end)
+  S.bubbleAttached = false
+  S.bubbleHost = nil
+end
+
+function api.makeContentLp(x, y)
+  local lp = J.FrameLayout.LayoutParams(api.dp(48), api.dp(48))
+  lp.gravity = J.Gravity.TOP | J.Gravity.START
+  lp.leftMargin = x
+  lp.topMargin = y
+  return lp
+end
+
+function api.makeWmLp(x, y)
+  local lp = J.WindowManager.LayoutParams()
+  lp.width = J.WindowManager.LayoutParams.WRAP_CONTENT
+  lp.height = J.WindowManager.LayoutParams.WRAP_CONTENT
+  lp.gravity = J.Gravity.TOP | J.Gravity.START
+  lp.flags = J.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+    | J.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+    | J.WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
+  lp.format = J.PixelFormat.TRANSLUCENT
+  lp.x = x
+  lp.y = y
+  return lp
+end
+
+function api.getBubbleXY()
+  if S.bubbleHost == "content" and S.bubbleLp then
+    return S.bubbleLp.leftMargin or 0, S.bubbleLp.topMargin or 0
+  end
+  if S.bubbleLp then return S.bubbleLp.x or 0, S.bubbleLp.y or 0 end
+  return 0, 0
+end
+
+function api.setBubbleXY(x, y)
+  if not S.bubbleLp then return end
+  if S.bubbleHost == "content" then
+    S.bubbleLp.leftMargin = x
+    S.bubbleLp.topMargin = y
+    pcall(function() S.bubble.setLayoutParams(S.bubbleLp) end)
+  else
+    S.bubbleLp.x = x
+    S.bubbleLp.y = y
+    pcall(function() S.wm.updateViewLayout(S.bubble, S.bubbleLp) end)
+  end
+end
+
+function api.screenSize()
+  local w, h = S.dm.widthPixels, S.dm.heightPixels
+  pcall(function()
+    w = this.getWidth()
+    h = this.getHeight()
+  end)
+  if not w or w <= 0 then w = S.dm.widthPixels end
+  if not h or h <= 0 then h = S.dm.heightPixels end
+  return w, h
+end
+
+function api.clampBubble(x, y)
+  local w = S.bubble.getWidth()
+  local h = S.bubble.getHeight()
+  if w <= 0 then w = api.dp(48) end
+  if h <= 0 then h = api.dp(48) end
+  local sw, sh = api.screenSize()
+  local maxX = math.max(0, sw - w)
+  local maxY = math.max(0, sh - h)
+  if x < 0 then x = 0 elseif x > maxX then x = maxX end
+  if y < 0 then y = 0 elseif y > maxY then y = maxY end
+  return math.floor(x), math.floor(y)
+end
+
+function api.snapBubble()
+  local w = S.bubble.getWidth()
+  if w <= 0 then w = api.dp(48) end
+  local x, y = api.getBubbleXY()
+  local sw = select(1, api.screenSize())
+  if x + w / 2 < sw / 2 then
+    x = api.dp(8)
+  else
+    x = math.floor(sw - w - api.dp(8))
+  end
+  api.setBubbleXY(api.clampBubble(x, y))
+end
+
+function api.resolveContentRoot()
+  local root
+  pcall(function()
+    local androidR = bindClass "android.R"
+    root = activity.findViewById(androidR.id.content)
+  end)
+  if root then return root end
+  pcall(function() root = this.getDecorView() end)
+  return root
+end
+
+function api.attachBubble()
+  if S.bubbleAttached or not api.activityAlive() then return end
+  if not api.ensureBubble() then return end
+  local sw, sh = api.screenSize()
+  local x = math.floor(sw - api.dp(64))
+  local y = math.floor(sh * 0.35)
+
+  local ok = pcall(function()
+    S.contentRoot = api.resolveContentRoot()
+    if not S.contentRoot then error("no content root") end
+    S.bubbleLp = api.makeContentLp(x, y)
+    S.contentRoot.addView(S.bubble, S.bubbleLp)
+    S.bubbleHost = "content"
+  end)
+
+  if not ok then
+    ok = pcall(function()
+      S.bubbleLp = api.makeWmLp(x, y)
+      S.wm.addView(S.bubble, S.bubbleLp)
+      S.bubbleHost = "wm"
+    end)
+  end
+
+  S.bubbleAttached = ok and true or false
+  if S.bubbleAttached then api.setBubbleError(S.hasError) end
+  if not ok then
+    pcall(function() activity.sendMsg("[vConsole] attach bubble failed") end)
+  end
+end
+
+function api.wireBubbleTouch()
+  if not S.bubbleIds or not S.bubbleIds.card then return end
+  S.bubbleIds.card.onTouch = function(v, e)
+    local action = e.getActionMasked()
+    local rx, ry = e.getRawX(), e.getRawY()
+    if action == J.MotionEvent.ACTION_DOWN then
+      S.drag.downX, S.drag.downY = rx, ry
+      S.drag.startX, S.drag.startY = api.getBubbleXY()
+      S.drag.moved, S.drag.dragging = false, true
+      pcall(function() v.getParent().requestDisallowInterceptTouchEvent(true) end)
+      return true
+    elseif action == J.MotionEvent.ACTION_MOVE and S.drag.dragging then
+      local dx, dy = rx - S.drag.downX, ry - S.drag.downY
+      if not S.drag.moved and (dx * dx + dy * dy) > (S.touchSlop * S.touchSlop) then
+        S.drag.moved = true
+      end
+      if S.drag.moved then
+        api.setBubbleXY(api.clampBubble(S.drag.startX + dx, S.drag.startY + dy))
+      end
+      return true
+    elseif action == J.MotionEvent.ACTION_UP or action == J.MotionEvent.ACTION_CANCEL then
+      S.drag.dragging = false
+      pcall(function() v.getParent().requestDisallowInterceptTouchEvent(false) end)
+      if S.drag.moved then
+        api.snapBubble()
+      else
+        api.vibrate(v)
+        api.showSheet()
+      end
+      return true
+    end
+    return false
+  end
+end
+
+-- ─── 面板布局（系统控件） ───────────────────────────────
+function api.spacer(w)
+  return { J.View, layout_width = w or "8dp", layout_height = "1dp" }
+end
+
+function api.hairline()
+  return {
+    J.View,
+    layout_width = "match",
+    layout_height = "1dp",
+    BackgroundColor = c.outline,
+  }
+end
+
+function api.compactButtonMetrics(btn, minHDp, padHDp)
+  if not btn then return end
+  pcall(function()
+    btn.setMinimumHeight(api.dp(minHDp or 36))
+    btn.setMinHeight(api.dp(minHDp or 36))
+    btn.setMinimumWidth(0)
+    btn.setMinWidth(0)
+    btn.setPadding(
+      math.floor(api.dp(padHDp or 10)),
+      math.floor(api.dp(4)),
+      math.floor(api.dp(padHDp or 10)),
+      math.floor(api.dp(4)))
+    btn.setIncludeFontPadding(false)
+    btn.setAllCaps(false)
+    btn.setStateListAnimator(nil)
+    btn.setElevation(0)
+  end)
+end
+
+function api.applyButtonTheme(btn, bg, fg, radiusDp, minHDp)
+  if not btn then return end
+  api.resolveTheme()
+  local bgInt = type(bg) == "number" and bg or 0
+  local fgInt = type(fg) == "number" and fg or c.primary
+  local r = radiusDp or 12
+  api.compactButtonMetrics(btn, minHDp or 36, 12)
+  pcall(function()
+    if bgInt == 0 then
+      btn.setBackgroundColor(0)
+    else
+      api.applyRound(btn, bgInt, r)
+    end
+  end)
+  pcall(function() btn.setTextColor(fgInt) end)
+end
+
+function api.tonalBtn(id, text)
+  return {
+    J.Button,
+    id = id,
+    text = text,
+    layout_width = "0dp",
+    layout_weight = 1,
+    layout_height = "40dp",
+    minHeight = "40dp",
+    textSize = "12sp",
+    includeFontPadding = false,
+    BackgroundColor = c.secondaryContainer,
+    textColor = c.onSecondaryContainer,
+  }
+end
+
+function api.textBtn(id, text)
+  return {
+    J.Button,
+    id = id,
+    text = text,
+    layout_width = "0dp",
+    layout_weight = 1,
+    layout_height = "36dp",
+    minHeight = "36dp",
+    textSize = "12sp",
+    includeFontPadding = false,
+    BackgroundColor = 0,
+    textColor = c.primary,
+  }
+end
+
+function api.filterBtn(id, text)
+  return {
+    J.Button,
+    id = id,
+    text = text,
+    layout_width = "wrap",
+    layout_height = "32dp",
+    minHeight = "32dp",
+    minWidth = "0dp",
+    textSize = "12sp",
+    includeFontPadding = false,
+    paddingLeft = "10dp",
+    paddingRight = "10dp",
+    paddingTop = "0dp",
+    paddingBottom = "0dp",
+    BackgroundColor = 0,
+    textColor = c.onSurfaceVariant,
+    layout_marginEnd = "4dp",
+  }
+end
+
+function api.printsPage()
+  return {
+    J.LinearLayout,
+    orientation = "vertical",
+    layout_width = "match",
+    layout_height = "match",
+    BackgroundColor = c.surface,
+    {
+      J.LinearLayout,
+      orientation = "horizontal",
+      layout_width = "match",
+      layout_height = "36dp",
+      gravity = "center_vertical",
+      paddingLeft = "10dp",
+      paddingRight = "4dp",
+      BackgroundColor = c.surfaceContainerHigh,
+      layout_marginStart = "10dp",
+      layout_marginEnd = "10dp",
+      layout_marginTop = "6dp",
+      focusable = true,
+      focusableInTouchMode = true,
+      {
+        J.TextView,
+        text = "⌕",
+        textSize = "14sp",
+        textColor = c.onSurfaceVariant,
+        layout_marginEnd = "4dp",
+      },
+      {
+        J.EditText,
+        id = "printSearch",
+        layout_width = "0dp",
+        layout_weight = 1,
+        layout_height = "match",
+        textSize = "13sp",
+        textColor = c.onSurface,
+        hint = "Search logs…",
+        singleLine = true,
+        BackgroundColor = 0,
+        paddingTop = "0dp",
+        paddingBottom = "0dp",
+        imeOptions = "actionSearch",
+      },
+      {
+        J.Button,
+        id = "printSearchClear",
+        text = "×",
+        layout_width = "32dp",
+        layout_height = "32dp",
+        minHeight = "32dp",
+        minWidth = "32dp",
+        textSize = "16sp",
+        BackgroundColor = 0,
+        textColor = c.primary,
+        visibility = "gone",
+      },
+    },
+    {
+      J.HorizontalScrollView,
+      layout_width = "match",
+      layout_height = "wrap",
+      horizontalScrollBarEnabled = false,
+      {
+        J.LinearLayout,
+        id = "printFilterChips",
+        orientation = "horizontal",
+        layout_width = "wrap",
+        layout_height = "wrap",
+        gravity = "center_vertical",
+        paddingLeft = "8dp",
+        paddingRight = "8dp",
+        paddingTop = "4dp",
+        paddingBottom = "2dp",
+        api.filterBtn("pf_all", "All"),
+        api.filterBtn("pf_error", "Error"),
+        api.filterBtn("pf_warn", "Warn"),
+        api.filterBtn("pf_info", "Info"),
+        api.filterBtn("pf_log", "Log"),
+      },
+    },
+    {
+      J.TextView,
+      id = "printMeta",
+      layout_width = "match",
+      layout_height = "wrap",
+      paddingLeft = "12dp",
+      paddingRight = "12dp",
+      paddingTop = "2dp",
+      paddingBottom = "2dp",
+      text = "0 entries",
+      textSize = "11sp",
+      textColor = c.onSurfaceVariant,
+    },
+    {
+      J.FrameLayout,
+      layout_width = "match",
+      layout_height = "0dp",
+      layout_weight = 1,
+      {
+        J.LinearLayout,
+        id = "printEmpty",
+        orientation = "vertical",
+        layout_width = "match",
+        layout_height = "wrap",
+        layout_gravity = "center",
+        gravity = "center",
+        padding = "20dp",
+        {
+          J.TextView,
+          text = "No logs yet",
+          textSize = "14sp",
+          textStyle = "bold",
+          textColor = c.onSurface,
+          gravity = "center",
+        },
+        {
+          J.TextView,
+          text = "print() · sendMsg · onError will show here",
+          textSize = "12sp",
+          textColor = c.onSurfaceVariant,
+          gravity = "center",
+          layout_marginTop = "6dp",
+        },
+      },
+      {
+        J.ListView,
+        id = "printList",
+        layout_width = "match",
+        layout_height = "match",
+        DividerHeight = 0,
+        FastScrollEnabled = true,
+        overScrollMode = 2,
+      },
+    },
+  }
+end
+
+function api.buildSheetContent()
+  for k in pairs(ui) do ui[k] = nil end
+  return loadlayout({
+    J.LinearLayout,
+    orientation = "vertical",
+    layout_width = "match",
+    layout_height = "match",
+    BackgroundColor = c.surface,
+    {
+      J.LinearLayout,
+      orientation = "vertical",
+      layout_width = "match",
+      layout_height = "wrap",
+      paddingTop = "4dp",
+      {
+        J.LinearLayout,
+        orientation = "horizontal",
+        layout_width = "match",
+        layout_height = "wrap",
+        gravity = "center_vertical",
+        paddingLeft = "12dp",
+        paddingRight = "4dp",
+        paddingTop = "4dp",
+        paddingBottom = "2dp",
+        {
+          J.LinearLayout,
+          orientation = "vertical",
+          layout_width = "0dp",
+          layout_weight = 1,
+          layout_height = "wrap",
+          {
+            J.TextView,
+            text = "vConsole",
+            textSize = "16sp",
+            textStyle = "bold",
+            textColor = c.onSurface,
+          },
+          {
+            J.TextView,
+            id = "headerSub",
+            text = "Runtime debugger",
+            textSize = "11sp",
+            textColor = c.onSurfaceVariant,
+            layout_marginTop = "0dp",
+          },
+        },
+        {
+          J.Button,
+          id = "headerExport",
+          text = "Export",
+          layout_width = "wrap",
+          layout_height = "32dp",
+          minHeight = "32dp",
+          minWidth = "0dp",
+          textSize = "12sp",
+          paddingLeft = "10dp",
+          paddingRight = "10dp",
+          BackgroundColor = 0,
+          textColor = c.primary,
+        },
+      },
+      {
+        J.HorizontalScrollView,
+        layout_width = "match",
+        layout_height = "wrap",
+        horizontalScrollBarEnabled = false,
+        {
+          J.LinearLayout,
+          id = "tabBar",
+          orientation = "horizontal",
+          layout_width = "wrap",
+          layout_height = "wrap",
+          gravity = "center_vertical",
+          paddingLeft = "6dp",
+          paddingRight = "6dp",
+          paddingTop = "2dp",
+          paddingBottom = "4dp",
+          api.filterBtn("tab_prints", "Prints"),
+          api.filterBtn("tab_vars", "Vars"),
+          api.filterBtn("tab_logcat", "Logcat"),
+          api.filterBtn("tab_text", "Text"),
+          api.filterBtn("tab_control", "Control"),
+        },
+      },
+      api.hairline(),
+    },
+    {
+      J.ViewPager,
+      id = "page",
+      layout_width = "match",
+      layout_height = "0dp",
+      layout_weight = 1,
+      overScrollMode = 2,
+      pagesWithTitle = {
+        {
+          api.printsPage(),
+          {
+            J.LinearLayout,
+            orientation = "vertical",
+            layout_width = "match",
+            layout_height = "match",
+            {
+              J.LinearLayout,
+              orientation = "horizontal",
+              layout_width = "match",
+              layout_height = "36dp",
+              gravity = "center_vertical",
+              paddingLeft = "10dp",
+              paddingRight = "10dp",
+              focusable = true,
+              focusableInTouchMode = true,
+              {
+                J.TextView,
+                id = "varPath",
+                text = "node: /",
+                textSize = "11sp",
+                textColor = c.success,
+                layout_marginEnd = "6dp",
+              },
+              {
+                J.EditText,
+                id = "varSearch",
+                layout_width = "0dp",
+                layout_height = "match",
+                layout_weight = 1,
+                textSize = "12sp",
+                textColor = c.onSurface,
+                hint = "key…",
+                singleLine = true,
+                BackgroundColor = 0,
+                paddingTop = "0dp",
+                paddingBottom = "0dp",
+                imeOptions = "actionSearch",
+              },
+            },
+            {
+              J.ListView,
+              id = "varList",
+              layout_width = "match",
+              layout_height = "0dp",
+              layout_weight = 1,
+              DividerHeight = 0,
+              FastScrollEnabled = true,
+              overScrollMode = 2,
+            },
+          },
+          {
+            J.LinearLayout,
+            orientation = "vertical",
+            layout_width = "match",
+            layout_height = "match",
+            {
+              J.HorizontalScrollView,
+              layout_width = "match",
+              layout_height = "wrap",
+              horizontalScrollBarEnabled = false,
+              {
+                J.LinearLayout,
+                id = "logcatChips",
+                orientation = "horizontal",
+                layout_width = "wrap",
+                layout_height = "wrap",
+                gravity = "center_vertical",
+                paddingLeft = "6dp",
+                paddingRight = "6dp",
+                paddingTop = "4dp",
+                paddingBottom = "2dp",
+                api.filterBtn("lc_all", "All"),
+                api.filterBtn("lc_lua", "Lua"),
+                api.filterBtn("lc_tcc", "Tcc"),
+                api.filterBtn("lc_e", "E"),
+                api.filterBtn("lc_w", "W"),
+                api.filterBtn("lc_i", "I"),
+                api.filterBtn("lc_d", "D"),
+                api.filterBtn("lc_v", "V"),
+              },
+            },
+            {
+              J.ListView,
+              id = "logcatList",
+              layout_width = "match",
+              layout_height = "0dp",
+              layout_weight = 1,
+              DividerHeight = 0,
+              FastScrollEnabled = true,
+              overScrollMode = 2,
+            },
+          },
+          {
+            J.LinearLayout,
+            orientation = "vertical",
+            layout_width = "match",
+            layout_height = "match",
+            focusable = true,
+            focusableInTouchMode = true,
+            {
+              J.ScrollView,
+              layout_width = "match",
+              layout_height = "match",
+              fillViewport = true,
+              overScrollMode = 2,
+              {
+                J.EditText,
+                id = "textEdit",
+                layout_width = "match",
+                layout_height = "wrap",
+                minHeight = "140dp",
+                padding = "12dp",
+                textSize = "12sp",
+                textColor = c.onSurface,
+                hint = "Text buffer…",
+                gravity = "start|top",
+                BackgroundColor = 0,
+                textIsSelectable = true,
+                inputType = "textMultiLine",
+              },
+            },
+          },
+          {
+            J.LinearLayout,
+            orientation = "vertical",
+            layout_width = "match",
+            layout_height = "match",
+            {
+              J.ScrollView,
+              layout_width = "match",
+              layout_height = "0dp",
+              layout_weight = 1,
+              fillViewport = true,
+              {
+                J.LinearLayout,
+                orientation = "vertical",
+                layout_width = "match",
+                layout_height = "wrap",
+                padding = "10dp",
+                {
+                  J.LinearLayout,
+                  layout_width = "match",
+                  layout_height = "wrap",
+                  api.tonalBtn("ctrlFinish", "Finish"),
+                  api.spacer("6dp"),
+                  api.tonalBtn("ctrlRecreate", "Recreate"),
+                },
+                {
+                  J.LinearLayout,
+                  layout_width = "match",
+                  layout_height = "wrap",
+                  layout_marginTop = "6dp",
+                  api.tonalBtn("ctrlRestart", "Restart"),
+                  api.spacer("6dp"),
+                  api.tonalBtn("ctrlKill", "Kill"),
+                },
+                {
+                  J.TextView,
+                  text = "Inspect",
+                  textSize = "11sp",
+                  textColor = c.onSurfaceVariant,
+                  layout_marginTop = "10dp",
+                  layout_marginBottom = "4dp",
+                },
+                {
+                  J.LinearLayout,
+                  layout_width = "match",
+                  layout_height = "wrap",
+                  api.tonalBtn("ctrlDevice", "Device"),
+                  api.spacer("6dp"),
+                  api.tonalBtn("ctrlMem", "Memory"),
+                },
+                {
+                  J.LinearLayout,
+                  layout_width = "match",
+                  layout_height = "wrap",
+                  layout_marginTop = "6dp",
+                  api.tonalBtn("ctrlIntent", "Intent"),
+                  api.spacer("6dp"),
+                  api.tonalBtn("ctrlViews", "Views"),
+                },
+                {
+                  J.LinearLayout,
+                  layout_width = "match",
+                  layout_height = "wrap",
+                  layout_marginTop = "6dp",
+                  api.tonalBtn("ctrlPaths", "Paths"),
+                  api.spacer("6dp"),
+                  api.tonalBtn("ctrlGc", "GC"),
+                },
+                {
+                  J.TextView,
+                  text = "Tools",
+                  textSize = "11sp",
+                  textColor = c.onSurfaceVariant,
+                  layout_marginTop = "10dp",
+                  layout_marginBottom = "4dp",
+                },
+                {
+                  J.LinearLayout,
+                  layout_width = "match",
+                  layout_height = "wrap",
+                  api.tonalBtn("ctrlPause", "Pause log"),
+                  api.spacer("6dp"),
+                  api.tonalBtn("ctrlScreen", "Screen on"),
+                },
+                {
+                  J.LinearLayout,
+                  layout_width = "match",
+                  layout_height = "wrap",
+                  layout_marginTop = "6dp",
+                  api.tonalBtn("ctrlHide", "Hide bubble"),
+                  api.spacer("6dp"),
+                  api.tonalBtn("ctrlHist", "Eval hist"),
+                },
+                {
+                  J.TextView,
+                  text = "Eval Lua in this environment",
+                  textSize = "11sp",
+                  textColor = c.onSurfaceVariant,
+                  layout_marginTop = "10dp",
+                },
+              },
+            },
+            api.hairline(),
+            {
+              J.LinearLayout,
+              orientation = "horizontal",
+              layout_width = "match",
+              layout_height = "40dp",
+              gravity = "center_vertical",
+              paddingLeft = "8dp",
+              paddingRight = "6dp",
+              layout_margin = "8dp",
+              focusable = true,
+              focusableInTouchMode = true,
+              {
+                J.EditText,
+                id = "ctrlCode",
+                layout_width = "0dp",
+                layout_weight = 1,
+                layout_height = "match",
+                textSize = "12sp",
+                textColor = c.onSurface,
+                hint = "Lua code…",
+                BackgroundColor = 0,
+                paddingLeft = "8dp",
+                paddingRight = "6dp",
+                paddingTop = "0dp",
+                paddingBottom = "0dp",
+              },
+              {
+                J.Button,
+                id = "ctrlRun",
+                text = "Run",
+                layout_width = "wrap",
+                layout_height = "32dp",
+                minHeight = "32dp",
+                minWidth = "0dp",
+                textSize = "12sp",
+                paddingLeft = "12dp",
+                paddingRight = "12dp",
+                BackgroundColor = c.primary,
+                textColor = c.onPrimary,
+              },
+            },
+          },
+        },
+        { "Prints", "Vars", "Logcat", "Text", "Control" },
+      },
+    },
+    {
+      J.LinearLayout,
+      id = "actionBar",
+      orientation = "horizontal",
+      layout_width = "match",
+      layout_height = "44dp",
+      gravity = "center_vertical",
+      paddingLeft = "6dp",
+      paddingRight = "6dp",
+      paddingTop = "4dp",
+      paddingBottom = "4dp",
+      BackgroundColor = c.surfaceContainerLow,
+    },
+  }, ui)
+end
+
+function api.preferredSheetSize()
+  local sw, sh = api.screenSize()
+  local w = math.min(math.floor(sw - api.dp(20)), math.floor(sw * 0.94))
+  local h = math.min(math.floor(sh * 0.62), math.max(api.dp(340), math.floor(sh * 0.56)))
+  return w, h
+end
+
+-- J.AppCompatDialog 直接 setContentView，无 AlertDialog contentPanel 留白
+function api.applySheetLayout(content, dialog)
+  local dw, dh = api.preferredSheetSize()
+  local MATCH = -1
+  pcall(function()
+    content.setMinimumHeight(dh)
+    local lp = content.getLayoutParams()
+    if lp then
+      lp.width = MATCH
+      lp.height = dh
+      content.setLayoutParams(lp)
+    else
+      -- setContentView 前可安全用 J.FrameLayout.LayoutParams
+      content.setLayoutParams(J.FrameLayout.LayoutParams(MATCH, dh))
+    end
+  end)
+  if not dialog then return end
+  pcall(function()
+    local win = dialog.getWindow()
+    if not win then return end
+    win.setBackgroundDrawable(J.ColorDrawable(0))
+    pcall(function() win.getDecorView().setPadding(0, 0, 0, 0) end)
+    pcall(function() win.setDimAmount(0.45) end)
+    local attrs = win.getAttributes()
+    attrs.width = dw
+    attrs.height = dh
+    attrs.gravity = J.Gravity.CENTER
+    win.setAttributes(attrs)
+    -- 再设一次，部分机型 attrs 后仍会被主题改写
+    pcall(function() win.setLayout(dw, dh) end)
+  end)
+  pcall(function() content.requestLayout() end)
+end
+
+function api.highlightQuery(text, query)
+  text = tostring(text or "")
+  if not query or query == "" then return text end
+  api.resolveTheme()
+  local lower = text:lower()
+  local q = query:lower()
+  local i = lower:find(q, 1, true)
+  if not i then return text end
+  local span = J.SpannableStringBuilder(text)
+  local bg = J.BackgroundColorSpan(c.secondaryContainer)
+  local fg = J.ForegroundColorSpan(c.onSecondaryContainer)
+  while i do
+    local j = i + #query
+    pcall(function()
+      span.setSpan(bg, i - 1, j - 1, S.spanFlags)
+      span.setSpan(fg, i - 1, j - 1, S.spanFlags)
+    end)
+    i = lower:find(q, j, true)
+  end
+  return span
+end
+
+function api.entryMatches(entry)
+  if S.printFilter ~= "all" and entry.level ~= S.printFilter then
+    return false
+  end
+  if S.printQuery ~= "" then
+    local q = S.printQuery:lower()
+    local hay = tostring(entry.full or ""):lower()
+    if not hay:find(q, 1, true) then return false end
+  end
+  return true
+end
+
+function api.updatePrintMeta()
+  if not ui.printMeta then return end
+  local n = #S.printData
+  local total = #S.printStore
+  local label
+  if S.printFilter == "all" and S.printQuery == "" then
+    label = string.format("%d entries", total)
+  else
+    label = string.format("%d / %d · %s%s",
+      n, total, S.printFilter,
+      S.printQuery ~= "" and (" · \"" .. S.printQuery .. "\"") or "")
+  end
+  pcall(function() ui.printMeta.setText(label) end)
+  if ui.headerSub then
+    pcall(function()
+      ui.headerSub.setText(string.format("%d logs · filter %s", total, S.printFilter))
+    end)
+  end
+end
+
+function api.setPrintEmptyVisible(show)
+  if ui.printEmpty then
+    pcall(function()
+      ui.printEmpty.setVisibility(show and J.View.VISIBLE or J.View.GONE)
+    end)
+  end
+  if ui.printList then
+    pcall(function()
+      ui.printList.setVisibility(show and J.View.GONE or J.View.VISIBLE)
+    end)
+  end
+end
+
+function api.rebuildPrintList()
+  table.clear(S.printData)
+  table.clear(S.printFull)
+  for _, entry in ipairs(S.printStore) do
+    if api.entryMatches(entry) then
+      local shown = entry.shown
+      if S.printQuery ~= "" then
+        shown = api.highlightQuery(entry.shown, S.printQuery)
+      end
+      S.printData[#S.printData + 1] = {
+        txt = {
+          text = shown,
+          textColor = entry.color or c.onSurface,
+        },
+      }
+      S.printFull[#S.printData] = entry.full
+    end
+  end
+  if S.printAdp then
+    pcall(function() S.printAdp.notifyDataSetChanged() end)
+  end
+  api.setPrintEmptyVisible(#S.printData == 0)
+  api.updatePrintMeta()
+end
+
+function api.pushStore(entry)
+  S.printStore[#S.printStore + 1] = entry
+  while #S.printStore > S.MAX_PRINT do
+    table.remove(S.printStore, 1)
+  end
+  if api.entryMatches(entry) then
+    local shown = entry.shown
+    if S.printQuery ~= "" then
+      shown = api.highlightQuery(entry.shown, S.printQuery)
+    end
+    local row = {
+      txt = {
+        text = shown,
+        textColor = entry.color or c.onSurface,
+      },
+    }
+    if S.printAdp then
+      pcall(function() S.printAdp.add(row) end)
+    else
+      S.printData[#S.printData + 1] = row
+    end
+    S.printFull[#S.printData] = entry.full
+    api.setPrintEmptyVisible(false)
+  end
+  api.updatePrintMeta()
+end
+
+function api.appendPrintEntry(full, level, color, withTime)
+  if S.loggingPaused and level ~= "error" then return end
+  level = level or api.levelForMessage(full)
+  color = color or api.colorForLevel(level)
+  local ts = ""
+  pcall(function() ts = S.dateFmt.format(J.System.currentTimeMillis()) end)
+  local shown
+  if withTime then
+    shown = (ts ~= "" and (ts .. " ") or "") .. api.truncate(full, 100)
+  else
+    shown = api.truncate(full, 120)
+  end
+  if level == "error" or level == "warn" then
+    api.setBubbleError(true)
+  end
+  api.pushStore {
+    full = full,
+    shown = shown,
+    color = color,
+    level = level,
+    ts = ts,
+  }
+end
+
+function api.copyFilteredPrints()
+  local lines = {}
+  for _, entry in ipairs(S.printStore) do
+    if api.entryMatches(entry) then
+      lines[#lines + 1] = entry.full or ""
+    end
+  end
+  if #lines == 0 then api.toast("Nothing to copy"); return end
+  api.clipboardSet(table.concat(lines, "\n"))
+  api.toast("Copied " .. #lines)
+end
+
+function api.scrollPrintToBottom()
+  if not ui.printList or not S.printAdp then return end
+  pcall(function()
+    local n = S.printAdp.getCount()
+    if n > 0 then ui.printList.setSelection(n - 1) end
+  end)
+end
+
+function api.pushEvalHistory(src)
+  src = tostring(src or ""):match("^%s*(.-)%s*$") or ""
+  if src == "" then return end
+  for i = #S.evalHistory, 1, -1 do
+    if S.evalHistory[i] == src then table.remove(S.evalHistory, i) end
+  end
+  S.evalHistory[#S.evalHistory + 1] = src
+  while #S.evalHistory > S.MAX_EVAL_HISTORY do table.remove(S.evalHistory, 1) end
+end
+
+function api.runtimeMemText()
+  local lines = {}
+  pcall(function()
+    local rt = J.Runtime.getRuntime()
+    local used = (rt.totalMemory() - rt.freeMemory()) / (1024 * 1024)
+    local total = rt.totalMemory() / (1024 * 1024)
+    local max = rt.maxMemory() / (1024 * 1024)
+    lines[#lines + 1] = string.format("Java heap: %.1f / %.1f MB (max %.1f)", used, total, max)
+  end)
+  pcall(function()
+    local kb = collectgarbage("count")
+    lines[#lines + 1] = string.format("Lua GC: %.1f KB", kb)
+  end)
+  pcall(function()
+    local am = activity.getSystemService(J.Context.ACTIVITY_SERVICE)
+    local mi = luajava.newInstance("android.app.ActivityManager$MemoryInfo")
+    am.getMemoryInfo(mi)
+    lines[#lines + 1] = string.format(
+      "System avail: %.0f MB%s",
+      mi.availMem / (1024 * 1024),
+      mi.lowMemory and " · LOW" or "")
+  end)
+  return table.concat(lines, "\n")
+end
+
+function api.deviceInfoText()
+  local lines = {
+    "=== Device / Runtime ===",
+  }
+  pcall(function()
+    lines[#lines + 1] = "Model: " .. tostring(J.Build.MODEL)
+    lines[#lines + 1] = "Device: " .. tostring(J.Build.DEVICE)
+    lines[#lines + 1] = "Brand: " .. tostring(J.Build.BRAND)
+    lines[#lines + 1] = "Android: " .. tostring(J.Build.VERSION.RELEASE)
+      .. " (SDK " .. tostring(J.Build.VERSION.SDK_INT or J.Build.VERSION.SDK) .. ")"
+    lines[#lines + 1] = "ABI: " .. tostring(J.Build.SUPPORTED_ABIS
+      and tostring(J.Build.SUPPORTED_ABIS[0]) or J.Build.CPU_ABI)
+  end)
+  pcall(function()
+    local pkg = activity.getPackageManager().getPackageInfo(activity.getPackageName(), 0)
+    lines[#lines + 1] = "Package: " .. tostring(pkg.packageName)
+    lines[#lines + 1] = "Version: " .. tostring(pkg.versionName)
+      .. " (" .. tostring(pkg.versionCode or pkg.getLongVersionCode and pkg.getLongVersionCode() or "?") .. ")"
+  end)
+  pcall(function()
+    S.dm = activity.getResources().getDisplayMetrics()
+    lines[#lines + 1] = string.format(
+      "Display: %dx%d · density %.2f · %.0fdpi",
+      S.dm.widthPixels, S.dm.heightPixels, S.dm.density, S.dm.densityDpi)
+  end)
+  pcall(function()
+    local conf = activity.getResources().getConfiguration()
+    lines[#lines + 1] = "Locale: " .. tostring(conf.locale or conf.getLocales and conf.getLocales().get(0))
+    lines[#lines + 1] = "Orientation: " .. (conf.orientation == 2 and "landscape" or "portrait")
+  end)
+  pcall(function()
+    lines[#lines + 1] = "Lua path: " .. tostring(this.getLuaPath())
+    lines[#lines + 1] = "Lua dir: " .. tostring(this.getLuaDir())
+  end)
+  pcall(function()
+    lines[#lines + 1] = "Files: " .. activity.getFilesDir().getAbsolutePath()
+    lines[#lines + 1] = "Cache: " .. activity.getCacheDir().getAbsolutePath()
+  end)
+  pcall(function()
+    local ext = activity.getExternalFilesDir(nil)
+    if ext then lines[#lines + 1] = "Ext files: " .. ext.getAbsolutePath() end
+  end)
+  pcall(function()
+    if this.getMediaDir then
+      lines[#lines + 1] = "Media: " .. this.getMediaDir().getAbsolutePath()
+    end
+  end)
+  lines[#lines + 1] = ""
+  lines[#lines + 1] = api.runtimeMemText()
+  if S.lastCrashPath then
+    lines[#lines + 1] = "Last crash: " .. tostring(S.lastCrashPath)
+  end
+  return table.concat(lines, "\n")
+end
+
+function api.intentExtrasText()
+  local lines = { "=== Intent ===" }
+  pcall(function()
+    local intent = activity.getIntent()
+    lines[#lines + 1] = "Action: " .. tostring(intent.getAction())
+    lines[#lines + 1] = "Data: " .. tostring(intent.getDataString())
+    lines[#lines + 1] = "Type: " .. tostring(intent.getType())
+    lines[#lines + 1] = "Flags: 0x" .. string.format("%x", intent.getFlags())
+    local extras = intent.getExtras()
+    if extras then
+      local keys = extras.keySet().toArray()
+      local n = keys.length
+      lines[#lines + 1] = "Extras (" .. n .. "):"
+      for i = 0, math.min(n - 1, 80) do
+        local k = tostring(keys[i])
+        local v
+        pcall(function() v = extras.get(k) end)
+        lines[#lines + 1] = "  " .. k .. " = " .. api.truncate(tostring(v), 120)
+      end
+    else
+      lines[#lines + 1] = "Extras: (none)"
+    end
+  end)
+  return table.concat(lines, "\n")
+end
+
+function api.dumpViewTree(root, maxDepth)
+  maxDepth = maxDepth or 4
+  local lines = { "=== View hierarchy ===" }
+  local function walk(v, depth)
+    if not v or depth > maxDepth then return end
+    local pad = string.rep("  ", depth)
+    local idName = ""
+    pcall(function()
+      local id = v.getId()
+      if id and id > 0 then
+        idName = " @" .. activity.getResources().getResourceEntryName(id)
+      end
+    end)
+    local cls = ""
+    pcall(function() cls = v.getClass().getSimpleName() end)
+    local wh = ""
+    pcall(function() wh = string.format(" %dx%d", v.getWidth(), v.getHeight()) end)
+    local vis = ""
+    pcall(function()
+      local vv = v.getVisibility()
+      if vv == J.View.GONE then vis = " GONE"
+      elseif vv == J.View.INVISIBLE then vis = " INVIS" end
+    end)
+    lines[#lines + 1] = pad .. cls .. idName .. wh .. vis
+    pcall(function()
+      if v.getChildCount then
+        local n = v.getChildCount()
+        for i = 0, math.min(n - 1, 40) do
+          walk(v.getChildAt(i), depth + 1)
+        end
+      end
+    end)
+  end
+  pcall(function()
+    root = root or activity.getWindow().getDecorView()
+    walk(root, 0)
+  end)
+  return table.concat(lines, "\n")
+end
+
+function api.openTextInPanel(title, body)
+  if ui.textEdit then
+    pcall(function() ui.textEdit.setText(tostring(body or "")) end)
+    pcall(function() ui.page.setCurrentItem(3, false) end)
+    if ui.headerSub then
+      pcall(function() ui.headerSub.setText(tostring(title or "Text")) end)
+    end
+  else
+    api.clipboardSet(body)
+    api.toast("Copied (panel closed)")
+  end
+end
+
+function api.runGcAndReport()
+  local before = api.runtimeMemText()
+  pcall(function() collectgarbage("collect") end)
+  pcall(function() J.Runtime.getRuntime().gc() end)
+  local after = api.runtimeMemText()
+  local msg = "GC done\n-- before --\n" .. before .. "\n-- after --\n" .. after
+  info("GC done")
+  api.openTextInPanel("Memory / GC", msg)
+end
+
+function api.toggleKeepScreenOn()
+  S.keepScreenOn = not S.keepScreenOn
+  pcall(function()
+    local w = activity.getWindow()
+    local f = bindClass "android.view.WindowManager$LayoutParams".FLAG_KEEP_SCREEN_ON
+    if S.keepScreenOn then
+      w.addFlags(f)
+    else
+      w.clearFlags(f)
+    end
+  end)
+  api.toast(S.keepScreenOn and "Keep screen ON" or "Keep screen OFF")
+  info("keepScreenOn=" .. tostring(S.keepScreenOn))
+end
+
+function api.toggleLoggingPause()
+  S.loggingPaused = not S.loggingPaused
+  api.toast(S.loggingPaused and "Logging paused" or "Logging resumed")
+  info(S.loggingPaused and "logging paused" or "logging resumed")
+end
+
+function api.hideBubbleTemporarily()
+  api.removeBubble()
+  api.toast("Bubble hidden until recreate / re-require")
+end
+
+function log(color, withTime, ...)
+  if not api.activityAlive() then return ... end
+  local parts = {}
+  local args = { ... }
+  for i = 1, #args do
+    parts[#parts + 1] = tostring(args[i])
+    if i < #args then parts[#parts + 1] = "  " end
+  end
+  local full = table.concat(parts)
+  local level = "log"
+  if color == c.error then
+    level = "error"
+  elseif color == c.warning then
+    level = "warn"
+  elseif color == c.success then
+    level = "info"
+  elseif color == c.muted then
+    level = "log"
+  else
+    level = api.levelForMessage(full)
+  end
+  api.appendPrintEntry(full, level, color or api.colorForLevel(level), withTime and true or false)
+  return ...
+end
+
+-- 同步宿主 LuaActivity.logs
+function api.pullHostLogs()
+  local ok, logs = pcall(function() return J.LuaActivityClass.logs end)
+  if not ok or not logs then return end
+  local size = 0
+  pcall(function() size = logs.size() end)
+  if size <= S.hostLogsCursor then return end
+  for i = S.hostLogsCursor, size - 1 do
+    local msg
+    pcall(function() msg = logs.get(i) end)
+    if msg then
+      local s = tostring(msg)
+      local last = S.printStore[#S.printStore]
+      if not last or last.full ~= s then
+        api.appendPrintEntry(s, api.levelForMessage(s), nil, false)
+      end
+    end
+  end
+  S.hostLogsCursor = size
+end
+
+function print(...)
+  local parts = {}
+  local args = { ... }
+  for i = 1, #args do
+    parts[#parts + 1] = tostring(args[i])
+    if i < #args then parts[#parts + 1] = "    " end
+  end
+  local msg = table.concat(parts)
+  api.appendPrintEntry(msg, "log", c.primary, true)
+  S.suppressHostMirror = true
+  S.hostLogsCursor = S.hostLogsCursor + 1
+  pcall(function() activity.sendMsg(msg) end)
+  S.suppressHostMirror = false
+  return ...
+end
+
+-- printf：格式化后走 print 通路（面板 + sendMsg）
+function printf(fmt, ...)
+  local ok, formatted = pcall(string.format, fmt, ...)
+  if ok then
+    print(formatted)
+  else
+    print(fmt, ...)
+  end
+end
+
+function safe_error(...)
+  local parts = {}
+  local args = { ... }
+  for i = 1, #args do
+    parts[#parts + 1] = tostring(args[i])
+    if i < #args then parts[#parts + 1] = "  " end
+  end
+  local full = table.concat(parts)
+  api.appendPrintEntry(full, "error", c.error, true)
+  api.sendHostMsg(full)
+  return ...
+end
+
+function explain(...)
+  local parts = {}
+  local args = { ... }
+  for i = 1, #args do parts[i] = tostring(args[i]) end
+  api.appendPrintEntry(table.concat(parts, "  "), "log", c.muted, true)
+  return ...
+end
+
+function info(...)
+  local parts = {}
+  local args = { ... }
+  for i = 1, #args do parts[i] = tostring(args[i]) end
+  api.appendPrintEntry(table.concat(parts, "  "), "info", c.success, true)
+  return ...
+end
+
+function warning(...)
+  local parts = {}
+  local args = { ... }
+  for i = 1, #args do parts[i] = tostring(args[i]) end
+  api.appendPrintEntry(table.concat(parts, "  "), "warn", c.warning, true)
+  return ...
+end
+
+function error(a, b)
+  api.appendPrintEntry(tostring(a), "error", c.error, true)
+  return S.hostError(a, b)
+end
+
+function assert(a, ...)
+  if not a then
+    local parts = {}
+    local args = { ... }
+    for i = 1, #args do parts[i] = tostring(args[i]) end
+    api.appendPrintEntry(table.concat(parts, "  "), "error", c.error, true)
+  end
+  return S.hostAssert(a, ...)
+end
+
+function api.crashDir()
+  local dir
+  pcall(function()
+    dir = this.getMediaDir().getAbsolutePath() .. "/crash"
+  end)
+  if not dir then
+    pcall(function()
+      dir = activity.getExternalFilesDir(nil).getAbsolutePath() .. "/crash"
+    end)
+  end
+  if not dir then
+    dir = activity.getFilesDir().getAbsolutePath() .. "/crash"
+  end
+  pcall(function() J.File(dir).mkdirs() end)
+  return dir
+end
+
+function api.writeTextFileJava(path, text)
+  local ok = pcall(function()
+    local jstr = luajava.newInstance("java.lang.String", tostring(text or ""))
+    local bytes = jstr.getBytes("UTF-8")
+    local fos = J.FileOutputStream(path)
+    fos.write(bytes)
+    fos.close()
+  end)
+  if ok then return true end
+  local f = io.open(path, "w")
+  if not f then return false end
+  f:write(tostring(text or ""))
+  f:close()
+  return true
+end
+
+function api.buildExportText(limit)
+  local lines = {}
+  lines[#lines + 1] = "=== vConsole export ==="
+  pcall(function()
+    lines[#lines + 1] = "file: " .. tostring(this.getLuaPath())
+    lines[#lines + 1] = "time: " .. tostring(S.fileStampFmt.format(J.System.currentTimeMillis()))
+  end)
+  lines[#lines + 1] = ""
+  local start = 1
+  if limit and #S.printStore > limit then
+    start = #S.printStore - limit + 1
+  end
+  for i = start, #S.printStore do
+    local e = S.printStore[i]
+    lines[#lines + 1] = string.format("[%s] %s", e.level or "log", e.full or "")
+  end
+  return table.concat(lines, "\n")
+end
+
+function api.exportPrints(share)
+  api.pullHostLogs()
+  local body = api.buildExportText()
+  local stamp = "export"
+  pcall(function() stamp = S.fileStampFmt.format(J.System.currentTimeMillis()) end)
+  local path = api.crashDir() .. "/vconsole_" .. stamp .. ".txt"
+  if not api.writeTextFileJava(path, body) then
+    api.toast("Export failed")
+    return nil
+  end
+  S.lastCrashPath = path
+  api.toast("Saved: " .. path)
+  info("exported → " .. path)
+  if share then
+    pcall(function()
+      local intent = J.Intent(J.Intent.ACTION_SEND)
+      intent.setType("text/plain")
+      intent.putExtra(J.Intent.EXTRA_TEXT, body)
+      intent.putExtra(J.Intent.EXTRA_SUBJECT, "vConsole export")
+      activity.startActivity(J.Intent.createChooser(intent, "Share logs"))
+    end)
+  end
+  return path
+end
+
+function api.snapshotCrash(title, exception, msg)
+  local stamp = "crash"
+  pcall(function() stamp = S.fileStampFmt.format(J.System.currentTimeMillis()) end)
+  local path = api.crashDir() .. "/vconsole_crash_" .. stamp .. ".txt"
+  local lines = {
+    "=== vConsole crash snapshot ===",
+    "title: " .. tostring(title),
+    "message: " .. tostring(msg),
+  }
+  pcall(function()
+    lines[#lines + 1] = "file: " .. tostring(this.getLuaPath())
+    lines[#lines + 1] = "model: " .. tostring(J.Build.MODEL)
+    lines[#lines + 1] = "sdk: " .. tostring(J.Build.VERSION.SDK_INT or J.Build.VERSION.SDK)
+  end)
+  if exception then
+    pcall(function()
+      if exception.stackTraceToString then
+        lines[#lines + 1] = "stack:\n" .. tostring(exception.stackTraceToString())
+      elseif exception.getStackTrace then
+        local st = exception.getStackTrace()
+        local n = st.length
+        local buf = {}
+        for i = 0, math.min(n - 1, 40) do
+          buf[#buf + 1] = tostring(st[i])
+        end
+        lines[#lines + 1] = "stack:\n" .. table.concat(buf, "\n")
+      end
+    end)
+  end
+  lines[#lines + 1] = ""
+  lines[#lines + 1] = "--- recent prints ---"
+  local start = math.max(1, #S.printStore - 80)
+  for i = start, #S.printStore do
+    local e = S.printStore[i]
+    lines[#lines + 1] = string.format("[%s] %s", e.level or "log", e.full or "")
+  end
+  if api.writeTextFileJava(path, table.concat(lines, "\n")) then
+    S.lastCrashPath = path
+    api.appendPrintEntry("crash saved → " .. path, "info", c.success, true)
+  end
+  return path
+end
+
+-- LuaActivity.sendError → runFunc("onError", title, exception)
+S.prevOnError = rawget(_G, "onError")
+function onError(title, exception)
+  local msg
+  pcall(function()
+    if exception and exception.getMessage then
+      msg = tostring(title) .. ": " .. tostring(exception.getMessage())
+    else
+      msg = tostring(title) .. ": " .. tostring(exception)
+    end
+  end)
+  msg = msg or (tostring(title) .. ": " .. tostring(exception))
+  api.appendPrintEntry(msg, "error", c.error, true)
+  pcall(function() api.snapshotCrash(title, exception, msg) end)
+  if type(S.prevOnError) == "function" then
+    local ok, ret = pcall(S.prevOnError, title, exception)
+    if ok and ret ~= nil then return ret end
+  end
+  return "log"
+end
+
+-- ─── Vars ───────────────────────────────────────────────
+-- Span 须在主题色就绪后创建（int 构造，nil 会落到 Parcel 构造失败）
+function api.isVConsoleGlobalKey(k)
+  if type(k) ~= "string" then return false end
+  if S.VC_HIDDEN_GLOBALS[k] then return true end
+  if k:find("^__vConsole", 1) then return true end
+  return false
+end
+
+function api.ensureVarSpans()
+  if S.colorKey then return end
+  api.resolveTheme()
+  S.colorKey = J.ForegroundColorSpan(c.primary)
+  S.colorArrow = J.ForegroundColorSpan(c.success)
+  S.colorTable = J.ForegroundColorSpan(c.warning)
+end
+
+function api.varAdd(meta, str)
+  S.variableData[#S.variableData + 1] = {
+    kv = { text = str, textColor = c.muted },
+  }
+  S.variableKv[#S.variableData] = meta
+end
+
+function api.refreshVars()
+  if not ui.varList then return end
+  api.ensureVarSpans()
+  local tab = _ENV
+  table.clear(S.variablePath)
+  table.clear(S.variableData)
+
+  for i, key in ipairs(S.variableNode) do
+    if type(tab[key]) == "table" then
+      tab = tab[key]
+    else
+      S.variableNode[i] = nil
+    end
+  end
+
+  local pathParts = {}
+  for i, key in ipairs(S.variableNode) do
+    pathParts[i] = tostring(key)
+  end
+  local pathStr = table.concat(pathParts, "/")
+  if #pathStr > 0 then pathStr = pathStr .. "/" end
+  ui.varPath.setText("node: /" .. pathStr)
+
+  if #S.variableNode > 0 then api.varAdd(1, "← parent") end
+  api.varAdd(2, "serialize node")
+
+  -- 根环境跳过 vConsole 自身注入的全局，避免污染 Vars
+  local atRoot = (#S.variableNode == 0)
+  for k, v in pairs(tab) do
+    if atRoot and api.isVConsoleGlobalKey(k) then
+      -- skip
+    else
+      local rawK, rawV = k, v
+      local vs = tostring(v)
+      if vs then
+        vs = api.truncate(vs, 80)
+        local ks = type(k) == "string" and tostring(k) or string.format("[%s]", tostring(k))
+        if type(rawV) == "string" then
+          vs = string.format('"%s"', vs)
+        elseif type(rawV) == "table" then
+          vs = string.format("%s => {...}", vs)
+          S.variablePath[tostring(rawK)] = rawK
+        end
+        local line = string.format("%s => %s", ks, vs)
+        local span = S.variableSpanCache[#S.variableData + 1]
+        if not span then
+          span = J.SpannableStringBuilder()
+          S.variableSpanCache[#S.variableData + 1] = span
+        end
+        span.clearSpans()
+        span.clear()
+        span.append(line)
+        local s1, e1 = utf8.find(line, "=>")
+        if s1 then
+          span.setSpan(S.colorKey, 0, utf8.len(ks), S.spanFlags)
+          span.setSpan(S.colorArrow, s1 - 1, e1, S.spanFlags)
+          if type(rawV) == "table" then
+            local s2, e2 = utf8.find(line, "{%.%.%.}", e1)
+            if s2 then span.setSpan(S.colorTable, s2 - 1, e2, S.spanFlags) end
+          end
+        end
+        api.varAdd({ rawK, rawV }, span)
+      end
+    end
+  end
+  if S.variableAdp then S.variableAdp.notifyDataSetChanged() end
+end
+
+function api.ensurePrintAdp()
+  if S.printAdp or not ui.printList then return end
+  S.printAdp = J.LuaAdapter(activity, S.printData, {
+    J.TextView,
+    layout_width = "match",
+    textSize = "12sp",
+    paddingLeft = "12dp",
+    paddingRight = "12dp",
+    paddingTop = "8dp",
+    paddingBottom = "8dp",
+    id = "txt",
+  })
+  ui.printList.setAdapter(S.printAdp)
+  ui.printList.onItemClick = function(_, v, _, d)
+    api.vibrate(v)
+    ui.textEdit.setText(S.printFull[d] or "")
+    ui.page.setCurrentItem(3, false)
+  end
+  ui.printList.onItemLongClick = function(_, v, _, d)
+    api.vibrate(v)
+    local full = S.printFull[d] or ""
+    api.clipboardSet(full)
+    api.toast("Copied log line")
+    return true
+  end
+end
+
+function api.markFilterButtons(ids, activeKey, keyOf)
+  api.resolveTheme()
+  for _, item in ipairs(ids) do
+    local btn = ui[item[1]]
+    if btn then
+      local on = keyOf(item) == activeKey
+      api.compactButtonMetrics(btn, 32, 10)
+      pcall(function()
+        btn.setTextColor(on and c.primary or c.onSurfaceVariant)
+        if on then
+          api.applyRound(btn, c.secondaryContainer, 16)
+        else
+          btn.setBackgroundColor(0)
+        end
+      end)
+    end
+  end
+end
+
+function api.setupPrintFilters()
+  for _, item in ipairs(S.printFilterIds) do
+    local btn = ui[item[1]]
+    if btn then
+      btn.onClick = function(v)
+        api.vibrate(v)
+        S.printFilter = item[3]
+        api.markFilterButtons(S.printFilterIds, S.printFilter, function(o) return o[3] end)
+        api.rebuildPrintList()
+      end
+    end
+  end
+  api.markFilterButtons(S.printFilterIds, S.printFilter, function(o) return o[3] end)
+  if ui.printSearch then
+    local TextWatcher = bindClass "android.text.TextWatcher"
+    pcall(function()
+      ui.printSearch.addTextChangedListener(TextWatcher({
+        beforeTextChanged = function() end,
+        onTextChanged = function() end,
+        afterTextChanged = function(s)
+          S.printQuery = tostring(s or ""):match("^%s*(.-)%s*$") or ""
+          if ui.printSearchClear then
+            ui.printSearchClear.setVisibility(
+              S.printQuery ~= "" and J.View.VISIBLE or J.View.GONE)
+          end
+          api.rebuildPrintList()
+        end,
+      }))
+    end)
+  end
+  if ui.printSearchClear then
+    ui.printSearchClear.onClick = function(v)
+      api.vibrate(v)
+      S.printQuery = ""
+      pcall(function() ui.printSearch.setText("") end)
+      api.rebuildPrintList()
+    end
+  end
+end
+
+function api.ensureVarAdp()
+  if S.variableAdp or not ui.varList then return end
+  S.variableAdp = J.LuaAdapter(activity, S.variableData, {
+    J.TextView,
+    layout_width = "match",
+    textSize = "11sp",
+    paddingLeft = "12dp",
+    paddingRight = "12dp",
+    paddingTop = "7dp",
+    paddingBottom = "7dp",
+    singleLine = true,
+    ellipsize = "end",
+    id = "kv",
+  })
+  ui.varList.setAdapter(S.variableAdp)
+  ui.varList.onItemClick = function(_, v, _, d)
+    api.vibrate(v)
+    local t = S.variableKv[d]
+    if t == 1 then
+      S.variableNode[#S.variableNode] = nil
+      api.refreshVars()
+    elseif t == 2 then
+      local tab = _ENV
+      for _, key in ipairs(S.variableNode) do tab = tab[key] end
+      ui.textEdit.setText(api.dumpValue(tab))
+      ui.page.setCurrentItem(3, false)
+    elseif type(t) == "table" then
+      if type(t[2]) == "table" then
+        S.variableNode[#S.variableNode + 1] = t[1]
+        api.refreshVars()
+      else
+        ui.textEdit.setText(tostring(t[2]))
+        ui.page.setCurrentItem(3, false)
+      end
+    end
+  end
+  ui.varList.onItemLongClick = function(_, v)
+    local path = table.concat(S.variableNode, "/")
+    local key = tostring(v.getText()):match("(.+)%s=>")
+    if ui.textEdit then
+      ui.textEdit.setText(string.format("%s/%s", path, key or ""))
+    end
+    if ui.page then ui.page.setCurrentItem(3, false) end
+    return true
+  end
+  if ui.varSearch then
+    ui.varSearch.onEditorAction = function(v, actionId)
+      if actionId == 0 then
+        local key = S.variablePath[tostring(v.getText())]
+        if key ~= nil then S.variableNode[#S.variableNode + 1] = key end
+        v.setText("")
+        pcall(function()
+          activity.getSystemService(J.Context.INPUT_METHOD_SERVICE)
+            .hideSoftInputFromWindow(v.getWindowToken(), 0)
+        end)
+        api.refreshVars()
+      end
+      return false
+    end
+  end
+end
+
+function api.logcatLevelColor(level)
+  api.resolveTheme()
+  local L = tostring(level or "?"):upper()
+  if L == "E" or L == "F" or L == "A" then return c.error end
+  if L == "W" then return c.warning end
+  if L == "I" then return c.success end
+  if L == "D" then return c.primary end
+  if L == "V" then return c.onSurfaceVariant end
+  return c.onSurfaceVariant
+end
+
+function api.logcatLevelFill(level)
+  api.resolveTheme()
+  local L = tostring(level or "?"):upper()
+  if L == "E" or L == "F" or L == "A" then return c.errorContainer end
+  if L == "W" then return c.surfaceContainerHigh end
+  if L == "I" then return c.secondaryContainer end
+  if L == "D" then return c.primaryContainer end
+  return c.surfaceContainer
+end
+
+-- long: [ 07-23 12:34:56.789  1234: 5678 E/Tag ]
+-- threadtime / brief 兜底
+function api.parseLogcatBlock(block)
+  block = tostring(block or "")
+  local level, tag, body = "?", "", block
+  local hdr, rest = block:match("^(%[[^\n]*%])%s*\n?(.*)$")
+  if hdr then
+    local lv, tg = hdr:match("%s([VDIWEFA])/([^%]%s]+)")
+    if not lv then lv, tg = hdr:match("%s([VDIWEFA])/([^%]]+)") end
+    if lv then
+      level = lv:upper()
+      tag = (tg or ""):gsub("%s+$", "")
+    end
+    body = rest or ""
+  else
+    local lv, tg, msg = block:match("^%s*([VDIWEFA])/([^:%s]+)%s*:%s*(.*)$")
+    if not lv then
+      lv, tg, msg = block:match(
+        "^%d%d%-%d%d%s+%d%d:%d%d:%d%d%.%d+%s+%d+%s+%d+%s+([VDIWEFA])%s+([^:]+):%s*(.*)$")
+    end
+    if lv then
+      level = lv:upper()
+      tag = (tg or ""):gsub("%s+$", "")
+      body = msg or ""
+    end
+  end
+  body = body:gsub("^%s+", ""):gsub("%s+$", "")
+  local preview
+  if tag ~= "" and body ~= "" then
+    preview = tag .. " · " .. api.truncate(body:gsub("\n", " "), 90)
+  elseif tag ~= "" then
+    preview = tag
+  else
+    preview = api.truncate(block:gsub("\n", " "), 100)
+  end
+  return level, tag, preview, block
+end
+
+function api.ensureLogcatAdp()
+  if S.logcatAdp or not ui.logcatList then return end
+  api.resolveTheme()
+  S.logcatAdp = J.LuaAdapter(activity, S.logcatData, {
+    J.LinearLayout,
+    orientation = "horizontal",
+    layout_width = "match",
+    layout_height = "wrap",
+    gravity = "center_vertical",
+    paddingLeft = "10dp",
+    paddingRight = "10dp",
+    paddingTop = "6dp",
+    paddingBottom = "6dp",
+    {
+      J.TextView,
+      id = "lvl",
+      layout_width = "24dp",
+      layout_height = "24dp",
+      gravity = "center",
+      textSize = "12sp",
+      textStyle = "bold",
+      includeFontPadding = false,
+    },
+    {
+      J.TextView,
+      id = "txt",
+      layout_width = "0dp",
+      layout_weight = 1,
+      layout_height = "wrap",
+      layout_marginStart = "8dp",
+      textSize = "11sp",
+      textColor = c.onSurface,
+      maxLines = 2,
+      ellipsize = "end",
+    },
+  })
+  -- 列表复用后给左侧级别徽标补圆角底色
+  pcall(function()
+    local AbsListView = bindClass "android.widget.AbsListView"
+    ui.logcatList.setRecyclerListener(AbsListView.RecyclerListener({
+      onMovedToScrapHeap = function() end,
+    }))
+  end)
+  pcall(function()
+    local OnScrollListener = bindClass "android.widget.AbsListView$OnScrollListener"
+    ui.logcatList.setOnScrollListener(OnScrollListener({
+      onScrollStateChanged = function() end,
+      onScroll = function()
+        pcall(function() api.paintLogcatBadges() end)
+      end,
+    }))
+  end)
+  ui.logcatList.setAdapter(S.logcatAdp)
+  ui.logcatList.onItemClick = function(_, v, _, d)
+    api.vibrate(v)
+    ui.textEdit.setText(S.logcatFull[d] or "")
+    ui.page.setCurrentItem(3, false)
+  end
+  ui.logcatList.onItemLongClick = function(_, v, _, d)
+    api.vibrate(v)
+    api.clipboardSet(S.logcatFull[d] or "")
+    api.toast("Copied logcat")
+    return true
+  end
+end
+
+function api.paintLogcatBadges()
+  if not ui.logcatList then return end
+  local n = ui.logcatList.getChildCount()
+  for i = 0, n - 1 do
+    local row = ui.logcatList.getChildAt(i)
+    if row and row.getChildCount and row.getChildCount() > 0 then
+      local badge = row.getChildAt(0)
+      local t = ""
+      pcall(function() t = tostring(badge.getText() or "") end)
+      if t ~= "" then
+        api.applyRound(badge, api.logcatLevelFill(t), 6)
+        pcall(function() badge.setTextColor(api.logcatLevelColor(t)) end)
+      end
+    end
+  end
+end
+
+-- 后台任务：优先 xTask(io)，其次 task，最后同步
+-- 注意：Java 注入的 xTask/task 在 Luaj 里 type 常为 userdata，不能用 type=="function"
+function api.runBg(bgFn, onMain, dispatcher)
+  dispatcher = dispatcher or "io"
+  local function deliver(result)
+    if onMain then pcall(onMain, result) end
+  end
+  if xTask ~= nil then
+    local ok = pcall(function()
+      xTask(function()
+        return bgFn()
+      end, function(result)
+        deliver(result)
+      end, dispatcher)
+    end)
+    if ok then return true end
+    ok = pcall(function()
+      xTask {
+        task = function() return bgFn() end,
+        callback = function(result) deliver(result) end,
+        dispatcher = dispatcher,
+      }
+    end)
+    if ok then return true end
+  end
+  if task ~= nil then
+    local ok = pcall(function()
+      task(function()
+        return bgFn()
+      end, function(result)
+        if result ~= nil then deliver(result) end
+      end)
+    end)
+    if ok then return true end
+  end
+  local ok, result = pcall(bgFn)
+  if ok then deliver(result) end
+  return ok
+end
+
+function api.applyLogcatText(str)
+  if not api.activityAlive() or not S.logcatAdp then return end
+  if str == nil then str = "" end
+  str = tostring(str)
+  table.clear(S.logcatData)
+  table.clear(S.logcatFull)
+  local blocks = {}
+  local n = 0
+  str:gsub("[^\n]+", function(w)
+    if n % 2 == 0 then
+      if not w:find("^%[") then
+        if #blocks > 0 then
+          blocks[#blocks] = blocks[#blocks] .. "\n" .. w
+        else
+          blocks[1] = w
+          n = n + 1
+        end
+      else
+        blocks[#blocks + 1] = w
+        n = n + 1
+      end
+    else
+      blocks[#blocks] = blocks[#blocks] .. "\n" .. w
+      n = n + 1
+    end
+  end)
+  local start = 1
+  if #blocks > S.MAX_LOGCAT then start = #blocks - S.MAX_LOGCAT + 1 end
+  for i = start, #blocks do
+    local level, _, preview, full = api.parseLogcatBlock(blocks[i])
+    S.logcatData[#S.logcatData + 1] = {
+      lvl = {
+        text = level,
+        textColor = api.logcatLevelColor(level),
+        BackgroundColor = api.logcatLevelFill(level),
+      },
+      txt = {
+        text = preview,
+        textColor = c.onSurface,
+      },
+    }
+    S.logcatFull[#S.logcatData] = full
+  end
+  pcall(function() S.logcatAdp.notifyDataSetChanged() end)
+  pcall(function()
+    if ui.logcatList then
+      ui.logcatList.post(function() api.paintLogcatBadges() end)
+    end
+  end)
+end
+
+function api.refreshLogcat()
+  if not ui.logcatList then return end
+  api.ensureLogcatAdp()
+  local filter = S.logcatTypes[S.logcatPos] or ""
+  -- xTask 后台读 logcat，主线程刷新列表
+  api.runBg(function()
+    return api.readlog(filter)
+  end, function(str)
+    api.applyLogcatText(str)
+  end, "io")
+end
+
+function api.setupLogcatChips()
+  local function paint()
+    api.resolveTheme()
+    for j, oid in ipairs(S.logcatChipIds) do
+      local btn = ui[oid]
+      if btn then
+        local on = j == S.logcatPos
+        api.compactButtonMetrics(btn, 32, 10)
+        pcall(function()
+          btn.setTextColor(on and c.primary or c.onSurfaceVariant)
+          if on then
+            api.applyRound(btn, c.secondaryContainer, 16)
+          else
+            btn.setBackgroundColor(0)
+          end
+        end)
+      end
+    end
+  end
+  for i, id in ipairs(S.logcatChipIds) do
+    local btn = ui[id]
+    if btn then
+      btn.onClick = function(v)
+        api.vibrate(v)
+        S.logcatPos = i
+        paint()
+        api.refreshLogcat()
+      end
+    end
+  end
+  paint()
+end
+
+S.actionSpecs = {
+  [0] = {
+    { "Clear", function()
+      table.clear(S.printStore)
+      table.clear(S.printData)
+      table.clear(S.printFull)
+      if S.printAdp then pcall(function() S.printAdp.clear() end) end
+      api.setPrintEmptyVisible(true)
+      api.setBubbleError(false)
+      api.updatePrintMeta()
+    end },
+    { "Copy", function() api.copyFilteredPrints() end },
+    { "Bottom", function() api.scrollPrintToBottom() end },
+    { "Export", function() api.exportPrints(false) end },
+    { "Share", function() api.exportPrints(true) end },
+    { "Close", function() if S.sheet then S.sheet.dismiss() end end },
+  },
+  [1] = {
+    { "Refresh", function() api.refreshVars() end },
+    { "Root", function()
+      table.clear(S.variableNode)
+      api.refreshVars()
+    end },
+    { "Copy path", function()
+      local path = "/" .. table.concat(S.variableNode, "/")
+      api.clipboardSet(path)
+      api.toast(path)
+    end },
+    { "Close", function() if S.sheet then S.sheet.dismiss() end end },
+  },
+  [2] = {
+    { "Clear", function()
+      api.runBg(function()
+        api.clearlog()
+        return true
+      end, function()
+        api.refreshLogcat()
+      end, "io")
+    end },
+    { "Refresh", function() api.refreshLogcat() end },
+    { "Copy", function()
+      local body = table.concat(S.logcatFull, "\n\n")
+      if body == "" then api.toast("Empty"); return end
+      api.clipboardSet(body)
+      api.toast("Copied logcat")
+    end },
+    { "Export", function()
+      local body = table.concat(S.logcatFull, "\n\n")
+      if body == "" then api.toast("Empty logcat"); return end
+      local stamp = "logcat"
+      pcall(function() stamp = S.fileStampFmt.format(J.System.currentTimeMillis()) end)
+      local path = api.crashDir() .. "/vconsole_logcat_" .. stamp .. ".txt"
+      if api.writeTextFileJava(path, body) then
+        api.toast("Saved: " .. path)
+        info("logcat → " .. path)
+      else
+        api.toast("Export failed")
+      end
+    end },
+    { "Close", function() if S.sheet then S.sheet.dismiss() end end },
+  },
+  [3] = {
+    { "Copy", function()
+      api.clipboardSet(ui.textEdit.getText())
+      api.toast("Copied")
+    end },
+    { "Paste", function() ui.textEdit.setText(api.clipboardGet()) end },
+    { "Share", function()
+      local body = tostring(ui.textEdit.getText() or "")
+      if body == "" then api.toast("Empty"); return end
+      pcall(function()
+        local intent = J.Intent(J.Intent.ACTION_SEND)
+        intent.setType("text/plain")
+        intent.putExtra(J.Intent.EXTRA_TEXT, body)
+        activity.startActivity(J.Intent.createChooser(intent, "Share text"))
+      end)
+    end },
+    { "Save", function()
+      local body = tostring(ui.textEdit.getText() or "")
+      if body == "" then api.toast("Empty"); return end
+      local stamp = "text"
+      pcall(function() stamp = S.fileStampFmt.format(J.System.currentTimeMillis()) end)
+      local path = api.crashDir() .. "/vconsole_text_" .. stamp .. ".txt"
+      if api.writeTextFileJava(path, body) then
+        api.toast("Saved: " .. path)
+        info("text → " .. path)
+      else
+        api.toast("Save failed")
+      end
+    end },
+    { "Clear", function() ui.textEdit.setText(nil) end },
+    { "Close", function() if S.sheet then S.sheet.dismiss() end end },
+  },
+  [4] = {
+    { "Device", function() api.openTextInPanel("Device", api.deviceInfoText()) end },
+    { "Memory", function() api.openTextInPanel("Memory", api.runtimeMemText()) end },
+    { "Export", function() api.exportPrints(false) end },
+    { "Close", function() if S.sheet then S.sheet.dismiss() end end },
+  },
+}
+
+function api.rebuildActionBar(pos)
+  if not ui.actionBar then return end
+  ui.actionBar.removeAllViews()
+  for i, item in ipairs(S.actionSpecs[pos] or S.actionSpecs[0]) do
+    local btn = loadlayout(api.textBtn("act" .. i, item[1]))
+    api.applyButtonTheme(btn, c.secondaryContainer, c.onSecondaryContainer, 12, 32)
+    if i > 1 then
+      pcall(function()
+        local lp = btn.getLayoutParams()
+        if lp and lp.setMarginStart then
+          lp.setMarginStart(api.dp(4))
+          btn.setLayoutParams(lp)
+        elseif lp then
+          lp.leftMargin = api.dp(4)
+          btn.setLayoutParams(lp)
+        end
+      end)
+    end
+    btn.onClick = function(v)
+      api.vibrate(v)
+      item[2]()
+    end
+    ui.actionBar.addView(btn)
+  end
+end
+
+function api.onPage(pos)
+  api.rebuildActionBar(pos)
+  if pos == 0 then
+    api.pullHostLogs()
+  elseif pos == 1 then
+    api.ensureVarAdp()
+    api.refreshVars()
+  elseif pos == 2 then
+    api.ensureLogcatAdp()
+    api.refreshLogcat()
+  end
+end
+
+function api.paintTabs(pos)
+  api.resolveTheme()
+  for i, id in ipairs(S.tabIds) do
+    local btn = ui[id]
+    if btn then
+      local on = (i - 1) == pos
+      api.compactButtonMetrics(btn, 32, 10)
+      pcall(function()
+        btn.setTextColor(on and c.primary or c.onSurfaceVariant)
+        if on then
+          api.applyRound(btn, c.secondaryContainer, 16)
+        else
+          btn.setBackgroundColor(0)
+        end
+      end)
+    end
+  end
+end
+
+function api.wireSheet()
+  -- 分段 pcall：任一页适配器失败不得阻断 Control 绑定
+  pcall(api.ensurePrintAdp)
+  pcall(api.ensureVarAdp)
+  pcall(api.ensureLogcatAdp)
+  pcall(api.setupLogcatChips)
+  pcall(api.setupPrintFilters)
+  pcall(api.rebuildPrintList)
+
+  local ctrlIds = {
+    "ctrlFinish", "ctrlRecreate", "ctrlRestart", "ctrlKill",
+    "ctrlDevice", "ctrlMem", "ctrlIntent", "ctrlViews",
+    "ctrlPaths", "ctrlGc", "ctrlPause", "ctrlScreen",
+    "ctrlHide", "ctrlHist", "ctrlRun", "headerExport",
+  }
+  for _, id in ipairs(ctrlIds) do
+    local btn = ui[id]
+    if btn then
+      if id == "ctrlKill" then
+        api.applyButtonTheme(btn, c.errorContainer, c.onErrorContainer, 12, 40)
+      elseif id == "ctrlRun" then
+        api.applyButtonTheme(btn, c.primary, c.onPrimary, 12, 32)
+      elseif id == "headerExport" then
+        api.applyButtonTheme(btn, 0, c.primary, 0, 32)
+      else
+        api.applyButtonTheme(btn, c.secondaryContainer, c.onSecondaryContainer, 12, 40)
+      end
+    end
+  end
+  api.compactButtonMetrics(ui.printSearchClear, 32, 4)
+  pcall(function()
+    if ui.ctrlPause then
+      ui.ctrlPause.setText(S.loggingPaused and "Resume log" or "Pause log")
+    end
+    if ui.ctrlScreen then
+      ui.ctrlScreen.setText(S.keepScreenOn and "Screen off" or "Screen on")
+    end
+  end)
+
+  pcall(function()
+    if ui.ctrlCode and ui.ctrlCode.getParent() then
+      api.applyRound(ui.ctrlCode.getParent(), c.surfaceContainerHigh, 12)
+    end
+  end)
+
+  for i, id in ipairs(S.tabIds) do
+    local btn = ui[id]
+    if btn then
+      btn.onClick = function(v)
+        api.vibrate(v)
+        pcall(function() ui.page.setCurrentItem(i - 1, true) end)
+        api.paintTabs(i - 1)
+        api.onPage(i - 1)
+      end
+    end
+  end
+  api.paintTabs(0)
+
+  if ui.headerExport then
+    ui.headerExport.onClick = function(v)
+      api.vibrate(v)
+      api.exportPrints(false)
+    end
+  end
+
+  pcall(function()
+    ui.page.addOnPageChangeListener {
+      onPageSelected = function(pos)
+        api.paintTabs(pos)
+        api.onPage(pos)
+      end,
+    }
+  end)
+
+  local function bindClick(btn, fn)
+    if not btn then return end
+    pcall(function()
+      btn.onClick = function(v)
+        api.vibrate(v)
+        fn(v)
+      end
+    end)
+  end
+
+  bindClick(ui.ctrlFinish, function()
+    if S.sheet then S.sheet.dismiss() end
+    activity.finish()
+  end)
+  bindClick(ui.ctrlRecreate, function()
+    if S.sheet then S.sheet.dismiss() end
+    activity.recreate()
+  end)
+  bindClick(ui.ctrlRestart, function()
+    if S.sheet then S.sheet.dismiss() end
+    local intent = activity.getIntent()
+    activity.finish()
+    activity.startActivity(intent)
+  end)
+  bindClick(ui.ctrlKill, function()
+    if S.sheet then S.sheet.dismiss() end
+    api.removeBubble()
+    os.exit()
+  end)
+  bindClick(ui.ctrlDevice, function()
+    api.openTextInPanel("Device", api.deviceInfoText())
+  end)
+  bindClick(ui.ctrlMem, function()
+    api.openTextInPanel("Memory", api.runtimeMemText())
+  end)
+  bindClick(ui.ctrlIntent, function()
+    api.openTextInPanel("Intent", api.intentExtrasText())
+  end)
+  bindClick(ui.ctrlViews, function()
+    api.openTextInPanel("Views", api.dumpViewTree(nil, 5))
+  end)
+  bindClick(ui.ctrlPaths, function()
+    local lines = { "=== Paths ===" }
+    pcall(function() lines[#lines + 1] = "Lua: " .. tostring(this.getLuaPath()) end)
+    pcall(function() lines[#lines + 1] = "LuaDir: " .. tostring(this.getLuaDir()) end)
+    pcall(function() lines[#lines + 1] = "Files: " .. activity.getFilesDir().getAbsolutePath() end)
+    pcall(function() lines[#lines + 1] = "Cache: " .. activity.getCacheDir().getAbsolutePath() end)
+    pcall(function()
+      local e = activity.getExternalFilesDir(nil)
+      if e then lines[#lines + 1] = "Ext: " .. e.getAbsolutePath() end
+    end)
+    pcall(function()
+      if this.getMediaDir then
+        lines[#lines + 1] = "Media: " .. this.getMediaDir().getAbsolutePath()
+      end
+    end)
+    lines[#lines + 1] = "Crash: " .. api.crashDir()
+    if S.lastCrashPath then lines[#lines + 1] = "Last crash: " .. S.lastCrashPath end
+    api.openTextInPanel("Paths", table.concat(lines, "\n"))
+  end)
+  bindClick(ui.ctrlGc, function()
+    api.runGcAndReport()
+  end)
+  bindClick(ui.ctrlPause, function()
+    api.toggleLoggingPause()
+    pcall(function()
+      if ui.ctrlPause then
+        ui.ctrlPause.setText(S.loggingPaused and "Resume log" or "Pause log")
+      end
+    end)
+  end)
+  bindClick(ui.ctrlScreen, function()
+    api.toggleKeepScreenOn()
+    pcall(function()
+      if ui.ctrlScreen then
+        ui.ctrlScreen.setText(S.keepScreenOn and "Screen off" or "Screen on")
+      end
+    end)
+  end)
+  bindClick(ui.ctrlHide, function()
+    if S.sheet then S.sheet.dismiss() end
+    api.hideBubbleTemporarily()
+  end)
+  bindClick(ui.ctrlHist, function()
+    if #S.evalHistory == 0 then
+      api.toast("No eval history")
+      return
+    end
+    local last = S.evalHistory[#S.evalHistory]
+    pcall(function() if ui.ctrlCode then ui.ctrlCode.setText(last) end end)
+    api.toast("Loaded last eval (" .. #S.evalHistory .. ")")
+  end)
+  pcall(function()
+    if not ui.ctrlHist then return end
+    ui.ctrlHist.onLongClick = function(v)
+      api.vibrate(v)
+      if #S.evalHistory == 0 then
+        api.toast("No eval history")
+        return true
+      end
+      api.openTextInPanel("Eval history", table.concat(S.evalHistory, "\n---\n"))
+      return true
+    end
+  end)
+  bindClick(ui.ctrlRun, function()
+    if not ui.ctrlCode then return end
+    local src = tostring(ui.ctrlCode.getText() or "")
+    local f, e = load(src)
+    if f then
+      local ok, ret = pcall(f)
+      if ok then
+        api.pushEvalHistory(src)
+        ui.ctrlCode.setText("")
+        if ret ~= nil then
+          info("eval ok → " .. api.truncate(api.dumpValue(ret), 200))
+          api.openTextInPanel("Eval result", api.dumpValue(ret))
+        else
+          info("eval ok")
+        end
+      else
+        safe_error(ret)
+        api.toast("runtime error")
+      end
+    else
+      safe_error(e)
+      api.toast("syntax error")
+    end
+  end)
+
+  api.rebuildActionBar(0)
+  api.pullHostLogs()
+  api.rebuildPrintList()
+end
+
+function api.showSheet()
+  if not api.activityAlive() then return end
+  api.resolveTheme(true)
+  local showing = false
+  pcall(function() showing = S.sheet and S.sheet.isShowing() end)
+  if showing then return end
+
+  local content = api.buildSheetContent()
+  local dw, dh = api.preferredSheetSize()
+  -- 先定尺寸再 setContentView，避免 Dialog 按 wrap 量出矮内容
+  pcall(function()
+    content.setLayoutParams(J.FrameLayout.LayoutParams(-1, dh))
+    content.setMinimumHeight(dh)
+  end)
+
+  pcall(function()
+    S.sheet = J.AppCompatDialog(activity)
+    S.sheet.setCancelable(true)
+    S.sheet.setCanceledOnTouchOutside(true)
+    -- 窗口样式：无标题，自管内容
+    pcall(function() S.sheet.supportRequestWindowFeature(1) end) -- FEATURE_NO_TITLE
+    pcall(function() S.sheet.requestWindowFeature(1) end)
+    local win = S.sheet.getWindow()
+    if win then
+      win.setBackgroundDrawable(J.ColorDrawable(0))
+      pcall(function() win.getDecorView().setPadding(0, 0, 0, 0) end)
+      local attrs = win.getAttributes()
+      attrs.width = dw
+      attrs.height = dh
+      attrs.gravity = J.Gravity.CENTER
+      attrs.dimAmount = 0.45
+      win.setAttributes(attrs)
+    end
+    S.sheet.setContentView(content)
+    S.sheet.setOnDismissListener(function()
+      S.sheet = nil
+      for k in pairs(ui) do ui[k] = nil end
+      S.printAdp = nil
+      S.variableAdp = nil
+      S.logcatAdp = nil
+    end)
+  end)
+  if not S.sheet then return end
+
+  api.wireSheet()
+  api.setBubbleError(false)
+
+  pcall(function()
+    api.applyRound(content, c.surface, 18)
+    if ui.printSearch and ui.printSearch.getParent() then
+      api.applyRound(ui.printSearch.getParent(), c.surfaceContainerHigh, 12)
+    end
+    api.applyRound(ui.actionBar, c.surfaceContainerLow, 0)
+  end)
+
+  S.sheet.show()
+  api.applySheetLayout(content, S.sheet)
+  pcall(function()
+    content.post(function()
+      if S.sheet then api.applySheetLayout(content, S.sheet) end
+    end)
+  end)
+end
+
+-- ─── Lifecycle（链式旧回调） ─────────────────────────────
+api.chainGlobal("onDestroy", function()
+  api.removeBubble()
+  if S.sheet then
+    pcall(function() S.sheet.dismiss() end)
+    S.sheet = nil
+  end
+end)
+
+api.chainGlobal("onConfigurationChanged", function()
+  pcall(function()
+    S.dm = activity.getResources().getDisplayMetrics()
+    api.snapBubble()
+  end)
+end)
+
+-- ─── Boot：仅在 setContentView 之后挂悬浮钮（不碰 statusBar / 主题） ───
+pcall(function()
+  local logs = J.LuaActivityClass.logs
+  if logs then S.hostLogsCursor = logs.size() end
+end)
+
+function api.bootUi()
+  if S.bootDone or not api.activityAlive() then return end
+  S.bootDone = true
+  api.resolveTheme(true)
+  api.attachBubble()
+  if not S.bubbleAttached then
+    pcall(function()
+      local decor = api.resolveContentRoot()
+      if decor and decor.post then
+        decor.post(function()
+          if not S.bubbleAttached then api.attachBubble() end
+        end)
+      end
+    end)
+  end
+  pcall(function()
+    local pkg = activity.getPackageManager().getPackageInfo(activity.getPackageName(), 0)
+    local label = tostring(pkg.applicationInfo.loadLabel(activity.getPackageManager()))
+    info(string.format(
+      "System: %s · Android %s (SDK %s) · %s %s",
+      J.Build.MODEL,
+      J.Build.VERSION.RELEASE,
+      tostring(J.Build.VERSION.SDK_INT or J.Build.VERSION.SDK),
+      label,
+      tostring(pkg.versionName)))
+    info("File: " .. tostring(this.getLuaPath()))
+  end)
+end
+
+-- 等宿主 setContentView 触发 onContentChanged，再挂 UI
+-- （require 在文件顶部时也不会在 dynamicColor 前 inflate）
+api.chainGlobal("onContentChanged", function()
+  if not S.bootDone then
+    api.bootUi()
+    return
+  end
+  if not S.bubble or not S.bubbleAttached or not S.bubble.getParent() then
+    S.bubbleAttached = false
+    api.attachBubble()
+  end
+end)
+
+-- 若 require 在 setContentView 之后，content 已存在则下一帧启动
+pcall(function()
+  local root = api.resolveContentRoot()
+  if root and root.getChildCount and root.getChildCount() > 0 and root.post then
+    root.post(function() api.bootUi() end)
+  end
+end)
+
+return true

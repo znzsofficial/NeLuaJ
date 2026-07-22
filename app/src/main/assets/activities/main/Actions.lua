@@ -3,6 +3,7 @@ import "java.io.File"
 import "android.animation.AnimatorSet"
 import "android.animation.ObjectAnimator"
 import "com.google.android.material.dialog.MaterialAlertDialogBuilder"
+import "com.androlua.LuaUtil"
 
 import "mods.utils.EditorUtil"
 import "mods.utils.ActivityUtil"
@@ -60,6 +61,44 @@ function Actions.backupCurrentProject()
   local zipName = (init.app_name or "Untitled") .. "-" .. os.date("%Y-%m-%d-%H-%M-%S") .. ".zip"
   LuaFileUtil.compress(projectDir, Bean.Path.app_root_dir .. "/Backup", zipName)
   snack(res.string.backup .. ": " .. zipName)
+end
+
+--- 复制 vConsole.lua 到工程根，并将 require 行放入剪贴板（不改 main.lua）
+function Actions.injectVConsole()
+  if Bean.Project.this_project == "" then
+    snack(res.string.noProject)
+    return
+  end
+  local projectDir = Bean.Path.app_root_pro_dir .. "/" .. Bean.Project.this_project
+  local dest = projectDir .. "/vConsole.lua"
+  local src
+  pcall(function() src = this.getLuaDir("vConsole.lua") end)
+  if not src or src == "" or not File(src).isFile() then
+    snack(res.string.vconsole_inject_no_src or "找不到内置 vConsole.lua")
+    return
+  end
+
+  local copied = false
+  pcall(function()
+    LuaUtil.copyFile(src, dest)
+    copied = File(dest).isFile()
+  end)
+  if not copied then
+    snack(res.string.vconsole_inject_copy_fail or "复制 vConsole.lua 失败")
+    return
+  end
+
+  local requireLine = 'require "vConsole"'
+  pcall(function()
+    local ClipData = luajava.bindClass "android.content.ClipData"
+    local Context = luajava.bindClass "android.content.Context"
+    local cm = activity.getSystemService(Context.CLIPBOARD_SERVICE)
+    cm.setPrimaryClip(ClipData.newPlainText("vConsole", requireLine))
+  end)
+  pcall(function() MainActivity.RecyclerView.update() end)
+
+  snack(res.string.vconsole_inject_ok
+    or '已复制 vConsole.lua；require "vConsole" 已在剪贴板，请粘贴到 setContentView 之后')
 end
 
 function Actions.formatCode()
@@ -128,6 +167,10 @@ end
 
 function Actions.openResource()
   ActivityUtil.open("resource")
+end
+
+function Actions.openMedia()
+  ActivityUtil.open("media")
 end
 
 function Actions.openJavaAnalysis()
