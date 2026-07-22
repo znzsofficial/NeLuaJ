@@ -62,6 +62,7 @@ local function buildClickMap(Actions)
     layout_helper = function() Actions.openLayoutHelper() end,
     api = function() Actions.openApi() end,
     resource = function() Actions.openResource() end,
+    media = function() Actions.openMedia() end,
     build = function() Actions.openBuild() end,
     create_project = function() Actions.createProject() end,
     project_settings = function() Actions.openProjectSettings() end,

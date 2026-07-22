@@ -19,6 +19,7 @@ local routes = {
   layouthelper     = "layouthelper/LayoutHelperActivity.lua",
   resource         = "resource/ResourceBrowserActivity.lua",
   project_settings = "projectsettings/ProjectSettingsActivity.lua",
+  media            = "media/MediaBrowserActivity.lua",
 }
 
 local PENDING_KEY = "_nav_pending_v1"

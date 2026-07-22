@@ -16,6 +16,7 @@ local CATALOG = {
   { id = "layout_helper", titleKey = "layout_helper" },
   { id = "api", titleKey = "api_title" },
   { id = "resource", titleKey = "resource_browser" },
+  { id = "media", titleKey = "media_browser" },
   { id = "build", titleKey = "build" },
   { id = "create_project", titleKey = "create_project" },
   { id = "project_settings", titleKey = "project_settings" },
