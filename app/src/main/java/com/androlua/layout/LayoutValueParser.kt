@@ -214,11 +214,32 @@ internal class LayoutValueParser(
         }
     }
 
+    /**
+     * 统一成 ColorStateList，供 iconTint / backgroundTint 等使用。
+     * 兼容：ColorStateList userdata、int、long（Lua 数字）、"#AARRGGBB"、"?attr/…"。
+     */
     fun toColorStateList(value: LuaValue): ColorStateList {
-        if (value.isuserdata(ColorStateList::class.java)) {
-            return value.touserdata(ColorStateList::class.java) as ColorStateList
+        if (value.isnil()) {
+            throw LuaError("颜色不能为 nil")
         }
-        return ColorStateList.valueOf(toColorIntValue(value))
+        if (value.isuserdata()) {
+            val raw = value.touserdata()
+            when (raw) {
+                is ColorStateList -> return raw
+                is Number -> return ColorStateList.valueOf(raw.toInt())
+            }
+            // 兼容 isuserdata(ColorStateList) 在部分桥接下不匹配的情况
+            if (value.isuserdata(ColorStateList::class.java)) {
+                return value.touserdata(ColorStateList::class.java) as ColorStateList
+            }
+        }
+        return try {
+            ColorStateList.valueOf(toColorIntValue(value))
+        } catch (e: LuaError) {
+            throw e
+        } catch (e: Exception) {
+            throw LuaError("无法转为 ColorStateList: ${value.typename()} — ${e.message}")
+        }
     }
 
     fun resolveThemeAttributeValue(ref: String): Any? {

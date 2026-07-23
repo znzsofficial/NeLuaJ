@@ -50,18 +50,20 @@ internal class LayoutViewFactory(
         val styleSpec = parseViewStyle(layout)
         if (!styleSpec.hasStyle) return viewClass.call(luaValueContext)
 
-        val themeWrapId = when {
-            styleSpec.themeResId != 0 -> styleSpec.themeResId
-            styleSpec.legacyStyleResId != 0 && styleSpec.styleAttr == 0 -> styleSpec.legacyStyleResId
-            styleSpec.styleRes != 0 && styleSpec.styleAttr == 0 && styleSpec.legacyStyleResId == 0 ->
-                styleSpec.styleRes
-            else -> 0
-        }
-        val themedContext = contextForThemeRes(themeWrapId)
+        // theme 只用于 ContextThemeWrapper；style / styleRes 不得当 theme 包一层
+        val themedContext = contextForThemeRes(styleSpec.themeResId)
         val themedLuaContext =
             if (themedContext === initialContext) luaValueContext
             else themedContext.toLuaInstance()
         val attrs = NIL
+
+        // 最终 defStyleRes：显式 styleRes 优先，否则 legacy style=@style/...
+        val defStyleRes = when {
+            styleSpec.styleRes != 0 -> styleSpec.styleRes
+            styleSpec.legacyStyleResId != 0 -> styleSpec.legacyStyleResId
+            else -> 0
+        }
+        val defStyleAttr = styleSpec.styleAttr
 
         var failures: ArrayList<String>? = null
         fun fail(sig: String, error: Throwable) {
@@ -69,15 +71,15 @@ internal class LayoutViewFactory(
             list.add("$sig -> ${error.message ?: error::class.java.simpleName}")
         }
 
-        if (styleSpec.styleAttr != 0 && styleSpec.styleRes != 0 &&
-            viewClass.isuserdata(Class::class.java)
-        ) {
+        // 有 style 资源时优先四参 (Context, attrs, defStyleAttr, defStyleRes)
+        // 纯 styleRes / @style 时 defStyleAttr=0，勿把 style id 塞进第三参
+        if (defStyleRes != 0 && viewClass.isuserdata(Class::class.java)) {
             val clazz = viewClass.touserdata(Class::class.java) as Class<*>
             if (fourArgConstructor(clazz) != null) {
                 try {
                     return instantiateView(
                         clazz, themedContext, null,
-                        styleSpec.styleAttr, styleSpec.styleRes
+                        defStyleAttr, defStyleRes
                     )
                 } catch (e: Exception) {
                     fail("(Context, AttributeSet?, defStyleAttr, defStyleRes)", e)
@@ -85,33 +87,14 @@ internal class LayoutViewFactory(
             }
         }
 
-        if (styleSpec.styleAttr != 0) {
+        // 仅 styleAttr（?attr/…）走三参构造
+        if (defStyleAttr != 0) {
             try {
                 return viewClass.call(
-                    themedLuaContext, attrs, styleSpec.styleAttr.toLuaValue()
+                    themedLuaContext, attrs, defStyleAttr.toLuaValue()
                 )
             } catch (e: Exception) {
                 fail("(Context, AttributeSet?, defStyleAttr)", e)
-            }
-        }
-
-        if (styleSpec.styleRes != 0) {
-            try {
-                return viewClass.call(
-                    themedLuaContext, attrs, styleSpec.styleRes.toLuaValue()
-                )
-            } catch (e: Exception) {
-                fail("(Context, AttributeSet?, styleRes)", e)
-            }
-        }
-
-        if (styleSpec.legacyStyleResId != 0) {
-            try {
-                return viewClass.call(
-                    themedLuaContext, attrs, styleSpec.legacyStyleResId.toLuaValue()
-                )
-            } catch (e: Exception) {
-                fail("legacy (Context, AttributeSet?, style)", e)
             }
         }
 

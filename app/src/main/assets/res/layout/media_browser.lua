@@ -1,16 +1,21 @@
 import "android.widget.LinearLayout"
-import "android.widget.ListView"
 import "android.widget.HorizontalScrollView"
 import "android.widget.FrameLayout"
+import "androidx.swiperefreshlayout.widget.SwipeRefreshLayout"
+import "androidx.recyclerview.widget.RecyclerView"
 import "com.google.android.material.textview.MaterialTextView"
 import "com.google.android.material.chip.ChipGroup"
 import "com.google.android.material.chip.Chip"
 import "com.google.android.material.button.MaterialButton"
+import "com.google.android.material.card.MaterialCardView"
 import "vinx.material.textfield.MaterialTextField"
 
 local ColorUtil = this.themeUtil
 local primary = ColorUtil.getColorPrimary()
 local onVar = ColorUtil.getColorOnSurfaceVariant()
+local surfaceLow = ColorUtil.getColorSurfaceContainerLow
+  and ColorUtil.getColorSurfaceContainerLow()
+  or ColorUtil.getColorBackground()
 
 local function rootChip(id, text)
   return {
@@ -54,35 +59,75 @@ return {
   },
 
   {
-    LinearLayout,
-    orientation = "horizontal",
+    MaterialCardView,
     layout_width = "match",
     layout_height = "wrap",
-    gravity = "center_vertical",
-    paddingLeft = "12dp",
-    paddingRight = "8dp",
-    paddingBottom = "4dp",
+    layout_marginLeft = "12dp",
+    layout_marginRight = "12dp",
+    layout_marginTop = "4dp",
+    layout_marginBottom = "4dp",
+    cardElevation = "0dp",
+    radius = "12dp",
+    cardBackgroundColor = surfaceLow,
     {
-      MaterialTextView,
-      id = "pathText",
-      layout_width = "0dp",
-      layout_weight = 1,
+      LinearLayout,
+      orientation = "vertical",
+      layout_width = "match",
       layout_height = "wrap",
-      textSize = "12sp",
-      textColor = onVar,
-      maxLines = 2,
-      text = "…",
-    },
-    {
-      MaterialButton,
-      id = "btnUp",
-      text = res.string.media_up or "上级",
-      layout_width = "wrap",
-      layout_height = "wrap",
-      minHeight = "40dp",
-      textSize = "12sp",
-      styleAttr = "?attr/borderlessButtonStyle",
-      textColor = primary,
+      paddingLeft = "12dp",
+      paddingRight = "8dp",
+      paddingTop = "8dp",
+      paddingBottom = "8dp",
+      {
+        LinearLayout,
+        orientation = "horizontal",
+        layout_width = "match",
+        layout_height = "wrap",
+        gravity = "center_vertical",
+        {
+          MaterialTextView,
+          id = "pathText",
+          layout_width = "0dp",
+          layout_weight = 1,
+          layout_height = "wrap",
+          textSize = "12sp",
+          textColor = onVar,
+          maxLines = 2,
+          text = "…",
+        },
+        {
+          MaterialButton,
+          id = "btnUp",
+          text = res.string.media_up or "上级",
+          layout_width = "wrap",
+          layout_height = "wrap",
+          minHeight = "36dp",
+          textSize = "12sp",
+          styleAttr = "?attr/borderlessButtonStyle",
+          textColor = primary,
+        },
+        {
+          MaterialButton,
+          id = "btnRefresh",
+          text = res.string.media_refresh or "刷新",
+          layout_width = "wrap",
+          layout_height = "wrap",
+          minHeight = "36dp",
+          textSize = "12sp",
+          styleAttr = "?attr/borderlessButtonStyle",
+          textColor = primary,
+        },
+      },
+      {
+        MaterialTextView,
+        id = "metaText",
+        layout_width = "match",
+        layout_height = "wrap",
+        layout_marginTop = "2dp",
+        textSize = "11sp",
+        textColor = onVar,
+        text = "",
+      },
     },
   },
 
@@ -91,7 +136,7 @@ return {
     id = "searchEdit",
     layout_marginLeft = "12dp",
     layout_marginRight = "12dp",
-    layout_marginBottom = "4dp",
+    layout_marginBottom = "2dp",
     layout_height = "wrap",
     layout_width = "match",
     textSize = "12sp",
@@ -102,16 +147,91 @@ return {
   },
 
   {
-    MaterialTextView,
-    id = "metaText",
+    HorizontalScrollView,
     layout_width = "match",
     layout_height = "wrap",
-    paddingLeft = "16dp",
-    paddingRight = "16dp",
-    paddingBottom = "4dp",
-    textSize = "12sp",
-    textColor = onVar,
-    text = "",
+    horizontalScrollBarEnabled = false,
+    {
+      LinearLayout,
+      id = "toolBar",
+      orientation = "horizontal",
+      layout_width = "wrap",
+      layout_height = "wrap",
+      gravity = "center_vertical",
+      paddingLeft = "8dp",
+      paddingRight = "8dp",
+      paddingBottom = "4dp",
+      {
+        MaterialButton,
+        id = "btnSort",
+        text = res.string.media_sort or "排序",
+        layout_width = "wrap",
+        layout_height = "wrap",
+        minHeight = "36dp",
+        textSize = "12sp",
+        styleAttr = "?attr/borderlessButtonStyle",
+        textColor = primary,
+      },
+      {
+        MaterialButton,
+        id = "btnSelectMode",
+        text = res.string.media_select or "多选",
+        layout_width = "wrap",
+        layout_height = "wrap",
+        minHeight = "36dp",
+        textSize = "12sp",
+        styleAttr = "?attr/borderlessButtonStyle",
+        textColor = primary,
+      },
+      {
+        MaterialButton,
+        id = "btnSelectAll",
+        text = res.string.media_select_all or "全选",
+        layout_width = "wrap",
+        layout_height = "wrap",
+        minHeight = "36dp",
+        textSize = "12sp",
+        styleAttr = "?attr/borderlessButtonStyle",
+        textColor = primary,
+        visibility = "gone",
+      },
+      {
+        MaterialButton,
+        id = "btnDeleteSel",
+        text = res.string.delete or "删除",
+        layout_width = "wrap",
+        layout_height = "wrap",
+        minHeight = "36dp",
+        textSize = "12sp",
+        styleAttr = "?attr/borderlessButtonStyle",
+        textColor = "?attr/colorError",
+        visibility = "gone",
+      },
+      {
+        MaterialButton,
+        id = "btnShareSel",
+        text = res.string.media_share or "分享",
+        layout_width = "wrap",
+        layout_height = "wrap",
+        minHeight = "36dp",
+        textSize = "12sp",
+        styleAttr = "?attr/borderlessButtonStyle",
+        textColor = primary,
+        visibility = "gone",
+      },
+      {
+        MaterialButton,
+        id = "btnCopyPaths",
+        text = res.string.media_copy_path or "复制路径",
+        layout_width = "wrap",
+        layout_height = "wrap",
+        minHeight = "36dp",
+        textSize = "12sp",
+        styleAttr = "?attr/borderlessButtonStyle",
+        textColor = primary,
+        visibility = "gone",
+      },
+    },
   },
 
   {
@@ -119,6 +239,22 @@ return {
     layout_width = "match",
     layout_height = "0dp",
     layout_weight = 1,
+    {
+      SwipeRefreshLayout,
+      id = "swipeRefresh",
+      layout_width = "match",
+      layout_height = "match",
+      {
+        RecyclerView,
+        id = "fileList",
+        layout_width = "match",
+        layout_height = "match",
+        paddingTop = "4dp",
+        paddingBottom = "12dp",
+        clipToPadding = false,
+        overScrollMode = 2,
+      },
+    },
     {
       LinearLayout,
       id = "emptyView",
@@ -147,17 +283,6 @@ return {
         gravity = "center",
         layout_marginTop = "8dp",
       },
-    },
-    {
-      ListView,
-      id = "fileList",
-      layout_width = "match",
-      layout_height = "match",
-      FastScrollEnabled = true,
-      DividerHeight = 0,
-      paddingTop = "4dp",
-      paddingBottom = "8dp",
-      clipToPadding = false,
     },
   },
 }

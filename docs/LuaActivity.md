@@ -148,10 +148,11 @@ print / sendMsg
 ## 8. 已知限制
 
 1. **一脚本一 Activity**：深栈多页面时实例多，Globals 不共享（有意隔离）。  
-2. **`sLuaActivityMap` 按 pageName**：同名脚本多实例会互相覆盖 map 项。  
+2. **`sLuaActivityMap` 按 pageName**：同名多实例用 **栈**（后打开的在顶）；`getActivity(name)` 返回栈顶；`onDestroy` 只移除自身。  
 3. **主线程假设**：多数 UI API 要求主线程；`thread`/`task` 回传需 `call`。  
 4. **`onError` 返回非约定值**：可能拦截默认日志，脚本需自觉。  
-5. **与主工程 environment 耦合**：编辑器主界面逻辑在 assets，不在 Kotlin；改注入需两边对齐。
+5. **与主工程 environment 耦合**：编辑器主界面逻辑在 assets，不在 Kotlin；改注入需两边对齐。  
+6. **`sActivity` 静态当前页**：仅表示最近置前/创建的实例，后台页勿依赖。
 
 ---
 
@@ -162,7 +163,6 @@ print / sendMsg
 | 项 | 说明 |
 |----|------|
 | 继续抽离 onCreate | 把 Globals 注入列表收到 `LuaActivityBootstrap`，Activity 只调一行 |
-| pageName 冲突 | map 键改为 `luaFile` 绝对路径或 `identityHashCode` |
 | 日志背压 | `logEvents` 已有 buffer；可监控丢弃并计数 |
 | 文档 | 与 `res/doc/LuaActivity.html` / `global_env.html` 保持同步 |
 

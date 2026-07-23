@@ -18,6 +18,7 @@ import "com.google.android.material.tabs.TabLayout"
 import "com.google.android.material.textview.MaterialTextView"
 import "com.google.android.material.button.MaterialButton"
 import "github.daisukiKaffuChino.LuaFileTabView"
+import "android.view.View"
 --import "vinx.material.textfield.MaterialTextField"
 
 local ColorUtil = this.themeUtil
@@ -25,6 +26,28 @@ local ColorUtil = this.themeUtil
 local rippleRes = activity.obtainStyledAttributes({ android.R.attr.selectableItemBackgroundBorderless }).getResourceId(0, 0)
 
 local ColorBackground = ColorUtil.getColorBackground()
+local ColorPrimary = ColorUtil.getColorPrimary()
+local ColorOnSurfaceVar = ColorUtil.getColorOnSurfaceVariant()
+local ColorOnSurface = ColorUtil.getColorOnSurface()
+local ColorPrimaryContainer = ColorUtil.getColorPrimaryContainer()
+local ColorOnPrimaryContainer = ColorUtil.getColorOnPrimaryContainer()
+local ColorError = ColorUtil.getColorError()
+
+local function fileIcon(id, drawableName, tint, desc)
+  return {
+    AppCompatImageView,
+    id = id,
+    layout_width = "40dp",
+    layout_height = "40dp",
+    padding = "8dp",
+    src = res.drawable(drawableName, tint),
+    BackgroundResource = rippleRes,
+    clickable = true,
+    longClickable = true,
+    focusable = true,
+    contentDescription = desc,
+  }
+end
 
 return {
   CoordinatorLayout;
@@ -424,11 +447,74 @@ return {
           layout_width = "0dp";
           layout_height = "match";
           layout_weight = 1;
+          -- 常态：工程 / 新建 · 粘贴(有剪贴板) / 多选
+          {
+            LinearLayout,
+            id = "fileNormalBar",
+            orientation = "horizontal",
+            layout_width = "match",
+            layout_height = "44dp",
+            gravity = "center_vertical",
+            paddingLeft = "2dp",
+            paddingRight = "2dp",
+            fileIcon("btnFileHome", "android_studio", ColorPrimary, res.string.file_at_project),
+            fileIcon("btnFileNewFile", "new_file", ColorPrimary, res.string.new_file),
+            fileIcon("btnFileNewDir", "new_folder", ColorPrimary, res.string.new_dir),
+            {
+              View,
+              layout_width = "0dp",
+              layout_height = "1dp",
+              layout_weight = 1,
+            },
+            fileIcon("btnFilePaste", "ic_paste", ColorPrimary, res.string.file_paste),
+            {
+              MaterialTextView,
+              id = "btnFileSelect",
+              layout_width = "wrap",
+              layout_height = "40dp",
+              gravity = "center",
+              paddingLeft = "12dp",
+              paddingRight = "12dp",
+              textSize = "13sp",
+              text = res.string.media_select,
+              textColor = ColorPrimary,
+              BackgroundResource = rippleRes,
+              clickable = true,
+              longClickable = true,
+              focusable = true,
+              contentDescription = res.string.media_select,
+            },
+          },
+          -- 多选栏：取消 / 全选 · 复制 / 剪切 / 删除（粘贴在常态栏）
+          {
+            LinearLayout,
+            id = "fileSelectBar",
+            orientation = "horizontal",
+            layout_width = "match",
+            layout_height = "44dp",
+            gravity = "center_vertical",
+            paddingLeft = "2dp",
+            paddingRight = "2dp",
+            BackgroundColor = ColorPrimaryContainer,
+            visibility = 8, -- GONE
+            fileIcon("btnFileCancelSel", "close", ColorOnPrimaryContainer, res.string.media_cancel_select),
+            fileIcon("btnFileSelectAll", "ic_select_all", ColorOnPrimaryContainer, res.string.media_select_all),
+            {
+              View,
+              layout_width = "0dp",
+              layout_height = "1dp",
+              layout_weight = 1,
+            },
+            fileIcon("btnFileCopy", "ic_copy", ColorOnPrimaryContainer, res.string.copy),
+            fileIcon("btnFileCut", "ic_cut", ColorOnPrimaryContainer, res.string.file_cut),
+            fileIcon("btnFileDeleteSel", "delete", ColorError, res.string.delete),
+          },
+          -- 面包屑
           {
             LuaFileTabView,
             id = "filetab",
             layout_width = "match",
-            layout_height = "48dp",
+            layout_height = "40dp",
             tabMode = 0,
             selectedTabIndicatorHeight = 0,
             inlineLabel = true,

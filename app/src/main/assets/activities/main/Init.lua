@@ -79,6 +79,7 @@ _M.initView2 = function()
   mRecycler.post(function()
     MainActivity.RecyclerView
       .init()
+      .bindChrome()
       .update()
   end)
   swipeRefresh.onRefresh = function()

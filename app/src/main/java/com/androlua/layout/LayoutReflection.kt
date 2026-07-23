@@ -98,6 +98,17 @@ internal object LayoutReflection {
         return null
     }
 
+    /** Lua / 表属性名 → setXxx */
+    fun setterName(key: String): String {
+        if (key.isEmpty()) return "set"
+        val c0 = key[0]
+        return if (c0.isLowerCase()) {
+            "set" + c0.uppercaseChar() + key.substring(1)
+        } else {
+            "set$key"
+        }
+    }
+
     fun invokeBooleanSetter(target: Any, methodName: String, value: Boolean): Boolean {
         val m = cachedMethod(
             booleanSetterCache, target.javaClass, methodName,
@@ -144,6 +155,91 @@ internal object LayoutReflection {
             m.invoke(target, csl)
             true
         }.getOrDefault(false)
+    }
+
+    fun invokeObjectSetter(target: Any, methodName: String, value: Any): Boolean {
+        // 精确类型 → 常见接口/父类形参（setTag(Object)、setImageDrawable(Drawable)…）
+        val candidates = ArrayList<Class<*>>(4)
+        candidates.add(value.javaClass)
+        when (value) {
+            is android.graphics.drawable.Drawable ->
+                candidates.add(android.graphics.drawable.Drawable::class.java)
+            is android.view.View ->
+                candidates.add(android.view.View::class.java)
+            is CharSequence -> {
+                candidates.add(CharSequence::class.java)
+                candidates.add(String::class.java)
+            }
+        }
+        candidates.add(Any::class.java)
+        for (param in candidates) {
+            val m = cachedMethod(objectSetterCache, target.javaClass, methodName, param)
+                ?: continue
+            if (runCatching {
+                    m.invoke(target, value)
+                    true
+                }.getOrDefault(false)
+            ) {
+                return true
+            }
+        }
+        return false
+    }
+
+    /**
+     * 热路径：用缓存 Method 直接写属性，避开 JavaInstance `view[key]=` 桥。
+     * 调用方应先 [canSetJavaProperty]，避免误命中无关 setXxx。
+     * @return true 已成功设置
+     */
+    fun trySetJavaValue(target: Any, key: String, value: Any?): Boolean {
+        if (value == null) return false
+        val name = setterName(key)
+        return when (value) {
+            is Boolean -> invokeBooleanSetter(target, name, value)
+            is Int -> invokeIntSetter(target, name, value)
+            is Long -> {
+                val n = value.toInt()
+                if (n.toLong() == value && invokeIntSetter(target, name, n)) true
+                else invokeFloatSetter(target, name, value.toFloat())
+            }
+            is Float -> invokeFloatSetter(target, name, value)
+            is Double -> {
+                val asInt = value.toInt()
+                if (asInt.toDouble() == value && invokeIntSetter(target, name, asInt)) true
+                else invokeFloatSetter(target, name, value.toFloat())
+            }
+            is android.content.res.ColorStateList ->
+                invokeColorStateListSetter(target, name, value)
+            is CharSequence -> invokeCharSequenceSetter(target, name, value)
+            else -> invokeObjectSetter(target, name, value)
+        }
+    }
+
+    private fun invokeCharSequenceSetter(
+        target: Any,
+        methodName: String,
+        value: CharSequence,
+    ): Boolean {
+        // setText(CharSequence) 比 setText(String) 更常见
+        val byCs = cachedMethod(
+            objectSetterCache, target.javaClass, methodName, CharSequence::class.java
+        )
+        if (byCs != null) {
+            return runCatching {
+                byCs.invoke(target, value)
+                true
+            }.getOrDefault(false)
+        }
+        val byStr = cachedMethod(
+            objectSetterCache, target.javaClass, methodName, String::class.java
+        )
+        if (byStr != null) {
+            return runCatching {
+                byStr.invoke(target, value.toString())
+                true
+            }.getOrDefault(false)
+        }
+        return false
     }
 
     fun intSetterCache(): ConcurrentHashMap<String, Any> = intSetterCache

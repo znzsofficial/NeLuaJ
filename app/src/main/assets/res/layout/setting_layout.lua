@@ -355,6 +355,8 @@ return {
         -- ── 调试 ──
         sectionTitle(res.string.debug, "bug_report"),
         card(
+            settingItem("RunKeyModeItem", res.string.run_key_mode, res.string.run_key_mode_desc, "play"),
+            divider(),
             settingItem("RunWindowModeItem", res.string.run_window_mode, res.string.run_window_mode_desc, "dashboard"),
             divider(),
             settingItem("CustomApp", res.string.debug_app, "设置外部调试应用包名", "android_studio")

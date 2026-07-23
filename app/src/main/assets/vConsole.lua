@@ -139,13 +139,14 @@ S.loggingPaused = false
 S.keepScreenOn = false
 S.evalHistory = {}
 S.logcatTypes = { "", "lua:* *:S", "tcc:* *:S", "*:E", "*:W", "*:I", "*:D", "*:V" }
-S.logcatLabels = { "All", "Lua", "Tcc", "E", "W", "I", "D", "V" }
+-- 芯片文案 key：All/Lua/Tcc/E…（与 S.L 共享）
+S.logcatLabelKeys = { "all", "lc_lua", "lc_tcc", "lc_e", "lc_w", "lc_i", "lc_d", "lc_v" }
 S.printFilterIds = {
-  { "pf_all", "All", "all" },
-  { "pf_error", "Error", "error" },
-  { "pf_warn", "Warn", "warn" },
-  { "pf_info", "Info", "info" },
-  { "pf_log", "Log", "log" },
+  { "pf_all", "all", "all" },
+  { "pf_error", "error", "error" },
+  { "pf_warn", "warn", "warn" },
+  { "pf_info", "info", "info" },
+  { "pf_log", "log", "log" },
 }
 S.hostPrint = print
 S.hostPrintf = printf
@@ -189,6 +190,271 @@ S.logcatChipIds = {
   "lc_all", "lc_lua", "lc_tcc", "lc_e", "lc_w", "lc_i", "lc_d", "lc_v",
 }
 S.tabIds = { "tab_prints", "tab_vars", "tab_logcat", "tab_text", "tab_control" }
+
+-- ─── I18N：共享 key → { en, zh }，api.t(key) 取当前语言 ───
+S.lang = "en" -- "en" | "zh"
+S.L = {
+  -- header / common
+  app_sub = { "Runtime debugger", "运行时调试器" },
+  clear = { "Clear", "清空" },
+  export = { "Export", "导出" },
+  lang = { "中文", "EN" }, -- 按钮显示「目标语言」
+  close = { "Close", "关闭" },
+  copy = { "Copy", "复制" },
+  share = { "Share", "分享" },
+  refresh = { "Refresh", "刷新" },
+  save = { "Save", "保存" },
+  paste = { "Paste", "粘贴" },
+  run = { "Run", "运行" },
+  empty = { "Empty", "空" },
+  bottom = { "Bottom", "到底" },
+  root = { "Root", "根" },
+  copy_path = { "Copy path", "复制路径" },
+  -- tabs
+  tab_prints = { "Prints", "输出" },
+  tab_vars = { "Vars", "变量" },
+  tab_logcat = { "Logcat", "系统日志" },
+  tab_text = { "Text", "文本" },
+  tab_control = { "Control", "控制" },
+  -- filters
+  all = { "All", "全部" },
+  error = { "Error", "错误" },
+  warn = { "Warn", "警告" },
+  info = { "Info", "信息" },
+  log = { "Log", "普通" },
+  lc_lua = { "Lua", "Lua" },
+  lc_tcc = { "Tcc", "Tcc" },
+  lc_e = { "E", "E" },
+  lc_w = { "W", "W" },
+  lc_i = { "I", "I" },
+  lc_d = { "D", "D" },
+  lc_v = { "V", "V" },
+  -- prints empty
+  no_logs = { "No logs yet", "暂无日志" },
+  no_logs_hint = { "print() · sendMsg · onError will show here", "print() · sendMsg · onError 会出现在这里" },
+  entries = { "%d entries", "%d 条" },
+  -- vars / text
+  node = { "node: /", "节点: /" },
+  inspect = { "Inspect", "检查" },
+  -- control
+  tools = { "Tools", "工具" },
+  device = { "Device", "设备" },
+  memory = { "Memory", "内存" },
+  intent = { "Intent", "Intent" },
+  views = { "Views", "视图" },
+  paths = { "Paths", "路径" },
+  gc = { "GC", "GC" },
+  pause_log = { "Pause log", "暂停日志" },
+  resume_log = { "Resume log", "恢复日志" },
+  screen_on = { "Screen on", "常亮开" },
+  screen_off = { "Screen off", "常亮关" },
+  hide_bubble = { "Hide bubble", "隐藏气泡" },
+  eval_hist = { "Eval hist", "历史" },
+  eval_hint = { "Eval Lua in this environment", "在此环境执行 Lua" },
+  code_hint = { "Lua code…", "Lua 代码…" },
+  finish = { "Finish", "结束" },
+  recreate = { "Recreate", "重建" },
+  restart = { "Restart", "重启" },
+  kill = { "Kill", "强杀" },
+  -- toasts / status
+  export_failed = { "Export failed", "导出失败" },
+  save_failed = { "Save failed", "保存失败" },
+  saved = { "Saved: %s", "已保存: %s" },
+  copied = { "Copied", "已复制" },
+  copied_n = { "Copied %d", "已复制 %d" },
+  copied_logcat = { "Copied logcat", "已复制 logcat" },
+  nothing_copy = { "Nothing to copy", "无可复制内容" },
+  empty_logcat = { "Empty logcat", "logcat 为空" },
+  logging_paused = { "Logging paused", "日志已暂停" },
+  logging_resumed = { "Logging resumed", "日志已恢复" },
+  bubble_hidden = { "Bubble hidden until recreate / re-require", "气泡已隐藏，重建/重新 require 后恢复" },
+  export_banner = { "=== vConsole export ===", "=== vConsole 导出 ===" },
+  empty_logcat_body = { "<empty logcat>", "<logcat 为空>" },
+  logcat_unavail = { "<logcat unavailable>", "<logcat 不可用>" },
+  lang_switched = { "Language: English", "语言: 中文" },
+  search_logs = { "Search logs…", "搜索日志…" },
+  text_buffer = { "Text buffer…", "文本缓冲…" },
+  key_hint = { "key…", "键…" },
+  share_logs = { "Share logs", "分享日志" },
+  share_text = { "Share text", "分享文本" },
+  eval_history = { "Eval history", "执行历史" },
+  no_eval_hist = { "No eval history", "无执行历史" },
+  keep_screen_on = { "Keep screen ON", "屏幕常亮：开" },
+  keep_screen_off = { "Keep screen OFF", "屏幕常亮：关" },
+  logs_meta = { "%d logs · filter %s", "%d 条 · 筛选 %s" },
+  filtered_meta = { "%d / %d · %s%s", "%d / %d · %s%s" },
+  copied_panel = { "Copied (panel closed)", "已复制（面板未开）" },
+  copied_line = { "Copied log line", "已复制该行" },
+  mem_gc = { "Memory / GC", "内存 / GC" },
+  eval_result = { "Eval result", "执行结果" },
+  loaded_eval = { "Loaded last eval (%d)", "已载入上次代码 (%d)" },
+  runtime_error = { "runtime error", "运行时错误" },
+  syntax_error = { "syntax error", "语法错误" },
+}
+
+function api.t(key)
+  local row = S.L[key]
+  if not row then return tostring(key or "") end
+  local i = (S.lang == "zh") and 2 or 1
+  return row[i] or row[1] or tostring(key)
+end
+
+function api.tf(key, ...)
+  local fmt = api.t(key)
+  if select("#", ...) == 0 then return fmt end
+  local ok, s = pcall(string.format, fmt, ...)
+  return ok and s or fmt
+end
+
+function api.setLang(lang, quiet)
+  if lang ~= "zh" and lang ~= "en" then lang = "en" end
+  S.lang = lang
+  pcall(function()
+    if this and this.setSharedData then
+      this.setSharedData("vconsole_lang", lang)
+    end
+  end)
+  pcall(api.applyI18n)
+  if not quiet then api.toast(api.t("lang_switched")) end
+end
+
+function api.toggleLang()
+  api.setLang(S.lang == "zh" and "en" or "zh")
+end
+
+function api.detectSystemLang()
+  local lang = "en"
+  pcall(function()
+    local Locale = bindClass "java.util.Locale"
+    local l = Locale.getDefault().getLanguage()
+    if l and tostring(l):sub(1, 2) == "zh" then lang = "zh" end
+  end)
+  return lang
+end
+
+function api.loadLangPref()
+  local applied = false
+  pcall(function()
+    if this and this.getSharedData then
+      local v = this.getSharedData("vconsole_lang", nil)
+      if v == "zh" or v == "en" then
+        S.lang = v
+        applied = true
+      end
+    end
+  end)
+  if not applied then
+    S.lang = api.detectSystemLang()
+  end
+end
+
+function api.tabTitleKeys()
+  return { "tab_prints", "tab_vars", "tab_logcat", "tab_text", "tab_control" }
+end
+
+function api.syncPagerTitles()
+  if not ui.page then return end
+  pcall(function()
+    local adp = ui.page.getAdapter()
+    if not adp or not adp.setPageTitle then return end
+    local keys = api.tabTitleKeys()
+    for i = 1, #keys do
+      pcall(function() adp.setPageTitle(i - 1, api.t(keys[i])) end)
+    end
+  end)
+end
+
+--- 刷新已创建控件文案（切换语言 / 打开面板后）
+function api.applyI18n()
+  local function setText(view, key)
+    if view then pcall(function() view.setText(api.t(key)) end) end
+  end
+  local function setHint(view, key)
+    if view then pcall(function() view.setHint(api.t(key)) end) end
+  end
+  setText(ui.headerClear, "clear")
+  setText(ui.headerExport, "export")
+  setText(ui.headerLang, "lang")
+  setText(ui.ctrlFinish, "finish")
+  setText(ui.ctrlRecreate, "recreate")
+  setText(ui.ctrlRestart, "restart")
+  setText(ui.ctrlKill, "kill")
+  setText(ui.ctrlDevice, "device")
+  setText(ui.ctrlMem, "memory")
+  setText(ui.ctrlIntent, "intent")
+  setText(ui.ctrlViews, "views")
+  setText(ui.ctrlPaths, "paths")
+  setText(ui.ctrlGc, "gc")
+  setText(ui.ctrlHide, "hide_bubble")
+  setText(ui.ctrlHist, "eval_hist")
+  setText(ui.ctrlRun, "run")
+  setText(ui.ctrlInspectLabel, "inspect")
+  setText(ui.ctrlToolsLabel, "tools")
+  setText(ui.ctrlEvalLabel, "eval_hint")
+  setHint(ui.printSearch, "search_logs")
+  setHint(ui.textEdit, "text_buffer")
+  setHint(ui.ctrlCode, "code_hint")
+  setHint(ui.varSearch, "key_hint")
+  pcall(function()
+    if ui.ctrlPause then
+      ui.ctrlPause.setText(S.loggingPaused and api.t("resume_log") or api.t("pause_log"))
+    end
+    if ui.ctrlScreen then
+      ui.ctrlScreen.setText(S.keepScreenOn and api.t("screen_off") or api.t("screen_on"))
+    end
+  end)
+  local keys = api.tabTitleKeys()
+  for i, id in ipairs(S.tabIds) do
+    setText(ui[id], keys[i])
+  end
+  for _, item in ipairs(S.printFilterIds) do
+    setText(ui[item[1]], item[2])
+  end
+  for i, id in ipairs(S.logcatChipIds) do
+    setText(ui[id], S.logcatLabelKeys[i])
+  end
+  setText(ui.printEmptyTitle, "no_logs")
+  setText(ui.printEmptyHint, "no_logs_hint")
+  if ui.headerSub and #S.printStore == 0 then
+    setText(ui.headerSub, "app_sub")
+  end
+  api.syncPagerTitles()
+  api.updatePrintMeta()
+  pcall(function()
+    local pos = 0
+    if ui.page then pos = ui.page.getCurrentItem() end
+    api.rebuildActionBar(pos)
+  end)
+end
+
+--- 顶栏 Clear：按当前页清空
+function api.clearForCurrentPage()
+  local pos = 0
+  pcall(function()
+    if ui.page then pos = ui.page.getCurrentItem() end
+  end)
+  if pos == 2 then
+    -- Logcat
+    api.runBg(function()
+      api.clearlog()
+      return true
+    end, function()
+      api.refreshLogcat()
+    end, "io")
+  elseif pos == 3 then
+    -- Text
+    pcall(function()
+      if ui.textEdit then ui.textEdit.setText(nil) end
+    end)
+  elseif pos == 1 then
+    -- Vars：回到根并刷新
+    table.clear(S.variableNode)
+    api.refreshVars()
+  else
+    -- Prints / Control：清空 print 缓冲
+    api.clearPrints()
+  end
+end
 
 if not table.clear then
   function table.clear(t)
@@ -357,10 +623,10 @@ function api.readlog(filter)
     local s = p:read("*a") or ""
     p:close()
     s = s:gsub("%-+ beginning of[^\n]*\n", "")
-    if #s == 0 then s = "<empty logcat>" end
+    if #s == 0 then s = api.t("empty_logcat_body") end
     return s
   end)
-  return ok and out or "<logcat unavailable>"
+  return ok and out or api.t("logcat_unavail")
 end
 
 function api.clearlog()
@@ -578,10 +844,11 @@ function api.attachBubble()
     end)
   end
 
-  S.bubbleAttached = ok and true or false
-  if S.bubbleAttached then api.setBubbleError(S.hasError) end
-  if not ok then
-    pcall(function() activity.sendMsg("[vConsole] attach bubble failed") end)
+  S.bubbleAttached = ok
+  if S.bubbleAttached then
+    api.setBubbleError(S.hasError)
+  else
+    activity.sendMsg("[vConsole] attach bubble failed")
   end
 end
 
@@ -759,7 +1026,7 @@ function api.printsPage()
         layout_height = "match",
         textSize = "13sp",
         textColor = c.onSurface,
-        hint = "Search logs…",
+        hint = api.t("search_logs"),
         singleLine = true,
         BackgroundColor = 0,
         paddingTop = "0dp",
@@ -796,11 +1063,11 @@ function api.printsPage()
         paddingRight = "8dp",
         paddingTop = "4dp",
         paddingBottom = "2dp",
-        api.filterBtn("pf_all", "All"),
-        api.filterBtn("pf_error", "Error"),
-        api.filterBtn("pf_warn", "Warn"),
-        api.filterBtn("pf_info", "Info"),
-        api.filterBtn("pf_log", "Log"),
+          api.filterBtn("pf_all", api.t("all")),
+          api.filterBtn("pf_error", api.t("error")),
+          api.filterBtn("pf_warn", api.t("warn")),
+          api.filterBtn("pf_info", api.t("info")),
+          api.filterBtn("pf_log", api.t("log")),
       },
     },
     {
@@ -812,7 +1079,7 @@ function api.printsPage()
       paddingRight = "12dp",
       paddingTop = "2dp",
       paddingBottom = "2dp",
-      text = "0 entries",
+      text = api.tf("entries", 0),
       textSize = "11sp",
       textColor = c.onSurfaceVariant,
     },
@@ -832,7 +1099,8 @@ function api.printsPage()
         padding = "20dp",
         {
           J.TextView,
-          text = "No logs yet",
+          id = "printEmptyTitle",
+          text = api.t("no_logs"),
           textSize = "14sp",
           textStyle = "bold",
           textColor = c.onSurface,
@@ -840,7 +1108,8 @@ function api.printsPage()
         },
         {
           J.TextView,
-          text = "print() · sendMsg · onError will show here",
+          id = "printEmptyHint",
+          text = api.t("no_logs_hint"),
           textSize = "12sp",
           textColor = c.onSurfaceVariant,
           gravity = "center",
@@ -900,7 +1169,7 @@ function api.buildSheetContent()
           {
             J.TextView,
             id = "headerSub",
-            text = "Runtime debugger",
+            text = api.t("app_sub"),
             textSize = "11sp",
             textColor = c.onSurfaceVariant,
             layout_marginTop = "0dp",
@@ -908,8 +1177,36 @@ function api.buildSheetContent()
         },
         {
           J.Button,
+          id = "headerClear",
+          text = api.t("clear"),
+          layout_width = "wrap",
+          layout_height = "32dp",
+          minHeight = "32dp",
+          minWidth = "0dp",
+          textSize = "12sp",
+          paddingLeft = "10dp",
+          paddingRight = "10dp",
+          BackgroundColor = 0,
+          textColor = c.primary,
+        },
+        {
+          J.Button,
           id = "headerExport",
-          text = "Export",
+          text = api.t("export"),
+          layout_width = "wrap",
+          layout_height = "32dp",
+          minHeight = "32dp",
+          minWidth = "0dp",
+          textSize = "12sp",
+          paddingLeft = "10dp",
+          paddingRight = "10dp",
+          BackgroundColor = 0,
+          textColor = c.primary,
+        },
+        {
+          J.Button,
+          id = "headerLang",
+          text = api.t("lang"),
           layout_width = "wrap",
           layout_height = "32dp",
           minHeight = "32dp",
@@ -937,11 +1234,11 @@ function api.buildSheetContent()
           paddingRight = "6dp",
           paddingTop = "2dp",
           paddingBottom = "4dp",
-          api.filterBtn("tab_prints", "Prints"),
-          api.filterBtn("tab_vars", "Vars"),
-          api.filterBtn("tab_logcat", "Logcat"),
-          api.filterBtn("tab_text", "Text"),
-          api.filterBtn("tab_control", "Control"),
+          api.filterBtn("tab_prints", api.t("tab_prints")),
+          api.filterBtn("tab_vars", api.t("tab_vars")),
+          api.filterBtn("tab_logcat", api.t("tab_logcat")),
+          api.filterBtn("tab_text", api.t("tab_text")),
+          api.filterBtn("tab_control", api.t("tab_control")),
         },
       },
       api.hairline(),
@@ -974,7 +1271,7 @@ function api.buildSheetContent()
               {
                 J.TextView,
                 id = "varPath",
-                text = "node: /",
+                text = api.t("node"),
                 textSize = "11sp",
                 textColor = c.success,
                 layout_marginEnd = "6dp",
@@ -987,7 +1284,7 @@ function api.buildSheetContent()
                 layout_weight = 1,
                 textSize = "12sp",
                 textColor = c.onSurface,
-                hint = "key…",
+                hint = api.t("key_hint"),
                 singleLine = true,
                 BackgroundColor = 0,
                 paddingTop = "0dp",
@@ -1027,14 +1324,14 @@ function api.buildSheetContent()
                 paddingRight = "6dp",
                 paddingTop = "4dp",
                 paddingBottom = "2dp",
-                api.filterBtn("lc_all", "All"),
-                api.filterBtn("lc_lua", "Lua"),
-                api.filterBtn("lc_tcc", "Tcc"),
-                api.filterBtn("lc_e", "E"),
-                api.filterBtn("lc_w", "W"),
-                api.filterBtn("lc_i", "I"),
-                api.filterBtn("lc_d", "D"),
-                api.filterBtn("lc_v", "V"),
+                api.filterBtn("lc_all", api.t("all")),
+                api.filterBtn("lc_lua", api.t("lc_lua")),
+                api.filterBtn("lc_tcc", api.t("lc_tcc")),
+                api.filterBtn("lc_e", api.t("lc_e")),
+                api.filterBtn("lc_w", api.t("lc_w")),
+                api.filterBtn("lc_i", api.t("lc_i")),
+                api.filterBtn("lc_d", api.t("lc_d")),
+                api.filterBtn("lc_v", api.t("lc_v")),
               },
             },
             {
@@ -1070,7 +1367,7 @@ function api.buildSheetContent()
                 padding = "12dp",
                 textSize = "12sp",
                 textColor = c.onSurface,
-                hint = "Text buffer…",
+                hint = api.t("text_buffer"),
                 gravity = "start|top",
                 BackgroundColor = 0,
                 textIsSelectable = true,
@@ -1099,22 +1396,23 @@ function api.buildSheetContent()
                   J.LinearLayout,
                   layout_width = "match",
                   layout_height = "wrap",
-                  api.tonalBtn("ctrlFinish", "Finish"),
+                  api.tonalBtn("ctrlFinish", api.t("finish")),
                   api.spacer("6dp"),
-                  api.tonalBtn("ctrlRecreate", "Recreate"),
+                  api.tonalBtn("ctrlRecreate", api.t("recreate")),
                 },
                 {
                   J.LinearLayout,
                   layout_width = "match",
                   layout_height = "wrap",
                   layout_marginTop = "6dp",
-                  api.tonalBtn("ctrlRestart", "Restart"),
+                  api.tonalBtn("ctrlRestart", api.t("restart")),
                   api.spacer("6dp"),
-                  api.tonalBtn("ctrlKill", "Kill"),
+                  api.tonalBtn("ctrlKill", api.t("kill")),
                 },
                 {
                   J.TextView,
-                  text = "Inspect",
+                  id = "ctrlInspectLabel",
+                  text = api.t("inspect"),
                   textSize = "11sp",
                   textColor = c.onSurfaceVariant,
                   layout_marginTop = "10dp",
@@ -1124,31 +1422,32 @@ function api.buildSheetContent()
                   J.LinearLayout,
                   layout_width = "match",
                   layout_height = "wrap",
-                  api.tonalBtn("ctrlDevice", "Device"),
+                  api.tonalBtn("ctrlDevice", api.t("device")),
                   api.spacer("6dp"),
-                  api.tonalBtn("ctrlMem", "Memory"),
+                  api.tonalBtn("ctrlMem", api.t("memory")),
                 },
                 {
                   J.LinearLayout,
                   layout_width = "match",
                   layout_height = "wrap",
                   layout_marginTop = "6dp",
-                  api.tonalBtn("ctrlIntent", "Intent"),
+                  api.tonalBtn("ctrlIntent", api.t("intent")),
                   api.spacer("6dp"),
-                  api.tonalBtn("ctrlViews", "Views"),
+                  api.tonalBtn("ctrlViews", api.t("views")),
                 },
                 {
                   J.LinearLayout,
                   layout_width = "match",
                   layout_height = "wrap",
                   layout_marginTop = "6dp",
-                  api.tonalBtn("ctrlPaths", "Paths"),
+                  api.tonalBtn("ctrlPaths", api.t("paths")),
                   api.spacer("6dp"),
-                  api.tonalBtn("ctrlGc", "GC"),
+                  api.tonalBtn("ctrlGc", api.t("gc")),
                 },
                 {
                   J.TextView,
-                  text = "Tools",
+                  id = "ctrlToolsLabel",
+                  text = api.t("tools"),
                   textSize = "11sp",
                   textColor = c.onSurfaceVariant,
                   layout_marginTop = "10dp",
@@ -1158,22 +1457,23 @@ function api.buildSheetContent()
                   J.LinearLayout,
                   layout_width = "match",
                   layout_height = "wrap",
-                  api.tonalBtn("ctrlPause", "Pause log"),
+                  api.tonalBtn("ctrlPause", api.t("pause_log")),
                   api.spacer("6dp"),
-                  api.tonalBtn("ctrlScreen", "Screen on"),
+                  api.tonalBtn("ctrlScreen", api.t("screen_on")),
                 },
                 {
                   J.LinearLayout,
                   layout_width = "match",
                   layout_height = "wrap",
                   layout_marginTop = "6dp",
-                  api.tonalBtn("ctrlHide", "Hide bubble"),
+                  api.tonalBtn("ctrlHide", api.t("hide_bubble")),
                   api.spacer("6dp"),
-                  api.tonalBtn("ctrlHist", "Eval hist"),
+                  api.tonalBtn("ctrlHist", api.t("eval_hist")),
                 },
                 {
                   J.TextView,
-                  text = "Eval Lua in this environment",
+                  id = "ctrlEvalLabel",
+                  text = api.t("eval_hint"),
                   textSize = "11sp",
                   textColor = c.onSurfaceVariant,
                   layout_marginTop = "10dp",
@@ -1200,7 +1500,7 @@ function api.buildSheetContent()
                 layout_height = "match",
                 textSize = "12sp",
                 textColor = c.onSurface,
-                hint = "Lua code…",
+                hint = api.t("code_hint"),
                 BackgroundColor = 0,
                 paddingLeft = "8dp",
                 paddingRight = "6dp",
@@ -1210,7 +1510,7 @@ function api.buildSheetContent()
               {
                 J.Button,
                 id = "ctrlRun",
-                text = "Run",
+                text = api.t("run"),
                 layout_width = "wrap",
                 layout_height = "32dp",
                 minHeight = "32dp",
@@ -1224,7 +1524,13 @@ function api.buildSheetContent()
             },
           },
         },
-        { "Prints", "Vars", "Logcat", "Text", "Control" },
+        {
+          api.t("tab_prints"),
+          api.t("tab_vars"),
+          api.t("tab_logcat"),
+          api.t("tab_text"),
+          api.t("tab_control"),
+        },
       },
     },
     {
@@ -1324,16 +1630,15 @@ function api.updatePrintMeta()
   local total = #S.printStore
   local label
   if S.printFilter == "all" and S.printQuery == "" then
-    label = string.format("%d entries", total)
+    label = api.tf("entries", total)
   else
-    label = string.format("%d / %d · %s%s",
-      n, total, S.printFilter,
-      S.printQuery ~= "" and (" · \"" .. S.printQuery .. "\"") or "")
+    local q = S.printQuery ~= "" and (" · \"" .. S.printQuery .. "\"") or ""
+    label = api.tf("filtered_meta", n, total, S.printFilter, q)
   end
   pcall(function() ui.printMeta.setText(label) end)
   if ui.headerSub then
     pcall(function()
-      ui.headerSub.setText(string.format("%d logs · filter %s", total, S.printFilter))
+      ui.headerSub.setText(api.tf("logs_meta", total, S.printFilter))
     end)
   end
 end
@@ -1434,9 +1739,9 @@ function api.copyFilteredPrints()
       lines[#lines + 1] = entry.full or ""
     end
   end
-  if #lines == 0 then api.toast("Nothing to copy"); return end
+  if #lines == 0 then api.toast(api.t("nothing_copy")); return end
   api.clipboardSet(table.concat(lines, "\n"))
-  api.toast("Copied " .. #lines)
+  api.toast(api.tf("copied_n", #lines))
 end
 
 function api.scrollPrintToBottom()
@@ -1612,7 +1917,7 @@ function api.openTextInPanel(title, body)
     end
   else
     api.clipboardSet(body)
-    api.toast("Copied (panel closed)")
+    api.toast(api.t("copied_panel"))
   end
 end
 
@@ -1623,7 +1928,7 @@ function api.runGcAndReport()
   local after = api.runtimeMemText()
   local msg = "GC done\n-- before --\n" .. before .. "\n-- after --\n" .. after
   info("GC done")
-  api.openTextInPanel("Memory / GC", msg)
+  api.openTextInPanel(api.t("mem_gc"), msg)
 end
 
 function api.toggleKeepScreenOn()
@@ -1637,19 +1942,39 @@ function api.toggleKeepScreenOn()
       w.clearFlags(f)
     end
   end)
-  api.toast(S.keepScreenOn and "Keep screen ON" or "Keep screen OFF")
+  api.toast(S.keepScreenOn and api.t("keep_screen_on") or api.t("keep_screen_off"))
   info("keepScreenOn=" .. tostring(S.keepScreenOn))
+  pcall(function()
+    if ui.ctrlScreen then
+      ui.ctrlScreen.setText(S.keepScreenOn and api.t("screen_off") or api.t("screen_on"))
+    end
+  end)
 end
 
 function api.toggleLoggingPause()
   S.loggingPaused = not S.loggingPaused
-  api.toast(S.loggingPaused and "Logging paused" or "Logging resumed")
+  api.toast(S.loggingPaused and api.t("logging_paused") or api.t("logging_resumed"))
   info(S.loggingPaused and "logging paused" or "logging resumed")
+  pcall(function()
+    if ui.ctrlPause then
+      ui.ctrlPause.setText(S.loggingPaused and api.t("resume_log") or api.t("pause_log"))
+    end
+  end)
 end
 
 function api.hideBubbleTemporarily()
   api.removeBubble()
-  api.toast("Bubble hidden until recreate / re-require")
+  api.toast(api.t("bubble_hidden"))
+end
+
+function api.clearPrints()
+  table.clear(S.printStore)
+  table.clear(S.printData)
+  table.clear(S.printFull)
+  if S.printAdp then pcall(function() S.printAdp.clear() end) end
+  api.setPrintEmptyVisible(true)
+  api.setBubbleError(false)
+  api.updatePrintMeta()
 end
 
 function log(color, withTime, ...)
@@ -1811,7 +2136,7 @@ end
 
 function api.buildExportText(limit)
   local lines = {}
-  lines[#lines + 1] = "=== vConsole export ==="
+  lines[#lines + 1] = api.t("export_banner")
   pcall(function()
     lines[#lines + 1] = "file: " .. tostring(this.getLuaPath())
     lines[#lines + 1] = "time: " .. tostring(S.fileStampFmt.format(J.System.currentTimeMillis()))
@@ -1835,11 +2160,11 @@ function api.exportPrints(share)
   pcall(function() stamp = S.fileStampFmt.format(J.System.currentTimeMillis()) end)
   local path = api.crashDir() .. "/vconsole_" .. stamp .. ".txt"
   if not api.writeTextFileJava(path, body) then
-    api.toast("Export failed")
+    api.toast(api.t("export_failed"))
     return nil
   end
   S.lastCrashPath = path
-  api.toast("Saved: " .. path)
+  api.toast(api.tf("saved", path))
   info("exported → " .. path)
   if share then
     pcall(function()
@@ -1847,7 +2172,7 @@ function api.exportPrints(share)
       intent.setType("text/plain")
       intent.putExtra(J.Intent.EXTRA_TEXT, body)
       intent.putExtra(J.Intent.EXTRA_SUBJECT, "vConsole export")
-      activity.startActivity(J.Intent.createChooser(intent, "Share logs"))
+      activity.startActivity(J.Intent.createChooser(intent, api.t("share_logs")))
     end)
   end
   return path
@@ -2031,7 +2356,7 @@ function api.ensurePrintAdp()
     api.vibrate(v)
     local full = S.printFull[d] or ""
     api.clipboardSet(full)
-    api.toast("Copied log line")
+    api.toast(api.t("copied_line"))
     return true
   end
 end
@@ -2277,7 +2602,7 @@ function api.ensureLogcatAdp()
   ui.logcatList.onItemLongClick = function(_, v, _, d)
     api.vibrate(v)
     api.clipboardSet(S.logcatFull[d] or "")
-    api.toast("Copied logcat")
+    api.toast(api.t("copied_logcat"))
     return true
   end
 end
@@ -2435,38 +2760,31 @@ function api.setupLogcatChips()
   paint()
 end
 
+-- actionSpecs: item[1] = i18n key（共享 S.L），item[2] = handler
 S.actionSpecs = {
   [0] = {
-    { "Clear", function()
-      table.clear(S.printStore)
-      table.clear(S.printData)
-      table.clear(S.printFull)
-      if S.printAdp then pcall(function() S.printAdp.clear() end) end
-      api.setPrintEmptyVisible(true)
-      api.setBubbleError(false)
-      api.updatePrintMeta()
-    end },
-    { "Copy", function() api.copyFilteredPrints() end },
-    { "Bottom", function() api.scrollPrintToBottom() end },
-    { "Export", function() api.exportPrints(false) end },
-    { "Share", function() api.exportPrints(true) end },
-    { "Close", function() if S.sheet then S.sheet.dismiss() end end },
+    { "clear", function() api.clearPrints() end },
+    { "copy", function() api.copyFilteredPrints() end },
+    { "bottom", function() api.scrollPrintToBottom() end },
+    { "export", function() api.exportPrints(false) end },
+    { "share", function() api.exportPrints(true) end },
+    { "close", function() if S.sheet then S.sheet.dismiss() end end },
   },
   [1] = {
-    { "Refresh", function() api.refreshVars() end },
-    { "Root", function()
+    { "refresh", function() api.refreshVars() end },
+    { "root", function()
       table.clear(S.variableNode)
       api.refreshVars()
     end },
-    { "Copy path", function()
+    { "copy_path", function()
       local path = "/" .. table.concat(S.variableNode, "/")
       api.clipboardSet(path)
       api.toast(path)
     end },
-    { "Close", function() if S.sheet then S.sheet.dismiss() end end },
+    { "close", function() if S.sheet then S.sheet.dismiss() end end },
   },
   [2] = {
-    { "Clear", function()
+    { "clear", function()
       api.runBg(function()
         api.clearlog()
         return true
@@ -2474,65 +2792,65 @@ S.actionSpecs = {
         api.refreshLogcat()
       end, "io")
     end },
-    { "Refresh", function() api.refreshLogcat() end },
-    { "Copy", function()
+    { "refresh", function() api.refreshLogcat() end },
+    { "copy", function()
       local body = table.concat(S.logcatFull, "\n\n")
-      if body == "" then api.toast("Empty"); return end
+      if body == "" then api.toast(api.t("empty")); return end
       api.clipboardSet(body)
-      api.toast("Copied logcat")
+      api.toast(api.t("copied_logcat"))
     end },
-    { "Export", function()
+    { "export", function()
       local body = table.concat(S.logcatFull, "\n\n")
-      if body == "" then api.toast("Empty logcat"); return end
+      if body == "" then api.toast(api.t("empty_logcat")); return end
       local stamp = "logcat"
       pcall(function() stamp = S.fileStampFmt.format(J.System.currentTimeMillis()) end)
       local path = api.crashDir() .. "/vconsole_logcat_" .. stamp .. ".txt"
       if api.writeTextFileJava(path, body) then
-        api.toast("Saved: " .. path)
+        api.toast(api.tf("saved", path))
         info("logcat → " .. path)
       else
-        api.toast("Export failed")
+        api.toast(api.t("export_failed"))
       end
     end },
-    { "Close", function() if S.sheet then S.sheet.dismiss() end end },
+    { "close", function() if S.sheet then S.sheet.dismiss() end end },
   },
   [3] = {
-    { "Copy", function()
+    { "copy", function()
       api.clipboardSet(ui.textEdit.getText())
-      api.toast("Copied")
+      api.toast(api.t("copied"))
     end },
-    { "Paste", function() ui.textEdit.setText(api.clipboardGet()) end },
-    { "Share", function()
+    { "paste", function() ui.textEdit.setText(api.clipboardGet()) end },
+    { "share", function()
       local body = tostring(ui.textEdit.getText() or "")
-      if body == "" then api.toast("Empty"); return end
+      if body == "" then api.toast(api.t("empty")); return end
       pcall(function()
         local intent = J.Intent(J.Intent.ACTION_SEND)
         intent.setType("text/plain")
         intent.putExtra(J.Intent.EXTRA_TEXT, body)
-        activity.startActivity(J.Intent.createChooser(intent, "Share text"))
+        activity.startActivity(J.Intent.createChooser(intent, api.t("share_text")))
       end)
     end },
-    { "Save", function()
+    { "save", function()
       local body = tostring(ui.textEdit.getText() or "")
-      if body == "" then api.toast("Empty"); return end
+      if body == "" then api.toast(api.t("empty")); return end
       local stamp = "text"
       pcall(function() stamp = S.fileStampFmt.format(J.System.currentTimeMillis()) end)
       local path = api.crashDir() .. "/vconsole_text_" .. stamp .. ".txt"
       if api.writeTextFileJava(path, body) then
-        api.toast("Saved: " .. path)
+        api.toast(api.tf("saved", path))
         info("text → " .. path)
       else
-        api.toast("Save failed")
+        api.toast(api.t("save_failed"))
       end
     end },
-    { "Clear", function() ui.textEdit.setText(nil) end },
-    { "Close", function() if S.sheet then S.sheet.dismiss() end end },
+    { "clear", function() ui.textEdit.setText(nil) end },
+    { "close", function() if S.sheet then S.sheet.dismiss() end end },
   },
   [4] = {
-    { "Device", function() api.openTextInPanel("Device", api.deviceInfoText()) end },
-    { "Memory", function() api.openTextInPanel("Memory", api.runtimeMemText()) end },
-    { "Export", function() api.exportPrints(false) end },
-    { "Close", function() if S.sheet then S.sheet.dismiss() end end },
+    { "device", function() api.openTextInPanel(api.t("device"), api.deviceInfoText()) end },
+    { "memory", function() api.openTextInPanel(api.t("memory"), api.runtimeMemText()) end },
+    { "export", function() api.exportPrints(false) end },
+    { "close", function() if S.sheet then S.sheet.dismiss() end end },
   },
 }
 
@@ -2540,7 +2858,7 @@ function api.rebuildActionBar(pos)
   if not ui.actionBar then return end
   ui.actionBar.removeAllViews()
   for i, item in ipairs(S.actionSpecs[pos] or S.actionSpecs[0]) do
-    local btn = loadlayout(api.textBtn("act" .. i, item[1]))
+    local btn = loadlayout(api.textBtn("act" .. i, api.t(item[1])))
     api.applyButtonTheme(btn, c.secondaryContainer, c.onSecondaryContainer, 12, 32)
     if i > 1 then
       pcall(function()
@@ -2607,7 +2925,8 @@ function api.wireSheet()
     "ctrlFinish", "ctrlRecreate", "ctrlRestart", "ctrlKill",
     "ctrlDevice", "ctrlMem", "ctrlIntent", "ctrlViews",
     "ctrlPaths", "ctrlGc", "ctrlPause", "ctrlScreen",
-    "ctrlHide", "ctrlHist", "ctrlRun", "headerExport",
+    "ctrlHide", "ctrlHist", "ctrlRun",
+    "headerClear", "headerExport", "headerLang",
   }
   for _, id in ipairs(ctrlIds) do
     local btn = ui[id]
@@ -2616,7 +2935,7 @@ function api.wireSheet()
         api.applyButtonTheme(btn, c.errorContainer, c.onErrorContainer, 12, 40)
       elseif id == "ctrlRun" then
         api.applyButtonTheme(btn, c.primary, c.onPrimary, 12, 32)
-      elseif id == "headerExport" then
+      elseif id == "headerClear" or id == "headerExport" or id == "headerLang" then
         api.applyButtonTheme(btn, 0, c.primary, 0, 32)
       else
         api.applyButtonTheme(btn, c.secondaryContainer, c.onSecondaryContainer, 12, 40)
@@ -2626,10 +2945,10 @@ function api.wireSheet()
   api.compactButtonMetrics(ui.printSearchClear, 32, 4)
   pcall(function()
     if ui.ctrlPause then
-      ui.ctrlPause.setText(S.loggingPaused and "Resume log" or "Pause log")
+      ui.ctrlPause.setText(S.loggingPaused and api.t("resume_log") or api.t("pause_log"))
     end
     if ui.ctrlScreen then
-      ui.ctrlScreen.setText(S.keepScreenOn and "Screen off" or "Screen on")
+      ui.ctrlScreen.setText(S.keepScreenOn and api.t("screen_off") or api.t("screen_on"))
     end
   end)
 
@@ -2652,10 +2971,22 @@ function api.wireSheet()
   end
   api.paintTabs(0)
 
+  if ui.headerClear then
+    ui.headerClear.onClick = function(v)
+      api.vibrate(v)
+      api.clearForCurrentPage()
+    end
+  end
   if ui.headerExport then
     ui.headerExport.onClick = function(v)
       api.vibrate(v)
       api.exportPrints(false)
+    end
+  end
+  if ui.headerLang then
+    ui.headerLang.onClick = function(v)
+      api.vibrate(v)
+      api.toggleLang()
     end
   end
 
@@ -2698,16 +3029,16 @@ function api.wireSheet()
     os.exit()
   end)
   bindClick(ui.ctrlDevice, function()
-    api.openTextInPanel("Device", api.deviceInfoText())
+    api.openTextInPanel(api.t("device"), api.deviceInfoText())
   end)
   bindClick(ui.ctrlMem, function()
-    api.openTextInPanel("Memory", api.runtimeMemText())
+    api.openTextInPanel(api.t("memory"), api.runtimeMemText())
   end)
   bindClick(ui.ctrlIntent, function()
-    api.openTextInPanel("Intent", api.intentExtrasText())
+    api.openTextInPanel(api.t("intent"), api.intentExtrasText())
   end)
   bindClick(ui.ctrlViews, function()
-    api.openTextInPanel("Views", api.dumpViewTree(nil, 5))
+    api.openTextInPanel(api.t("views"), api.dumpViewTree(nil, 5))
   end)
   bindClick(ui.ctrlPaths, function()
     local lines = { "=== Paths ===" }
@@ -2726,26 +3057,16 @@ function api.wireSheet()
     end)
     lines[#lines + 1] = "Crash: " .. api.crashDir()
     if S.lastCrashPath then lines[#lines + 1] = "Last crash: " .. S.lastCrashPath end
-    api.openTextInPanel("Paths", table.concat(lines, "\n"))
+    api.openTextInPanel(api.t("paths"), table.concat(lines, "\n"))
   end)
   bindClick(ui.ctrlGc, function()
     api.runGcAndReport()
   end)
   bindClick(ui.ctrlPause, function()
     api.toggleLoggingPause()
-    pcall(function()
-      if ui.ctrlPause then
-        ui.ctrlPause.setText(S.loggingPaused and "Resume log" or "Pause log")
-      end
-    end)
   end)
   bindClick(ui.ctrlScreen, function()
     api.toggleKeepScreenOn()
-    pcall(function()
-      if ui.ctrlScreen then
-        ui.ctrlScreen.setText(S.keepScreenOn and "Screen off" or "Screen on")
-      end
-    end)
   end)
   bindClick(ui.ctrlHide, function()
     if S.sheet then S.sheet.dismiss() end
@@ -2753,22 +3074,22 @@ function api.wireSheet()
   end)
   bindClick(ui.ctrlHist, function()
     if #S.evalHistory == 0 then
-      api.toast("No eval history")
+      api.toast(api.t("no_eval_hist"))
       return
     end
     local last = S.evalHistory[#S.evalHistory]
     pcall(function() if ui.ctrlCode then ui.ctrlCode.setText(last) end end)
-    api.toast("Loaded last eval (" .. #S.evalHistory .. ")")
+    api.toast(api.tf("loaded_eval", #S.evalHistory))
   end)
   pcall(function()
     if not ui.ctrlHist then return end
     ui.ctrlHist.onLongClick = function(v)
       api.vibrate(v)
       if #S.evalHistory == 0 then
-        api.toast("No eval history")
+        api.toast(api.t("no_eval_hist"))
         return true
       end
-      api.openTextInPanel("Eval history", table.concat(S.evalHistory, "\n---\n"))
+      api.openTextInPanel(api.t("eval_history"), table.concat(S.evalHistory, "\n---\n"))
       return true
     end
   end)
@@ -2783,27 +3104,29 @@ function api.wireSheet()
         ui.ctrlCode.setText("")
         if ret ~= nil then
           info("eval ok → " .. api.truncate(api.dumpValue(ret), 200))
-          api.openTextInPanel("Eval result", api.dumpValue(ret))
+          api.openTextInPanel(api.t("eval_result"), api.dumpValue(ret))
         else
           info("eval ok")
         end
       else
         safe_error(ret)
-        api.toast("runtime error")
+        api.toast(api.t("runtime_error"))
       end
     else
       safe_error(e)
-      api.toast("syntax error")
+      api.toast(api.t("syntax_error"))
     end
   end)
 
   api.rebuildActionBar(0)
   api.pullHostLogs()
   api.rebuildPrintList()
+  pcall(api.applyI18n)
 end
 
 function api.showSheet()
   if not api.activityAlive() then return end
+  api.loadLangPref()
   api.resolveTheme(true)
   local showing = false
   pcall(function() showing = S.sheet and S.sheet.isShowing() end)
@@ -2891,6 +3214,7 @@ end)
 function api.bootUi()
   if S.bootDone or not api.activityAlive() then return end
   S.bootDone = true
+  api.loadLangPref()
   api.resolveTheme(true)
   api.attachBubble()
   if not S.bubbleAttached then

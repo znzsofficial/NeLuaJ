@@ -24,6 +24,9 @@ local ImageRequestBuilder = bindClass "coil3.request.ImageRequest$Builder"
 
 import "mods.utils.EditorUtil"
 import "mods.utils.ActivityUtil"
+import "mods.utils.TabUtil"
+import "com.google.android.material.dialog.MaterialAlertDialogBuilder"
+import "com.androlua.LuaUtil"
 
 local Bean_Path
 local res = res
@@ -36,6 +39,10 @@ local R = R
 local _M = {}
 local FileList
 local Anim
+local selectMode = false
+local selected = {} -- path -> true
+-- clipboard: { mode = "copy"|"cut", paths = {..} }
+local fileClipboard = nil
 
 -- 扩展名 → 图标名
 local suffix_image = setmetatable({
@@ -237,12 +244,9 @@ _M.init = function()
     local cSecondary = ColorUtil.getColorSecondary()
     local cOnSurface = ColorUtil.getColorOnSurface()
     local cOnSurfaceVar = ColorUtil.getColorOnSurfaceVariant()
-    local cTertiary = cPrimary
-    pcall(function()
-        if ColorUtil.getColorTertiary then
-            cTertiary = ColorUtil.getColorTertiary()
-        end
-    end)
+    local cTertiary = ColorUtil.getColorTertiary()
+    local cPrimaryContainer = ColorUtil.getColorPrimaryContainer()
+    local cSurface = ColorUtil.getColorSurface()
 
     local iconColor = {
         folder = cPrimary,
@@ -281,11 +285,15 @@ _M.init = function()
     })
 
     local function iconOf(name, color)
-        local d = res_drawable(name, color or iconColor[name] or cOnSurfaceVar)
+        local d = res_drawable(name, color or iconColor[name])
         if d then
             d.setBounds(0, 0, size, size)
         end
         return d
+    end
+
+    local function isUpItem(v)
+        return v.is_up or v.file_name == "..." or v.img == "folder_up"
     end
 
     local error_project = iconOf("android_studio", cSecondary)
@@ -321,7 +329,7 @@ _M.init = function()
                 onViewRecycled = function(holder)
                     local t = holder.Tag
                     if t and t.coil_disposable then
-                        pcall(function() t.coil_disposable.dispose() end)
+                        t.coil_disposable.dispose()
                         t.coil_disposable = nil
                     end
                     holder.unbind()
@@ -335,13 +343,36 @@ _M.init = function()
 
                     -- 取消上一绑定时的 Coil 请求，避免异步回调写到复用后的 item
                     if tag and tag.coil_disposable then
-                        pcall(function() tag.coil_disposable.dispose() end)
+                        tag.coil_disposable.dispose()
                         tag.coil_disposable = nil
                     end
                     if tag then tag.bind_token = bind_token end
 
-                    view.name.setText(v.file_name)
+                    local isUp = isUpItem(v)
+                    local isChecked = false
+                    if selectMode and selected[v_path] then
+                        isChecked = true
+                    end
+                    view.name.setText(tostring(v.file_name or ""))
                     view.name.setCompoundDrawables(nil, nil, nil, nil)
+
+                    if selectMode and not isUp then
+                        view.check.setVisibility(0)
+                        view.check.setChecked(isChecked)
+                    else
+                        view.check.setVisibility(8)
+                        view.check.setChecked(false)
+                    end
+                    view.contents.setChecked(isChecked)
+                    if isChecked then
+                        view.contents.setStrokeWidth(this.dpToPx(1.5))
+                        view.contents.setStrokeColor(cPrimary)
+                        view.contents.setCardBackgroundColor(cPrimaryContainer)
+                    else
+                        view.contents.setStrokeWidth(0)
+                        view.contents.setStrokeColor(0)
+                        view.contents.setCardBackgroundColor(cSurface)
+                    end
 
                     local function setIcon(drawable)
                         if drawable then
@@ -349,29 +380,26 @@ _M.init = function()
                         end
                     end
 
-                    -- 「...」上级目录：始终 folder_up
-                    if v.img == "folder_up" or v.file_name == "..." then
+                    if isUp then
                         setIcon(iconOf("folder_up"))
                     elseif v.img == "Project" then
                         setIcon(error_project)
-                        local ok, disposable = pcall(function()
-                            return imageLoader.enqueue(
-                                ImageRequestBuilder(activity)
-                                    .data(v_path .. "/icon.png")
-                                    .target(LuaTarget(this, LuaTarget.Listener {
-                                        onError = function()
-                                            if not tag or tag.bind_token ~= bind_token then return end
-                                            setIcon(error_project)
-                                        end,
-                                        onSuccess = function(drawable)
-                                            if not tag or tag.bind_token ~= bind_token then return end
-                                            drawable.setBounds(0, 0, size, size)
-                                            setIcon(drawable)
-                                        end
-                                    })).build()
-                            )
-                        end)
-                        if ok and tag then
+                        local disposable = imageLoader.enqueue(
+                            ImageRequestBuilder(activity)
+                                .data(v_path .. "/icon.png")
+                                .target(LuaTarget(this, LuaTarget.Listener {
+                                    onError = function()
+                                        if not tag or tag.bind_token ~= bind_token then return end
+                                        setIcon(error_project)
+                                    end,
+                                    onSuccess = function(drawable)
+                                        if not tag or tag.bind_token ~= bind_token then return end
+                                        drawable.setBounds(0, 0, size, size)
+                                        setIcon(drawable)
+                                    end
+                                })).build()
+                        )
+                        if tag then
                             tag.coil_disposable = disposable
                         end
                     else
@@ -379,9 +407,19 @@ _M.init = function()
                     end
 
                     view.contents.onLongClick = function()
-                        if v.img == "folder_up" or v.is_up or v.file_name == "..." then
-                            return
-                        elseif v.isDirectory then
+                        if isUpItem(v) then
+                            return true
+                        end
+                        if selectMode then
+                            if selected[v_path] then
+                                selected[v_path] = nil
+                            else
+                                selected[v_path] = true
+                            end
+                            _M.refreshSelectUi()
+                            return true
+                        end
+                        if v.isDirectory then
                             MainActivity.Public.dirMenu(v_path, v.file_name)
                         else
                             MainActivity.Public.fileMenu(v_path, v.file_name)
@@ -390,6 +428,16 @@ _M.init = function()
                     end
 
                     view.contents.onClick = function()
+                        if selectMode then
+                            if isUpItem(v) then return end
+                            if selected[v_path] then
+                                selected[v_path] = nil
+                            else
+                                selected[v_path] = true
+                            end
+                            _M.refreshSelectUi()
+                            return
+                        end
 
                         if not File(v_path).canRead() then
                             MainActivity.Public.snack(res.string.NoReadPms)
@@ -403,18 +451,16 @@ _M.init = function()
                             return
                         end
 
-                        local action = openAction[v.img] or "external"
+                        local action = openAction[v.img]
+                        if not action then
+                            action = "external"
+                        end
 
                         if action == "editor" then
                             EditorUtil.fromRecy = true
                             EditorUtil.load(v_path)
-                            -- 平板常驻侧栏时保持打开
-                            local keepOpen = false
-                            pcall(function()
-                                local Init = require "activities.main.Init"
-                                keepOpen = Init.isTabletMode and Init.isTabletMode()
-                            end)
-                            if not keepOpen then
+                            local Init = require "activities.main.Init"
+                            if not Init.isTabletMode() then
                                 drawer.closeDrawer(GravityCompat.START)
                             end
                         elseif action == "image" then
@@ -423,12 +469,11 @@ _M.init = function()
                             MainActivity.Public.dexDialog(v_path)
                         elseif action == "install" then
                             MainActivity.Public.InstallApk(v_path)
-                        else -- "external"
+                        else
                             this.openFile(v_path, function()
                                 MainActivity.Public.snack(res.string.NoSupport)
                             end)
                         end
-
                     end
 
                 end,
@@ -555,10 +600,50 @@ local getList = function()
     FileList = list
 end
 
+local function selectablePaths()
+    local list = {}
+    if not FileList then return list end
+    for _, v in ipairs(FileList) do
+        if not v.is_up and v.file_name ~= "..." then
+            list[#list + 1] = v.path
+        end
+    end
+    return list
+end
+
+local function selectedList()
+    local list = {}
+    for _, path in ipairs(selectablePaths()) do
+        if selected[path] then list[#list + 1] = path end
+    end
+    return list
+end
+
+local function selectedCount()
+    return #selectedList()
+end
+
+-- 切目录后丢掉不在当前列表的勾选，避免「已选 N」虚高
+local function pruneSelected()
+    if not FileList then
+        selected = {}
+        return
+    end
+    local keep = {}
+    for _, v in ipairs(FileList) do
+        if selected[v.path] and not v.is_up and v.file_name ~= "..." then
+            keep[v.path] = true
+        end
+    end
+    selected = keep
+end
+
 local updateCallback = function()
-    adapter_rv.notifyDataSetChanged()
+    pruneSelected()
+    if adapter_rv then adapter_rv.notifyDataSetChanged() end
     Anim.start()
     swipeRefresh.setRefreshing(false)
+    _M.refreshSelectUi()
 end
 
 _M.update = function()
@@ -575,6 +660,310 @@ _M.delete = function(path)
         end
     end
     return nil
+end
+
+_M.isSelectMode = function()
+    return selectMode
+end
+
+_M.refreshSelectUi = function()
+    if adapter_rv then adapter_rv.notifyDataSetChanged() end
+    if selectMode then
+        fileNormalBar.setVisibility(8)
+        fileSelectBar.setVisibility(0)
+    else
+        fileNormalBar.setVisibility(0)
+        fileSelectBar.setVisibility(8)
+        btnFileSelect.setText(res.string.media_select)
+    end
+    local hasClip = false
+    if fileClipboard and fileClipboard.paths and #fileClipboard.paths > 0 then
+        hasClip = true
+    end
+    if hasClip then
+        btnFilePaste.setVisibility(0)
+    else
+        btnFilePaste.setVisibility(8)
+    end
+end
+
+_M.setSelectMode = function(on, seedPath)
+    if on then
+        selectMode = true
+        if seedPath and seedPath ~= "" then
+            selected[seedPath] = true
+        end
+    else
+        selectMode = false
+        selected = {}
+    end
+    _M.refreshSelectUi()
+end
+
+_M.enterSelect = function(seedPath)
+    _M.setSelectMode(true, seedPath)
+end
+
+_M.toggleSelectMode = function()
+    if selectMode then
+        _M.setSelectMode(false)
+    else
+        _M.setSelectMode(true)
+    end
+end
+
+_M.selectAll = function()
+    if not selectMode then return end
+    local allOn = true
+    for _, path in ipairs(selectablePaths()) do
+        if not selected[path] then
+            allOn = false
+            break
+        end
+    end
+    for _, path in ipairs(selectablePaths()) do
+        if allOn then
+            selected[path] = nil
+        else
+            selected[path] = true
+        end
+    end
+    _M.refreshSelectUi()
+end
+
+local function setClipboard(mode, paths)
+    if not paths or #paths == 0 then
+        MainActivity.Public.snack(res.string.media_none_selected)
+        return
+    end
+    fileClipboard = { mode = mode, paths = paths }
+    if mode == "cut" then
+        MainActivity.Public.snack(string.format(res.string.file_cut_ok, #paths))
+    else
+        MainActivity.Public.snack(string.format(res.string.file_copy_ok, #paths))
+    end
+    if selectMode then
+        _M.setSelectMode(false)
+    else
+        _M.refreshSelectUi()
+    end
+end
+
+_M.copySelected = function()
+    setClipboard("copy", selectedList())
+end
+
+_M.cutSelected = function()
+    setClipboard("cut", selectedList())
+end
+
+_M.copyPaths = function(paths)
+    setClipboard("copy", paths)
+end
+
+_M.cutPaths = function(paths)
+    setClipboard("cut", paths)
+end
+
+local function uniqueDest(dir, name)
+    local dest = dir .. "/" .. name
+    if not File(dest).exists() then return dest end
+    local base, ext = name:match("^(.*)(%.[^%.]+)$")
+    if not base then base, ext = name, "" end
+    local i = 1
+    while true do
+        local cand = string.format("%s/%s (%d)%s", dir, base, i, ext)
+        if not File(cand).exists() then return cand end
+        i = i + 1
+        if i > 99 then return cand end
+    end
+end
+
+_M.pasteClipboard = function()
+    if not fileClipboard or not fileClipboard.paths or #fileClipboard.paths == 0 then
+        MainActivity.Public.snack(res.string.file_clipboard_empty)
+        return
+    end
+    local destDir = Bean_Path.this_dir
+    local mode = fileClipboard.mode
+    local okN, failN = 0, 0
+    for _, src in ipairs(fileClipboard.paths) do
+        local name = File(src).getName()
+        local dest = uniqueDest(destDir, tostring(name))
+        if mode == "cut" and (destDir == src or destDir:find(src .. "/", 1, true) == 1) then
+            failN = failN + 1
+        else
+            if File(src).isDirectory() then
+                LuaUtil.copyDir(File(src), File(dest))
+            else
+                LuaUtil.copyFile(src, dest)
+            end
+            if mode == "cut" then
+                LuaUtil.rmDir(File(src))
+                TabUtil.remove(src)
+            end
+            okN = okN + 1
+        end
+    end
+    if mode == "cut" then
+        fileClipboard = nil
+    end
+    _M.setSelectMode(false)
+    _M.update()
+    MainActivity.Public.snack(string.format(res.string.file_paste_ok, okN, failN))
+end
+
+_M.deleteSelected = function()
+    local paths = selectedList()
+    if #paths == 0 then
+        MainActivity.Public.snack(res.string.media_none_selected)
+        return
+    end
+    MaterialAlertDialogBuilder(activity)
+        .setTitle(res.string.delete)
+        .setMessage(string.format(res.string.media_delete_n, #paths))
+        .setPositiveButton(android.R.string.ok, function()
+            for _, path in ipairs(paths) do
+                TabUtil.remove(path)
+                LuaUtil.rmDir(File(path))
+            end
+            _M.setSelectMode(false)
+            _M.update()
+            MainActivity.Public.snack(string.format(res.string.media_deleted_n, #paths))
+        end)
+        .setNegativeButton(android.R.string.cancel, nil)
+        .show()
+end
+
+_M.goProjectHome = function()
+    local root = Bean_Path.app_root_pro_dir
+    if Bean.Project and Bean.Project.this_project and Bean.Project.this_project ~= "" then
+        local projectRoot = Bean_Path.app_root_pro_dir .. "/" .. Bean.Project.this_project
+        if File(projectRoot).isDirectory() then
+            root = projectRoot
+        end
+    end
+    _M.setSelectMode(false)
+    PathManager.updateDir(root)
+    filetab.setPath(root)
+    _M.update()
+    MainActivity.Public.snack(res.string.file_at_project)
+end
+
+local function promptCreate(isDir)
+    local sublayout = {}
+    local title
+    if isDir then
+        title = res.string.new_dir
+    else
+        title = res.string.new_file
+    end
+    MaterialAlertDialogBuilder(activity)
+        .setTitle(title)
+        .setView(loadlayout(res.layout.dialog_fileinput, sublayout))
+        .setPositiveButton(android.R.string.ok, function()
+            local name = tostring(sublayout.file_name.getText())
+            if name == "" then return end
+            local new_path = Bean_Path.this_dir .. "/" .. name
+            if File(new_path).exists() then
+                MainActivity.Public.snack(res.string.have_same_name)
+                return
+            end
+            if isDir then
+                MainActivity.Public.newDir(new_path)
+            else
+                swipeRefresh.setRefreshing(true)
+                LuaFileUtil.create(new_path, "")
+                _M.update()
+            end
+            MainActivity.Public.snack(res.string.create_success)
+        end)
+        .setNegativeButton(android.R.string.cancel, nil)
+        .show()
+end
+
+-- 顶栏长按：handler 可自定义；默认 snack 说明文案
+local function bindLong(view, handler)
+    view.setLongClickable(true)
+    view.onLongClick = function()
+        handler()
+        return true
+    end
+end
+
+local function tipLong(view, text)
+    bindLong(view, function()
+        MainActivity.Public.snack(text)
+    end)
+end
+
+_M.bindChrome = function()
+    btnFileHome.onClick = function()
+        _M.goProjectHome()
+    end
+    tipLong(btnFileHome, res.string.file_at_project)
+
+    btnFileNewFile.onClick = function()
+        promptCreate(false)
+    end
+    -- 长按新建文件 → 新建文件夹
+    bindLong(btnFileNewFile, function()
+        promptCreate(true)
+    end)
+
+    btnFileNewDir.onClick = function()
+        promptCreate(true)
+    end
+    -- 长按新建文件夹 → 新建文件
+    bindLong(btnFileNewDir, function()
+        promptCreate(false)
+    end)
+
+    btnFileSelect.onClick = function()
+        _M.toggleSelectMode()
+    end
+    tipLong(btnFileSelect, res.string.media_select)
+
+    btnFileSelectAll.onClick = function()
+        _M.selectAll()
+    end
+    tipLong(btnFileSelectAll, res.string.media_select_all)
+
+    btnFileCopy.onClick = function()
+        _M.copySelected()
+    end
+    tipLong(btnFileCopy, res.string.copy)
+
+    btnFileCut.onClick = function()
+        _M.cutSelected()
+    end
+    tipLong(btnFileCut, res.string.file_cut)
+
+    btnFilePaste.onClick = function()
+        _M.pasteClipboard()
+    end
+    bindLong(btnFilePaste, function()
+        if not fileClipboard or not fileClipboard.paths or #fileClipboard.paths == 0 then
+            MainActivity.Public.snack(res.string.file_clipboard_empty)
+            return
+        end
+        local n = #fileClipboard.paths
+        local mode = fileClipboard.mode == "cut" and res.string.file_cut or res.string.copy
+        MainActivity.Public.snack(string.format("%s · %d", mode, n))
+    end)
+
+    btnFileDeleteSel.onClick = function()
+        _M.deleteSelected()
+    end
+    tipLong(btnFileDeleteSel, res.string.delete)
+
+    btnFileCancelSel.onClick = function()
+        _M.setSelectMode(false)
+    end
+    tipLong(btnFileCancelSel, res.string.media_cancel_select)
+
+    _M.refreshSelectUi()
+    return _M
 end
 
 return _M

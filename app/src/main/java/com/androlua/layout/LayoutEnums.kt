@@ -27,15 +27,28 @@ internal object LayoutEnums {
         "px" to 0, "dp" to 1, "sp" to 2, "pt" to 3, "in" to 4, "mm" to 5,
     )
 
+    /**
+     * ImageView.ScaleType 名称 → 枚举 ordinal。
+     * 必须与 android.widget.ImageView.ScaleType 声明顺序一致：
+     * MATRIX, FIT_XY, FIT_START, FIT_CENTER, FIT_END, CENTER, CENTER_CROP, CENTER_INSIDE
+     * （旧表 fit* 下标曾写错，会导致 fitCenter 等映射到错误 ScaleType）
+     */
     val scaleType: Map<String, Int> = mapOf(
         "matrix" to 0,
-        "fitCenter" to 1,
-        "fitEnd" to 2,
-        "fitStart" to 3,
-        "fitXY" to 4,
+        "fitXY" to 1,
+        "fitStart" to 2,
+        "fitCenter" to 3,
+        "fitEnd" to 4,
         "center" to 5,
         "centerCrop" to 6,
         "centerInside" to 7,
+        // 兼容下划线 / 全大写写法
+        "fit_xy" to 1,
+        "fit_start" to 2,
+        "fit_center" to 3,
+        "fit_end" to 4,
+        "center_crop" to 6,
+        "center_inside" to 7,
     )
 
     /** RelativeLayout addRule 动词 → rule id */

@@ -1167,6 +1167,22 @@ end
 
 refreshMinimapCodeAlphaDesc()
 
+-- ── 运行键行为（工具栏 ▶）──
+local RunKeyConfig = require "mods.utils.RunKeyConfig"
+
+local function refreshRunKeyModeDesc()
+    local mode = RunKeyConfig.getMode(this)
+    RunKeyModeItemDesc.setText(
+        RunKeyConfig.label(mode) .. " · " .. res.string.run_key_mode_desc
+    )
+end
+
+refreshRunKeyModeDesc()
+
+RunKeyModeItem.onClick = function()
+    RunKeyConfig.showPicker(this, refreshRunKeyModeDesc)
+end
+
 -- ── 运行窗口模式（与 Init 共用 RunWindowConfig）──
 local RunWindowConfig = require "mods.utils.RunWindowConfig"
 

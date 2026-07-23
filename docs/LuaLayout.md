@@ -60,14 +60,15 @@ load(layout, env, paramsClass)
 ## 3. 模块拆分（当前）
 
 ```
-com.androlua.LuaLayout.kt          -- 编排 + 专用属性 when（~650 行）
+com.androlua.LuaLayout.kt          -- 编排 + 专用属性 when
 com.androlua.layout/
   LayoutEnums.kt                   -- 枚举分表、sizeTokens、relativeRules
   LayoutValueParser.kt             -- 字符串→尺寸/颜色/枚举/布尔
   LayoutParamsApplier.kt           -- layout_*、margin、padding、behavior
   LayoutViewFactory.kt             -- theme/style 构造 View
   LayoutReflection.kt              -- 属性可写集合、Method 缓存
-  LayoutTint.kt                    -- TintColor 按控件类型分发
+  LayoutTint.kt                    -- TintColor / iconTint 按控件类型分发
+  LayoutSrcLoader.kt               -- src / @drawable / Coil
 ```
 
 | 模块 | 职责 |
@@ -77,7 +78,8 @@ com.androlua.layout/
 | **ParamsApplier** | `layout_width/height/weight/gravity`；margin 字段名 `leftMargin`；Start/End；padding 合并 |
 | **ViewFactory** | 无 style 快路径；四参构造缓存；`ContextThemeWrapper` 缓存 |
 | **Reflection** | 每 Class 扫一次 setXxx/fields；`getMethod` 缓存 |
-| **Tint** | ImageView / CompoundButton / ProgressBar / Material* / EditText 背景下划线 |
+| **Tint** | ImageView / CompoundButton / ProgressBar / Material* / EditText 背景下划线；`iconTint` 仅图标 |
+| **SrcLoader** | `src`：Bitmap/Drawable 同步；`@drawable` / `@android:drawable` / `drawable/`；路径/URL Coil 异步 |
 
 ---
 
@@ -104,11 +106,42 @@ Android `MarginLayoutParams` 字段是 **`leftMargin`**，不是 `marginLeft`。
 | 类型 | 例子 | 原因 |
 |------|------|------|
 | 必须专用 | `textSize`、`padding*`、`visibility`、`inputType` | 单位/枚举/API 组合 |
+| 图片专用 | `src` → `LayoutSrcLoader` | 资源引用 + Coil + 与 `res.drawable` 对齐 |
 | MDC 专用 | `radius`、`cardElevation`、`stroke*`、`Checked` | 类型分支 + 正确 API |
 | 历史别名 | `TintColor`、`DividerHeight` | 工程存量布局 |
 | 通用反射 | `alpha`、`enabled`、多数 setXxx | `view[key]=` → JavaInstance |
 
 `textSize`：裸数字按 **sp→px**；带 `sp`/`dp` 走 `toValue`；调用 `setTextSize(PX, px)`。
+
+### 4.3.1 `src` / `@drawable`（LayoutSrcLoader）
+
+与 **`res.drawable` 解析顺序对齐**（`org.luaj.android.res`）：
+
+```
+src 值
+  ├─ Bitmap          → jset ImageBitmap
+  ├─ Drawable        → ImageView.setImageDrawable / 否则 ImageDrawable
+  ├─ 资源引用字符串
+  │     "@drawable/name" | "drawable/name" | "@android:drawable/name"
+  │       1) R 同步：app 包 name → ic_name；android 包仅 name
+  │          ContextCompat.getDrawable + mutate → setImageDrawable
+  │       2) 工程 assets 位图（png/jpg/…）→ Coil 异步
+  │       3) 工程 res/drawable/name.lua → 同步
+  │       4) 失败 → LuaError（不静默）
+  └─ 其它 string（路径 / URL）→ Coil 异步
+```
+
+要点：
+
+| 项 | 说明 |
+|----|------|
+| **着色** | `@drawable/…` **不**带颜色；布局另写 `iconTint` / `TintColor`，或改用 `res.drawable(name, color)` |
+| **`ic_` 候选** | 与 `res` 相同：`name` 未命中再试 `ic_name`（便于 `save` → `ic_save.xml`） |
+| **ImageView** | Drawable 路径一律 `setImageDrawable`，避免 `jset("ImageDrawable")` 属性名歧义 |
+| **trim** | 字符串去空白；空串忽略 |
+| **缓存** | 工程位图路径 miss 记 `MISS`，避免反复扫盘 |
+
+用户文档：`res/doc/module_loadlayout.html`（src 专节）、`layout_reference.html` §4。
 
 ### 4.4 未知属性
 
@@ -142,7 +175,8 @@ LayoutReflection.canSetJavaProperty(viewClass, key) → 否则 LuaError → send
 | 通用属性 `canSet` 首次 | 扫 Class methods 一次后缓存 |
 | `view[key]=` / `jcall` | JavaInstance 元表，比直接 Kotlin 调用慢 |
 | Adapter 列表项反复 load | 每行重建 View 树；应用层应复用 / 简化 item 表 |
-| Coil `src` | 异步解码，不占主线程解析时间 |
+| Coil `src`（路径/URL/工程位图） | 异步解码，不占主线程解析时间 |
+| `@drawable` R 命中 | 同步 `getDrawable`，无 Coil |
 
 ---
 
@@ -150,12 +184,23 @@ LayoutReflection.canSetJavaProperty(viewClass, key) → 否则 LuaError → send
 
 应用内文档（应与实现同步）：
 
-- `res/doc/module_loadlayout.html`
-- `res/doc/layout_reference.html`
+- `res/doc/module_loadlayout.html` — 主文（用法、`src`、style）
+- `res/doc/layout_reference.html` — 属性速查
+- `res/doc/module_res.html` — `res.drawable` 等
 - `res/doc/md3_design.html`、`color_api.html`
 
 布局颜色：优先 `"?attr/color…"`；运行时 int 用 `themeUtil`。  
-MaterialButton style 在 loadlayout 上支持有限，工程里常用 **BackgroundTintList / 事后 setTint**。
+
+**style 构造（LayoutViewFactory）**：
+
+| 布局写法 | 构造 |
+|----------|------|
+| 仅 `styleAttr = "?attr/…"` | 三参 `(Context, attrs, defStyleAttr)` |
+| `styleAttr` + `styleRes` | 四参 `(Context, attrs, defStyleAttr, defStyleRes)` |
+| 仅 `styleRes` / `style = "@style/…"` / 数字 style id | 四参 `(Context, attrs, 0, styleRes)`（**不把 style id 当 defStyleAttr**） |
+| 仅 `theme` | `ContextThemeWrapper` + 单参 `(Context)` |
+
+`theme` 只用于包装 Context；style 资源不再误作 theme overlay。
 
 ---
 
@@ -165,8 +210,10 @@ MaterialButton style 在 loadlayout 上支持有限，工程里常用 **Backgrou
 2. **id 顺序**：`layout_below = "title"` 要求 `title` 已在表中更早出现。  
 3. **属性错误不中断**：半残 UI + 日志，调试时需看 log。  
 4. **`commonLayoutParamKeys`**：跳过校验的字段若写错仍可能静默。  
-5. **Coil `src`**：异步回调依赖 `isAttachedToWindow`，极端时序仍可能丢图。  
-6. **id**：现用 `View.generateViewId()`，不再使用 `0x7f000000` 手写计数。
+5. **Coil `src`（非 R 路径）**：异步回调依赖 `isAttachedToWindow` / `post`，极端时序仍可能丢图；**R 同步路径无此问题**。  
+6. **`@drawable` 不着色**：与 `res.drawable(name, color)` 不同；忘记 `iconTint` 时可能像「有热区无色图」（取决于 vector 默认 fill）。  
+7. **id**：现用 `View.generateViewId()`，不再使用 `0x7f000000` 手写计数。  
+8. **无四参构造的 View**：纯 `styleRes` 时若类没有 `(Context, AttributeSet, int, int)`，会回退到仅 themed Context（style 可能未完全应用）。
 
 ---
 
@@ -211,7 +258,8 @@ MaterialButton style 在 loadlayout 上支持有限，工程里常用 **Backgrou
 - [ ] 尺寸是否走 `toLayoutSize` / `toDimensionPx`，勿把 `"16dp"` 当字符串塞进 int 字段  
 - [ ] margin/padding 是否只改指定边  
 - [ ] 枚举是否进 **对应** 分表  
-- [ ] 更新 `res/doc/module_loadlayout.html` / `layout_reference.html`  
+- [ ] 更新 `res/doc/module_loadlayout.html` / `layout_reference.html`（含 `src` / `@drawable`）  
+- [ ] `src` 改动时同步 `LayoutSrcLoader` 与 `res.drawable` 顺序是否仍对齐  
 - [ ] 工程内存量布局（`res/layout/*.lua`、`vConsole`）冒烟  
 
 ---

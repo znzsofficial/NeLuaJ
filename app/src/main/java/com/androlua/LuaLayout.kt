@@ -17,15 +17,12 @@ import android.widget.ImageView.ScaleType
 import android.widget.ListView
 import android.widget.TextView
 import androidx.core.view.ViewCompat
-import coil3.ImageLoader
-import coil3.asDrawable
-import coil3.imageLoader
-import coil3.request.ImageRequest
 import com.androlua.adapter.ArrayListAdapter
 import com.androlua.adapter.LuaAdapter
 import com.androlua.layout.LayoutEnums
 import com.androlua.layout.LayoutParamsApplier
 import com.androlua.layout.LayoutReflection
+import com.androlua.layout.LayoutSrcLoader
 import com.androlua.layout.LayoutTextSupport
 import com.androlua.layout.LayoutTint
 import com.androlua.layout.LayoutValueParser
@@ -53,13 +50,11 @@ import java.util.Locale
 fun LuaValue.toView(): View = this.touserdata(View::class.java)
 
 /**
- * 表驱动布局加载器。实现拆在 [com.androlua.layout] 子包：
- * - [LayoutEnums] 枚举/尺寸关键字
- * - [LayoutValueParser] 值解析
- * - [LayoutParamsApplier] layout_* / margin / padding
- * - [LayoutViewFactory] style 构造
- * - [LayoutTint] TintColor
- * - [LayoutReflection] 属性可写性
+ * 表驱动布局加载器。实现拆在 [com.androlua.layout]：
+ * - [LayoutEnums] / [LayoutValueParser] / [LayoutViewFactory]
+ * - [LayoutParamsApplier] layout_* · margin · padding · 嵌套 LP 类
+ * - [LayoutSrcLoader] src / @drawable
+ * - [LayoutTint] / [LayoutTextSupport] / [LayoutReflection]
  */
 class LuaLayout(private val initialContext: Context) {
     private val dm = initialContext.resources.displayMetrics
@@ -67,12 +62,12 @@ class LuaLayout(private val initialContext: Context) {
     private val ids = HashMap<String, Int>()
     private val luaValueContext: LuaValue = initialContext.toLuaInstance()
     private val luaContext = luaValueContext.touserdata(LuaContext::class.java)
-    private val imageLoader: ImageLoader = initialContext.imageLoader
     private val scaleTypeValues: Array<ScaleType> = ScaleType.entries.toTypedArray()
 
     private val values = LayoutValueParser(initialContext, luaContext, dm)
     private val viewFactory = LayoutViewFactory(initialContext, luaContext, luaValueContext)
     private val paramsApplier = LayoutParamsApplier(luaContext, values, ids)
+    private val srcLoader = LayoutSrcLoader(initialContext, luaContext)
 
     val id: Map<String, Int> get() = ids
     val view: Map<String, LuaValue> get() = views
@@ -123,9 +118,12 @@ class LuaLayout(private val initialContext: Context) {
             )
         }
         val view = viewFactory.create(viewClass, layout)
+        // 仅 ViewGroup 嵌套 LP 类；勿用 viewClass["LayoutParams"]（叶子会误调 getLayoutParams）
+        val childLayoutParamsClass =
+            LayoutParamsApplier.resolveNestedLayoutParamsLua(viewClass)
         lp = lp.call(LayoutEnums.wrapContent, LayoutEnums.wrapContent)
-        var needsMargins = false
-        var needsPadding = false
+        // 首遍收集 margin/padding 原值，结束时一次应用（不再二次 layout["…"]）
+        val box = LayoutParamsApplier.Box()
         try {
             var key = NIL
             var next: Varargs
@@ -134,23 +132,16 @@ class LuaLayout(private val initialContext: Context) {
                     key = next.firstArg()
                     if (key.isint()) {
                         if (key.toint() > 1) {
-                            addChild(view, viewClass, next.secondArg(), env)
+                            addChild(
+                                view, viewClass, next.secondArg(), env, childLayoutParamsClass
+                            )
                         }
                     } else if (key.isstring()) {
                         val keyString = key.asString()
-                        // 首遍扫描标记：避免无 margin/padding 时二次扫表
-                        when (keyString) {
-                            "layout_margin", "layout_marginLeft", "layout_marginTop",
-                            "layout_marginRight", "layout_marginBottom",
-                            "layout_marginStart", "layout_marginEnd",
-                            "layout_marginHorizontal", "layout_marginVertical" ->
-                                needsMargins = true
-                            "padding", "paddingLeft", "paddingTop", "paddingRight",
-                            "paddingBottom", "paddingStart", "paddingEnd" ->
-                                needsPadding = true
-                        }
+                        val value = next.secondArg()
+                        box.accept(keyString, value)
                         applyAttribute(
-                            keyString, next.secondArg(), view, viewClass, env, lp, key
+                            keyString, value, view, viewClass, env, lp, key
                         )
                     }
                 } catch (e: LuaError) {
@@ -160,35 +151,52 @@ class LuaLayout(private val initialContext: Context) {
                 }
             }
 
-            if (needsMargins) {
+            if (box.hasMargin) {
                 try {
-                    paramsApplier.applyMargins(layout, lp)
+                    paramsApplier.applyMargins(box, lp)
                 } catch (e: Exception) {
-                    val viewId = layout["id"].let {
-                        if (it.isstring()) "[${it.asString()}]" else ""
-                    }
-                    luaContext.sendError("loadlayout margin 解析错误 $viewId", e)
+                    luaContext.sendError("loadlayout margin 解析错误 ${layoutIdTag(layout)}", e)
                 }
             }
 
-            view["LayoutParams"] = lp
-            if (needsPadding) {
+            assignLayoutParams(view, lp)
+            if (box.hasPadding) {
                 try {
-                    paramsApplier.applyPadding(layout, view.toView())
+                    paramsApplier.applyPadding(box, view.toView())
                 } catch (e: Exception) {
-                    val viewId = layout["id"].let {
-                        if (it.isstring()) "[${it.asString()}]" else ""
-                    }
-                    luaContext.sendError("loadlayout padding 解析错误 $viewId", e)
+                    luaContext.sendError("loadlayout padding 解析错误 ${layoutIdTag(layout)}", e)
                 }
             }
         } catch (e: Exception) {
-            val viewId = layout["id"].let {
-                if (it.isstring()) "[${it.asString()}]" else ""
-            }
-            luaContext.sendError("loadlayout 布局错误 $viewId", e)
+            luaContext.sendError("loadlayout 布局错误 ${layoutIdTag(layout)}", e)
         }
         return view
+    }
+
+    private fun layoutIdTag(layout: LuaValue): String {
+        val id = layout["id"]
+        return if (id.isstring()) "[${id.asString()}]" else ""
+    }
+
+    /** 将 Lua LayoutParams userdata 直接挂到 View，失败再走桥 */
+    private fun assignLayoutParams(view: LuaValue, lp: LuaValue) {
+        val host = try {
+            view.toView()
+        } catch (_: Exception) {
+            null
+        }
+        if (host != null) {
+            val raw = try {
+                lp.touserdata()
+            } catch (_: Exception) {
+                null
+            }
+            if (raw is ViewGroup.LayoutParams) {
+                host.layoutParams = raw
+                return
+            }
+        }
+        view["LayoutParams"] = lp
     }
 
     private fun reportAttrError(
@@ -219,7 +227,9 @@ class LuaLayout(private val initialContext: Context) {
         parent: LuaValue,
         parentClass: LuaValue,
         childRaw: LuaValue,
-        env: LuaTable
+        env: LuaTable,
+        layoutParamsClass: LuaValue =
+            LayoutParamsApplier.resolveNestedLayoutParamsLua(parentClass),
     ) {
         var child = childRaw
         if (child.isnil()) return
@@ -250,9 +260,24 @@ class LuaLayout(private val initialContext: Context) {
         val childView = if (child.isuserdata()) {
             child
         } else {
-            // LayoutParams 元字段在 JavaClass 上查找一次即可
-            val lpClass = parentClass["LayoutParams"]
-            if (lpClass.isnil()) load(child, env) else load(child, env, lpClass)
+            if (layoutParamsClass.isnil()) load(child, env) else load(child, env, layoutParamsClass)
+        }
+        // ViewGroup 热路径：直接 addView，少一次 parent["addView"] 桥查找
+        val host = try {
+            parent.toView()
+        } catch (_: Exception) {
+            null
+        }
+        if (host is ViewGroup) {
+            val childHost = try {
+                childView.toView()
+            } catch (_: Exception) {
+                null
+            }
+            if (childHost != null) {
+                host.addView(childHost)
+                return
+            }
         }
         val addView = parent["addView"]
         if (addView.isnil()) {
@@ -283,14 +308,30 @@ class LuaLayout(private val initialContext: Context) {
                 val name = tValue.asString().trim()
                 if (name.isEmpty()) throw LuaError("id 不能为空字符串")
                 val viewId = getOrGenerateId(name)
-                view["id"] = viewId
+                // 直设 View id，避免 view["id"]= 桥
+                try {
+                    view.toView().id = viewId
+                } catch (_: Exception) {
+                    view["id"] = viewId
+                }
                 views[name] = view
                 env[tValue] = view
                 return
             }
 
             "text" -> {
-                view["text"] = tValue.tostring()
+                val host = view.toView()
+                val s = if (tValue.isstring() || tValue.isnumber()) {
+                    tValue.asString()
+                } else {
+                    tValue.tostring().asString()
+                }
+                val tv = LayoutTextSupport.resolve(host)
+                if (tv != null) {
+                    tv.text = s
+                } else if (!LayoutReflection.trySetJavaValue(host, "text", s)) {
+                    view["text"] = tValue.tostring()
+                }
                 return
             }
 
@@ -339,17 +380,24 @@ class LuaLayout(private val initialContext: Context) {
             }
 
             "scaleType" -> {
-                val name = tValue.asString()
-                val idx = LayoutEnums.scaleType[name]
-                    ?: LayoutEnums.scaleType[name.lowercase(Locale.ROOT)]
+                val raw = tValue.asString().trim()
+                val key = raw.lowercase(Locale.ROOT).replace('-', '_')
+                val idx = LayoutEnums.scaleType[raw]
+                    ?: LayoutEnums.scaleType[key]
                     ?: throw LuaError(
-                        "不支持的 scaleType: $name（可用: ${LayoutEnums.scaleType.keys.joinToString()}）"
+                        "不支持的 scaleType: $raw（可用: matrix/fitXY/fitStart/fitCenter/fitEnd/center/centerCrop/centerInside）"
                     )
+                if (idx !in scaleTypeValues.indices) {
+                    throw LuaError("scaleType 内部下标越界: $idx")
+                }
+                val st = scaleTypeValues[idx]
                 val host = view.toView()
                 if (host is ImageView) {
-                    host.scaleType = scaleTypeValues[idx]
+                    host.scaleType = st
                 } else {
-                    view["setScaleType"].jcall(scaleTypeValues[idx])
+                    throw LuaError(
+                        "scaleType 仅适用于 ImageView，实际为 ${host.javaClass.simpleName}"
+                    )
                 }
                 return
             }
@@ -366,7 +414,45 @@ class LuaLayout(private val initialContext: Context) {
             }
 
             "hint" -> {
-                view["hint"] = tValue.tostring()
+                val host = view.toView()
+                val s = if (tValue.isstring() || tValue.isnumber()) {
+                    tValue.asString()
+                } else {
+                    tValue.tostring().asString()
+                }
+                val tv = LayoutTextSupport.resolve(host)
+                if (tv != null) {
+                    tv.hint = s
+                } else if (!LayoutReflection.trySetJavaValue(host, "hint", s)) {
+                    view["hint"] = tValue.tostring()
+                }
+                return
+            }
+
+            "enabled" -> {
+                view.toView().isEnabled = values.toBoolean(tValue)
+                return
+            }
+            "selected" -> {
+                view.toView().isSelected = values.toBoolean(tValue)
+                return
+            }
+            "clickable" -> {
+                view.toView().isClickable = values.toBoolean(tValue)
+                return
+            }
+            "focusable" -> {
+                view.toView().isFocusable = values.toBoolean(tValue)
+                return
+            }
+            "alpha" -> {
+                val a = when {
+                    tValue.isnumber() -> tValue.todouble().toFloat()
+                    tValue.isstring() -> tValue.asString().toFloatOrNull()
+                        ?: throw LuaError("无法解析 alpha: ${tValue.asString()}")
+                    else -> throw LuaError("alpha 需要 number")
+                }
+                view.toView().alpha = a
                 return
             }
 
@@ -397,6 +483,26 @@ class LuaLayout(private val initialContext: Context) {
                 return
             }
 
+            // MaterialButton / FAB 等：int / "#AARRGGBB" / ?attr / ColorStateList → ColorStateList
+            // 切勿走默认 Java setter：setIconTint 要 ColorStateList，int 会 IllegalArgumentException
+            "iconTint", "IconTint", "iconTintList", "IconTintList" -> {
+                val host = view.toView()
+                val csl = try {
+                    values.toColorStateList(tValue)
+                } catch (e: LuaError) {
+                    throw LuaError(
+                        "iconTint 颜色无效（${host.javaClass.simpleName}）: ${e.message}"
+                    )
+                }
+                if (!LayoutTint.applyIconTint(host, csl)) {
+                    throw LuaError(
+                        "iconTint 无法应用到 ${host.javaClass.simpleName}：" +
+                            "需要 MaterialButton / FAB / Chip / ImageView / TextInputLayout 或带 setIconTint(ColorStateList) 的控件"
+                    )
+                }
+                return
+            }
+
             "TintColor", "tintColor" -> {
                 LayoutTint.apply(view.toView(), values.toColorStateList(tValue))
                 return
@@ -416,11 +522,15 @@ class LuaLayout(private val initialContext: Context) {
             }
 
             "strokeColor", "StrokeColor" -> {
+                // CardView: setStrokeColor(int)；MaterialButton/Chip: ColorStateList
                 val csl = values.toColorStateList(tValue)
                 val color = csl.defaultColor
                 val v = view.toView()
                 when (v) {
-                    is MaterialCardView -> v.strokeColor = color
+                    is MaterialCardView -> {
+                        // API 有 int 与 ColorStateList 重载；int 兼容更广
+                        v.strokeColor = color
+                    }
                     is MaterialButton -> v.strokeColor = csl
                     is Chip -> v.chipStrokeColor = csl
                     else -> {
@@ -521,25 +631,7 @@ class LuaLayout(private val initialContext: Context) {
             }
 
             "src" -> {
-                if (tValue.isuserdata(Bitmap::class.java)) {
-                    view.jset("ImageBitmap", tValue.touserdata(Bitmap::class.java))
-                } else if (tValue.isuserdata(Drawable::class.java)) {
-                    view.jset("ImageDrawable", tValue.touserdata(Drawable::class.java))
-                } else {
-                    val hostView = view.toView()
-                    imageLoader.enqueue(
-                        ImageRequest.Builder(initialContext)
-                            .data(tValue.asString()).target { drawable ->
-                                if (!hostView.isAttachedToWindow) return@target
-                                val d = drawable.asDrawable(initialContext.resources)
-                                if (hostView is ImageView) {
-                                    hostView.setImageDrawable(d)
-                                } else {
-                                    view.jset("ImageDrawable", d)
-                                }
-                            }.build()
-                    )
-                }
+                srcLoader.apply(tValue, view.toView(), view)
                 return
             }
 
@@ -730,10 +822,11 @@ class LuaLayout(private val initialContext: Context) {
             }
         }
 
-        if (tValue.type() == LuaValue.TSTRING) {
-            tValue = values.toValue(tValue.asString(), keyString).toLuaValue()
-        }
+        // layout_* 仍可能要字符串尺寸/枚举；先处理 layout 再做默认 setter，少一次无用转换
         if (keyString.startsWith("layout")) {
+            if (tValue.type() == LuaValue.TSTRING) {
+                tValue = values.toValue(tValue.asString(), keyString).toLuaValue()
+            }
             paramsApplier.applyLayoutParam(keyString, tValue, params)
             return
         }
@@ -744,48 +837,118 @@ class LuaLayout(private val initialContext: Context) {
             null
         }
         if (viewObj != null) {
+            // 热路径：可写属性才直调缓存 Method；失败再走 view[key]= 桥
+            if (tryApplyJavaProperty(viewObj, keyString, tValue, rawValue)) return
+
             if (LayoutReflection.canSetJavaProperty(viewObj.javaClass, keyString)) {
+                if (tValue.type() == LuaValue.TSTRING) {
+                    tValue = values.toValue(tValue.asString(), keyString).toLuaValue()
+                }
                 view[key] = tValue
                 return
             }
-            // TextInputLayout / MaterialTextField：外层无 setter 时回退内部 EditText 属性名校验
+            // TextInputLayout / MaterialTextField：外层无 setter 时回退内部 EditText
             val inner = LayoutTextSupport.resolve(viewObj)
-            if (inner != null &&
-                inner !== viewObj &&
-                LayoutReflection.canSetJavaProperty(inner.javaClass, keyString)
-            ) {
-                // 优先走外层 JavaInstance（MaterialTextField 代理 setXxx）
-                try {
-                    view[key] = tValue
-                    return
-                } catch (_: Exception) {
-                    when (keyString) {
-                        "enabled" -> {
-                            inner.isEnabled = values.toBoolean(rawValue)
-                            return
+            if (inner != null && inner !== viewObj) {
+                if (tryApplyJavaProperty(inner, keyString, tValue, rawValue)) return
+                if (LayoutReflection.canSetJavaProperty(inner.javaClass, keyString)) {
+                    try {
+                        if (tValue.type() == LuaValue.TSTRING) {
+                            tValue = values.toValue(tValue.asString(), keyString).toLuaValue()
                         }
-                        "selected" -> {
-                            inner.isSelected = values.toBoolean(rawValue)
-                            return
-                        }
-                        "clickable" -> {
-                            inner.isClickable = values.toBoolean(rawValue)
-                            return
-                        }
-                        "focusable" -> {
-                            inner.isFocusable = values.toBoolean(rawValue)
-                            return
+                        view[key] = tValue
+                        return
+                    } catch (_: Exception) {
+                        when (keyString) {
+                            "enabled" -> {
+                                inner.isEnabled = values.toBoolean(rawValue)
+                                return
+                            }
+                            "selected" -> {
+                                inner.isSelected = values.toBoolean(rawValue)
+                                return
+                            }
+                            "clickable" -> {
+                                inner.isClickable = values.toBoolean(rawValue)
+                                return
+                            }
+                            "focusable" -> {
+                                inner.isFocusable = values.toBoolean(rawValue)
+                                return
+                            }
                         }
                     }
                 }
             }
-            val setterHint = "set" + keyString.replaceFirstChar {
-                if (it.isLowerCase()) it.uppercaseChar() else it
-            }
+            val setterHint = LayoutReflection.setterName(keyString)
             throw LuaError(
                 "不支持的属性 '$keyString'（${viewObj.javaClass.simpleName} 无 $setterHint / field）"
             )
         }
+        if (tValue.type() == LuaValue.TSTRING) {
+            tValue = values.toValue(tValue.asString(), keyString).toLuaValue()
+        }
         view[key] = tValue
+    }
+
+    /**
+     * 默认属性：优先反射 setter（int/float/boolean/CSL/CharSequence），减少 Lua↔Java 往返。
+     * 必须先通过 [LayoutReflection.canSetJavaProperty]，避免对不存在的属性误命中其它 setXxx。
+     */
+    private fun tryApplyJavaProperty(
+        host: View,
+        keyString: String,
+        tValue: LuaValue,
+        rawValue: LuaValue,
+    ): Boolean {
+        if (!LayoutReflection.canSetJavaProperty(host.javaClass, keyString)) {
+            return false
+        }
+        when {
+            tValue.isboolean() ->
+                return LayoutReflection.trySetJavaValue(host, keyString, tValue.toboolean())
+            tValue.isnumber() -> {
+                val d = tValue.todouble()
+                val asInt = d.toInt()
+                if (asInt.toDouble() == d &&
+                    LayoutReflection.trySetJavaValue(host, keyString, asInt)
+                ) {
+                    return true
+                }
+                return LayoutReflection.trySetJavaValue(host, keyString, d.toFloat())
+            }
+            tValue.isstring() -> {
+                // 常见 View 布尔字符串（canSet 已通过）
+                when (keyString) {
+                    "enabled" -> {
+                        host.isEnabled = values.toBoolean(rawValue)
+                        return true
+                    }
+                    "selected" -> {
+                        host.isSelected = values.toBoolean(rawValue)
+                        return true
+                    }
+                    "clickable" -> {
+                        host.isClickable = values.toBoolean(rawValue)
+                        return true
+                    }
+                    "focusable" -> {
+                        host.isFocusable = values.toBoolean(rawValue)
+                        return true
+                    }
+                }
+                val javaVal = values.toValue(tValue.asString(), keyString) ?: return false
+                return LayoutReflection.trySetJavaValue(host, keyString, javaVal)
+            }
+            tValue.isuserdata(ColorStateList::class.java) -> {
+                val csl = tValue.touserdata(ColorStateList::class.java) as ColorStateList
+                return LayoutReflection.trySetJavaValue(host, keyString, csl)
+            }
+            tValue.isuserdata() -> {
+                val raw = tValue.touserdata() ?: return false
+                return LayoutReflection.trySetJavaValue(host, keyString, raw)
+            }
+        }
+        return false
     }
 }

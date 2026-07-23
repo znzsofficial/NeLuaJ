@@ -73,14 +73,33 @@ internal object LayoutTextSupport {
 
     fun setTextColor(host: View, color: Int) {
         resolve(host)?.let {
+            // TextView.setTextColor(int) — 亦有 ColorStateList 重载，int 更常见于布局表
             it.setTextColor(color)
             return
+        }
+        // TextInputLayout：hint 用 setHintTextColor；正文色仍尽量落到内部 EditText
+        if (host is TextInputLayout) {
+            host.editText?.let {
+                it.setTextColor(color)
+                return
+            }
         }
         if (LayoutReflection.invokeIntSetter(host, "setTextColor", color)) return
         throw unsupported(host, "textColor")
     }
 
     fun setHintTextColor(host: View, color: Int) {
+        // TextInputLayout 公开 API：hint 颜色（与内部 EditText hint 不同层）
+        if (host is TextInputLayout) {
+            runCatching {
+                host.setHintTextColor(android.content.res.ColorStateList.valueOf(color))
+                return
+            }
+            runCatching {
+                host.defaultHintTextColor = android.content.res.ColorStateList.valueOf(color)
+                return
+            }
+        }
         resolve(host)?.let {
             it.setHintTextColor(color)
             return

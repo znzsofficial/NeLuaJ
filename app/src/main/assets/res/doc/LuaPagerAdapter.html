@@ -17,10 +17,10 @@
 </code></pre>
 <h2>设计说明</h2>
 <p><code>LuaPagerAdapter</code> 使用无参构造，并在 Java 侧内部维护页面列表和标题列表。这样可以避免 LuaJ 包装 Lua table 后，Java 侧无法感知 table 后续变更而导致 <code>ViewPager</code> 不刷新的问题。</p>
-<p>适配器在 <code>setData</code>、<code>add</code>、<code>insert</code>、<code>set</code>、<code>remove</code>、<code>clear</code> 后会自动调用 <code>notifyDataSetChanged()</code>。同时已重写 <code>getItemPosition()</code>，便于页面动态更新。</p>
+<p>适配器在 <code>setData</code>、<code>add</code>、<code>insert</code>、<code>set</code>、<code>remove</code>、<code>clear</code>、<code>setPageTitle</code>、<code>setPageTitles</code> 后会自动调用 <code>notifyDataSetChanged()</code>。同时已重写 <code>getItemPosition()</code>，便于页面动态更新。</p>
 <p>标题列表会和页面列表保持同长度：标题过多会被裁剪，标题不足会补为空字符串，<code>nil</code> 标题也会转为空字符串。</p>
 <blockquote>
-<p>如果通过 <code>getData()</code> 或 <code>getTitles()</code> 取得内部 <code>List</code> 后直接修改列表，适配器不会自动收到通知。推荐使用本文档中的 <code>setData</code>、<code>add</code>、<code>insert</code>、<code>set</code>、<code>remove</code>、<code>clear</code> 方法修改数据。</p>
+<p>如果通过 <code>getData()</code> 或 <code>getTitles()</code> 取得内部 <code>List</code> 后直接修改列表，适配器不会自动收到通知。推荐使用本文档中的 API 修改数据。</p>
 </blockquote>
 <p><strong>索引说明：</strong> 所有 <code>index</code> / <code>position</code> 均为 Java/Android 风格的 <strong>0 基索引</strong>。Lua 表通常从 1 开始，从 Lua 调用这些方法时请注意转换。</p>
 <h2>构造函数</h2>
@@ -68,6 +68,27 @@ pager.setAdapter(adapter)
 <p>替换指定页面和标题。索引越界时不会修改数据。</p>
 <pre><code class="language-lua">adapter.set(0, newPageView, "新标题")
 </code></pre>
+<h2>仅更新标题</h2>
+<p>需要切换语言或改文案、但不想重建 <code>View</code> 时，用下列方法只改标题（页面列表不变）。</p>
+<h3><code>setPageTitle(index, title)</code></h3>
+<p>更新单个页标题。索引越界（含尚无页面）时不修改。<code>nil</code> 标题转为空字符串。</p>
+<pre><code class="language-lua">adapter.setPageTitle(0, "首页")
+adapter.setPageTitle(1, "设置")
+</code></pre>
+<h3><code>setPageTitles(titles)</code></h3>
+<p>按列表批量更新标题。只写入 <code>min(当前页数, titles 长度)</code> 项，多余标题忽略、不足的页保持原标题。传入 <code>nil</code> 时不修改。</p>
+<pre><code class="language-lua">-- Java List&lt;String&gt; 或适配器可接收的字符串列表
+adapter.setPageTitles(titleList)
+</code></pre>
+<blockquote>
+<p><strong>Lua 注意：</strong> 从 Lua 传 table 时，底层可能无法当作 <code>List&lt;String&gt;</code> 使用。i18n 等场景可逐项调用 <code>setPageTitle</code>（例如 vConsole 的 <code>api.syncPagerTitles</code>）。</p>
+</blockquote>
+<pre><code class="language-lua">local titles = { "输出", "变量", "系统日志", "文本", "控制" }
+for i = 1, #titles do
+  adapter.setPageTitle(i - 1, titles[i]) -- 0 基
+end
+</code></pre>
+<p>配合 <code>TabLayout</code> / <code>setupWithViewPager</code> 时，标题变更后一般会随 <code>notifyDataSetChanged</code> 刷新；若 Tab 未更新，可再调用一次与 ViewPager 的关联逻辑。</p>
 <h2>移除页面</h2>
 <h3><code>remove(index)</code></h3>
 <p>移除指定 0 基索引的页面和对应标题，并返回被移除的 <code>View</code>。索引越界时返回 <code>nil</code>。</p>
@@ -121,6 +142,12 @@ local ok = adapter.remove(page)
         { "首页", "设置" },
     },
 }
+</code></pre>
+<p><code>loadlayout</code> 会创建 <code>LuaPagerAdapter</code> 并 <code>setData(views, titles)</code>。之后若需改标题，可从 <code>pager.getAdapter()</code> 取适配器并调用 <code>setPageTitle</code> / <code>setPageTitles</code>。</p>
+<pre><code class="language-lua">local adp = pager.getAdapter()
+if adp and adp.setPageTitle then
+  adp.setPageTitle(0, "新首页")
+end
 </code></pre>
     </main>
   </body>

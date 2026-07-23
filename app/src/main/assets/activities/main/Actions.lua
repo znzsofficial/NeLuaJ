@@ -71,34 +71,26 @@ function Actions.injectVConsole()
   end
   local projectDir = Bean.Path.app_root_pro_dir .. "/" .. Bean.Project.this_project
   local dest = projectDir .. "/vConsole.lua"
-  local src
-  pcall(function() src = this.getLuaDir("vConsole.lua") end)
+  local src = this.getLuaDir("vConsole.lua")
   if not src or src == "" or not File(src).isFile() then
-    snack(res.string.vconsole_inject_no_src or "找不到内置 vConsole.lua")
+    snack(res.string.vconsole_inject_no_src)
     return
   end
 
-  local copied = false
-  pcall(function()
-    LuaUtil.copyFile(src, dest)
-    copied = File(dest).isFile()
-  end)
-  if not copied then
-    snack(res.string.vconsole_inject_copy_fail or "复制 vConsole.lua 失败")
+  LuaUtil.copyFile(src, dest)
+  if not File(dest).isFile() then
+    snack(res.string.vconsole_inject_copy_fail)
     return
   end
 
   local requireLine = 'require "vConsole"'
-  pcall(function()
-    local ClipData = luajava.bindClass "android.content.ClipData"
-    local Context = luajava.bindClass "android.content.Context"
-    local cm = activity.getSystemService(Context.CLIPBOARD_SERVICE)
-    cm.setPrimaryClip(ClipData.newPlainText("vConsole", requireLine))
-  end)
-  pcall(function() MainActivity.RecyclerView.update() end)
+  local ClipData = luajava.bindClass "android.content.ClipData"
+  local Context = luajava.bindClass "android.content.Context"
+  local cm = activity.getSystemService(Context.CLIPBOARD_SERVICE)
+  cm.setPrimaryClip(ClipData.newPlainText("vConsole", requireLine))
+  MainActivity.RecyclerView.update()
 
-  snack(res.string.vconsole_inject_ok
-    or '已复制 vConsole.lua；require "vConsole" 已在剪贴板，请粘贴到 setContentView 之后')
+  snack(res.string.vconsole_inject_ok)
 end
 
 function Actions.formatCode()

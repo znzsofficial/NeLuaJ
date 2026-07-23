@@ -2,6 +2,9 @@ package com.androlua.layout
 
 import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
+import android.widget.LinearLayout
+import androidx.coordinatorlayout.widget.CoordinatorLayout
 import com.androlua.LuaContext
 import com.nekolaska.ktx.asString
 import com.google.android.material.appbar.AppBarLayout
@@ -17,6 +20,7 @@ import com.nekolaska.ktx.toLuaValue
 import org.luaj.LuaError
 import org.luaj.LuaValue
 import org.luaj.LuaValue.NIL
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * layout_* 参数、margin、padding、Coordinator behavior。
@@ -26,6 +30,51 @@ internal class LayoutParamsApplier(
     private val values: LayoutValueParser,
     private val ids: Map<String, Int>,
 ) {
+
+    companion object {
+        private val NO_LP = Any()
+        private val nestedLpClassCache = ConcurrentHashMap<Class<*>, Any>()
+
+        /**
+         * 解析父 View 类给子节点用的 LayoutParams **类**。
+         * 不可用 JavaClass["LayoutParams"]：叶子 View 会误调 getLayoutParams()。
+         */
+        fun resolveNestedLayoutParamsClass(parentClass: Class<*>): Class<*>? {
+            if (!ViewGroup::class.java.isAssignableFrom(parentClass)) return null
+            val hit = nestedLpClassCache[parentClass]
+            if (hit === NO_LP) return null
+            if (hit is Class<*>) return hit
+
+            var c: Class<*>? = parentClass
+            while (c != null && ViewGroup::class.java.isAssignableFrom(c)) {
+                val nested = c.declaredClasses.firstOrNull { nested ->
+                    nested.simpleName == "LayoutParams" &&
+                        ViewGroup.LayoutParams::class.java.isAssignableFrom(nested)
+                } ?: c.classes.firstOrNull { nested ->
+                    nested.simpleName == "LayoutParams" &&
+                        ViewGroup.LayoutParams::class.java.isAssignableFrom(nested)
+                }
+                if (nested != null) {
+                    nestedLpClassCache[parentClass] = nested
+                    return nested
+                }
+                c = c.superclass
+            }
+            nestedLpClassCache[parentClass] = NO_LP
+            return null
+        }
+
+        fun resolveNestedLayoutParamsLua(parentClassValue: LuaValue): LuaValue {
+            val clazz = try {
+                if (parentClassValue.isuserdata(Class::class.java)) {
+                    parentClassValue.touserdata(Class::class.java) as Class<*>
+                } else null
+            } catch (_: Exception) {
+                null
+            } ?: return NIL
+            return resolveNestedLayoutParamsClass(clazz)?.toLuaValue() ?: NIL
+        }
+    }
 
     fun applyLayoutParam(keyString: String, tValue: LuaValue, params: LuaValue) {
         if (keyString == "layout_alignWithParentIfMissing") {
@@ -39,20 +88,55 @@ internal class LayoutParamsApplier(
             return
         }
 
+        val javaLp = try {
+            params.touserdata()
+        } catch (_: Exception) {
+            null
+        }
+
         when (keyString) {
-            "layout_width" -> params["width"] = values.toLayoutSize(tValue)
-            "layout_height" -> params["height"] = values.toLayoutSize(tValue)
+            "layout_width" -> {
+                val w = values.toLayoutSize(tValue)
+                if (javaLp is ViewGroup.LayoutParams) javaLp.width = w
+                else params["width"] = w
+            }
+            "layout_height" -> {
+                val h = values.toLayoutSize(tValue)
+                if (javaLp is ViewGroup.LayoutParams) javaLp.height = h
+                else params["height"] = h
+            }
             "layout_weight" -> {
                 val w = when {
-                    tValue.isnumber() -> tValue.todouble()
-                    tValue.isstring() -> tValue.asString().toDoubleOrNull()
+                    tValue.isnumber() -> tValue.todouble().toFloat()
+                    tValue.isstring() -> tValue.asString().toFloatOrNull()
                         ?: throw LuaError("layout_weight 无法解析: ${tValue.asString()}")
-                    else -> tValue.todouble()
+                    else -> tValue.todouble().toFloat()
                 }
-                params["weight"] = w
+                // AppBarLayout.LayoutParams 继承 LinearLayout.LayoutParams，一并覆盖
+                if (javaLp is LinearLayout.LayoutParams) {
+                    javaLp.weight = w
+                    return
+                }
+                params["weight"] = w.toDouble()
             }
-            "layout_gravity" ->
-                params["gravity"] = values.toIntValue(tValue, "layout_gravity")
+            "layout_gravity" -> {
+                val g = values.toIntValue(tValue, "layout_gravity")
+                when (javaLp) {
+                    is LinearLayout.LayoutParams -> {
+                        javaLp.gravity = g
+                        return
+                    }
+                    is FrameLayout.LayoutParams -> {
+                        javaLp.gravity = g
+                        return
+                    }
+                    is CoordinatorLayout.LayoutParams -> {
+                        javaLp.gravity = g
+                        return
+                    }
+                }
+                params["gravity"] = g
+            }
             "layout_margin", "layout_marginLeft", "layout_marginTop",
             "layout_marginRight", "layout_marginBottom",
             "layout_marginStart", "layout_marginEnd",
@@ -118,50 +202,139 @@ internal class LayoutParamsApplier(
         }
     }
 
-    fun applyMargins(layout: LuaValue, params: LuaValue) {
-        fun raw(key: String): LuaValue {
-            val v = layout[key]
-            return if (v.isnil()) NIL else v
-        }
-        fun dim(key: String): Int? {
-            val v = raw(key)
-            return if (v.isnil()) null else values.toLayoutSize(v)
-        }
+    /**
+     * 首遍 [LuaLayout.load] 收集的 margin / padding 原始值，避免二次 layout["…"] 扫表。
+     * 字段为 null 表示布局表未写该 key。
+     */
+    class Box {
+        var marginAll: LuaValue? = null
+        var marginLeft: LuaValue? = null
+        var marginTop: LuaValue? = null
+        var marginRight: LuaValue? = null
+        var marginBottom: LuaValue? = null
+        var marginStart: LuaValue? = null
+        var marginEnd: LuaValue? = null
+        var marginHorizontal: LuaValue? = null
+        var marginVertical: LuaValue? = null
+        var paddingAll: LuaValue? = null
+        var paddingLeft: LuaValue? = null
+        var paddingTop: LuaValue? = null
+        var paddingRight: LuaValue? = null
+        var paddingBottom: LuaValue? = null
+        var paddingStart: LuaValue? = null
+        var paddingEnd: LuaValue? = null
+        var hasMargin: Boolean = false
+        var hasPadding: Boolean = false
 
-        val all = dim("layout_margin")
-        val horizontal = dim("layout_marginHorizontal")
-        val vertical = dim("layout_marginVertical")
-        val left = dim("layout_marginLeft") ?: horizontal ?: all
-        val top = dim("layout_marginTop") ?: vertical ?: all
-        val right = dim("layout_marginRight") ?: horizontal ?: all
-        val bottom = dim("layout_marginBottom") ?: vertical ?: all
+        fun accept(key: String, value: LuaValue): Boolean {
+            when (key) {
+                "layout_margin" -> {
+                    marginAll = value; hasMargin = true
+                }
+                "layout_marginLeft" -> {
+                    marginLeft = value; hasMargin = true
+                }
+                "layout_marginTop" -> {
+                    marginTop = value; hasMargin = true
+                }
+                "layout_marginRight" -> {
+                    marginRight = value; hasMargin = true
+                }
+                "layout_marginBottom" -> {
+                    marginBottom = value; hasMargin = true
+                }
+                "layout_marginStart" -> {
+                    marginStart = value; hasMargin = true
+                }
+                "layout_marginEnd" -> {
+                    marginEnd = value; hasMargin = true
+                }
+                "layout_marginHorizontal" -> {
+                    marginHorizontal = value; hasMargin = true
+                }
+                "layout_marginVertical" -> {
+                    marginVertical = value; hasMargin = true
+                }
+                "padding" -> {
+                    paddingAll = value; hasPadding = true
+                }
+                "paddingLeft" -> {
+                    paddingLeft = value; hasPadding = true
+                }
+                "paddingTop" -> {
+                    paddingTop = value; hasPadding = true
+                }
+                "paddingRight" -> {
+                    paddingRight = value; hasPadding = true
+                }
+                "paddingBottom" -> {
+                    paddingBottom = value; hasPadding = true
+                }
+                "paddingStart" -> {
+                    paddingStart = value; hasPadding = true
+                }
+                "paddingEnd" -> {
+                    paddingEnd = value; hasPadding = true
+                }
+                else -> return false
+            }
+            return true
+        }
+    }
+
+    fun applyMargins(box: Box, params: LuaValue) {
+        if (!box.hasMargin) return
+        fun dim(v: LuaValue?): Int? =
+            if (v == null || v.isnil()) null else values.toLayoutSize(v)
+
+        val all = dim(box.marginAll)
+        val horizontal = dim(box.marginHorizontal)
+        val vertical = dim(box.marginVertical)
+        val left = dim(box.marginLeft) ?: horizontal ?: all
+        val top = dim(box.marginTop) ?: vertical ?: all
+        val right = dim(box.marginRight) ?: horizontal ?: all
+        val bottom = dim(box.marginBottom) ?: vertical ?: all
+        val start = dim(box.marginStart)
+            ?: if (box.marginLeft == null) (horizontal ?: all) else null
+        val end = dim(box.marginEnd)
+            ?: if (box.marginRight == null) (horizontal ?: all) else null
+
+        // 热路径：直接写 MarginLayoutParams 字段，避免 params["leftMargin"]= 桥
+        val javaLp = try {
+            params.touserdata()
+        } catch (_: Exception) {
+            null
+        }
+        if (javaLp is ViewGroup.MarginLayoutParams) {
+            left?.let { javaLp.leftMargin = it }
+            top?.let { javaLp.topMargin = it }
+            right?.let { javaLp.rightMargin = it }
+            bottom?.let { javaLp.bottomMargin = it }
+            start?.let { javaLp.marginStart = it }
+            end?.let { javaLp.marginEnd = it }
+            return
+        }
 
         left?.let { params["leftMargin"] = it }
         top?.let { params["topMargin"] = it }
         right?.let { params["rightMargin"] = it }
         bottom?.let { params["bottomMargin"] = it }
-
-        val start = dim("layout_marginStart")
-            ?: if (raw("layout_marginLeft").isnil()) (horizontal ?: all) else null
-        val end = dim("layout_marginEnd")
-            ?: if (raw("layout_marginRight").isnil()) (horizontal ?: all) else null
         start?.let { params["setMarginStart"]?.ifNotNil()?.jcall(it) }
         end?.let { params["setMarginEnd"]?.ifNotNil()?.jcall(it) }
     }
 
-    fun applyPadding(layout: LuaValue, host: View) {
-        fun dim(key: String): Int? {
-            val v = layout[key]
-            return if (v.isnil()) null else values.toLayoutSize(v)
-        }
+    fun applyPadding(box: Box, host: View) {
+        if (!box.hasPadding) return
+        fun dim(v: LuaValue?): Int? =
+            if (v == null || v.isnil()) null else values.toLayoutSize(v)
 
-        val all = dim("padding")
-        val left = dim("paddingLeft")
-        val top = dim("paddingTop")
-        val right = dim("paddingRight")
-        val bottom = dim("paddingBottom")
-        val start = dim("paddingStart")
-        val end = dim("paddingEnd")
+        val all = dim(box.paddingAll)
+        val left = dim(box.paddingLeft)
+        val top = dim(box.paddingTop)
+        val right = dim(box.paddingRight)
+        val bottom = dim(box.paddingBottom)
+        val start = dim(box.paddingStart)
+        val end = dim(box.paddingEnd)
 
         if (all == null && left == null && top == null && right == null &&
             bottom == null && start == null && end == null
@@ -184,6 +357,41 @@ internal class LayoutParamsApplier(
                 bottom ?: all ?: host.paddingBottom
             )
         }
+    }
+
+    /** 兼容：仍从 layout 表读（测试 / 外部调用） */
+    fun applyMargins(layout: LuaValue, params: LuaValue) {
+        val box = Box()
+        fun take(key: String) {
+            val v = layout[key]
+            if (!v.isnil()) box.accept(key, v)
+        }
+        take("layout_margin")
+        take("layout_marginLeft")
+        take("layout_marginTop")
+        take("layout_marginRight")
+        take("layout_marginBottom")
+        take("layout_marginStart")
+        take("layout_marginEnd")
+        take("layout_marginHorizontal")
+        take("layout_marginVertical")
+        applyMargins(box, params)
+    }
+
+    fun applyPadding(layout: LuaValue, host: View) {
+        val box = Box()
+        fun take(key: String) {
+            val v = layout[key]
+            if (!v.isnil()) box.accept(key, v)
+        }
+        take("padding")
+        take("paddingLeft")
+        take("paddingTop")
+        take("paddingRight")
+        take("paddingBottom")
+        take("paddingStart")
+        take("paddingEnd")
+        applyPadding(box, host)
     }
 
     private fun layoutParamFieldName(layoutKey: String): String {

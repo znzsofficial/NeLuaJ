@@ -29,21 +29,31 @@ local function getFunctionTabTextSize()
   )
 end
 
-local function addChip(parent, text, onClick)
+local function addChip(parent, text, onClick, onLongClick)
   local textSize = getFunctionTabTextSize()
+  local chip = {
+    TextView,
+    TextSize = textSize .. "sp",
+    BackgroundResource = rippleRes,
+    text = text,
+    paddingLeft = "8dp",
+    paddingRight = "8dp",
+    paddingTop = "6dp",
+    paddingBottom = "6dp",
+    clickable = true,
+    focusable = true,
+    onClick = onClick,
+  }
+  if onLongClick then
+    chip.longClickable = true
+    chip.onLongClick = function()
+      onLongClick()
+      return true
+    end
+  end
   parent.addView(loadlayout {
     LinearLayout,
-    {
-      TextView,
-      TextSize = textSize .. "sp",
-      BackgroundResource = rippleRes,
-      text = text,
-      paddingLeft = "8dp",
-      paddingRight = "8dp",
-      paddingTop = "6dp",
-      paddingBottom = "6dp",
-      onClick = onClick,
-    },
+    chip,
   })
 end
 
@@ -73,8 +83,19 @@ local function buildClickMap(Actions)
   }
 end
 
+local function buildLongClickMap()
+  local RunKeyConfig = require "mods.utils.RunKeyConfig"
+  return {
+    -- 长按运行 → 与设置页相同的运行键配置
+    run = function()
+      RunKeyConfig.showPicker(this)
+    end,
+  }
+end
+
 function _M.buildActions(Actions)
   local click = buildClickMap(Actions)
+  local longClick = buildLongClickMap()
   local ids = FunctionBarConfig.parseIds(this.getSharedData("function_bar", nil))
     or FunctionBarConfig.getDefaultIds()
   local actions = {}
@@ -86,6 +107,7 @@ function _M.buildActions(Actions)
         id = id,
         title = FunctionBarConfig.resolveTitle(item),
         onClick = onClick,
+        onLongClick = longClick[id],
       }
     end
   end
@@ -98,6 +120,7 @@ function _M.buildActions(Actions)
           id = id,
           title = FunctionBarConfig.resolveTitle(item),
           onClick = onClick,
+          onLongClick = longClick[id],
         }
       end
     end
@@ -108,7 +131,7 @@ end
 function _M.render(parent, Actions)
   parent.removeAllViews()
   for _, action in ipairs(_M.buildActions(Actions)) do
-    addChip(parent, action.title, action.onClick)
+    addChip(parent, action.title, action.onClick, action.onLongClick)
   end
 end
 

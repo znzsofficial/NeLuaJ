@@ -149,6 +149,24 @@ public final class LuaPagerAdapter extends PagerAdapter {
         return titles;
     }
 
+    /** 仅更新页标题（如 i18n 切换），不替换 View 列表 */
+    public void setPageTitle(int index, String title) {
+        if (index < 0 || index >= pagerViews.size()) return;
+        normalizeTitles();
+        titles.set(index, normalizeTitle(title));
+        notifyDataSetChanged();
+    }
+
+    public void setPageTitles(List<String> titleList) {
+        normalizeTitles();
+        if (titleList == null) return;
+        int n = Math.min(titles.size(), titleList.size());
+        for (int i = 0; i < n; i++) {
+            titles.set(i, normalizeTitle(titleList.get(i)));
+        }
+        notifyDataSetChanged();
+    }
+
     private void normalizeTitles() {
         while (titles.size() > pagerViews.size()) {
             titles.remove(titles.size() - 1);

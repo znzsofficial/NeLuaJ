@@ -375,44 +375,6 @@ end
 local function buildHeader()
   docHeader.removeAllViews()
 
-  -- Hero
-  docHeader.addView(loadlayout {
-    MaterialCardView,
-    layout_width = "match",
-    layout_height = "wrap",
-    layout_marginBottom = "10dp",
-    radius = "20dp",
-    CardElevation = 0,
-    strokeWidth = "0dp",
-    CardBackgroundColor = ui.primaryContainer,
-    {
-      LinearLayout,
-      orientation = "vertical",
-      layout_width = "match",
-      layout_height = "wrap",
-      paddingLeft = "20dp",
-      paddingRight = "20dp",
-      paddingTop = "18dp",
-      paddingBottom = "18dp",
-      {
-        MaterialTextView,
-        text = "文档中心",
-        textSize = "24sp",
-        textStyle = "bold",
-        textColor = ui.onPrimaryContainer,
-        letterSpacing = -0.01,
-      },
-      {
-        MaterialTextView,
-        text = "搜索或按分类浏览 API、模块与组件说明",
-        textSize = "13sp",
-        textColor = ui.onPrimaryContainer,
-        paddingTop = "6dp",
-        alpha = 0.9,
-      },
-    },
-  })
-
   -- Search
   docHeader.addView(loadlayout {
     MaterialCardView,

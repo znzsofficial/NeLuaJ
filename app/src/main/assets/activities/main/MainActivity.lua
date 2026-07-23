@@ -77,14 +77,29 @@ local function isTabletUi()
   return Init.isTabletMode and Init.isTabletMode()
 end
 
+local RunKeyConfig = require "mods.utils.RunKeyConfig"
+
+--- 工具栏运行键：按设置 run_key_mode（默认 menu）
 local function showRunMenu()
   if not Actions.requireOpenFile() then return end
 
+  local mode = RunKeyConfig.getMode(this)
+  -- 无工程：无法「运行工程」；file/project 都退化为当前文件，menu 也无工程项
   if Bean.Project.this_project == "" then
     Actions.runCurrent()
     return
   end
 
+  if mode == RunKeyConfig.MODE_FILE then
+    Actions.runCurrent()
+    return
+  end
+  if mode == RunKeyConfig.MODE_PROJECT then
+    Actions.runProject()
+    return
+  end
+
+  -- menu（默认）
   local pop = PopupMenu(activity, mToolBar.getChildAt(3))
   local menu = pop.Menu
   addItem(menu, res.string.run_code .. " " .. File(Bean.Path.this_file).getName(), Actions.runCurrent)

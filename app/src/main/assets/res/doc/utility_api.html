@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -10,7 +10,7 @@
   <body>
     <main class="markdown-export">
 <h1>便捷 API 参考</h1>
-<p>NeLuaJ+ 提供了丰富的工具类和模块，简化常见开发任务。</p>
+<p>常用工具与模块速查。需要完整说明时，请点下方相关文档按钮进入专页。</p>
 <hr>
 <h2>1. LuaFileUtil — 文件操作</h2>
 <pre><code class="language-lua">local LuaFileUtil = luajava.bindClass "com.nekolaska.io.LuaFileUtil".INSTANCE
@@ -42,18 +42,20 @@ file.mkdir("newdir")
 file.list(".")
 </code></pre>
 <nav class="doc-nav" aria-label="相关文档">
-  <span class="doc-nav-label">详文</span>
+  <span class="doc-nav-label">相关文档</span>
   <a class="doc-link" href="module_file.html">file 模块</a>
 </nav>
 <hr>
 <h2>4. res / loadlayout</h2>
 <pre><code class="language-lua">local title = res.string.app_title
 activity.setContentView(res.layout.main)
+-- 图标：src = res.drawable("save", ColorUtil.getColorPrimary())
 </code></pre>
 <nav class="doc-nav" aria-label="相关文档">
-  <span class="doc-nav-label">详文</span>
+  <span class="doc-nav-label">相关文档</span>
   <a class="doc-link" href="module_res.html">res</a>
   <a class="doc-link" href="module_loadlayout.html">loadlayout</a>
+  <a class="doc-link" href="layout_reference.html">布局属性参考</a>
   <a class="doc-link" href="color_api.html">颜色与主题</a>
 </nav>
 <hr>
@@ -153,17 +155,20 @@ end)
 </code></pre>
 <hr>
 <h2>12. loadlayout — 布局加载</h2>
-<pre><code class="language-lua">-- 基本用法
-local view = loadlayout(layoutTable)
+<pre><code class="language-lua">local view = loadlayout(layoutTable)
 
--- 带绑定表（通过 id 自动绑定到表中）
 local binding = {}
-local view = loadlayout(layoutTable, binding)
--- 之后可通过 binding.viewId 访问视图
+local view = loadlayout(layoutTable, binding)  -- binding.title 等
 
--- 加载资源布局
 local view = loadlayout(res.layout.main)
+-- 图片推荐：src = res.drawable("save", ColorUtil.getColorPrimary())
 </code></pre>
+<nav class="doc-nav" aria-label="相关文档">
+  <span class="doc-nav-label">相关文档</span>
+  <a class="doc-link" href="module_loadlayout.html">loadlayout · src 详解</a>
+  <a class="doc-link" href="layout_reference.html">布局属性参考</a>
+  <a class="doc-link" href="module_res.html">res.drawable</a>
+</nav>
 <hr>
 <h2>13. print / printf — 打印</h2>
 <pre><code class="language-lua">-- 打印到日志（会显示 Toast）

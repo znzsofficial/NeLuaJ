@@ -151,6 +151,13 @@ res.drawable("settings", function(icon)
 end)
 </code></pre>
       <p>未找到资源时返回 <code>nil</code>。带着色参数时不会污染未着色缓存实例。</p>
+      <p>布局里工具栏图标推荐 <code>src = res.drawable(name, color)</code>。<code>src = "@drawable/name"</code> 的查找顺序与上相同，但<strong>不带颜色</strong>，需再写 <code>iconTint</code>。</p>
+      <nav class="doc-nav" aria-label="相关文档">
+        <span class="doc-nav-label">相关文档</span>
+        <a class="doc-link" href="module_loadlayout.html">loadlayout · src 详解</a>
+        <a class="doc-link" href="layout_reference.html">布局参考 · 图片</a>
+        <a class="doc-link" href="color_api.html">颜色与主题</a>
+      </nav>
 
       <h3>内置矢量命名约定</h3>
       <div class="table-wrapper"><table>
@@ -184,9 +191,10 @@ activity.setContentView(res.layout.main)
 </code></pre>
       <p>布局取色用 <code>"?attr/…"</code>；图标 tint 用 <code>res.drawable("save", this.themeUtil.primary.main)</code>。</p>
       <nav class="doc-nav" aria-label="相关文档">
-        <span class="doc-nav-label">相关</span>
+        <span class="doc-nav-label">相关文档</span>
         <a class="doc-link" href="color_api.html">颜色与主题</a>
         <a class="doc-link" href="module_loadlayout.html">loadlayout</a>
+        <a class="doc-link" href="layout_reference.html">布局属性参考</a>
       </nav>
 
       <h2>10. res.view</h2>
@@ -225,6 +233,13 @@ end
         <li>drawable / bitmap / font / raw 有缓存；同名资源热替换后可能需重启进程。</li>
         <li>字符串与 plurals 的键名完全由你的资源文件定义。</li>
       </ul>
+      <nav class="doc-nav doc-nav-primary" aria-label="继续阅读">
+        <span class="doc-nav-label">继续阅读</span>
+        <a class="doc-link" href="module_loadlayout.html">loadlayout</a>
+        <a class="doc-link" href="layout_reference.html">布局属性参考</a>
+        <a class="doc-link" href="color_api.html">颜色与主题</a>
+        <a class="doc-link" href="utility_api.html">便捷 API</a>
+      </nav>
       <nav class="doc-nav" aria-label="相关文档">
         <span class="doc-nav-label">相关文档</span>
         <a class="doc-link" href="color_api.html">颜色与主题</a>

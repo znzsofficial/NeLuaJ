@@ -198,7 +198,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         pageName = File(luaFile).getName()
         val idx = pageName.lastIndexOf(".")
         if (idx > 0) pageName = pageName.substring(0, idx)
-        sLuaActivityMap[pageName] = this
+        sLuaActivityMap.getOrPut(pageName) { ArrayDeque() }.addLast(this)
         mLuaDexLoader = LuaDexLoader(this, luaRootDir)
         mLuaDexLoader.loadLibs()
         globals = JsePlatform.standardGlobals()
@@ -740,7 +740,10 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         }
         registeredReceivers.clear()
         mReceiver = null
-        sLuaActivityMap.remove(pageName)
+        sLuaActivityMap[pageName]?.let { stack ->
+            stack.removeAll { it === this }
+            if (stack.isEmpty()) sLuaActivityMap.remove(pageName)
+        }
         if (equals(sActivity)) sActivity = null
         super.onDestroy()
     }
@@ -1014,7 +1017,8 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         
         @JvmField
         var sActivity: LuaActivity? = null
-        private val sLuaActivityMap = HashMap<String?, LuaActivity?>()
+        /** pageName → 同名实例栈（后打开的在栈顶）；getActivity 返回栈顶 */
+        private val sLuaActivityMap = HashMap<String?, ArrayDeque<LuaActivity>>()
         
         @JvmStatic
         fun logError(title: String?, msg: Exception) {
@@ -1024,7 +1028,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         
         @JvmStatic
         fun getActivity(name: String?): LuaActivity? {
-            return sLuaActivityMap[name]
+            return sLuaActivityMap[name]?.lastOrNull()
         }
     }
 }
