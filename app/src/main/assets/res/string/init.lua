@@ -467,10 +467,8 @@ end
 setmetatable(_M, _M)
 
 return _M]]
-mcode = [[-- 动态取色
-activity.dynamicColor()
-
-activity.setContentView(res.layout.main)
+-- Material 3 / 动态色：主题只看 NeLuaJ_Theme，不插 dynamicColor
+mcode = [[activity.setContentView(res.layout.main)
   .setSupportActionBar(toolbar)
   .getSupportActionBar() {
     Title = res.string.app_title,
@@ -482,17 +480,14 @@ function onCreateOptionsMenu(menu)
   end
 end
 ]]
-mcode_minimal = [[activity.dynamicColor()
-
-activity.setContentView(res.layout.main)
+mcode_minimal = [[activity.setContentView(res.layout.main)
   .setSupportActionBar(toolbar)
   .getSupportActionBar() {
     Title = res.string.app_title,
   }
 ]]
--- 带系统 ActionBar 的主题：不 setSupportActionBar，布局无 Toolbar
-mcode_ab = [[activity.dynamicColor()
-activity.setTitle(res.string.app_title)
+-- 系统 ActionBar 主题：布局无 Toolbar，用 setTitle
+mcode_ab = [[activity.setTitle(res.string.app_title)
 activity.setContentView(res.layout.main)
 
 function onCreateOptionsMenu(menu)
@@ -501,8 +496,7 @@ function onCreateOptionsMenu(menu)
   end
 end
 ]]
-mcode_ab_minimal = [[activity.dynamicColor()
-activity.setTitle(res.string.app_title)
+mcode_ab_minimal = [[activity.setTitle(res.string.app_title)
 activity.setContentView(res.layout.main)
 ]]
 lcode_ab = [[import "com.google.android.material.textview.MaterialTextView"
@@ -511,11 +505,13 @@ import "com.google.android.material.card.MaterialCardView"
 import "android.widget.LinearLayout"
 import "android.widget.ScrollView"
 
+-- 取色用 ?attr/…；运行时 int 再用 this.themeUtil
 return {
   ScrollView,
   layout_width = "match",
   layout_height = "match",
-  BackgroundColor = "?attr/colorBackground",
+  fillViewport = true,
+  BackgroundColor = "?attr/colorSurface",
   {
     LinearLayout,
     orientation = "vertical",
@@ -562,6 +558,14 @@ return {
           textColor = "?attr/colorOnSurface",
         },
         {
+          MaterialTextView,
+          text = "Edit res/layout/main.lua to design UI",
+          textSize = "13sp",
+          textColor = "?attr/colorOnSurfaceVariant",
+          layout_marginTop = "6dp",
+          gravity = "center",
+        },
+        {
           MaterialButton,
           id = "hello_btn",
           text = "Click Me",
@@ -585,7 +589,7 @@ return {
   layout_height = "match",
   gravity = "center",
   padding = "24dp",
-  BackgroundColor = "?attr/colorBackground",
+  BackgroundColor = "?attr/colorSurface",
   {
     MaterialTextView,
     text = res.string.app_title,
@@ -601,25 +605,25 @@ import "com.google.android.material.card.MaterialCardView"
 import "android.widget.LinearLayout"
 import "android.widget.ScrollView"
 
--- 布局取色推荐 ?attr/…（loadlayout 解析主题属性）
--- 运行时需要 int 颜色时再用 this.themeUtil
+-- 取色用 ?attr/…；运行时 int 再用 this.themeUtil
 return {
   LinearLayout,
   orientation = "vertical",
   layout_width = "match",
   layout_height = "match",
-  BackgroundColor = "?attr/colorBackground",
+  BackgroundColor = "?attr/colorSurface",
   {
     MaterialToolbar,
     id = "toolbar",
     layout_width = "match",
     layout_height = "?attr/actionBarSize",
-    BackgroundColor = "?attr/colorBackground",
+    BackgroundColor = "?attr/colorSurface",
   },
   {
     ScrollView,
     layout_width = "match",
     layout_height = "match",
+    fillViewport = true,
     {
       LinearLayout,
       orientation = "vertical",
@@ -697,13 +701,13 @@ return {
   orientation = "vertical",
   layout_width = "match",
   layout_height = "match",
-  BackgroundColor = "?attr/colorBackground",
+  BackgroundColor = "?attr/colorSurface",
   {
     MaterialToolbar,
     id = "toolbar",
     layout_width = "match",
     layout_height = "?attr/actionBarSize",
-    BackgroundColor = "?attr/colorBackground",
+    BackgroundColor = "?attr/colorSurface",
   },
   {
     LinearLayout,
@@ -718,6 +722,474 @@ return {
       textSize = "22sp",
       textColor = "?attr/colorPrimary",
     },
+  },
+}
+]]
+-- AppCompat：无 Material 控件；布局不写颜色 / ?attr
+mcode_compat = [[activity.setContentView(res.layout.main)
+  .setSupportActionBar(toolbar)
+  .getSupportActionBar() {
+    Title = res.string.app_title,
+  }
+
+function onCreateOptionsMenu(menu)
+  menu.add(res.string.about).onMenuItemClick = function()
+    print("Hello NeLuaJ+ · " .. res.string.app_title)
+  end
+end
+]]
+mcode_compat_minimal = [[activity.setContentView(res.layout.main)
+  .setSupportActionBar(toolbar)
+  .getSupportActionBar() {
+    Title = res.string.app_title,
+  }
+]]
+mcode_compat_ab = [[activity.setTitle(res.string.app_title)
+activity.setContentView(res.layout.main)
+
+function onCreateOptionsMenu(menu)
+  menu.add(res.string.about).onMenuItemClick = function()
+    print("Hello NeLuaJ+ · " .. res.string.app_title)
+  end
+end
+]]
+mcode_compat_ab_minimal = [[activity.setTitle(res.string.app_title)
+activity.setContentView(res.layout.main)
+]]
+lcode_compat = [[import "androidx.appcompat.widget.Toolbar"
+import "android.widget.TextView"
+import "android.widget.Button"
+import "android.widget.LinearLayout"
+import "android.widget.ScrollView"
+
+-- 控件走主题默认色；勿写 BackgroundColor / textColor / ?attr
+return {
+  LinearLayout,
+  orientation = "vertical",
+  layout_width = "match",
+  layout_height = "match",
+  {
+    Toolbar,
+    id = "toolbar",
+    layout_width = "match",
+    layout_height = "wrap",
+  },
+  {
+    ScrollView,
+    layout_width = "match",
+    layout_height = "match",
+    fillViewport = true,
+    {
+      LinearLayout,
+      orientation = "vertical",
+      layout_width = "match",
+      layout_height = "wrap",
+      gravity = "center_horizontal",
+      padding = "24dp",
+      {
+        TextView,
+        text = res.string.app_title,
+        textSize = "28sp",
+        textStyle = "bold",
+        gravity = "center",
+      },
+      {
+        TextView,
+        text = "Powered by NeLuaJ+",
+        textSize = "14sp",
+        gravity = "center",
+        layout_marginTop = "8dp",
+      },
+      {
+        LinearLayout,
+        orientation = "vertical",
+        layout_width = "match",
+        layout_height = "wrap",
+        layout_marginTop = "28dp",
+        padding = "20dp",
+        gravity = "center",
+        {
+          TextView,
+          text = "Hello NeLuaJ+",
+          textSize = "20sp",
+        },
+        {
+          TextView,
+          text = "Edit res/layout/main.lua to design UI",
+          textSize = "13sp",
+          layout_marginTop = "6dp",
+          gravity = "center",
+        },
+        {
+          Button,
+          id = "hello_btn",
+          text = "Click Me",
+          layout_marginTop = "16dp",
+          onClick = function()
+            print("Hello World from " .. res.string.app_title)
+          end,
+        },
+      },
+    },
+  },
+}
+]]
+lcode_compat_minimal = [[import "androidx.appcompat.widget.Toolbar"
+import "android.widget.TextView"
+import "android.widget.LinearLayout"
+
+return {
+  LinearLayout,
+  orientation = "vertical",
+  layout_width = "match",
+  layout_height = "match",
+  {
+    Toolbar,
+    id = "toolbar",
+    layout_width = "match",
+    layout_height = "wrap",
+  },
+  {
+    LinearLayout,
+    orientation = "vertical",
+    layout_width = "match",
+    layout_height = "match",
+    gravity = "center",
+    padding = "24dp",
+    {
+      TextView,
+      text = res.string.app_title,
+      textSize = "22sp",
+    },
+  },
+}
+]]
+lcode_compat_ab = [[import "android.widget.TextView"
+import "android.widget.Button"
+import "android.widget.LinearLayout"
+import "android.widget.ScrollView"
+
+return {
+  ScrollView,
+  layout_width = "match",
+  layout_height = "match",
+  fillViewport = true,
+  {
+    LinearLayout,
+    orientation = "vertical",
+    layout_width = "match",
+    layout_height = "wrap",
+    gravity = "center_horizontal",
+    padding = "24dp",
+    {
+      TextView,
+      text = res.string.app_title,
+      textSize = "28sp",
+      textStyle = "bold",
+      gravity = "center",
+    },
+    {
+      TextView,
+      text = "Powered by NeLuaJ+",
+      textSize = "14sp",
+      gravity = "center",
+      layout_marginTop = "8dp",
+    },
+    {
+      LinearLayout,
+      orientation = "vertical",
+      layout_width = "match",
+      layout_height = "wrap",
+      layout_marginTop = "28dp",
+      padding = "20dp",
+      gravity = "center",
+      {
+        TextView,
+        text = "Hello NeLuaJ+",
+        textSize = "20sp",
+      },
+      {
+        TextView,
+        text = "Edit res/layout/main.lua to design UI",
+        textSize = "13sp",
+        layout_marginTop = "6dp",
+        gravity = "center",
+      },
+      {
+        Button,
+        id = "hello_btn",
+        text = "Click Me",
+        layout_marginTop = "16dp",
+        onClick = function()
+          print("Hello World from " .. res.string.app_title)
+        end,
+      },
+    },
+  },
+}
+]]
+lcode_compat_ab_minimal = [[import "android.widget.TextView"
+import "android.widget.LinearLayout"
+
+return {
+  LinearLayout,
+  orientation = "vertical",
+  layout_width = "match",
+  layout_height = "match",
+  gravity = "center",
+  padding = "24dp",
+  {
+    TextView,
+    text = res.string.app_title,
+    textSize = "22sp",
+  },
+}
+]]
+-- Material Components（MD2）：Toolbar + 仅用 MD2 常见 attr（colorPrimary / colorSurface）
+mcode_mc = [[activity.setContentView(res.layout.main)
+  .setSupportActionBar(toolbar)
+  .getSupportActionBar() {
+    Title = res.string.app_title,
+  }
+
+function onCreateOptionsMenu(menu)
+  menu.add(res.string.about).onMenuItemClick = function()
+    print("Hello NeLuaJ+ · " .. res.string.app_title)
+  end
+end
+]]
+mcode_mc_minimal = [[activity.setContentView(res.layout.main)
+  .setSupportActionBar(toolbar)
+  .getSupportActionBar() {
+    Title = res.string.app_title,
+  }
+]]
+mcode_mc_ab = [[activity.setTitle(res.string.app_title)
+activity.setContentView(res.layout.main)
+
+function onCreateOptionsMenu(menu)
+  menu.add(res.string.about).onMenuItemClick = function()
+    print("Hello NeLuaJ+ · " .. res.string.app_title)
+  end
+end
+]]
+mcode_mc_ab_minimal = [[activity.setTitle(res.string.app_title)
+activity.setContentView(res.layout.main)
+]]
+lcode_mc = [[import "androidx.appcompat.widget.Toolbar"
+import "com.google.android.material.button.MaterialButton"
+import "com.google.android.material.card.MaterialCardView"
+import "android.widget.TextView"
+import "android.widget.LinearLayout"
+import "android.widget.ScrollView"
+
+-- MD2 色板：colorPrimary / colorSurface / colorOnPrimary 等，避免 M3 container token
+return {
+  LinearLayout,
+  orientation = "vertical",
+  layout_width = "match",
+  layout_height = "match",
+  BackgroundColor = "?attr/colorSurface",
+  {
+    Toolbar,
+    id = "toolbar",
+    layout_width = "match",
+    layout_height = "?attr/actionBarSize",
+    BackgroundColor = "?attr/colorPrimary",
+  },
+  {
+    ScrollView,
+    layout_width = "match",
+    layout_height = "match",
+    fillViewport = true,
+    {
+      LinearLayout,
+      orientation = "vertical",
+      layout_width = "match",
+      layout_height = "wrap",
+      gravity = "center_horizontal",
+      padding = "24dp",
+      {
+        TextView,
+        text = res.string.app_title,
+        textSize = "28sp",
+        textStyle = "bold",
+        textColor = "?attr/colorPrimary",
+        gravity = "center",
+      },
+      {
+        TextView,
+        text = "Powered by NeLuaJ+",
+        textSize = "14sp",
+        gravity = "center",
+        layout_marginTop = "8dp",
+      },
+      {
+        MaterialCardView,
+        layout_width = "match",
+        layout_height = "wrap",
+        layout_marginTop = "28dp",
+        radius = "8dp",
+        CardElevation = "2dp",
+        CardBackgroundColor = "?attr/colorSurface",
+        {
+          LinearLayout,
+          orientation = "vertical",
+          layout_width = "match",
+          padding = "20dp",
+          gravity = "center",
+          {
+            TextView,
+            text = "Hello NeLuaJ+",
+            textSize = "20sp",
+            textColor = "?attr/colorPrimary",
+          },
+          {
+            TextView,
+            text = "Edit res/layout/main.lua to design UI",
+            textSize = "13sp",
+            layout_marginTop = "6dp",
+            gravity = "center",
+          },
+          {
+            MaterialButton,
+            id = "hello_btn",
+            text = "Click Me",
+            layout_marginTop = "16dp",
+            onClick = function()
+              print("Hello World from " .. res.string.app_title)
+            end,
+          },
+        },
+      },
+    },
+  },
+}
+]]
+lcode_mc_minimal = [[import "androidx.appcompat.widget.Toolbar"
+import "android.widget.TextView"
+import "android.widget.LinearLayout"
+
+return {
+  LinearLayout,
+  orientation = "vertical",
+  layout_width = "match",
+  layout_height = "match",
+  BackgroundColor = "?attr/colorSurface",
+  {
+    Toolbar,
+    id = "toolbar",
+    layout_width = "match",
+    layout_height = "?attr/actionBarSize",
+    BackgroundColor = "?attr/colorPrimary",
+  },
+  {
+    LinearLayout,
+    orientation = "vertical",
+    layout_width = "match",
+    layout_height = "match",
+    gravity = "center",
+    padding = "24dp",
+    {
+      TextView,
+      text = res.string.app_title,
+      textSize = "22sp",
+      textColor = "?attr/colorPrimary",
+    },
+  },
+}
+]]
+lcode_mc_ab = [[import "com.google.android.material.button.MaterialButton"
+import "com.google.android.material.card.MaterialCardView"
+import "android.widget.TextView"
+import "android.widget.LinearLayout"
+import "android.widget.ScrollView"
+
+return {
+  ScrollView,
+  layout_width = "match",
+  layout_height = "match",
+  fillViewport = true,
+  BackgroundColor = "?attr/colorSurface",
+  {
+    LinearLayout,
+    orientation = "vertical",
+    layout_width = "match",
+    layout_height = "wrap",
+    gravity = "center_horizontal",
+    padding = "24dp",
+    {
+      TextView,
+      text = res.string.app_title,
+      textSize = "28sp",
+      textStyle = "bold",
+      textColor = "?attr/colorPrimary",
+      gravity = "center",
+    },
+    {
+      TextView,
+      text = "Powered by NeLuaJ+",
+      textSize = "14sp",
+      gravity = "center",
+      layout_marginTop = "8dp",
+    },
+    {
+      MaterialCardView,
+      layout_width = "match",
+      layout_height = "wrap",
+      layout_marginTop = "28dp",
+      radius = "8dp",
+      CardElevation = "2dp",
+      CardBackgroundColor = "?attr/colorSurface",
+      {
+        LinearLayout,
+        orientation = "vertical",
+        layout_width = "match",
+        padding = "20dp",
+        gravity = "center",
+        {
+          TextView,
+          text = "Hello NeLuaJ+",
+          textSize = "20sp",
+          textColor = "?attr/colorPrimary",
+        },
+        {
+          TextView,
+          text = "Edit res/layout/main.lua to design UI",
+          textSize = "13sp",
+          layout_marginTop = "6dp",
+          gravity = "center",
+        },
+        {
+          MaterialButton,
+          id = "hello_btn",
+          text = "Click Me",
+          layout_marginTop = "16dp",
+          onClick = function()
+            print("Hello World from " .. res.string.app_title)
+          end,
+        },
+      },
+    },
+  },
+}
+]]
+lcode_mc_ab_minimal = [[import "android.widget.TextView"
+import "android.widget.LinearLayout"
+
+return {
+  LinearLayout,
+  orientation = "vertical",
+  layout_width = "match",
+  layout_height = "match",
+  gravity = "center",
+  padding = "24dp",
+  BackgroundColor = "?attr/colorSurface",
+  {
+    TextView,
+    text = res.string.app_title,
+    textSize = "22sp",
+    textColor = "?attr/colorPrimary",
   },
 }
 ]]

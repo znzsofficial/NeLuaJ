@@ -96,7 +96,7 @@
 <tr><td><code>Theme_NeLuaJ_MaterialComponent_Light</code> / <code>_NoActionBar</code></td><td>MD2 固定浅色</td></tr>
 <tr><td><code>Theme_NeLuaJ_MaterialComponent_Dark</code> / <code>_NoActionBar</code></td><td>MD2 固定深色</td></tr>
 </tbody></table></div>
-<p>动态取色主题常与 <code>activity.dynamicColor()</code> 或设置页中的主题种子色一起使用，界面会更贴近壁纸/用户所选色板。详见 <a class="doc-link" href="color_api.html">颜色与主题</a>。</p>
+<p>项目外观由 <code>NeLuaJ_Theme</code> 指定。新建工程的 <code>main.lua</code> 默认不调用 <code>activity.dynamicColor()</code>；需要 Material You / 种子色板时，在入口自行加上即可（与设置页「主题色」的配合方式见 <a class="doc-link" href="color_api.html">颜色与主题</a>）。</p>
 <pre><code class="language-lua">NeLuaJ_Theme = "Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay"
 </code></pre>
 <hr>

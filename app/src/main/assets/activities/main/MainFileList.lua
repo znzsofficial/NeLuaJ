@@ -685,6 +685,12 @@ _M.refreshSelectUi = function()
     else
         btnFilePaste.setVisibility(8)
     end
+    -- 仅工程列表根（Projects）显示「创建工程」
+    local atProjectsRoot = Bean_Path
+        and Bean_Path.this_dir == Bean_Path.app_root_pro_dir
+    if btnFileNewProject then
+        btnFileNewProject.setVisibility(atProjectsRoot and 0 or 8)
+    end
 end
 
 _M.setSelectMode = function(on, seedPath)
@@ -799,14 +805,15 @@ _M.pasteClipboard = function()
                 LuaUtil.copyFile(src, dest)
             end
             if mode == "cut" then
+                TabUtil.removeUnder(src)
                 LuaUtil.rmDir(File(src))
-                TabUtil.remove(src)
             end
             okN = okN + 1
         end
     end
     if mode == "cut" then
         fileClipboard = nil
+        TabUtil.checkAll()
     end
     _M.setSelectMode(false)
     _M.update()
@@ -824,9 +831,11 @@ _M.deleteSelected = function()
         .setMessage(string.format(res.string.media_delete_n, #paths))
         .setPositiveButton(android.R.string.ok, function()
             for _, path in ipairs(paths) do
-                TabUtil.remove(path)
+                -- 目录/工程：关掉其下所有已开标签，不仅精确路径
+                TabUtil.removeUnder(path)
                 LuaUtil.rmDir(File(path))
             end
+            TabUtil.checkAll()
             _M.setSelectMode(false)
             _M.update()
             MainActivity.Public.snack(string.format(res.string.media_deleted_n, #paths))
@@ -923,6 +932,11 @@ _M.bindChrome = function()
     bindLong(btnFileNewDir, function()
         promptCreate(false)
     end)
+
+    btnFileNewProject.onClick = function()
+        require("activities.main.Actions").createProject()
+    end
+    tipLong(btnFileNewProject, res.string.create_project)
 
     btnFileSelect.onClick = function()
         _M.toggleSelectMode()

@@ -250,12 +250,9 @@ theme = "Theme_Material_Light"
 <pre><code class="language-lua">activity.setTheme(R.style.Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay)
 </code></pre>
 <h3>动态颜色与深色模式</h3>
-<p>如果应用已经保存了全局主题色种子 <code>theme_seed_color</code>，启动时会优先用该值生成整套动态色板。也就是说，绝大多数页面只需要继续调用 <code>this.dynamicColor()</code>，无需每个页面重复处理种子色逻辑。</p>
-<p>设置页提供了预设色板和自定义颜色入口，最终会把结果保存到 <code>theme_seed_color</code>。后续进入应用的页面会沿用这个值，从而保持整个软件的配色一致。</p>
-<pre><code class="language-lua">-- 启用 Material You 动态颜色
-this.dynamicColor()
+<p><code>this.dynamicColor()</code> 会为当前 Activity 应用动态色板：无参时优先使用 SharedData 中的 <code>theme_seed_color</code>（设置页「主题色」写入的值），否则跟随系统壁纸（若支持）。编辑器界面会调用它，所以设置里的主题色会反映在编辑器上。项目主题由 <code>init.lua</code> 的 <code>NeLuaJ_Theme</code> 决定；需要动态色时在项目入口自行调用即可。详见 <a class="doc-link" href="color_api.html">颜色与主题</a>。</p>
+<pre><code class="language-lua">this.dynamicColor()
 
--- 判断深色模式
 if this.isNightMode() then
     print("当前为深色模式")
 end

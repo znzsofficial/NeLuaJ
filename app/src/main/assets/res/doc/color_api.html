@@ -43,24 +43,26 @@
       </table></div>
 
       <h2>1. dynamicColor</h2>
-      <p>会优先使用设置页保存的全局种子 <code>theme_seed_color</code>；若未设置，则在支持的系统上跟随壁纸取色（Android 12+）。</p>
-      <pre><code class="language-lua">-- 通常在 main.lua 里、setContentView 之前
-activity.dynamicColor()
--- 也可以传入临时种子色（会覆盖用户在设置里选的全局种子）
+      <p>在 <code>setContentView</code> 之前调用，可为当前 Activity 套用 Material You 动态色板，之后布局里的 <code>?attr/…</code> 与 <code>themeUtil</code> 都会读到新色板。</p>
+      <pre><code class="language-lua">activity.dynamicColor()
+-- 或指定种子色：
 -- activity.dynamicColor(0xFF6750A4)
 
 activity.setContentView(res.layout.main)
 </code></pre>
       <ul>
-        <li>在 <code>setContentView</code> 之前调用时，后续布局才能用到新的动态色板。</li>
-        <li>设置里已经保存了 <code>theme_seed_color</code> 时，页面里调用 <code>dynamicColor()</code> 即可，一般不必再自己读 SharedData 拼种子。</li>
+        <li><strong>无参</strong>：若 SharedData 中有 <code>theme_seed_color</code>，用该色生成色板；否则在支持的系统上跟随壁纸取色（Android 12+）。</li>
+        <li><strong>有参</strong>：以传入颜色为种子生成色板。</li>
       </ul>
+      <h3>和「设置 → 主题色」的关系</h3>
+      <p>NeLuaJ+ 设置里的<strong>主题色</strong>会保存为 SharedData 键 <code>theme_seed_color</code>。编辑器各界面在入口会调用 <code>dynamicColor()</code>，因此这里改色后，编辑器自身的配色会跟着变。</p>
+      <p>项目外观由工程 <code>init.lua</code> 的 <code>NeLuaJ_Theme</code> 指定；新建工程的 <code>main.lua</code> 默认不调用 <code>dynamicColor</code>。若项目也想用动态色板，在项目的 <code>main.lua</code> 里同样写上 <code>activity.dynamicColor()</code> 即可（需要固定色时再传种子参数）。在 IDE 内运行且已调用无参 <code>dynamicColor()</code> 时，也会用到当前 SharedData 里的 <code>theme_seed_color</code>（若有）。</p>
 
       <h2>2. 布局：?attr/…</h2>
-      <p><code>loadlayout</code> 创建 View 时会解析主题属性，写法接近 Android XML。工程模板里的布局也多采用这种方式。</p>
+      <p><code>loadlayout</code> 创建 View 时会解析主题属性，写法接近 Android XML。Material 工程模板多采用 <code>?attr/colorSurface</code> 等 token。</p>
       <pre><code class="language-lua">return {
   LinearLayout,
-  BackgroundColor = "?attr/colorBackground",
+  BackgroundColor = "?attr/colorSurface",
   {
     MaterialTextView,
     textColor = "?attr/colorPrimary",

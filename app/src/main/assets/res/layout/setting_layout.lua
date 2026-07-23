@@ -267,14 +267,14 @@ local themeItem = function()
             {
                 MaterialTextView,
                 textSize = "16sp",
-                text = "主题色",
+                text = res.string.theme_color,
                 textColor = onSurfaceColor,
             },
             {
                 MaterialTextView,
                 textSize = "12sp",
                 id = "ThemeColorDesc",
-                text = "跟随系统动态取色",
+                text = res.string.theme_color_follow_system,
                 textColor = onSurfaceVarColor,
             },
         },
@@ -302,7 +302,7 @@ return {
         paddingBottom = "32dp",
 
         -- ── 外观 ──
-        sectionTitle("外观", "dashboard"),
+        sectionTitle(res.string.appearance, "dashboard"),
         card(
             themeItem(),
             divider(),

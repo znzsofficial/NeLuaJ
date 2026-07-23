@@ -334,7 +334,7 @@ return {
       sectionLabel(res.string.project_theme),
       {
         MaterialTextView,
-        text = res.string.project_theme_hint,
+        text = res.string.project_theme_settings_hint,
         textSize = "11sp",
         textColor = onVar,
         layout_marginBottom = "6dp",

@@ -630,7 +630,11 @@ end
 local resetThemeColor = function()
     local seedColor = this.getSharedData("theme_seed_color", nil)
     local color = resolveColorValue(seedColor)
-    ThemeColorDesc.text = formatColorValue(seedColor)
+    if color == nil then
+        ThemeColorDesc.text = res.string.theme_color_follow_system
+    else
+        ThemeColorDesc.text = formatColorValue(seedColor)
+    end
     setCircleColor(ThemeColorCircle, color or ColorUtil.getColorPrimary())
 end
 
@@ -691,7 +695,7 @@ local function openThemeHsvPicker()
         initial = Color.argb(255, 103, 80, 164)
     end
     showColorPickerDialog(
-        "主题色",
+        res.string.theme_color,
         initial,
         function(color, hex)
             applyThemeSeedColor(color)
@@ -701,19 +705,22 @@ local function openThemeHsvPicker()
         end,
         {
             hideAlpha = true,
-            defaultLabel = "跟随系统",
+            defaultLabel = res.string.theme_color_follow_system,
         }
     )
 end
 
 ThemeColorItem.onClick = function()
-    local items = { "HSV 取色…", "跟随系统动态取色" }
+    local items = {
+        res.string.theme_color_hsv,
+        res.string.theme_color_follow_system,
+    }
     for _, item in ipairs(themeColorPresets) do
         table.insert(items, item[1])
     end
 
     MaterialAlertDialogBuilder(this)
-        .setTitle("主题色")
+        .setTitle(res.string.theme_color)
         .setItems(items, function(dialog, which)
             if which == 0 then
                 -- 列表对话框 dismiss 后再开，避免嵌套被吞；多延迟一帧更稳

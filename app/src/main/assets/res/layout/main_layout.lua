@@ -460,6 +460,7 @@ return {
             fileIcon("btnFileHome", "android_studio", ColorPrimary, res.string.file_at_project),
             fileIcon("btnFileNewFile", "new_file", ColorPrimary, res.string.new_file),
             fileIcon("btnFileNewDir", "new_folder", ColorPrimary, res.string.new_dir),
+            fileIcon("btnFileNewProject", "ic_add_box", ColorPrimary, res.string.create_project),
             {
               View,
               layout_width = "0dp",

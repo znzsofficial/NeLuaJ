@@ -71,27 +71,9 @@ local function snack(msg)
   end)
 end
 
--- 与 themes.xml 中 Theme.NeLuaJ.* 对应（点号 → 下划线）
-local THEME_OPTIONS = {
-  { value = "Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay", labelKey = "project_theme_m3_noab_overlay" },
-  { value = "Theme_NeLuaJ_Material3_NoActionBar", labelKey = "project_theme_m3_noab" },
-  { value = "Theme_NeLuaJ_Material3_ActionOverlay", labelKey = "project_theme_m3_overlay" },
-  { value = "Theme_NeLuaJ_Material3", labelKey = "project_theme_m3_ab" },
-  { value = "Theme_NeLuaJ_Material3_DynamicColors_NoActionBar_ActionOverlay", labelKey = "project_theme_dyn_noab_overlay" },
-  { value = "Theme_NeLuaJ_Material3_DynamicColors_NoActionBar", labelKey = "project_theme_dyn_noab" },
-  { value = "Theme_NeLuaJ_Material3_DynamicColors_ActionOverlay", labelKey = "project_theme_dyn_overlay" },
-  { value = "Theme_NeLuaJ_Material3_DynamicColors", labelKey = "project_theme_dyn_ab" },
-  { value = "Theme_NeLuaJ_MaterialComponent_NoActionBar", labelKey = "project_theme_mc_noab" },
-  { value = "Theme_NeLuaJ_MaterialComponent", labelKey = "project_theme_mc_ab" },
-  { value = "Theme_NeLuaJ_MaterialComponent_Light_NoActionBar", labelKey = "project_theme_mc_light_noab" },
-  { value = "Theme_NeLuaJ_MaterialComponent_Light", labelKey = "project_theme_mc_light_ab" },
-  { value = "Theme_NeLuaJ_MaterialComponent_Dark_NoActionBar", labelKey = "project_theme_mc_dark_noab" },
-  { value = "Theme_NeLuaJ_MaterialComponent_Dark", labelKey = "project_theme_mc_dark_ab" },
-  { value = "Theme_NeLuaJ_Compat_NoActionBar", labelKey = "project_theme_compat_noab" },
-  { value = "Theme_NeLuaJ_Compat", labelKey = "project_theme_compat_ab" },
-}
-
-local selectedThemeValue = THEME_OPTIONS[1].value
+local ProjectTheme = require "mods.utils.ProjectTheme"
+local THEME_OPTIONS = ProjectTheme.OPTIONS
+local selectedThemeValue = ProjectTheme.DEFAULT
 local permissions = {} -- ordered unique short names (e.g. INTERNET)
 local permCatalogCache -- { { name=, full=, label= }, ... }
 
@@ -113,22 +95,16 @@ local function isValidPackageName(pkg)
 end
 
 local function themeLabel(opt)
-  if not opt then return "" end
-  local t = res.string[opt.labelKey]
-  if t and t ~= "" then return t end
-  return opt.value
+  return ProjectTheme.displayLabel(opt, res)
 end
 
 local function findThemeOpt(value)
-  for _, opt in ipairs(THEME_OPTIONS) do
-    if opt.value == value then return opt end
-  end
-  return nil
+  return ProjectTheme.find(value)
 end
 
 local function refreshThemeUi()
   local opt = findThemeOpt(selectedThemeValue)
-  local label = opt and themeLabel(opt) or res.string.project_theme_custom
+  local label = opt and themeLabel(opt) or (res.string.project_theme_custom or selectedThemeValue)
   pcall(function()
     ps_theme_label.setText(label)
     ps_theme_value.setText(selectedThemeValue)

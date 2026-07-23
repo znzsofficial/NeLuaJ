@@ -87,7 +87,7 @@
 <tr><td colspan="2"><strong>AppCompat / Material Components (MD2)</strong></td></tr>
 <tr><td><code>Theme_NeLuaJ_Compat…</code> / <code>Theme_NeLuaJ_MaterialComponent…</code></td><td>Legacy DayNight or fixed light/dark themes</td></tr>
 </tbody></table></div>
-<p>Dynamic color themes work well with <code>activity.dynamicColor()</code> or the seed color in settings. See <a class="doc-link" href="color_api.html">Colors and theme</a>.</p>
+<p>Project look-and-feel is set with <code>NeLuaJ_Theme</code>. New-project <code>main.lua</code> does not call <code>activity.dynamicColor()</code> by default; add it at the entry point when you want Material You / a seed palette. How that interacts with the Settings accent color is described in <a class="doc-link" href="color_api.html">Colors and theme</a>.</p>
 <pre><code class="language-lua">NeLuaJ_Theme = "Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay"
 </code></pre>
 <hr>

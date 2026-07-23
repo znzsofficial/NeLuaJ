@@ -162,18 +162,52 @@ function _M.remove(path)
     end
 end
 
+--- 关闭 path 本身及位于 path/ 下的全部标签（删目录 / 多选删工程）
+function _M.removeUnder(root)
+    if type(root) ~= "string" or root == "" then return end
+    local prefix = root
+    if prefix:sub(-1) ~= "/" then
+        prefix = prefix .. "/"
+    end
+    local paths = {}
+    for path, entry in pairs(tabTable) do
+        local current = path
+        if entry and entry.obj and entry.obj.tag and entry.obj.tag.path then
+            current = entry.obj.tag.path
+        end
+        if current == root or (current and current:sub(1, #prefix) == prefix) then
+            paths[#paths + 1] = path
+        end
+    end
+    closeTabs(paths)
+end
+
 function _M.checkAll()
     local missing = {}
     for path, entry in pairs(tabTable) do
         local tab = entry and entry.obj
         local currentPath = tab and tab.tag and tab.tag.path or path
         if currentPath and not File(currentPath).exists() then
-            missing[#missing + 1] = currentPath
+            missing[#missing + 1] = path
         end
     end
 
-    for _, path in ipairs(missing) do
-        _M.remove(path)
+    if #missing > 0 then
+        closeTabs(missing)
+    end
+
+    -- 当前工程目录已不存在时清掉项目态（标题 / this_project）
+    local proj = Bean.Project and Bean.Project.this_project
+    if type(proj) == "string" and proj ~= "" then
+        local proDir = Bean.Path.app_root_pro_dir .. "/" .. proj
+        if not File(proDir).exists() then
+            if mTab.getTabCount() == 0 then
+                resetEmptyState()
+            else
+                Bean.Project.this_project = ""
+                activity.setTitle("NeLuaJ+")
+            end
+        end
     end
 end
 

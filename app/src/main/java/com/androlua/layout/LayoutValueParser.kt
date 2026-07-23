@@ -4,8 +4,10 @@ import android.content.Context
 import android.content.res.ColorStateList
 import android.util.DisplayMetrics
 import android.util.TypedValue
+import androidx.core.content.ContextCompat
 import androidx.core.graphics.toColorInt
 import com.androlua.LuaContext
+import com.google.android.material.color.MaterialColors
 import com.nekolaska.ktx.asString
 import org.luaj.LuaError
 import org.luaj.LuaValue
@@ -57,7 +59,7 @@ internal class LayoutValueParser(
             if (unknown != null) {
                 val where = attr?.let { " ($it)" } ?: ""
                 luaContext.sendMsg(
-                    "loadlayout: 未知枚举 flag$where: ${unknown!!.joinToString()}（整串: $str）"
+                    "loadlayout: 未知枚举 flag$where: ${unknown.joinToString()}（整串: $str）"
                 )
             }
             return ret
@@ -198,9 +200,9 @@ internal class LayoutValueParser(
             value.isstring() -> {
                 val str = value.asString().trim()
                 if (str.startsWith("?")) {
-                    val resolved = resolveThemeAttributeValue(str)
-                    if (resolved is Number) return resolved.toInt()
-                    throw LuaError("无法将主题属性解析为颜色: $str")
+                    return asColorInt(resolveThemeAttributeValue(str), str)
+                        ?: materialColorOrNull(str)
+                        ?: throw LuaError("无法将主题属性解析为颜色: $str")
                 }
                 return parseColor(str)
             }
@@ -219,18 +221,21 @@ internal class LayoutValueParser(
      * 兼容：ColorStateList userdata、int、long（Lua 数字）、"#AARRGGBB"、"?attr/…"。
      */
     fun toColorStateList(value: LuaValue): ColorStateList {
-        if (value.isnil()) {
-            throw LuaError("颜色不能为 nil")
-        }
+        if (value.isnil()) throw LuaError("颜色不能为 nil")
         if (value.isuserdata()) {
-            val raw = value.touserdata()
-            when (raw) {
+            when (val raw = value.touserdata()) {
                 is ColorStateList -> return raw
                 is Number -> return ColorStateList.valueOf(raw.toInt())
             }
-            // 兼容 isuserdata(ColorStateList) 在部分桥接下不匹配的情况
             if (value.isuserdata(ColorStateList::class.java)) {
                 return value.touserdata(ColorStateList::class.java) as ColorStateList
+            }
+        }
+        if (value.isstring()) {
+            val str = value.asString().trim()
+            if (str.startsWith("?")) {
+                asColorStateList(resolveThemeAttributeValue(str))?.let { return it }
+                materialColorOrNull(str)?.let { return ColorStateList.valueOf(it) }
             }
         }
         return try {
@@ -248,42 +253,88 @@ internal class LayoutValueParser(
         if (cached === noValue) return null
         if (cached != null) return cached
 
-        val attrName = when {
-            ref.startsWith("?attr/") -> ref.removePrefix("?attr/")
-            ref.startsWith("?android:attr/") -> ref.removePrefix("?android:attr/")
-            else -> ref.removePrefix("?")
-        }
-        if (attrName.isBlank()) {
-            themeAttrValueCache[ref] = noValue
-            return null
-        }
-
-        val attrId = when {
-            ref.startsWith("?android:attr/") ->
-                context.resources.getIdentifier(attrName, "attr", "android")
-            else -> context.resources.getIdentifier(attrName, "attr", context.packageName)
-                .takeIf { it != 0 }
-                ?: context.resources.getIdentifier(attrName, "attr", "android")
-        }
+        val attrId = lookupThemeAttrId(ref)
         if (attrId == 0) {
             themeAttrValueCache[ref] = noValue
             return null
         }
 
-        val outValue = TypedValue()
-        if (!context.theme.resolveAttribute(attrId, outValue, true)) {
+        val tv = TypedValue()
+        if (!context.theme.resolveAttribute(attrId, tv, true)) {
             themeAttrValueCache[ref] = noValue
             return null
         }
 
-        val resolved: Any? = when (outValue.type) {
-            TypedValue.TYPE_DIMENSION -> outValue.getDimension(dm)
-            TypedValue.TYPE_FLOAT -> outValue.float
-            in TypedValue.TYPE_FIRST_INT..TypedValue.TYPE_LAST_INT -> outValue.data
-            TypedValue.TYPE_STRING -> outValue.string?.toString()?.let { toValue(it) }
-            else -> outValue.resourceId.takeIf { it != 0 } ?: outValue.data
+        // 资源引用优先展开（鸿蒙动态色常停在 color-v31 / ColorStateList）
+        val fromRes = if (tv.resourceId != 0) {
+            colorIntFromResId(tv.resourceId) ?: colorStateListFromResId(tv.resourceId)
+        } else null
+
+        val resolved: Any? = fromRes ?: when (tv.type) {
+            TypedValue.TYPE_DIMENSION -> tv.getDimension(dm)
+            TypedValue.TYPE_FLOAT -> tv.float
+            in TypedValue.TYPE_FIRST_INT..TypedValue.TYPE_LAST_INT -> tv.data
+            TypedValue.TYPE_STRING -> {
+                val s = tv.string?.toString()
+                when {
+                    s.isNullOrBlank() -> null
+                    s.startsWith("#") -> runCatching { parseColor(s) }.getOrNull()
+                    else -> toValue(s)
+                }
+            }
+            else -> tv.resourceId.takeIf { it != 0 } ?: tv.data
         }
         themeAttrValueCache[ref] = resolved ?: noValue
         return resolved
+    }
+
+    private fun lookupThemeAttrId(ref: String): Int {
+        val androidOnly = ref.startsWith("?android:attr/")
+        val name = when {
+            androidOnly -> ref.removePrefix("?android:attr/")
+            ref.startsWith("?attr/") -> ref.removePrefix("?attr/")
+            ref.startsWith("?") -> ref.removePrefix("?")
+            else -> return 0
+        }
+        if (name.isBlank()) return 0
+        if (androidOnly) {
+            return context.resources.getIdentifier(name, "attr", "android")
+        }
+        return context.resources.getIdentifier(name, "attr", context.packageName)
+            .takeIf { it != 0 }
+            ?: context.resources.getIdentifier(name, "attr", "android")
+    }
+
+    /** resolve 结果 → 颜色 int；非颜色类型返回 null */
+    private fun asColorInt(resolved: Any?, ref: String? = null): Int? = when (resolved) {
+        is Number -> resolved.toInt()
+        is ColorStateList -> resolved.defaultColor
+        else -> null
+    }
+
+    private fun asColorStateList(resolved: Any?): ColorStateList? = when (resolved) {
+        is ColorStateList -> resolved
+        is Number -> ColorStateList.valueOf(resolved.toInt())
+        else -> null
+    }
+
+    /** resolve 失败时再试 MaterialColors（不抢缓存主路径） */
+    private fun materialColorOrNull(ref: String): Int? {
+        val attrId = lookupThemeAttrId(ref)
+        if (attrId == 0) return null
+        return runCatching {
+            MaterialColors.getColor(context, attrId, "LayoutValueParser")
+        }.getOrNull()
+    }
+
+    private fun colorIntFromResId(resId: Int): Int? {
+        if (resId == 0) return null
+        return runCatching { ContextCompat.getColor(context, resId) }.getOrNull()
+            ?: colorStateListFromResId(resId)?.defaultColor
+    }
+
+    private fun colorStateListFromResId(resId: Int): ColorStateList? {
+        if (resId == 0) return null
+        return runCatching { ContextCompat.getColorStateList(context, resId) }.getOrNull()
     }
 }
