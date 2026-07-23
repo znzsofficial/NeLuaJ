@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="doc.css" />
+    <script src="doc.js" defer></script>
+    <title>布局 style / theme</title>
+  </head>
+  <body>
+    <main class="markdown-export">
+      <h1>布局 style / theme</h1>
+      <p>本文是 <code>loadlayout</code> 里<strong>构造期样式</strong>（<code>style</code> / <code>styleAttr</code> / <code>styleRes</code> / <code>theme</code>）的唯一入口。颜色取色见「颜色与主题」；属性词典见「布局参考」。</p>
+      <nav class="doc-nav" aria-label="相关文档">
+        <span class="doc-nav-label">相关文档</span>
+        <a class="doc-link" href="module_loadlayout.html">loadlayout</a>
+        <a class="doc-link" href="layout_reference.html">布局表属性参考</a>
+        <a class="doc-link" href="MaterialTextField.html">MaterialTextField</a>
+        <a class="doc-link" href="color_api.html">颜色与主题</a>
+        <a class="doc-link" href="md3_design.html">MD3 设计</a>
+      </nav>
+
+      <h2>四个键分别做什么</h2>
+      <div class="table-wrapper"><table>
+        <thead><tr><th>键</th><th>作用</th><th>典型写法</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>styleAttr</code></td>
+            <td>构造函数的 <code>defStyleAttr</code>（主题里的「默认控件样式」）</td>
+            <td><code>"?attr/materialButtonOutlinedStyle"</code>、<code>MDC_R.attr.textInputStyle</code></td>
+          </tr>
+          <tr>
+            <td><code>styleRes</code></td>
+            <td>构造函数的 <code>defStyleRes</code>（直接指定 style 资源）</td>
+            <td><code>MDC_R.style.Widget_Material3_Button_IconButton</code></td>
+          </tr>
+          <tr>
+            <td><code>style</code></td>
+            <td>兼容旧写法：自动拆进 <code>styleAttr</code> 或 <code>styleRes</code></td>
+            <td><code>"?attr/…"</code> → attr；<code>@style/…</code> / 数字 style id → res</td>
+          </tr>
+          <tr>
+            <td><code>theme</code></td>
+            <td>仅 <code>ContextThemeWrapper</code>，改子树主题，<strong>不是</strong>控件 Widget style</td>
+            <td>主题 overlay 名或 theme 资源 id</td>
+          </tr>
+        </tbody>
+      </table></div>
+      <p><code>theme</code> 用来包一层主题（例如 ThemeOverlay）。控件自己的外观（Outlined 按钮、轮廓输入框等）用 <code>style</code> / <code>styleAttr</code> / <code>styleRes</code> 写在控件表上，二者可以叠加，但含义不同。</p>
+
+      <h2>资源怎么写</h2>
+      <div class="table-wrapper"><table>
+        <thead><tr><th>写法</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td><code>?attr/name</code></td><td>当前主题 attr，如 <code>?attr/materialButtonOutlinedStyle</code></td></tr>
+          <tr><td><code>?android:attr/name</code></td><td>系统 attr</td></tr>
+          <tr><td><code>@attr/name</code> / <code>@style/name</code></td><td>应用 attr / style 资源</td></tr>
+          <tr><td><code>@android:style/name</code></td><td>系统 style</td></tr>
+          <tr><td>数字资源 ID</td><td><code>MDC_R.style.xxx</code>、<code>MDC_R.attr.xxx</code>、<code>R.style.xxx</code>（推荐，少一次字符串查找）</td></tr>
+        </tbody>
+      </table></div>
+      <p>字符串引用会缓存；列表项很多时优先传数字 ID。解析失败时日志会提示 <code>loadlayout: 无法解析 …</code>。</p>
+
+      <h2>构造顺序（实现）</h2>
+      <p><code>LayoutViewFactory</code> 在创建 View 时按下面顺序尝试，成功即返回。布局表<strong>没有</strong>完整 XML <code>AttributeSet</code>，style 主要靠构造参数，再叠加后续属性 setter。</p>
+      <div class="table-wrapper"><table>
+        <thead><tr><th>顺序</th><th>条件</th><th>构造</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>1</td>
+            <td>有 <code>styleRes</code>，且类有四参构造</td>
+            <td><code>(Context, attrs, styleAttr, styleRes)</code></td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>有 <code>styleRes</code>，无四参（如 <code>MaterialTextField</code>）</td>
+            <td>三参第三参 = <code>styleRes</code></td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>有 <code>styleAttr</code></td>
+            <td>三参第三参 = <code>styleAttr</code></td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td>回退</td>
+            <td>单参 <code>(Context)</code>（可先包 <code>theme</code>）</td>
+          </tr>
+        </tbody>
+      </table></div>
+      <p><code>MaterialTextField</code> 会根据 <code>style</code> / <code>styleRes</code> 里的 Widget 资源（如 OutlinedBox）初始化轮廓或填充外观，并带上内部输入框。布局表里写上对应的 style，就能得到完整的 Material 输入框。</p>
+
+      <h2>推荐写法</h2>
+      <h3>MaterialButton：优先 styleAttr</h3>
+      <pre><code class="language-lua">import "com.google.android.material.button.MaterialButton"
+
+-- 推荐：主题 attr
+{ MaterialButton, text = "轮廓",
+  styleAttr = "?attr/materialButtonOutlinedStyle" }
+
+-- 兼容旧写法（同样解析为 styleAttr）
+{ MaterialButton, text = "轮廓",
+  style = "?attr/materialButtonOutlinedStyle" }
+
+-- 数字 ID（少字符串查找）
+{ MaterialButton, text = "轮廓",
+  styleAttr = MDC_R.attr.materialButtonOutlinedStyle }
+
+-- 纯 Widget style（IconButton 等）
+{ MaterialButton, text = "",
+  styleRes = MDC_R.style.Widget_Material3_Button_IconButton }
+</code></pre>
+
+      <h3>MaterialTextField：轮廓 / 填充输入框</h3>
+      <pre><code class="language-lua">import "vinx.material.textfield.MaterialTextField"
+
+{
+  MaterialTextField,
+  layout_width = "match",
+  layout_height = "wrap",
+  hint = "文件名",  -- 浮动标签，写在组件上即可
+  singleLine = true,
+  TintColor = ColorUtil.getColorPrimary(),
+  style = MDC_R.style.Widget_Material3_TextInputLayout_OutlinedBox,
+  id = "file_name",
+}
+</code></pre>
+      <p>常用 style 名见 <a class="doc-link" href="MaterialTextField.html">MaterialTextField</a>。写上 OutlinedBox / FilledBox 等 style 后，会得到带轮廓（或填充）和内部输入区的完整控件。</p>
+      <p><code>hint</code> 会显示为 Material 的<strong>浮动标签</strong>（外层 TextInputLayout）。在布局表里给组件写 <code>hint = "…"</code> 即可，和普通输入框一样用。</p>
+
+      <h3>theme + styleAttr 叠加</h3>
+      <pre><code class="language-lua">-- theme 只改 Context；控件样式仍用 styleAttr / styleRes
+{
+  TextInputLayout,
+  layout_width = "match",
+  layout_height = "wrap",
+  theme = "ThemeOverlay.Material3",  -- 主题 overlay，不是 Widget_*
+  styleAttr = "?attr/textInputOutlinedStyle",
+  {
+    TextInputEditText,
+    layout_width = "match",
+    layout_height = "wrap",
+  },
+}
+</code></pre>
+      <p>在 NeLuaJ+ 里更推荐直接用 <code>MaterialTextField</code> + <code>style = MDC_R.style.Widget_…_OutlinedBox</code>，少一层手写嵌套。</p>
+
+      <h2>属性怎么叠在 style 上</h2>
+      <ul>
+        <li>先靠 <code>style</code> / <code>styleAttr</code> / <code>styleRes</code> 定好控件「长什么样」，再写 <code>text</code>、<code>hint</code>、<code>textSize</code>、<code>TintColor</code> 等。</li>
+        <li>布局里的颜色可以用 <code>"?attr/color…"</code>；代码里需要颜色 int 时用 <code>this.themeUtil</code>（见 <a class="doc-link" href="color_api.html">颜色与主题</a>）。</li>
+        <li>想要轮廓输入框时，在表上写 Outlined 的 Widget style 最省事；描边颜色等还可以再用 <code>TintColor</code> 等微调。</li>
+      </ul>
+
+      <h2>对照与排查</h2>
+      <div class="table-wrapper"><table>
+        <thead><tr><th>你想做的</th><th>可以这样写</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>轮廓按钮</td>
+            <td><code>styleAttr = "?attr/materialButtonOutlinedStyle"</code></td>
+          </tr>
+          <tr>
+            <td>轮廓输入框 + 浮动提示</td>
+            <td><code>MaterialTextField</code> + <code>style = MDC_R.style.Widget_…_OutlinedBox</code> + <code>hint = "…"</code></td>
+          </tr>
+          <tr>
+            <td>子树换一套主题叠加</td>
+            <td>控件上加 <code>theme = …</code>（ThemeOverlay），外观仍用上面的 style 字段</td>
+          </tr>
+          <tr>
+            <td>资源名不好记、想少查表</td>
+            <td>用 <code>MDC_R.style.xxx</code> / <code>MDC_R.attr.xxx</code> 数字 id</td>
+          </tr>
+          <tr>
+            <td>输入框看起来不像 Material 轮廓</td>
+            <td>补上 OutlinedBox 的 style；确认日志里没有「无法解析 style 资源」</td>
+          </tr>
+        </tbody>
+      </table></div>
+
+      <h2>补充</h2>
+      <ul>
+        <li>旧布局里的 <code>style = "?attr/…"</code> 仍然有效，会按 attr 解析。</li>
+        <li>Material 按钮常用 <code>styleAttr</code>；输入框常用 <code>style = MDC_R.style.Widget_…</code>，两种都是推荐路径。</li>
+        <li>列表里大量创建控件时，数字资源 ID 一般比字符串查找更轻。</li>
+      </ul>
+
+      <nav class="doc-nav doc-nav-primary" aria-label="继续阅读">
+        <span class="doc-nav-label">继续阅读</span>
+        <a class="doc-link" href="module_loadlayout.html">loadlayout</a>
+        <a class="doc-link" href="MaterialTextField.html">MaterialTextField</a>
+        <a class="doc-link" href="layout_reference.html">布局参考</a>
+      </nav>
+    </main>
+  </body>
+</html>

@@ -69,14 +69,14 @@ local sectionTitle = function(text, iconName)
     return row
 end
 
--- MD3 设置项（带副标题和右侧圆形色块）
-local colorItem = function(name, subtitle, iconName)
+-- MD3 颜色项：tag = SharedData 键；title 可选（默认显示 tag）
+local colorItem = function(tag, title, subtitle, iconName)
     local row = {
         LinearLayout,
         layout_width = "match",
         layout_height = "wrap",
-        tag = name,
-        id = name .. "Item",
+        tag = tag,
+        id = tag .. "Item",
         clickable = true,
         focusable = true,
         backgroundResource = rippleRes,
@@ -96,7 +96,7 @@ local colorItem = function(name, subtitle, iconName)
         {
             MaterialTextView,
             textSize = "16sp",
-            text = name,
+            text = title or tag,
             textColor = onSurfaceColor,
         },
         {
@@ -109,7 +109,7 @@ local colorItem = function(name, subtitle, iconName)
     }
     row[#row + 1] = {
         View,
-        id = name .. "Circle",
+        id = tag .. "Circle",
         layout_width = "32dp",
         layout_height = "32dp",
         layout_marginLeft = "12dp",
@@ -324,6 +324,12 @@ return {
             divider(),
             switchItem("EditorMagnifierItem", res.string.editor_magnifier, res.string.editor_magnifier_desc, "search"),
             divider(),
+            switchItem("EditorWordWrapItem", res.string.editor_word_wrap, res.string.editor_word_wrap_desc, "format"),
+            divider(),
+            switchItem("EditorWhitespaceItem", res.string.editor_show_whitespace, res.string.editor_show_whitespace_desc, "format"),
+            divider(),
+            settingItem("EditorTabSpacesItem", res.string.editor_tab_spaces, res.string.editor_tab_spaces_desc, "format"),
+            divider(),
             switchItem("CodeMinimapItem", res.string.code_minimap, res.string.code_minimap_desc, "article"),
             divider(),
             settingItem("MinimapCodeAlphaItem", res.string.minimap_code_alpha, res.string.minimap_code_alpha_desc, "article")
@@ -331,25 +337,45 @@ return {
 
         sectionTitle(res.string.editor_highlight_color, "format"),
         card(
-            colorItem("BaseWord", "标识符", "code"),
+            colorItem("BaseWord", res.string.hl_baseword, nil, "code"),
             divider(),
-            colorItem("KeyWord", "关键字", "code"),
+            colorItem("KeyWord", res.string.hl_keyword, nil, "code"),
             divider(),
-            colorItem("String", "字符串", "article"),
+            colorItem("String", res.string.hl_string, nil, "article"),
             divider(),
-            colorItem("UserWord", "用户词", "code"),
+            colorItem("UserWord", res.string.hl_userword, nil, "code"),
             divider(),
-            colorItem("Comment", "注释", "format"),
+            colorItem("Comment", res.string.hl_comment, nil, "format"),
             divider(),
-            colorItem("Global", "全局变量", "code"),
+            colorItem("Global", res.string.hl_global, nil, "code"),
             divider(),
-            colorItem("Local", "局部变量", "code"),
+            colorItem("Local", res.string.hl_local, nil, "code"),
             divider(),
-            colorItem("Upval", "上值", "code"),
+            colorItem("Upval", res.string.hl_upval, nil, "code"),
             divider(),
-            colorItem("MinimapMask", res.string.minimap_mask_desc, "article"),
+            switchItem("EditorCustomCaretItem", res.string.editor_custom_caret, res.string.editor_custom_caret_desc, "format"),
+            {
+                MaterialDivider,
+                id = "Caret_LightDivider",
+                layout_marginLeft = "56dp",
+                layout_marginRight = "16dp",
+                layout_marginTop = "4dp",
+                layout_marginBottom = "4dp",
+            },
+            colorItem("Caret_Light", res.string.caret_color_light, nil, "format"),
+            {
+                MaterialDivider,
+                id = "Caret_DarkDivider",
+                layout_marginLeft = "56dp",
+                layout_marginRight = "16dp",
+                layout_marginTop = "4dp",
+                layout_marginBottom = "4dp",
+            },
+            colorItem("Caret_Dark", res.string.caret_color_dark, nil, "format"),
             divider(),
-            colorItem("MinimapBg", res.string.minimap_bg_desc, "article")
+            colorItem("MinimapMask", res.string.minimap_mask_desc, nil, "article"),
+            divider(),
+            colorItem("MinimapBg", res.string.minimap_bg_desc, nil, "article")
         ),
 
         -- ── 调试 ──

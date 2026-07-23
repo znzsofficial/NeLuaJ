@@ -1,4 +1,4 @@
-import "com.androlua.LuaEditor";
+import "com.androlua.EnhancedLuaEditor";
 import "com.androlua.LuaCodeMinimapView";
 import "android.widget.LinearLayout";
 import "android.widget.FrameLayout";
@@ -351,7 +351,7 @@ return {
             layout_height = "fill",
             layout_weight = 1,
             {
-              LuaEditor;
+              EnhancedLuaEditor;
               layout_height = "fill";
               layout_width = "fill";
               id = "mLuaEditor";

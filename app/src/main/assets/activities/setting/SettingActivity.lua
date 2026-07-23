@@ -260,6 +260,7 @@ local resetSymbolBarDesc = function()
 end
 
 -- 必须用 Color.argb：0xff...... 在 LuaJ 里是超大 number，传给 Java Color.* 会错
+-- 语法高亮一套；仅光标分浅/深 Caret_Light / Caret_Dark
 local defaultMap = {
     BaseWord = Color.argb(255, 0x44, 0x77, 0xe0),
     KeyWord = Color.argb(255, 0xb4, 0x00, 0x2d),
@@ -269,8 +270,16 @@ local defaultMap = {
     Global = Color.argb(255, 0x68, 0x9f, 0x38),
     Local = Color.argb(255, 0xb4, 0xb4, 0x84),
     Upval = Color.argb(255, 0x80, 0x80, 0xc0),
+    Caret_Light = Color.argb(255, 0x15, 0x65, 0xc0),
+    Caret_Dark = Color.argb(255, 0x9e, 0xca, 0xff),
     MinimapMask = Color.argb(0x28, 0x21, 0x96, 0xf3),
     MinimapBg = Color.argb(0, 0, 0, 0),
+}
+
+local COLOR_TAGS = {
+    "BaseWord", "KeyWord", "String", "UserWord", "Comment",
+    "Global", "Local", "Upval", "Caret_Light", "Caret_Dark",
+    "MinimapMask", "MinimapBg",
 }
 
 local themeColorPresets = {
@@ -342,22 +351,24 @@ local resolveColorValue = function(value)
     return nil
 end
 
---- 当前 SharedData 颜色；未设置 / 无效时用 defaultMap（打开取色器的初值）
-local function getColorOrDefault(tag)
+local function readSharedRaw(key)
     local raw
     pcall(function()
-        raw = this.getSharedData(tag, nil)
+        raw = this.getSharedData(key, nil)
     end)
     if raw == nil then
         local data = this.getSharedData()
         if data then
-            pcall(function() raw = data[tag] end)
+            pcall(function() raw = data[key] end)
         end
     end
-    local color = resolveColorValue(raw)
-    if color ~= nil then
-        return color
-    end
+    return raw
+end
+
+--- SharedData 颜色；未设置用 defaultMap
+local function getColorOrDefault(tag)
+    local color = resolveColorValue(readSharedRaw(tag))
+    if color ~= nil then return color end
     return defaultMap[tag] or Color.argb(255, 0, 0, 0)
 end
 
@@ -627,6 +638,12 @@ local resetColor = function(tag)
     setCircleColor(_G[tag .. "Circle"], getColorOrDefault(tag))
 end
 
+local function notifyEditorPrefs()
+    pcall(function()
+        require("mods.utils.EditorUtil").notifyPrefsChanged()
+    end)
+end
+
 local click = View.OnClickListener {
     onClick = function(view)
         local tag = view.tag
@@ -635,22 +652,18 @@ local click = View.OnClickListener {
         showColorPickerDialog(tag, initial, function(color, hex)
             this.setSharedData(tag, hex)
             resetColor(tag)
+            notifyEditorPrefs()
         end, function()
             this.setSharedData(tag, nil)
             resetColor(tag)
+            notifyEditorPrefs()
         end)
     end
 }
-BaseWordItem.setOnClickListener(click)
-KeyWordItem.setOnClickListener(click)
-StringItem.setOnClickListener(click)
-UserWordItem.setOnClickListener(click)
-CommentItem.setOnClickListener(click)
-GlobalItem.setOnClickListener(click)
-LocalItem.setOnClickListener(click)
-UpvalItem.setOnClickListener(click)
-MinimapMaskItem.setOnClickListener(click)
-MinimapBgItem.setOnClickListener(click)
+for _, tag in ipairs(COLOR_TAGS) do
+    local item = _G[tag .. "Item"]
+    if item then item.setOnClickListener(click) end
+end
 
 local function applyThemeSeedColor(color)
     if color == nil then
@@ -727,16 +740,9 @@ ThemeColorItem.onClick = function()
 end
 
 resetThemeColor()
-resetColor("BaseWord")
-resetColor("KeyWord")
-resetColor("String")
-resetColor("UserWord")
-resetColor("Comment")
-resetColor("Global")
-resetColor("Local")
-resetColor("Upval")
-resetColor("MinimapMask")
-resetColor("MinimapBg")
+for _, tag in ipairs(COLOR_TAGS) do
+    resetColor(tag)
+end
 
 -- ── 符号栏 ──
 SymbolBarItem.onClick = function()
@@ -980,7 +986,11 @@ TabletModeItem.onClick = function()
     local enabled = not TabletModeItemSwitch.isChecked()
     TabletModeItemSwitch.checked = enabled
     this.setSharedData("tablet_mode", enabled)
-    print(enabled and res.string.tablet_mode_on_hint or res.string.tablet_mode_off_hint)
+    if enabled then
+        print(res.string.tablet_mode_on_hint)
+    else
+        print(res.string.tablet_mode_off_hint)
+    end
     -- 主界面 onResume 会 invalidateOptionsMenu 刷新工具栏
 end
 
@@ -1074,12 +1084,99 @@ EditorMagnifierItem.onClick = function()
     this.setSharedData("editor_magnifier", enabled)
 end
 
+-- ── 自定义光标色（默认关；关闭后需重启才恢复默认光标） ──
+local function refreshCaretColorRows()
+    local vis = isSharedTruthy(this.getSharedData("editor_custom_caret", false)) and 0 or 8
+    Caret_LightDivider.setVisibility(vis)
+    Caret_LightItem.setVisibility(vis)
+    Caret_DarkDivider.setVisibility(vis)
+    Caret_DarkItem.setVisibility(vis)
+end
+
+EditorCustomCaretItemSwitch.checked = isSharedTruthy(this.getSharedData("editor_custom_caret", false))
+EditorCustomCaretItem.onClick = function()
+    local enabled = not EditorCustomCaretItemSwitch.isChecked()
+    EditorCustomCaretItemSwitch.checked = enabled
+    this.setSharedData("editor_custom_caret", enabled)
+    refreshCaretColorRows()
+    if enabled then
+        notifyEditorPrefs()
+    else
+        print(res.string.editor_custom_caret_restart)
+    end
+end
+refreshCaretColorRows()
+
+-- ── 自动换行 ──
+EditorWordWrapItemSwitch.checked = isSharedTruthy(this.getSharedData("editor_word_wrap", false))
+EditorWordWrapItem.onClick = function()
+    local enabled = not EditorWordWrapItemSwitch.isChecked()
+    EditorWordWrapItemSwitch.checked = enabled
+    this.setSharedData("editor_word_wrap", enabled)
+    notifyEditorPrefs()
+end
+
+-- ── 显示空白字符（空格 / 回车等） ──
+EditorWhitespaceItemSwitch.checked = isSharedTruthy(this.getSharedData("editor_show_whitespace", false))
+EditorWhitespaceItem.onClick = function()
+    local enabled = not EditorWhitespaceItemSwitch.isChecked()
+    EditorWhitespaceItemSwitch.checked = enabled
+    this.setSharedData("editor_show_whitespace", enabled)
+    notifyEditorPrefs()
+end
+
+-- ── Tab 宽度（空格数） ──
+local DEFAULT_TAB_SPACES = 4
+local TAB_SPACE_OPTIONS = { 2, 4, 8 }
+
+local function clampTabSpaces(value)
+    local n = tonumber(value)
+    if not n then return DEFAULT_TAB_SPACES end
+    n = math.floor(n + 0.5)
+    if n < 1 then return 1 end
+    if n > 16 then return 16 end
+    return n
+end
+
+local function refreshTabSpacesDesc()
+    local n = clampTabSpaces(this.getSharedData("editor_tab_spaces", DEFAULT_TAB_SPACES))
+    EditorTabSpacesItemDesc.text = string.format(res.string.editor_tab_spaces_value, n)
+end
+
+EditorTabSpacesItem.onClick = function()
+    local current = clampTabSpaces(this.getSharedData("editor_tab_spaces", DEFAULT_TAB_SPACES))
+    local labels = {}
+    local checked = 0
+    for i, n in ipairs(TAB_SPACE_OPTIONS) do
+        labels[i] = string.format(res.string.editor_tab_spaces_value, n)
+        if n == current then checked = i - 1 end
+    end
+    MaterialAlertDialogBuilder(this)
+        .setTitle(res.string.editor_tab_spaces)
+        .setSingleChoiceItems(labels, checked, function(dialog, which)
+            this.setSharedData("editor_tab_spaces", TAB_SPACE_OPTIONS[which + 1])
+            refreshTabSpacesDesc()
+            notifyEditorPrefs()
+            dialog.dismiss()
+        end)
+        .setNegativeButton(android.R.string.cancel, nil)
+        .setNeutralButton(res.string._default, function()
+            this.setSharedData("editor_tab_spaces", nil)
+            refreshTabSpacesDesc()
+            notifyEditorPrefs()
+        end)
+        .show()
+end
+
+refreshTabSpacesDesc()
+
 -- ── 代码缩略图 ──
 CodeMinimapItemSwitch.checked = isSharedTruthy(this.getSharedData("code_minimap", true))
 CodeMinimapItem.onClick = function()
     local enabled = not CodeMinimapItemSwitch.isChecked()
     CodeMinimapItemSwitch.checked = enabled
     this.setSharedData("code_minimap", enabled)
+    notifyEditorPrefs()
 end
 
 local DEFAULT_MINIMAP_CODE_ALPHA = 200
@@ -1147,11 +1244,13 @@ MinimapCodeAlphaItem.onClick = function()
             local a = clampCodeAlpha(views.alphaSeek.getProgress())
             this.setSharedData("code_minimap_alpha", a)
             refreshMinimapCodeAlphaDesc()
+            notifyEditorPrefs()
         end)
         .setNegativeButton(android.R.string.cancel, nil)
         .setNeutralButton(res.string._default, function()
             this.setSharedData("code_minimap_alpha", nil)
             refreshMinimapCodeAlphaDesc()
+            notifyEditorPrefs()
         end)
         .show()
     views.alphaSeek.progress = current
@@ -1190,7 +1289,7 @@ local function refreshRunWindowModeDesc()
     pcall(function()
         local mode = RunWindowConfig.getMode(this)
         RunWindowModeItemDesc.setText(
-            RunWindowConfig.label(mode) .. " · " .. (res.string.run_window_mode_desc or "")
+            RunWindowConfig.label(mode) .. " · " .. res.string.run_window_mode_desc
         )
     end)
 end

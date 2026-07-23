@@ -477,8 +477,8 @@ activity.setContentView(res.layout.main)
   }
 
 function onCreateOptionsMenu(menu)
-  menu.add(res.string.about or "About").onMenuItemClick = function()
-    print("Hello NeLuaJ+ · " .. (res.string.app_title or ""))
+  menu.add(res.string.about).onMenuItemClick = function()
+    print("Hello NeLuaJ+ · " .. res.string.app_title)
   end
 end
 ]]
@@ -496,8 +496,8 @@ activity.setTitle(res.string.app_title)
 activity.setContentView(res.layout.main)
 
 function onCreateOptionsMenu(menu)
-  menu.add(res.string.about or "About").onMenuItemClick = function()
-    print("Hello NeLuaJ+ · " .. (res.string.app_title or ""))
+  menu.add(res.string.about).onMenuItemClick = function()
+    print("Hello NeLuaJ+ · " .. res.string.app_title)
   end
 end
 ]]
@@ -567,7 +567,7 @@ return {
           text = "Click Me",
           layout_marginTop = "16dp",
           onClick = function()
-            print("Hello World from " .. (res.string.app_title or "NeLuaJ+"))
+            print("Hello World from " .. res.string.app_title)
           end,
         },
       },
@@ -679,7 +679,7 @@ return {
             text = "Click Me",
             layout_marginTop = "16dp",
             onClick = function()
-              print("Hello World from " .. (res.string.app_title or "NeLuaJ+"))
+              print("Hello World from " .. res.string.app_title)
             end,
           },
         },

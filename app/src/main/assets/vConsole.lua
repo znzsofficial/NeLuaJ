@@ -6,7 +6,12 @@
   颜色：内置 LIGHT / DARK 固定色（isNightMode 切换），不读主题 attr / dynamicColor
   结构：单文件 + vc 表挂载（压低 main chunk local，规避 Luaj 200 上限）
 
-  Tabs: Prints / Vars / Logcat / Text / Control
+  loadlayout 必须传绑定表，禁止单参（单参 env 默认 _G，id 会污染全局）：
+    悬浮钮 → S.bubbleIds
+    面板   → ui（vc.ui）
+    动态钮 → 临时 holder 表
+
+  Tabs: Prints / Vars / Logcat / Text / Control / Views
   Hooks: print, printf, error, assert, onError
   Control: Device / Memory / Intent / Views / Paths / GC / Pause / Screen / Hist
 ]]
@@ -127,6 +132,7 @@ S.variableNode = {}
 S.variableData = {}
 S.variableAdp = nil
 S.variableSpanCache = {}
+S.varQuery = ""
 S.spanFlags = J.Spannable.SPAN_INCLUSIVE_INCLUSIVE
 S.dateFmt = J.SimpleDateFormat("HH:mm:ss.SSS")
 S.fileStampFmt = J.SimpleDateFormat("yyyyMMdd_HHmmss")
@@ -189,7 +195,13 @@ S.VC_HIDDEN_GLOBALS = {
 S.logcatChipIds = {
   "lc_all", "lc_lua", "lc_tcc", "lc_e", "lc_w", "lc_i", "lc_d", "lc_v",
 }
-S.tabIds = { "tab_prints", "tab_vars", "tab_logcat", "tab_text", "tab_control" }
+S.tabIds = { "tab_prints", "tab_vars", "tab_logcat", "tab_text", "tab_control", "tab_views" }
+-- 视图树
+S.viewTreeRoot = nil
+S.viewTreeFlat = {}
+S.viewTreeData = {}
+S.viewTreeAdp = nil
+S.viewOnlyVisible = false
 
 -- ─── I18N：共享 key → { en, zh }，api.t(key) 取当前语言 ───
 S.lang = "en" -- "en" | "zh"
@@ -216,6 +228,13 @@ S.L = {
   tab_logcat = { "Logcat", "系统日志" },
   tab_text = { "Text", "文本" },
   tab_control = { "Control", "控制" },
+  tab_views = { "Views", "视图" },
+  views_meta = { "%d rows · tap expand", "%d 行 · 点展开" },
+  views_only_vis = { "Visible", "仅可见" },
+  views_all = { "All", "全部" },
+  views_collapse = { "Collapse", "折叠" },
+  views_detail = { "View detail", "节点详情" },
+  views_empty = { "No views", "无视图" },
   -- filters
   all = { "All", "全部" },
   error = { "Error", "错误" },
@@ -273,8 +292,9 @@ S.L = {
   logcat_unavail = { "<logcat unavailable>", "<logcat 不可用>" },
   lang_switched = { "Language: English", "语言: 中文" },
   search_logs = { "Search logs…", "搜索日志…" },
+  search_vars = { "Filter keys…", "筛选键名…" },
   text_buffer = { "Text buffer…", "文本缓冲…" },
-  key_hint = { "key…", "键…" },
+  key_hint = { "Filter keys…", "筛选键名…" },
   share_logs = { "Share logs", "分享日志" },
   share_text = { "Share text", "分享文本" },
   eval_history = { "Eval history", "执行历史" },
@@ -309,12 +329,10 @@ end
 function api.setLang(lang, quiet)
   if lang ~= "zh" and lang ~= "en" then lang = "en" end
   S.lang = lang
-  pcall(function()
-    if this and this.setSharedData then
-      this.setSharedData("vconsole_lang", lang)
-    end
-  end)
-  pcall(api.applyI18n)
+  if this and this.setSharedData then
+    this.setSharedData("vconsole_lang", lang)
+  end
+  api.applyI18n()
   if not quiet then api.toast(api.t("lang_switched")) end
 end
 
@@ -323,54 +341,44 @@ function api.toggleLang()
 end
 
 function api.detectSystemLang()
-  local lang = "en"
-  pcall(function()
-    local Locale = bindClass "java.util.Locale"
-    local l = Locale.getDefault().getLanguage()
-    if l and tostring(l):sub(1, 2) == "zh" then lang = "zh" end
-  end)
-  return lang
+  local Locale = bindClass "java.util.Locale"
+  local l = Locale.getDefault().getLanguage()
+  if l and tostring(l):sub(1, 2) == "zh" then return "zh" end
+  return "en"
 end
 
 function api.loadLangPref()
-  local applied = false
-  pcall(function()
-    if this and this.getSharedData then
-      local v = this.getSharedData("vconsole_lang", nil)
-      if v == "zh" or v == "en" then
-        S.lang = v
-        applied = true
-      end
+  if this and this.getSharedData then
+    local v = this.getSharedData("vconsole_lang", nil)
+    if v == "zh" or v == "en" then
+      S.lang = v
+      return
     end
-  end)
-  if not applied then
-    S.lang = api.detectSystemLang()
   end
+  S.lang = api.detectSystemLang()
 end
 
 function api.tabTitleKeys()
-  return { "tab_prints", "tab_vars", "tab_logcat", "tab_text", "tab_control" }
+  return { "tab_prints", "tab_vars", "tab_logcat", "tab_text", "tab_control", "tab_views" }
 end
 
 function api.syncPagerTitles()
   if not ui.page then return end
-  pcall(function()
-    local adp = ui.page.getAdapter()
-    if not adp or not adp.setPageTitle then return end
-    local keys = api.tabTitleKeys()
-    for i = 1, #keys do
-      pcall(function() adp.setPageTitle(i - 1, api.t(keys[i])) end)
-    end
-  end)
+  local adp = ui.page.getAdapter()
+  if not adp or not adp.setPageTitle then return end
+  local keys = api.tabTitleKeys()
+  for i = 1, #keys do
+    adp.setPageTitle(i - 1, api.t(keys[i]))
+  end
 end
 
 --- 刷新已创建控件文案（切换语言 / 打开面板后）
 function api.applyI18n()
   local function setText(view, key)
-    if view then pcall(function() view.setText(api.t(key)) end) end
+    if view then view.setText(api.t(key)) end
   end
   local function setHint(view, key)
-    if view then pcall(function() view.setHint(api.t(key)) end) end
+    if view then view.setHint(api.t(key)) end
   end
   setText(ui.headerClear, "clear")
   setText(ui.headerExport, "export")
@@ -394,15 +402,13 @@ function api.applyI18n()
   setHint(ui.printSearch, "search_logs")
   setHint(ui.textEdit, "text_buffer")
   setHint(ui.ctrlCode, "code_hint")
-  setHint(ui.varSearch, "key_hint")
-  pcall(function()
-    if ui.ctrlPause then
-      ui.ctrlPause.setText(S.loggingPaused and api.t("resume_log") or api.t("pause_log"))
-    end
-    if ui.ctrlScreen then
-      ui.ctrlScreen.setText(S.keepScreenOn and api.t("screen_off") or api.t("screen_on"))
-    end
-  end)
+  setHint(ui.varSearch, "search_vars")
+  if ui.ctrlPause then
+    ui.ctrlPause.setText(S.loggingPaused and api.t("resume_log") or api.t("pause_log"))
+  end
+  if ui.ctrlScreen then
+    ui.ctrlScreen.setText(S.keepScreenOn and api.t("screen_off") or api.t("screen_on"))
+  end
   local keys = api.tabTitleKeys()
   for i, id in ipairs(S.tabIds) do
     setText(ui[id], keys[i])
@@ -430,11 +436,8 @@ end
 --- 顶栏 Clear：按当前页清空
 function api.clearForCurrentPage()
   local pos = 0
-  pcall(function()
-    if ui.page then pos = ui.page.getCurrentItem() end
-  end)
+  if ui.page then pos = ui.page.getCurrentItem() end
   if pos == 2 then
-    -- Logcat
     api.runBg(function()
       api.clearlog()
       return true
@@ -442,16 +445,15 @@ function api.clearForCurrentPage()
       api.refreshLogcat()
     end, "io")
   elseif pos == 3 then
-    -- Text
-    pcall(function()
-      if ui.textEdit then ui.textEdit.setText(nil) end
-    end)
+    if ui.textEdit then ui.textEdit.setText(nil) end
   elseif pos == 1 then
-    -- Vars：回到根并刷新
     table.clear(S.variableNode)
+    S.varQuery = ""
+    if ui.varSearch then ui.varSearch.setText("") end
     api.refreshVars()
+  elseif pos == 5 then
+    api.viewTreeCollapseAll()
   else
-    -- Prints / Control：清空 print 缓冲
     api.clearPrints()
   end
 end
@@ -472,16 +474,10 @@ function api.chainGlobal(name, handler)
 end
 
 function api.isNight()
-  local ok, night = pcall(function()
-    if this.isNightMode then return this.isNightMode() end
-    return false
-  end)
-  if ok and night then return true end
-  local ok2, mode = pcall(function()
-    return activity.getResources().getConfiguration().uiMode
-  end)
+  if this.isNightMode and this.isNightMode() then return true end
+  local mode = activity.getResources().getConfiguration().uiMode
   -- UI_MODE_NIGHT_MASK=0x30, NIGHT_YES=0x20
-  if ok2 and type(mode) == "number" then
+  if type(mode) == "number" then
     return math.floor(mode / 16) % 4 == 2
   end
   return false
@@ -492,7 +488,7 @@ function api.resolveTheme(force)
   local src = api.isNight() and vc.DARK or vc.LIGHT
   for k, v in pairs(src) do c[k] = v end
   c.muted = c.onSurfaceVariant
-  pcall(function() S.dm = activity.getResources().getDisplayMetrics() end)
+  S.dm = activity.getResources().getDisplayMetrics()
   S.themeReady = true
 end
 
@@ -517,31 +513,25 @@ end
 
 function api.applyRound(view, color, radiusDp, strokeColor, strokeDp)
   if not view then return end
-  pcall(function()
-    view.setBackground(api.roundBg(color, radiusDp, strokeColor, strokeDp))
-    view.setClipToOutline(true)
-  end)
+  view.setBackground(api.roundBg(color, radiusDp, strokeColor, strokeDp))
+  view.setClipToOutline(true)
 end
 
 function api.vibrate(v)
-  pcall(function()
-    v.performHapticFeedback(
-      J.HapticFeedbackConstants.CONTEXT_CLICK,
-      J.HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING)
-  end)
+  if not v then return end
+  v.performHapticFeedback(
+    J.HapticFeedbackConstants.CONTEXT_CLICK,
+    J.HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING)
 end
 
 function api.activityAlive()
-  local ok, finishing = pcall(function() return activity.isFinishing() end)
-  if not ok or finishing then return false end
-  local ok2, destroyed = pcall(function() return activity.isDestroyed() end)
-  return not (ok2 and destroyed)
+  if activity.isFinishing() then return false end
+  if activity.isDestroyed and activity.isDestroyed() then return false end
+  return true
 end
 
 function api.toast(msg)
-  pcall(function()
-    J.Toast.makeText(activity, tostring(msg), J.Toast.LENGTH_SHORT).show()
-  end)
+  J.Toast.makeText(activity, tostring(msg), J.Toast.LENGTH_SHORT).show()
 end
 
 function api.clipboard()
@@ -549,9 +539,7 @@ function api.clipboard()
 end
 
 function api.clipboardSet(text)
-  pcall(function()
-    api.clipboard().setPrimaryClip(J.ClipData.newPlainText("vConsole", tostring(text or "")))
-  end)
+  api.clipboard().setPrimaryClip(J.ClipData.newPlainText("vConsole", tostring(text or "")))
 end
 
 function api.clipboardGet()
@@ -651,59 +639,55 @@ function api.paintBubble(err)
   local fg = err and c.onErrorContainer or c.onPrimaryContainer
   api.applyRound(S.bubbleIds.card, fill, 24, stroke, 1.25)
   api.applyRound(S.bubbleIds.badge, c.error, 4.5)
-  pcall(function()
+  if S.bubbleIds.label then
     S.bubbleIds.label.setTextColor(fg)
     S.bubbleIds.label.setText(err and "!" or "VC")
+  end
+  if S.bubbleIds.badge then
     S.bubbleIds.badge.setVisibility(err and J.View.VISIBLE or J.View.GONE)
-  end)
-  pcall(function()
-    S.bubble.setElevation(api.dp(10))
-    S.bubble.setTranslationZ(api.dp(4))
-    if S.bubbleIds.card then
-      S.bubbleIds.card.setElevation(api.dp(10))
-      S.bubbleIds.card.setTranslationZ(api.dp(4))
-    end
-  end)
-  pcall(function()
-    S.bubble.setAlpha(0.96)
-  end)
+  end
+  S.bubble.setElevation(api.dp(10))
+  S.bubble.setTranslationZ(api.dp(4))
+  S.bubble.setAlpha(0.96)
+  if S.bubbleIds.card then
+    S.bubbleIds.card.setElevation(api.dp(10))
+    S.bubbleIds.card.setTranslationZ(api.dp(4))
+  end
 end
 
 function api.ensureBubble()
   if S.bubble then return true end
   api.resolveTheme(true)
   S.bubbleIds = {}
-  local ok, view = pcall(function()
-    return loadlayout({
-      J.FrameLayout,
-      id = "card",
-      layout_width = "48dp",
-      layout_height = "48dp",
-      clickable = true,
-      focusable = true,
-      {
-        J.TextView,
-        id = "label",
-        layout_gravity = "center",
-        text = "VC",
-        textSize = "13sp",
-        textStyle = "bold",
-        textColor = c.onPrimaryContainer,
-        gravity = "center",
-      },
-      {
-        J.View,
-        id = "badge",
-        layout_width = "9dp",
-        layout_height = "9dp",
-        layout_gravity = "top|end",
-        layout_marginTop = "4dp",
-        layout_marginEnd = "4dp",
-        visibility = "gone",
-      },
-    }, S.bubbleIds)
-  end)
-  if ok and view then
+  local view = loadlayout({
+    J.FrameLayout,
+    id = "card",
+    layout_width = "48dp",
+    layout_height = "48dp",
+    clickable = true,
+    focusable = true,
+    {
+      J.TextView,
+      id = "label",
+      layout_gravity = "center",
+      text = "VC",
+      textSize = "13sp",
+      textStyle = "bold",
+      textColor = c.onPrimaryContainer,
+      gravity = "center",
+    },
+    {
+      J.View,
+      id = "badge",
+      layout_width = "9dp",
+      layout_height = "9dp",
+      layout_gravity = "top|end",
+      layout_marginTop = "4dp",
+      layout_marginEnd = "4dp",
+      visibility = "gone",
+    },
+  }, S.bubbleIds)
+  if view then
     S.bubble = view
     api.paintBubble(false)
     if api.wireBubbleTouch then api.wireBubbleTouch() end
@@ -719,13 +703,11 @@ end
 
 function api.removeBubble()
   if not S.bubbleAttached or not S.bubble then return end
-  pcall(function()
-    if S.bubbleHost == "wm" then
-      S.wm.removeView(S.bubble)
-    elseif S.bubble.getParent() then
-      S.bubble.getParent().removeView(S.bubble)
-    end
-  end)
+  if S.bubbleHost == "wm" then
+    S.wm.removeView(S.bubble)
+  elseif S.bubble.getParent() then
+    S.bubble.getParent().removeView(S.bubble)
+  end
   S.bubbleAttached = false
   S.bubbleHost = nil
 end
@@ -761,26 +743,25 @@ function api.getBubbleXY()
 end
 
 function api.setBubbleXY(x, y)
-  if not S.bubbleLp then return end
+  if not S.bubbleLp or not S.bubble then return end
   if S.bubbleHost == "content" then
     S.bubbleLp.leftMargin = x
     S.bubbleLp.topMargin = y
-    pcall(function() S.bubble.setLayoutParams(S.bubbleLp) end)
+    S.bubble.setLayoutParams(S.bubbleLp)
   else
     S.bubbleLp.x = x
     S.bubbleLp.y = y
-    pcall(function() S.wm.updateViewLayout(S.bubble, S.bubbleLp) end)
+    S.wm.updateViewLayout(S.bubble, S.bubbleLp)
   end
 end
 
 function api.screenSize()
   local w, h = S.dm.widthPixels, S.dm.heightPixels
-  pcall(function()
-    w = this.getWidth()
-    h = this.getHeight()
-  end)
-  if not w or w <= 0 then w = S.dm.widthPixels end
-  if not h or h <= 0 then h = S.dm.heightPixels end
+  if this.getWidth then
+    local tw, th = this.getWidth(), this.getHeight()
+    if tw and tw > 0 then w = tw end
+    if th and th > 0 then h = th end
+  end
   return w, h
 end
 
@@ -811,14 +792,11 @@ function api.snapBubble()
 end
 
 function api.resolveContentRoot()
-  local root
-  pcall(function()
-    local androidR = bindClass "android.R"
-    root = activity.findViewById(androidR.id.content)
-  end)
+  local androidR = bindClass "android.R"
+  local root = activity.findViewById(androidR.id.content)
   if root then return root end
-  pcall(function() root = this.getDecorView() end)
-  return root
+  if this.getDecorView then return this.getDecorView() end
+  return nil
 end
 
 function api.attachBubble()
@@ -828,23 +806,22 @@ function api.attachBubble()
   local x = math.floor(sw - api.dp(64))
   local y = math.floor(sh * 0.35)
 
-  local ok = pcall(function()
-    S.contentRoot = api.resolveContentRoot()
-    if not S.contentRoot then error("no content root") end
+  S.contentRoot = api.resolveContentRoot()
+  if S.contentRoot then
     S.bubbleLp = api.makeContentLp(x, y)
     S.contentRoot.addView(S.bubble, S.bubbleLp)
     S.bubbleHost = "content"
-  end)
-
-  if not ok then
-    ok = pcall(function()
+    S.bubbleAttached = true
+  else
+    -- 回退 WindowManager（无 content 时）
+    local ok = pcall(function()
       S.bubbleLp = api.makeWmLp(x, y)
       S.wm.addView(S.bubble, S.bubbleLp)
       S.bubbleHost = "wm"
     end)
+    S.bubbleAttached = ok
   end
 
-  S.bubbleAttached = ok
   if S.bubbleAttached then
     api.setBubbleError(S.hasError)
   else
@@ -861,7 +838,10 @@ function api.wireBubbleTouch()
       S.drag.downX, S.drag.downY = rx, ry
       S.drag.startX, S.drag.startY = api.getBubbleXY()
       S.drag.moved, S.drag.dragging = false, true
-      pcall(function() v.getParent().requestDisallowInterceptTouchEvent(true) end)
+      local parent = v.getParent()
+      if parent and parent.requestDisallowInterceptTouchEvent then
+        parent.requestDisallowInterceptTouchEvent(true)
+      end
       return true
     elseif action == J.MotionEvent.ACTION_MOVE and S.drag.dragging then
       local dx, dy = rx - S.drag.downX, ry - S.drag.downY
@@ -874,7 +854,10 @@ function api.wireBubbleTouch()
       return true
     elseif action == J.MotionEvent.ACTION_UP or action == J.MotionEvent.ACTION_CANCEL then
       S.drag.dragging = false
-      pcall(function() v.getParent().requestDisallowInterceptTouchEvent(false) end)
+      local parent = v.getParent()
+      if parent and parent.requestDisallowInterceptTouchEvent then
+        parent.requestDisallowInterceptTouchEvent(false)
+      end
       if S.drag.moved then
         api.snapBubble()
       else
@@ -903,21 +886,23 @@ end
 
 function api.compactButtonMetrics(btn, minHDp, padHDp)
   if not btn then return end
-  pcall(function()
-    btn.setMinimumHeight(api.dp(minHDp or 36))
-    btn.setMinHeight(api.dp(minHDp or 36))
-    btn.setMinimumWidth(0)
-    btn.setMinWidth(0)
-    btn.setPadding(
-      math.floor(api.dp(padHDp or 10)),
-      math.floor(api.dp(4)),
-      math.floor(api.dp(padHDp or 10)),
-      math.floor(api.dp(4)))
-    btn.setIncludeFontPadding(false)
-    btn.setAllCaps(false)
+  btn.setMinimumHeight(api.dp(minHDp or 36))
+  btn.setMinHeight(api.dp(minHDp or 36))
+  btn.setMinimumWidth(0)
+  btn.setMinWidth(0)
+  btn.setPadding(
+    math.floor(api.dp(padHDp or 10)),
+    math.floor(api.dp(4)),
+    math.floor(api.dp(padHDp or 10)),
+    math.floor(api.dp(4)))
+  btn.setIncludeFontPadding(false)
+  btn.setAllCaps(false)
+  if btn.setStateListAnimator then
     btn.setStateListAnimator(nil)
+  end
+  if btn.setElevation then
     btn.setElevation(0)
-  end)
+  end
 end
 
 function api.applyButtonTheme(btn, bg, fg, radiusDp, minHDp)
@@ -927,14 +912,12 @@ function api.applyButtonTheme(btn, bg, fg, radiusDp, minHDp)
   local fgInt = type(fg) == "number" and fg or c.primary
   local r = radiusDp or 12
   api.compactButtonMetrics(btn, minHDp or 36, 12)
-  pcall(function()
-    if bgInt == 0 then
-      btn.setBackgroundColor(0)
-    else
-      api.applyRound(btn, bgInt, r)
-    end
-  end)
-  pcall(function() btn.setTextColor(fgInt) end)
+  if bgInt == 0 then
+    btn.setBackgroundColor(0)
+  else
+    api.applyRound(btn, bgInt, r)
+  end
+  btn.setTextColor(fgInt)
 end
 
 function api.tonalBtn(id, text)
@@ -1239,6 +1222,7 @@ function api.buildSheetContent()
           api.filterBtn("tab_logcat", api.t("tab_logcat")),
           api.filterBtn("tab_text", api.t("tab_text")),
           api.filterBtn("tab_control", api.t("tab_control")),
+          api.filterBtn("tab_views", api.t("tab_views")),
         },
       },
       api.hairline(),
@@ -1284,7 +1268,7 @@ function api.buildSheetContent()
                 layout_weight = 1,
                 textSize = "12sp",
                 textColor = c.onSurface,
-                hint = api.t("key_hint"),
+                hint = api.t("search_vars"),
                 singleLine = true,
                 BackgroundColor = 0,
                 paddingTop = "0dp",
@@ -1523,6 +1507,36 @@ function api.buildSheetContent()
               },
             },
           },
+          -- Views 树页
+          {
+            J.LinearLayout,
+            orientation = "vertical",
+            layout_width = "match",
+            layout_height = "match",
+            {
+              J.TextView,
+              id = "viewTreeMeta",
+              layout_width = "match",
+              layout_height = "wrap",
+              textSize = "11sp",
+              textColor = c.onSurfaceVariant,
+              paddingLeft = "12dp",
+              paddingRight = "12dp",
+              paddingTop = "6dp",
+              paddingBottom = "2dp",
+              text = api.t("views_meta"),
+            },
+            {
+              J.ListView,
+              id = "viewTreeList",
+              layout_width = "match",
+              layout_height = "0dp",
+              layout_weight = 1,
+              DividerHeight = 0,
+              FastScrollEnabled = true,
+              overScrollMode = 2,
+            },
+          },
         },
         {
           api.t("tab_prints"),
@@ -1530,6 +1544,7 @@ function api.buildSheetContent()
           api.t("tab_logcat"),
           api.t("tab_text"),
           api.t("tab_control"),
+          api.t("tab_views"),
         },
       },
     },
@@ -1560,54 +1575,54 @@ end
 function api.applySheetLayout(content, dialog)
   local dw, dh = api.preferredSheetSize()
   local MATCH = -1
-  pcall(function()
-    content.setMinimumHeight(dh)
-    local lp = content.getLayoutParams()
-    if lp then
-      lp.width = MATCH
-      lp.height = dh
-      content.setLayoutParams(lp)
-    else
-      -- setContentView 前可安全用 J.FrameLayout.LayoutParams
-      content.setLayoutParams(J.FrameLayout.LayoutParams(MATCH, dh))
-    end
-  end)
+  content.setMinimumHeight(dh)
+  local lp = content.getLayoutParams()
+  if lp then
+    lp.width = MATCH
+    lp.height = dh
+    content.setLayoutParams(lp)
+  else
+    content.setLayoutParams(J.FrameLayout.LayoutParams(MATCH, dh))
+  end
   if not dialog then return end
-  pcall(function()
-    local win = dialog.getWindow()
-    if not win then return end
+  local win = dialog.getWindow()
+  if win then
     win.setBackgroundDrawable(J.ColorDrawable(0))
-    pcall(function() win.getDecorView().setPadding(0, 0, 0, 0) end)
-    pcall(function() win.setDimAmount(0.45) end)
+    win.getDecorView().setPadding(0, 0, 0, 0)
+    if win.setDimAmount then win.setDimAmount(0.45) end
     local attrs = win.getAttributes()
     attrs.width = dw
     attrs.height = dh
     attrs.gravity = J.Gravity.CENTER
     win.setAttributes(attrs)
-    -- 再设一次，部分机型 attrs 后仍会被主题改写
-    pcall(function() win.setLayout(dw, dh) end)
-  end)
-  pcall(function() content.requestLayout() end)
+    if win.setLayout then win.setLayout(dw, dh) end
+  end
+  content.requestLayout()
 end
 
 function api.highlightQuery(text, query)
   text = tostring(text or "")
-  if not query or query == "" then return text end
+  query = tostring(query or "")
+  if query == "" then return text end
   api.resolveTheme()
-  local lower = text:lower()
-  local q = query:lower()
-  local i = lower:find(q, 1, true)
-  if not i then return text end
+  -- Spannable 下标是 UTF-16；用 Java String 搜索避免中文/emoji 错位
+  local jText = luajava.newInstance("java.lang.String", text)
+  local jQ = luajava.newInstance("java.lang.String", query)
+  local lower = jText.toLowerCase()
+  local q = jQ.toLowerCase()
+  local start = lower.indexOf(q)
+  if start < 0 then return text end
   local span = J.SpannableStringBuilder(text)
   local bg = J.BackgroundColorSpan(c.secondaryContainer)
   local fg = J.ForegroundColorSpan(c.onSecondaryContainer)
-  while i do
-    local j = i + #query
-    pcall(function()
-      span.setSpan(bg, i - 1, j - 1, S.spanFlags)
-      span.setSpan(fg, i - 1, j - 1, S.spanFlags)
-    end)
-    i = lower:find(q, j, true)
+  local qLen = q.length()
+  while start >= 0 do
+    local stop = start + qLen
+    if stop > start then
+      span.setSpan(bg, start, stop, S.spanFlags)
+      span.setSpan(fg, start, stop, S.spanFlags)
+    end
+    start = lower.indexOf(q, stop)
   end
   return span
 end
@@ -1635,24 +1650,18 @@ function api.updatePrintMeta()
     local q = S.printQuery ~= "" and (" · \"" .. S.printQuery .. "\"") or ""
     label = api.tf("filtered_meta", n, total, S.printFilter, q)
   end
-  pcall(function() ui.printMeta.setText(label) end)
+  ui.printMeta.setText(label)
   if ui.headerSub then
-    pcall(function()
-      ui.headerSub.setText(api.tf("logs_meta", total, S.printFilter))
-    end)
+    ui.headerSub.setText(api.tf("logs_meta", total, S.printFilter))
   end
 end
 
 function api.setPrintEmptyVisible(show)
   if ui.printEmpty then
-    pcall(function()
-      ui.printEmpty.setVisibility(show and J.View.VISIBLE or J.View.GONE)
-    end)
+    ui.printEmpty.setVisibility(show and J.View.VISIBLE or J.View.GONE)
   end
   if ui.printList then
-    pcall(function()
-      ui.printList.setVisibility(show and J.View.GONE or J.View.VISIBLE)
-    end)
+    ui.printList.setVisibility(show and J.View.GONE or J.View.VISIBLE)
   end
 end
 
@@ -1674,9 +1683,7 @@ function api.rebuildPrintList()
       S.printFull[#S.printData] = entry.full
     end
   end
-  if S.printAdp then
-    pcall(function() S.printAdp.notifyDataSetChanged() end)
-  end
+  if S.printAdp then S.printAdp.notifyDataSetChanged() end
   api.setPrintEmptyVisible(#S.printData == 0)
   api.updatePrintMeta()
 end
@@ -1698,7 +1705,7 @@ function api.pushStore(entry)
       },
     }
     if S.printAdp then
-      pcall(function() S.printAdp.add(row) end)
+      S.printAdp.add(row)
     else
       S.printData[#S.printData + 1] = row
     end
@@ -1746,10 +1753,8 @@ end
 
 function api.scrollPrintToBottom()
   if not ui.printList or not S.printAdp then return end
-  pcall(function()
-    local n = S.printAdp.getCount()
-    if n > 0 then ui.printList.setSelection(n - 1) end
-  end)
+  local n = S.printAdp.getCount()
+  if n > 0 then ui.printList.setSelection(n - 1) end
 end
 
 function api.pushEvalHistory(src)
@@ -1764,76 +1769,56 @@ end
 
 function api.runtimeMemText()
   local lines = {}
-  pcall(function()
-    local rt = J.Runtime.getRuntime()
-    local used = (rt.totalMemory() - rt.freeMemory()) / (1024 * 1024)
-    local total = rt.totalMemory() / (1024 * 1024)
-    local max = rt.maxMemory() / (1024 * 1024)
-    lines[#lines + 1] = string.format("Java heap: %.1f / %.1f MB (max %.1f)", used, total, max)
-  end)
-  pcall(function()
-    local kb = collectgarbage("count")
-    lines[#lines + 1] = string.format("Lua GC: %.1f KB", kb)
-  end)
-  pcall(function()
-    local am = activity.getSystemService(J.Context.ACTIVITY_SERVICE)
-    local mi = luajava.newInstance("android.app.ActivityManager$MemoryInfo")
-    am.getMemoryInfo(mi)
-    lines[#lines + 1] = string.format(
-      "System avail: %.0f MB%s",
-      mi.availMem / (1024 * 1024),
-      mi.lowMemory and " · LOW" or "")
-  end)
+  local rt = J.Runtime.getRuntime()
+  local used = (rt.totalMemory() - rt.freeMemory()) / (1024 * 1024)
+  local total = rt.totalMemory() / (1024 * 1024)
+  local max = rt.maxMemory() / (1024 * 1024)
+  lines[#lines + 1] = string.format("Java heap: %.1f / %.1f MB (max %.1f)", used, total, max)
+  lines[#lines + 1] = string.format("Lua GC: %.1f KB", collectgarbage("count"))
+  local am = activity.getSystemService(J.Context.ACTIVITY_SERVICE)
+  local mi = luajava.newInstance("android.app.ActivityManager$MemoryInfo")
+  am.getMemoryInfo(mi)
+  lines[#lines + 1] = string.format(
+    "System avail: %.0f MB%s",
+    mi.availMem / (1024 * 1024),
+    mi.lowMemory and " · LOW" or "")
   return table.concat(lines, "\n")
 end
 
 function api.deviceInfoText()
   local lines = {
     "=== Device / Runtime ===",
+    "Model: " .. tostring(J.Build.MODEL),
+    "Device: " .. tostring(J.Build.DEVICE),
+    "Brand: " .. tostring(J.Build.BRAND),
+    "Android: " .. tostring(J.Build.VERSION.RELEASE)
+      .. " (SDK " .. tostring(J.Build.VERSION.SDK_INT or J.Build.VERSION.SDK) .. ")",
+    "ABI: " .. tostring(J.Build.SUPPORTED_ABIS
+      and tostring(J.Build.SUPPORTED_ABIS[0]) or J.Build.CPU_ABI),
   }
-  pcall(function()
-    lines[#lines + 1] = "Model: " .. tostring(J.Build.MODEL)
-    lines[#lines + 1] = "Device: " .. tostring(J.Build.DEVICE)
-    lines[#lines + 1] = "Brand: " .. tostring(J.Build.BRAND)
-    lines[#lines + 1] = "Android: " .. tostring(J.Build.VERSION.RELEASE)
-      .. " (SDK " .. tostring(J.Build.VERSION.SDK_INT or J.Build.VERSION.SDK) .. ")"
-    lines[#lines + 1] = "ABI: " .. tostring(J.Build.SUPPORTED_ABIS
-      and tostring(J.Build.SUPPORTED_ABIS[0]) or J.Build.CPU_ABI)
-  end)
-  pcall(function()
-    local pkg = activity.getPackageManager().getPackageInfo(activity.getPackageName(), 0)
-    lines[#lines + 1] = "Package: " .. tostring(pkg.packageName)
-    lines[#lines + 1] = "Version: " .. tostring(pkg.versionName)
-      .. " (" .. tostring(pkg.versionCode or pkg.getLongVersionCode and pkg.getLongVersionCode() or "?") .. ")"
-  end)
-  pcall(function()
-    S.dm = activity.getResources().getDisplayMetrics()
-    lines[#lines + 1] = string.format(
-      "Display: %dx%d · density %.2f · %.0fdpi",
-      S.dm.widthPixels, S.dm.heightPixels, S.dm.density, S.dm.densityDpi)
-  end)
-  pcall(function()
-    local conf = activity.getResources().getConfiguration()
-    lines[#lines + 1] = "Locale: " .. tostring(conf.locale or conf.getLocales and conf.getLocales().get(0))
-    lines[#lines + 1] = "Orientation: " .. (conf.orientation == 2 and "landscape" or "portrait")
-  end)
-  pcall(function()
-    lines[#lines + 1] = "Lua path: " .. tostring(this.getLuaPath())
-    lines[#lines + 1] = "Lua dir: " .. tostring(this.getLuaDir())
-  end)
-  pcall(function()
-    lines[#lines + 1] = "Files: " .. activity.getFilesDir().getAbsolutePath()
-    lines[#lines + 1] = "Cache: " .. activity.getCacheDir().getAbsolutePath()
-  end)
-  pcall(function()
-    local ext = activity.getExternalFilesDir(nil)
-    if ext then lines[#lines + 1] = "Ext files: " .. ext.getAbsolutePath() end
-  end)
-  pcall(function()
-    if this.getMediaDir then
-      lines[#lines + 1] = "Media: " .. this.getMediaDir().getAbsolutePath()
-    end
-  end)
+  local pkg = activity.getPackageManager().getPackageInfo(activity.getPackageName(), 0)
+  local vc = pkg.versionCode
+  if pkg.getLongVersionCode then vc = pkg.getLongVersionCode() end
+  lines[#lines + 1] = "Package: " .. tostring(pkg.packageName)
+  lines[#lines + 1] = "Version: " .. tostring(pkg.versionName) .. " (" .. tostring(vc) .. ")"
+  S.dm = activity.getResources().getDisplayMetrics()
+  lines[#lines + 1] = string.format(
+    "Display: %dx%d · density %.2f · %.0fdpi",
+    S.dm.widthPixels, S.dm.heightPixels, S.dm.density, S.dm.densityDpi)
+  local conf = activity.getResources().getConfiguration()
+  local locale = conf.locale
+  if not locale and conf.getLocales then locale = conf.getLocales().get(0) end
+  lines[#lines + 1] = "Locale: " .. tostring(locale)
+  lines[#lines + 1] = "Orientation: " .. (conf.orientation == 2 and "landscape" or "portrait")
+  if this.getLuaPath then lines[#lines + 1] = "Lua path: " .. tostring(this.getLuaPath()) end
+  if this.getLuaDir then lines[#lines + 1] = "Lua dir: " .. tostring(this.getLuaDir()) end
+  lines[#lines + 1] = "Files: " .. activity.getFilesDir().getAbsolutePath()
+  lines[#lines + 1] = "Cache: " .. activity.getCacheDir().getAbsolutePath()
+  local ext = activity.getExternalFilesDir(nil)
+  if ext then lines[#lines + 1] = "Ext files: " .. ext.getAbsolutePath() end
+  if this.getMediaDir then
+    lines[#lines + 1] = "Media: " .. this.getMediaDir().getAbsolutePath()
+  end
   lines[#lines + 1] = ""
   lines[#lines + 1] = api.runtimeMemText()
   if S.lastCrashPath then
@@ -1844,77 +1829,309 @@ end
 
 function api.intentExtrasText()
   local lines = { "=== Intent ===" }
-  pcall(function()
-    local intent = activity.getIntent()
-    lines[#lines + 1] = "Action: " .. tostring(intent.getAction())
-    lines[#lines + 1] = "Data: " .. tostring(intent.getDataString())
-    lines[#lines + 1] = "Type: " .. tostring(intent.getType())
-    lines[#lines + 1] = "Flags: 0x" .. string.format("%x", intent.getFlags())
-    local extras = intent.getExtras()
-    if extras then
-      local keys = extras.keySet().toArray()
-      local n = keys.length
-      lines[#lines + 1] = "Extras (" .. n .. "):"
-      for i = 0, math.min(n - 1, 80) do
-        local k = tostring(keys[i])
-        local v
-        pcall(function() v = extras.get(k) end)
-        lines[#lines + 1] = "  " .. k .. " = " .. api.truncate(tostring(v), 120)
-      end
-    else
-      lines[#lines + 1] = "Extras: (none)"
+  local intent = activity.getIntent()
+  lines[#lines + 1] = "Action: " .. tostring(intent.getAction())
+  lines[#lines + 1] = "Data: " .. tostring(intent.getDataString())
+  lines[#lines + 1] = "Type: " .. tostring(intent.getType())
+  lines[#lines + 1] = "Flags: 0x" .. string.format("%x", intent.getFlags())
+  local extras = intent.getExtras()
+  if extras then
+    local keys = extras.keySet().toArray()
+    local n = keys.length
+    lines[#lines + 1] = "Extras (" .. n .. "):"
+    for i = 0, math.min(n - 1, 80) do
+      local k = tostring(keys[i])
+      local v = extras.get(k)
+      lines[#lines + 1] = "  " .. k .. " = " .. api.truncate(tostring(v), 120)
     end
-  end)
+  else
+    lines[#lines + 1] = "Extras: (none)"
+  end
   return table.concat(lines, "\n")
 end
 
+-- ─── 视图树（可展开） ───────────────────────────────────
+function api.viewIdName(v)
+  local id = v.getId()
+  if not id or id <= 0 then return "" end
+  local okn, name = pcall(function()
+    return activity.getResources().getResourceEntryName(id)
+  end)
+  if okn and name then return "@" .. name end
+  return string.format("#0x%x", id)
+end
+
+function api.viewBriefExtra(v)
+  local extra = ""
+  if v.getText then
+    local ok, t = pcall(function() return tostring(v.getText() or "") end)
+    if ok and t ~= "" then
+      return '"' .. api.truncate(t:gsub("%s+", " "), 28) .. '"'
+    end
+  end
+  if v.getContentDescription then
+    local ok, d = pcall(function() return v.getContentDescription() end)
+    if ok and d then
+      local s = tostring(d)
+      if s ~= "" then return "desc=" .. api.truncate(s, 24) end
+    end
+  end
+  return extra
+end
+
+function api.viewNodeFrom(v, depth)
+  local childN = 0
+  if v.getChildCount then childN = v.getChildCount() or 0 end
+  return {
+    view = v,
+    depth = depth or 0,
+    expanded = false,
+    children = nil, -- 懒加载
+    childCount = childN,
+    className = v.getClass().getSimpleName(),
+    idName = api.viewIdName(v),
+  }
+end
+
+function api.viewNodeLoadChildren(node)
+  if node.children then return end
+  node.children = {}
+  local v = node.view
+  if not v or not v.getChildCount then return end
+  local n = v.getChildCount() or 0
+  local lim = math.min(n, 80)
+  for i = 0, lim - 1 do
+    local child = v.getChildAt(i)
+    if child then
+      if S.viewOnlyVisible and child.getVisibility() ~= J.View.VISIBLE then
+        -- skip GONE / INVISIBLE
+      else
+        node.children[#node.children + 1] = api.viewNodeFrom(child, node.depth + 1)
+      end
+    end
+  end
+  if n > lim then
+    node.children[#node.children + 1] = {
+      view = nil,
+      depth = node.depth + 1,
+      expanded = false,
+      children = {},
+      childCount = 0,
+      className = "… +" .. (n - lim) .. " more",
+      idName = "",
+      stub = true,
+    }
+  end
+end
+
+function api.viewTreeFlatten(node, out)
+  out = out or {}
+  out[#out + 1] = node
+  if node.expanded and node.childCount > 0 then
+    api.viewNodeLoadChildren(node)
+    for _, ch in ipairs(node.children or {}) do
+      api.viewTreeFlatten(ch, out)
+    end
+  end
+  return out
+end
+
+function api.viewTreeRowLabel(node)
+  if node.stub then return string.rep("  ", node.depth) .. node.className end
+  local mark = "  "
+  if node.childCount > 0 then
+    mark = node.expanded and "▾ " or "▸ "
+  end
+  local pad = string.rep("  ", node.depth)
+  local id = node.idName ~= "" and (" " .. node.idName) or ""
+  local wh, flags, extra = "", "", ""
+  local v = node.view
+  if v then
+    local okW, dims = pcall(function()
+      return string.format(" %dx%d", v.getWidth(), v.getHeight())
+    end)
+    if okW then wh = dims end
+    local okF, f = pcall(function()
+      local parts = {}
+      local vv = v.getVisibility()
+      if vv == J.View.GONE then parts[#parts + 1] = "G"
+      elseif vv == J.View.INVISIBLE then parts[#parts + 1] = "I" end
+      if v.isClickable() then parts[#parts + 1] = "c" end
+      if #parts > 0 then return " [" .. table.concat(parts, "") .. "]" end
+      return ""
+    end)
+    if okF then flags = f end
+    local e = api.viewBriefExtra(v)
+    if e ~= "" then extra = " " .. e end
+  end
+  local kids = node.childCount > 0 and string.format(" {%d}", node.childCount) or ""
+  return pad .. mark .. node.className .. id .. wh .. kids .. flags .. extra
+end
+
+function api.viewNodeDetail(node)
+  if not node or node.stub or not node.view then return api.t("views_empty") end
+  local v = node.view
+  local lines = { "=== " .. api.t("views_detail") .. " ===" }
+  lines[#lines + 1] = "Class: " .. tostring(v.getClass().getName())
+  lines[#lines + 1] = "Simple: " .. node.className
+  local idn = node.idName
+  if idn == "" then idn = "(none)" end
+  lines[#lines + 1] = "Id: " .. idn
+  lines[#lines + 1] = string.format("Size: %dx%d", v.getWidth(), v.getHeight())
+  pcall(function()
+    lines[#lines + 1] = string.format(
+      "Location: (%d,%d)", v.getLeft(), v.getTop())
+  end)
+  local vv = v.getVisibility()
+  local vis = "VISIBLE"
+  if vv == J.View.GONE then vis = "GONE"
+  elseif vv == J.View.INVISIBLE then vis = "INVISIBLE" end
+  lines[#lines + 1] = "Visibility: " .. vis
+  lines[#lines + 1] = "Enabled: " .. tostring(v.isEnabled())
+  lines[#lines + 1] = "Clickable: " .. tostring(v.isClickable())
+  lines[#lines + 1] = "Focusable: " .. tostring(v.isFocusable())
+  lines[#lines + 1] = string.format("Alpha: %.2f", v.getAlpha() or 1)
+  pcall(function()
+    lines[#lines + 1] = string.format(
+      "Padding: L%d T%d R%d B%d",
+      v.getPaddingLeft(), v.getPaddingTop(),
+      v.getPaddingRight(), v.getPaddingBottom())
+  end)
+  if v.getText then
+    local ok, t = pcall(function() return tostring(v.getText() or "") end)
+    if ok and t ~= "" then lines[#lines + 1] = "Text: " .. t end
+  end
+  if v.getContentDescription then
+    local ok, d = pcall(function() return v.getContentDescription() end)
+    if ok and d then lines[#lines + 1] = "Desc: " .. tostring(d) end
+  end
+  lines[#lines + 1] = "Children: " .. tostring(node.childCount)
+  return table.concat(lines, "\n")
+end
+
+function api.viewTreeRebuildFlat()
+  table.clear(S.viewTreeFlat)
+  table.clear(S.viewTreeData)
+  if S.viewTreeRoot then
+    api.viewTreeFlatten(S.viewTreeRoot, S.viewTreeFlat)
+  end
+  for _, node in ipairs(S.viewTreeFlat) do
+    S.viewTreeData[#S.viewTreeData + 1] = {
+      line = {
+        text = api.viewTreeRowLabel(node),
+        textColor = c.onSurface,
+      },
+    }
+  end
+  if ui.viewTreeMeta then
+    ui.viewTreeMeta.setText(api.tf("views_meta", #S.viewTreeFlat))
+  end
+  if S.viewTreeAdp then S.viewTreeAdp.notifyDataSetChanged() end
+end
+
+function api.viewTreeRefresh()
+  local root = activity.getWindow().getDecorView()
+  S.viewTreeRoot = api.viewNodeFrom(root, 0)
+  S.viewTreeRoot.expanded = true
+  api.viewNodeLoadChildren(S.viewTreeRoot)
+  -- 默认展开一层 content
+  for _, ch in ipairs(S.viewTreeRoot.children or {}) do
+    if ch.childCount > 0 and ch.depth < 2 then
+      ch.expanded = true
+    end
+  end
+  api.viewTreeRebuildFlat()
+end
+
+function api.viewTreeCollapseAll()
+  local function collapse(node)
+    if not node then return end
+    node.expanded = false
+    if node.children then
+      for _, ch in ipairs(node.children) do collapse(ch) end
+    end
+  end
+  if S.viewTreeRoot then
+    collapse(S.viewTreeRoot)
+    S.viewTreeRoot.expanded = true
+  end
+  api.viewTreeRebuildFlat()
+end
+
+function api.ensureViewTreeAdp()
+  if S.viewTreeAdp or not ui.viewTreeList then return end
+  S.viewTreeAdp = J.LuaAdapter(activity, S.viewTreeData, {
+    J.TextView,
+    layout_width = "match",
+    textSize = "11sp",
+    paddingLeft = "8dp",
+    paddingRight = "8dp",
+    paddingTop = "6dp",
+    paddingBottom = "6dp",
+    singleLine = true,
+    ellipsize = "middle",
+    id = "line",
+  })
+  ui.viewTreeList.setAdapter(S.viewTreeAdp)
+  ui.viewTreeList.onItemClick = function(_, v, _, d)
+    api.vibrate(v)
+    local node = S.viewTreeFlat[d]
+    if not node or node.stub then return end
+    if node.childCount > 0 then
+      node.expanded = not node.expanded
+      if node.expanded then api.viewNodeLoadChildren(node) end
+      api.viewTreeRebuildFlat()
+    else
+      api.openTextInPanel(api.t("views_detail"), api.viewNodeDetail(node))
+    end
+  end
+  ui.viewTreeList.onItemLongClick = function(_, v, _, d)
+    api.vibrate(v)
+    local node = S.viewTreeFlat[d]
+    if not node then return true end
+    api.openTextInPanel(api.t("views_detail"), api.viewNodeDetail(node))
+    return true
+  end
+end
+
 function api.dumpViewTree(root, maxDepth)
-  maxDepth = maxDepth or 4
+  -- 纯文本导出（仍给 Control 长备份 / 兼容）
+  maxDepth = maxDepth or 8
+  local MAX_LINES = 600
   local lines = { "=== View hierarchy ===" }
   local function walk(v, depth)
-    if not v or depth > maxDepth then return end
-    local pad = string.rep("  ", depth)
-    local idName = ""
-    pcall(function()
-      local id = v.getId()
-      if id and id > 0 then
-        idName = " @" .. activity.getResources().getResourceEntryName(id)
-      end
-    end)
-    local cls = ""
-    pcall(function() cls = v.getClass().getSimpleName() end)
-    local wh = ""
-    pcall(function() wh = string.format(" %dx%d", v.getWidth(), v.getHeight()) end)
-    local vis = ""
-    pcall(function()
-      local vv = v.getVisibility()
-      if vv == J.View.GONE then vis = " GONE"
-      elseif vv == J.View.INVISIBLE then vis = " INVIS" end
-    end)
-    lines[#lines + 1] = pad .. cls .. idName .. wh .. vis
-    pcall(function()
-      if v.getChildCount then
-        local n = v.getChildCount()
-        for i = 0, math.min(n - 1, 40) do
-          walk(v.getChildAt(i), depth + 1)
+    if not v or depth > maxDepth or #lines >= MAX_LINES then return end
+    local node = api.viewNodeFrom(v, depth)
+    lines[#lines + 1] = api.viewTreeRowLabel(node):gsub("▾ ", "  "):gsub("▸ ", "  ")
+    local n = node.childCount
+    if n > 0 and depth < maxDepth then
+      local lim = math.min(n, 64)
+      for i = 0, lim - 1 do
+        local child = v.getChildAt(i)
+        if child then
+          if S.viewOnlyVisible and child.getVisibility() ~= J.View.VISIBLE then
+            -- skip
+          else
+            walk(child, depth + 1)
+          end
         end
+        if #lines >= MAX_LINES then break end
       end
-    end)
+    end
   end
-  pcall(function()
-    root = root or activity.getWindow().getDecorView()
-    walk(root, 0)
-  end)
+  root = root or activity.getWindow().getDecorView()
+  walk(root, 0)
+  if #lines >= MAX_LINES then
+    lines[#lines + 1] = "… truncated at " .. MAX_LINES .. " lines"
+  end
   return table.concat(lines, "\n")
 end
 
 function api.openTextInPanel(title, body)
   if ui.textEdit then
-    pcall(function() ui.textEdit.setText(tostring(body or "")) end)
-    pcall(function() ui.page.setCurrentItem(3, false) end)
-    if ui.headerSub then
-      pcall(function() ui.headerSub.setText(tostring(title or "Text")) end)
-    end
+    ui.textEdit.setText(tostring(body or ""))
+    if ui.page then ui.page.setCurrentItem(3, false) end
+    if ui.headerSub then ui.headerSub.setText(tostring(title or "Text")) end
   else
     api.clipboardSet(body)
     api.toast(api.t("copied_panel"))
@@ -1923,8 +2140,8 @@ end
 
 function api.runGcAndReport()
   local before = api.runtimeMemText()
-  pcall(function() collectgarbage("collect") end)
-  pcall(function() J.Runtime.getRuntime().gc() end)
+  collectgarbage("collect")
+  J.Runtime.getRuntime().gc()
   local after = api.runtimeMemText()
   local msg = "GC done\n-- before --\n" .. before .. "\n-- after --\n" .. after
   info("GC done")
@@ -1933,33 +2150,27 @@ end
 
 function api.toggleKeepScreenOn()
   S.keepScreenOn = not S.keepScreenOn
-  pcall(function()
-    local w = activity.getWindow()
-    local f = bindClass "android.view.WindowManager$LayoutParams".FLAG_KEEP_SCREEN_ON
-    if S.keepScreenOn then
-      w.addFlags(f)
-    else
-      w.clearFlags(f)
-    end
-  end)
+  local w = activity.getWindow()
+  local f = bindClass "android.view.WindowManager$LayoutParams".FLAG_KEEP_SCREEN_ON
+  if S.keepScreenOn then
+    w.addFlags(f)
+  else
+    w.clearFlags(f)
+  end
   api.toast(S.keepScreenOn and api.t("keep_screen_on") or api.t("keep_screen_off"))
   info("keepScreenOn=" .. tostring(S.keepScreenOn))
-  pcall(function()
-    if ui.ctrlScreen then
-      ui.ctrlScreen.setText(S.keepScreenOn and api.t("screen_off") or api.t("screen_on"))
-    end
-  end)
+  if ui.ctrlScreen then
+    ui.ctrlScreen.setText(S.keepScreenOn and api.t("screen_off") or api.t("screen_on"))
+  end
 end
 
 function api.toggleLoggingPause()
   S.loggingPaused = not S.loggingPaused
   api.toast(S.loggingPaused and api.t("logging_paused") or api.t("logging_resumed"))
   info(S.loggingPaused and "logging paused" or "logging resumed")
-  pcall(function()
-    if ui.ctrlPause then
-      ui.ctrlPause.setText(S.loggingPaused and api.t("resume_log") or api.t("pause_log"))
-    end
-  end)
+  if ui.ctrlPause then
+    ui.ctrlPause.setText(S.loggingPaused and api.t("resume_log") or api.t("pause_log"))
+  end
 end
 
 function api.hideBubbleTemporarily()
@@ -1971,7 +2182,7 @@ function api.clearPrints()
   table.clear(S.printStore)
   table.clear(S.printData)
   table.clear(S.printFull)
-  if S.printAdp then pcall(function() S.printAdp.clear() end) end
+  if S.printAdp then S.printAdp.clear() end
   api.setPrintEmptyVisible(true)
   api.setBubbleError(false)
   api.updatePrintMeta()
@@ -2004,14 +2215,12 @@ end
 
 -- 同步宿主 LuaActivity.logs
 function api.pullHostLogs()
-  local ok, logs = pcall(function() return J.LuaActivityClass.logs end)
-  if not ok or not logs then return end
-  local size = 0
-  pcall(function() size = logs.size() end)
+  local logs = J.LuaActivityClass.logs
+  if not logs then return end
+  local size = logs.size()
   if size <= S.hostLogsCursor then return end
   for i = S.hostLogsCursor, size - 1 do
-    local msg
-    pcall(function() msg = logs.get(i) end)
+    local msg = logs.get(i)
     if msg then
       local s = tostring(msg)
       local last = S.printStore[#S.printStore]
@@ -2287,11 +2496,17 @@ function api.refreshVars()
   end
   local pathStr = table.concat(pathParts, "/")
   if #pathStr > 0 then pathStr = pathStr .. "/" end
-  ui.varPath.setText("node: /" .. pathStr)
+  local q = S.varQuery or ""
+  if q ~= "" then
+    ui.varPath.setText("node: /" .. pathStr .. "  ⌕" .. q)
+  else
+    ui.varPath.setText("node: /" .. pathStr)
+  end
 
   if #S.variableNode > 0 then api.varAdd(1, "← parent") end
   api.varAdd(2, "serialize node")
 
+  local qLower = q:lower()
   -- 根环境跳过 vConsole 自身注入的全局，避免污染 Vars
   local atRoot = (#S.variableNode == 0)
   for k, v in pairs(tab) do
@@ -2299,35 +2514,40 @@ function api.refreshVars()
       -- skip
     else
       local rawK, rawV = k, v
-      local vs = tostring(v)
-      if vs then
-        vs = api.truncate(vs, 80)
-        local ks = type(k) == "string" and tostring(k) or string.format("[%s]", tostring(k))
-        if type(rawV) == "string" then
-          vs = string.format('"%s"', vs)
-        elseif type(rawV) == "table" then
-          vs = string.format("%s => {...}", vs)
-          S.variablePath[tostring(rawK)] = rawK
-        end
-        local line = string.format("%s => %s", ks, vs)
-        local span = S.variableSpanCache[#S.variableData + 1]
-        if not span then
-          span = J.SpannableStringBuilder()
-          S.variableSpanCache[#S.variableData + 1] = span
-        end
-        span.clearSpans()
-        span.clear()
-        span.append(line)
-        local s1, e1 = utf8.find(line, "=>")
-        if s1 then
-          span.setSpan(S.colorKey, 0, utf8.len(ks), S.spanFlags)
-          span.setSpan(S.colorArrow, s1 - 1, e1, S.spanFlags)
-          if type(rawV) == "table" then
-            local s2, e2 = utf8.find(line, "{%.%.%.}", e1)
-            if s2 then span.setSpan(S.colorTable, s2 - 1, e2, S.spanFlags) end
+      local ks = type(k) == "string" and tostring(k) or string.format("[%s]", tostring(k))
+      -- 筛选：匹配键名（忽略大小写）
+      if qLower ~= "" and not ks:lower():find(qLower, 1, true) then
+        -- skip
+      else
+        local vs = tostring(v)
+        if vs then
+          vs = api.truncate(vs, 80)
+          if type(rawV) == "string" then
+            vs = string.format('"%s"', vs)
+          elseif type(rawV) == "table" then
+            vs = string.format("%s => {...}", vs)
+            S.variablePath[tostring(rawK)] = rawK
           end
+          local line = string.format("%s => %s", ks, vs)
+          local span = S.variableSpanCache[#S.variableData + 1]
+          if not span then
+            span = J.SpannableStringBuilder()
+            S.variableSpanCache[#S.variableData + 1] = span
+          end
+          span.clearSpans()
+          span.clear()
+          span.append(line)
+          local s1, e1 = utf8.find(line, "=>")
+          if s1 then
+            span.setSpan(S.colorKey, 0, utf8.len(ks), S.spanFlags)
+            span.setSpan(S.colorArrow, s1 - 1, e1, S.spanFlags)
+            if type(rawV) == "table" then
+              local s2, e2 = utf8.find(line, "{%.%.%.}", e1)
+              if s2 then span.setSpan(S.colorTable, s2 - 1, e2, S.spanFlags) end
+            end
+          end
+          api.varAdd({ rawK, rawV }, span)
         end
-        api.varAdd({ rawK, rawV }, span)
       end
     end
   end
@@ -2368,14 +2588,12 @@ function api.markFilterButtons(ids, activeKey, keyOf)
     if btn then
       local on = keyOf(item) == activeKey
       api.compactButtonMetrics(btn, 32, 10)
-      pcall(function()
-        btn.setTextColor(on and c.primary or c.onSurfaceVariant)
-        if on then
-          api.applyRound(btn, c.secondaryContainer, 16)
-        else
-          btn.setBackgroundColor(0)
-        end
-      end)
+      btn.setTextColor(on and c.primary or c.onSurfaceVariant)
+      if on then
+        api.applyRound(btn, c.secondaryContainer, 16)
+      else
+        btn.setBackgroundColor(0)
+      end
     end
   end
 end
@@ -2395,26 +2613,24 @@ function api.setupPrintFilters()
   api.markFilterButtons(S.printFilterIds, S.printFilter, function(o) return o[3] end)
   if ui.printSearch then
     local TextWatcher = bindClass "android.text.TextWatcher"
-    pcall(function()
-      ui.printSearch.addTextChangedListener(TextWatcher({
-        beforeTextChanged = function() end,
-        onTextChanged = function() end,
-        afterTextChanged = function(s)
-          S.printQuery = tostring(s or ""):match("^%s*(.-)%s*$") or ""
-          if ui.printSearchClear then
-            ui.printSearchClear.setVisibility(
-              S.printQuery ~= "" and J.View.VISIBLE or J.View.GONE)
-          end
-          api.rebuildPrintList()
-        end,
-      }))
-    end)
+    ui.printSearch.addTextChangedListener(TextWatcher({
+      beforeTextChanged = function() end,
+      onTextChanged = function() end,
+      afterTextChanged = function(s)
+        S.printQuery = tostring(s or ""):match("^%s*(.-)%s*$") or ""
+        if ui.printSearchClear then
+          ui.printSearchClear.setVisibility(
+            S.printQuery ~= "" and J.View.VISIBLE or J.View.GONE)
+        end
+        api.rebuildPrintList()
+      end,
+    }))
   end
   if ui.printSearchClear then
     ui.printSearchClear.onClick = function(v)
       api.vibrate(v)
       S.printQuery = ""
-      pcall(function() ui.printSearch.setText("") end)
+      if ui.printSearch then ui.printSearch.setText("") end
       api.rebuildPrintList()
     end
   end
@@ -2466,18 +2682,39 @@ function api.ensureVarAdp()
     return true
   end
   if ui.varSearch then
+    local TextWatcher = bindClass "android.text.TextWatcher"
+    ui.varSearch.addTextChangedListener(TextWatcher({
+      beforeTextChanged = function() end,
+      onTextChanged = function() end,
+      afterTextChanged = function(s)
+        S.varQuery = tostring(s or ""):match("^%s*(.-)%s*$") or ""
+        api.refreshVars()
+      end,
+    }))
+    -- 回车：精确匹配 table 则进入该节点；否则只收起键盘（筛选已实时生效）
     ui.varSearch.onEditorAction = function(v, actionId)
-      if actionId == 0 then
-        local key = S.variablePath[tostring(v.getText())]
-        if key ~= nil then S.variableNode[#S.variableNode + 1] = key end
+      local q = tostring(v.getText() or ""):match("^%s*(.-)%s*$") or ""
+      local key = S.variablePath[q]
+      if key == nil then
+        local ql = q:lower()
+        for name, k in pairs(S.variablePath) do
+          if tostring(name):lower() == ql then
+            key = k
+            break
+          end
+        end
+      end
+      if key ~= nil then
+        S.variableNode[#S.variableNode + 1] = key
+        S.varQuery = ""
         v.setText("")
-        pcall(function()
-          activity.getSystemService(J.Context.INPUT_METHOD_SERVICE)
-            .hideSoftInputFromWindow(v.getWindowToken(), 0)
-        end)
         api.refreshVars()
       end
-      return false
+      pcall(function()
+        activity.getSystemService(J.Context.INPUT_METHOD_SERVICE)
+          .hideSoftInputFromWindow(v.getWindowToken(), 0)
+      end)
+      return true
     end
   end
 end
@@ -2577,22 +2814,16 @@ function api.ensureLogcatAdp()
       ellipsize = "end",
     },
   })
-  -- 列表复用后给左侧级别徽标补圆角底色
-  pcall(function()
-    local AbsListView = bindClass "android.widget.AbsListView"
-    ui.logcatList.setRecyclerListener(AbsListView.RecyclerListener({
-      onMovedToScrapHeap = function() end,
-    }))
-  end)
-  pcall(function()
+  local AbsListView = bindClass "android.widget.AbsListView"
+  if ui.logcatList.setOnScrollListener then
     local OnScrollListener = bindClass "android.widget.AbsListView$OnScrollListener"
     ui.logcatList.setOnScrollListener(OnScrollListener({
       onScrollStateChanged = function() end,
       onScroll = function()
-        pcall(function() api.paintLogcatBadges() end)
+        api.paintLogcatBadges()
       end,
     }))
-  end)
+  end
   ui.logcatList.setAdapter(S.logcatAdp)
   ui.logcatList.onItemClick = function(_, v, _, d)
     api.vibrate(v)
@@ -2614,11 +2845,12 @@ function api.paintLogcatBadges()
     local row = ui.logcatList.getChildAt(i)
     if row and row.getChildCount and row.getChildCount() > 0 then
       local badge = row.getChildAt(0)
-      local t = ""
-      pcall(function() t = tostring(badge.getText() or "") end)
-      if t ~= "" then
-        api.applyRound(badge, api.logcatLevelFill(t), 6)
-        pcall(function() badge.setTextColor(api.logcatLevelColor(t)) end)
+      if badge and badge.getText then
+        local t = tostring(badge.getText() or "")
+        if t ~= "" then
+          api.applyRound(badge, api.logcatLevelFill(t), 6)
+          badge.setTextColor(api.logcatLevelColor(t))
+        end
       end
     end
   end
@@ -2629,7 +2861,7 @@ end
 function api.runBg(bgFn, onMain, dispatcher)
   dispatcher = dispatcher or "io"
   local function deliver(result)
-    if onMain then pcall(onMain, result) end
+    if onMain then onMain(result) end
   end
   if xTask ~= nil then
     local ok = pcall(function()
@@ -2707,12 +2939,10 @@ function api.applyLogcatText(str)
     }
     S.logcatFull[#S.logcatData] = full
   end
-  pcall(function() S.logcatAdp.notifyDataSetChanged() end)
-  pcall(function()
-    if ui.logcatList then
-      ui.logcatList.post(function() api.paintLogcatBadges() end)
-    end
-  end)
+  if S.logcatAdp then S.logcatAdp.notifyDataSetChanged() end
+  if ui.logcatList then
+    ui.logcatList.post(function() api.paintLogcatBadges() end)
+  end
 end
 
 function api.refreshLogcat()
@@ -2774,6 +3004,8 @@ S.actionSpecs = {
     { "refresh", function() api.refreshVars() end },
     { "root", function()
       table.clear(S.variableNode)
+      S.varQuery = ""
+      if ui.varSearch then ui.varSearch.setText("") end
       api.refreshVars()
     end },
     { "copy_path", function()
@@ -2849,7 +3081,28 @@ S.actionSpecs = {
   [4] = {
     { "device", function() api.openTextInPanel(api.t("device"), api.deviceInfoText()) end },
     { "memory", function() api.openTextInPanel(api.t("memory"), api.runtimeMemText()) end },
+    { "views", function()
+      if ui.page then ui.page.setCurrentItem(5, true) end
+      api.paintTabs(5)
+      api.onPage(5)
+    end },
     { "export", function() api.exportPrints(false) end },
+    { "close", function() if S.sheet then S.sheet.dismiss() end end },
+  },
+  [5] = {
+    { "refresh", function()
+      api.ensureViewTreeAdp()
+      api.viewTreeRefresh()
+    end },
+    { "views_collapse", function() api.viewTreeCollapseAll() end },
+    { "views_only_vis", function()
+      S.viewOnlyVisible = not S.viewOnlyVisible
+      api.viewTreeRefresh()
+      api.rebuildActionBar(5)
+    end },
+    { "export", function()
+      api.openTextInPanel(api.t("views"), api.dumpViewTree(nil, 10))
+    end },
     { "close", function() if S.sheet then S.sheet.dismiss() end end },
   },
 }
@@ -2858,19 +3111,34 @@ function api.rebuildActionBar(pos)
   if not ui.actionBar then return end
   ui.actionBar.removeAllViews()
   for i, item in ipairs(S.actionSpecs[pos] or S.actionSpecs[0]) do
-    local btn = loadlayout(api.textBtn("act" .. i, api.t(item[1])))
+    local label = api.t(item[1])
+    -- Views 页：仅可见开关显示当前状态
+    if pos == 5 and item[1] == "views_only_vis" then
+      label = S.viewOnlyVisible and api.t("views_only_vis") or api.t("views_all")
+    end
+    local btn = loadlayout({
+      J.Button,
+      text = label,
+      layout_width = "0dp",
+      layout_weight = 1,
+      layout_height = "36dp",
+      minHeight = "36dp",
+      textSize = "12sp",
+      includeFontPadding = false,
+      BackgroundColor = 0,
+      textColor = c.primary,
+    }, {})
     api.applyButtonTheme(btn, c.secondaryContainer, c.onSecondaryContainer, 12, 32)
     if i > 1 then
-      pcall(function()
-        local lp = btn.getLayoutParams()
-        if lp and lp.setMarginStart then
+      local lp = btn.getLayoutParams()
+      if lp then
+        if lp.setMarginStart then
           lp.setMarginStart(api.dp(4))
-          btn.setLayoutParams(lp)
-        elseif lp then
+        else
           lp.leftMargin = api.dp(4)
-          btn.setLayoutParams(lp)
         end
-      end)
+        btn.setLayoutParams(lp)
+      end
     end
     btn.onClick = function(v)
       api.vibrate(v)
@@ -2890,6 +3158,13 @@ function api.onPage(pos)
   elseif pos == 2 then
     api.ensureLogcatAdp()
     api.refreshLogcat()
+  elseif pos == 5 then
+    api.ensureViewTreeAdp()
+    if not S.viewTreeRoot then
+      api.viewTreeRefresh()
+    else
+      api.viewTreeRebuildFlat()
+    end
   end
 end
 
@@ -2900,26 +3175,24 @@ function api.paintTabs(pos)
     if btn then
       local on = (i - 1) == pos
       api.compactButtonMetrics(btn, 32, 10)
-      pcall(function()
-        btn.setTextColor(on and c.primary or c.onSurfaceVariant)
-        if on then
-          api.applyRound(btn, c.secondaryContainer, 16)
-        else
-          btn.setBackgroundColor(0)
-        end
-      end)
+      btn.setTextColor(on and c.primary or c.onSurfaceVariant)
+      if on then
+        api.applyRound(btn, c.secondaryContainer, 16)
+      else
+        btn.setBackgroundColor(0)
+      end
     end
   end
 end
 
 function api.wireSheet()
-  -- 分段 pcall：任一页适配器失败不得阻断 Control 绑定
-  pcall(api.ensurePrintAdp)
-  pcall(api.ensureVarAdp)
-  pcall(api.ensureLogcatAdp)
-  pcall(api.setupLogcatChips)
-  pcall(api.setupPrintFilters)
-  pcall(api.rebuildPrintList)
+  -- 适配器/筛选先建；失败会抛出（布局 id 固定，不应静默）
+  api.ensurePrintAdp()
+  api.ensureVarAdp()
+  api.ensureLogcatAdp()
+  api.setupLogcatChips()
+  api.setupPrintFilters()
+  api.rebuildPrintList()
 
   local ctrlIds = {
     "ctrlFinish", "ctrlRecreate", "ctrlRestart", "ctrlKill",
@@ -2942,28 +3215,25 @@ function api.wireSheet()
       end
     end
   end
-  api.compactButtonMetrics(ui.printSearchClear, 32, 4)
-  pcall(function()
-    if ui.ctrlPause then
-      ui.ctrlPause.setText(S.loggingPaused and api.t("resume_log") or api.t("pause_log"))
-    end
-    if ui.ctrlScreen then
-      ui.ctrlScreen.setText(S.keepScreenOn and api.t("screen_off") or api.t("screen_on"))
-    end
-  end)
-
-  pcall(function()
-    if ui.ctrlCode and ui.ctrlCode.getParent() then
-      api.applyRound(ui.ctrlCode.getParent(), c.surfaceContainerHigh, 12)
-    end
-  end)
+  if ui.printSearchClear then
+    api.compactButtonMetrics(ui.printSearchClear, 32, 4)
+  end
+  if ui.ctrlPause then
+    ui.ctrlPause.setText(S.loggingPaused and api.t("resume_log") or api.t("pause_log"))
+  end
+  if ui.ctrlScreen then
+    ui.ctrlScreen.setText(S.keepScreenOn and api.t("screen_off") or api.t("screen_on"))
+  end
+  if ui.ctrlCode and ui.ctrlCode.getParent() then
+    api.applyRound(ui.ctrlCode.getParent(), c.surfaceContainerHigh, 12)
+  end
 
   for i, id in ipairs(S.tabIds) do
     local btn = ui[id]
     if btn then
       btn.onClick = function(v)
         api.vibrate(v)
-        pcall(function() ui.page.setCurrentItem(i - 1, true) end)
+        if ui.page then ui.page.setCurrentItem(i - 1, true) end
         api.paintTabs(i - 1)
         api.onPage(i - 1)
       end
@@ -3038,23 +3308,21 @@ function api.wireSheet()
     api.openTextInPanel(api.t("intent"), api.intentExtrasText())
   end)
   bindClick(ui.ctrlViews, function()
-    api.openTextInPanel(api.t("views"), api.dumpViewTree(nil, 5))
+    if ui.page then ui.page.setCurrentItem(5, true) end
+    api.paintTabs(5)
+    api.onPage(5)
   end)
   bindClick(ui.ctrlPaths, function()
     local lines = { "=== Paths ===" }
-    pcall(function() lines[#lines + 1] = "Lua: " .. tostring(this.getLuaPath()) end)
-    pcall(function() lines[#lines + 1] = "LuaDir: " .. tostring(this.getLuaDir()) end)
-    pcall(function() lines[#lines + 1] = "Files: " .. activity.getFilesDir().getAbsolutePath() end)
-    pcall(function() lines[#lines + 1] = "Cache: " .. activity.getCacheDir().getAbsolutePath() end)
-    pcall(function()
-      local e = activity.getExternalFilesDir(nil)
-      if e then lines[#lines + 1] = "Ext: " .. e.getAbsolutePath() end
-    end)
-    pcall(function()
-      if this.getMediaDir then
-        lines[#lines + 1] = "Media: " .. this.getMediaDir().getAbsolutePath()
-      end
-    end)
+    if this.getLuaPath then lines[#lines + 1] = "Lua: " .. tostring(this.getLuaPath()) end
+    if this.getLuaDir then lines[#lines + 1] = "LuaDir: " .. tostring(this.getLuaDir()) end
+    lines[#lines + 1] = "Files: " .. activity.getFilesDir().getAbsolutePath()
+    lines[#lines + 1] = "Cache: " .. activity.getCacheDir().getAbsolutePath()
+    local e = activity.getExternalFilesDir(nil)
+    if e then lines[#lines + 1] = "Ext: " .. e.getAbsolutePath() end
+    if this.getMediaDir then
+      lines[#lines + 1] = "Media: " .. this.getMediaDir().getAbsolutePath()
+    end
     lines[#lines + 1] = "Crash: " .. api.crashDir()
     if S.lastCrashPath then lines[#lines + 1] = "Last crash: " .. S.lastCrashPath end
     api.openTextInPanel(api.t("paths"), table.concat(lines, "\n"))
@@ -3078,11 +3346,10 @@ function api.wireSheet()
       return
     end
     local last = S.evalHistory[#S.evalHistory]
-    pcall(function() if ui.ctrlCode then ui.ctrlCode.setText(last) end end)
+    if ui.ctrlCode then ui.ctrlCode.setText(last) end
     api.toast(api.tf("loaded_eval", #S.evalHistory))
   end)
-  pcall(function()
-    if not ui.ctrlHist then return end
+  if ui.ctrlHist then
     ui.ctrlHist.onLongClick = function(v)
       api.vibrate(v)
       if #S.evalHistory == 0 then
@@ -3092,7 +3359,7 @@ function api.wireSheet()
       api.openTextInPanel(api.t("eval_history"), table.concat(S.evalHistory, "\n---\n"))
       return true
     end
-  end)
+  end
   bindClick(ui.ctrlRun, function()
     if not ui.ctrlCode then return end
     local src = tostring(ui.ctrlCode.getText() or "")
@@ -3121,71 +3388,67 @@ function api.wireSheet()
   api.rebuildActionBar(0)
   api.pullHostLogs()
   api.rebuildPrintList()
-  pcall(api.applyI18n)
+  api.applyI18n()
 end
 
 function api.showSheet()
   if not api.activityAlive() then return end
   api.loadLangPref()
   api.resolveTheme(true)
-  local showing = false
-  pcall(function() showing = S.sheet and S.sheet.isShowing() end)
-  if showing then return end
+  if S.sheet and S.sheet.isShowing() then return end
 
   local content = api.buildSheetContent()
   local dw, dh = api.preferredSheetSize()
-  -- 先定尺寸再 setContentView，避免 Dialog 按 wrap 量出矮内容
-  pcall(function()
-    content.setLayoutParams(J.FrameLayout.LayoutParams(-1, dh))
-    content.setMinimumHeight(dh)
-  end)
+  content.setLayoutParams(J.FrameLayout.LayoutParams(-1, dh))
+  content.setMinimumHeight(dh)
 
-  pcall(function()
-    S.sheet = J.AppCompatDialog(activity)
-    S.sheet.setCancelable(true)
-    S.sheet.setCanceledOnTouchOutside(true)
-    -- 窗口样式：无标题，自管内容
-    pcall(function() S.sheet.supportRequestWindowFeature(1) end) -- FEATURE_NO_TITLE
-    pcall(function() S.sheet.requestWindowFeature(1) end)
-    local win = S.sheet.getWindow()
-    if win then
-      win.setBackgroundDrawable(J.ColorDrawable(0))
-      pcall(function() win.getDecorView().setPadding(0, 0, 0, 0) end)
-      local attrs = win.getAttributes()
-      attrs.width = dw
-      attrs.height = dh
-      attrs.gravity = J.Gravity.CENTER
-      attrs.dimAmount = 0.45
-      win.setAttributes(attrs)
-    end
-    S.sheet.setContentView(content)
-    S.sheet.setOnDismissListener(function()
-      S.sheet = nil
-      for k in pairs(ui) do ui[k] = nil end
-      S.printAdp = nil
-      S.variableAdp = nil
-      S.logcatAdp = nil
-    end)
+  S.sheet = J.AppCompatDialog(activity)
+  S.sheet.setCancelable(true)
+  S.sheet.setCanceledOnTouchOutside(true)
+  if S.sheet.supportRequestWindowFeature then
+    S.sheet.supportRequestWindowFeature(1) -- FEATURE_NO_TITLE
+  elseif S.sheet.requestWindowFeature then
+    S.sheet.requestWindowFeature(1)
+  end
+  local win = S.sheet.getWindow()
+  if win then
+    win.setBackgroundDrawable(J.ColorDrawable(0))
+    win.getDecorView().setPadding(0, 0, 0, 0)
+    local attrs = win.getAttributes()
+    attrs.width = dw
+    attrs.height = dh
+    attrs.gravity = J.Gravity.CENTER
+    attrs.dimAmount = 0.45
+    win.setAttributes(attrs)
+  end
+  S.sheet.setContentView(content)
+  S.sheet.setOnDismissListener(function()
+    S.sheet = nil
+    for k in pairs(ui) do ui[k] = nil end
+    S.printAdp = nil
+    S.variableAdp = nil
+    S.logcatAdp = nil
+    S.viewTreeAdp = nil
+    S.viewTreeRoot = nil
+    table.clear(S.viewTreeFlat)
+    table.clear(S.viewTreeData)
   end)
-  if not S.sheet then return end
 
   api.wireSheet()
   api.setBubbleError(false)
 
-  pcall(function()
-    api.applyRound(content, c.surface, 18)
-    if ui.printSearch and ui.printSearch.getParent() then
-      api.applyRound(ui.printSearch.getParent(), c.surfaceContainerHigh, 12)
-    end
+  api.applyRound(content, c.surface, 18)
+  if ui.printSearch and ui.printSearch.getParent() then
+    api.applyRound(ui.printSearch.getParent(), c.surfaceContainerHigh, 12)
+  end
+  if ui.actionBar then
     api.applyRound(ui.actionBar, c.surfaceContainerLow, 0)
-  end)
+  end
 
   S.sheet.show()
   api.applySheetLayout(content, S.sheet)
-  pcall(function()
-    content.post(function()
-      if S.sheet then api.applySheetLayout(content, S.sheet) end
-    end)
+  content.post(function()
+    if S.sheet then api.applySheetLayout(content, S.sheet) end
   end)
 end
 
@@ -3193,23 +3456,21 @@ end
 api.chainGlobal("onDestroy", function()
   api.removeBubble()
   if S.sheet then
-    pcall(function() S.sheet.dismiss() end)
+    S.sheet.dismiss()
     S.sheet = nil
   end
 end)
 
 api.chainGlobal("onConfigurationChanged", function()
-  pcall(function()
-    S.dm = activity.getResources().getDisplayMetrics()
-    api.snapBubble()
-  end)
+  S.dm = activity.getResources().getDisplayMetrics()
+  if S.bubbleAttached then api.snapBubble() end
 end)
 
 -- ─── Boot：仅在 setContentView 之后挂悬浮钮（不碰 statusBar / 主题） ───
-pcall(function()
+do
   local logs = J.LuaActivityClass.logs
   if logs then S.hostLogsCursor = logs.size() end
-end)
+end
 
 function api.bootUi()
   if S.bootDone or not api.activityAlive() then return end
@@ -3218,27 +3479,23 @@ function api.bootUi()
   api.resolveTheme(true)
   api.attachBubble()
   if not S.bubbleAttached then
-    pcall(function()
-      local decor = api.resolveContentRoot()
-      if decor and decor.post then
-        decor.post(function()
-          if not S.bubbleAttached then api.attachBubble() end
-        end)
-      end
-    end)
+    local decor = api.resolveContentRoot()
+    if decor and decor.post then
+      decor.post(function()
+        if not S.bubbleAttached then api.attachBubble() end
+      end)
+    end
   end
-  pcall(function()
-    local pkg = activity.getPackageManager().getPackageInfo(activity.getPackageName(), 0)
-    local label = tostring(pkg.applicationInfo.loadLabel(activity.getPackageManager()))
-    info(string.format(
-      "System: %s · Android %s (SDK %s) · %s %s",
-      J.Build.MODEL,
-      J.Build.VERSION.RELEASE,
-      tostring(J.Build.VERSION.SDK_INT or J.Build.VERSION.SDK),
-      label,
-      tostring(pkg.versionName)))
-    info("File: " .. tostring(this.getLuaPath()))
-  end)
+  local pkg = activity.getPackageManager().getPackageInfo(activity.getPackageName(), 0)
+  local label = tostring(pkg.applicationInfo.loadLabel(activity.getPackageManager()))
+  info(string.format(
+    "System: %s · Android %s (SDK %s) · %s %s",
+    J.Build.MODEL,
+    J.Build.VERSION.RELEASE,
+    tostring(J.Build.VERSION.SDK_INT or J.Build.VERSION.SDK),
+    label,
+    tostring(pkg.versionName)))
+  info("File: " .. tostring(this.getLuaPath()))
 end
 
 -- 等宿主 setContentView 触发 onContentChanged，再挂 UI
@@ -3255,11 +3512,11 @@ api.chainGlobal("onContentChanged", function()
 end)
 
 -- 若 require 在 setContentView 之后，content 已存在则下一帧启动
-pcall(function()
+do
   local root = api.resolveContentRoot()
   if root and root.getChildCount and root.getChildCount() > 0 and root.post then
     root.post(function() api.bootUi() end)
   end
-end)
+end
 
 return true

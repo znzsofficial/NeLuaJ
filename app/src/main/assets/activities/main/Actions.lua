@@ -97,6 +97,12 @@ function Actions.formatCode()
   mLuaEditor.format()
 end
 
+--- 选中内容切换 --[[ ... ]] 多行注释
+function Actions.toggleBlockComment()
+  if not requireOpenFile() then return end
+  EditorUtil.toggleBlockComment(mLuaEditor)
+end
+
 function Actions.undo()
   mLuaEditor.undo()
 end

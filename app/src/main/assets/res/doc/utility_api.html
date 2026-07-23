@@ -108,8 +108,7 @@ end)
 thread(function()
     -- 耗时操作
     local data = okhttp.get(url)
-    -- 注意：不能直接更新 UI
-    -- 需要用 activity.runOnUiThread 或 call
+    -- 回到 UI 时：activity.runOnUiThread 或 call
 end)
 </code></pre>
 <hr>

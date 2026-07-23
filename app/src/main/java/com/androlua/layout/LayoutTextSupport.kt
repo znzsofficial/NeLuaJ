@@ -88,6 +88,36 @@ internal object LayoutTextSupport {
         throw unsupported(host, "textColor")
     }
 
+    /**
+     * TextInputLayout / MaterialTextField：hint 只设在外层（浮动标签），并清空内部 EditText.hint，
+     * 避免「Layout 浮动 hint + EditText placeholder」叠成两个 Hint。
+     */
+    fun setHint(host: View, text: CharSequence?) {
+        if (host is TextInputLayout) {
+            host.hint = text
+            host.editText?.hint = null
+            invokeGetEditText(host)?.hint = null
+            return
+        }
+        // 非标准 TIL 子类：若有 getEditText，同样只写外层
+        val inner = invokeGetEditText(host)
+        if (inner != null) {
+            if (LayoutReflection.trySetJavaValue(host, "hint", text)) {
+                inner.hint = null
+                return
+            }
+            // 外层无 hint 再落到内部
+            inner.hint = text
+            return
+        }
+        resolve(host)?.let {
+            it.hint = text
+            return
+        }
+        if (LayoutReflection.trySetJavaValue(host, "hint", text)) return
+        throw unsupported(host, "hint")
+    }
+
     fun setHintTextColor(host: View, color: Int) {
         // TextInputLayout 公开 API：hint 颜色（与内部 EditText hint 不同层）
         if (host is TextInputLayout) {

@@ -201,11 +201,16 @@ local function handleNavAction(action, path)
   return false
 end
 
+--- 设置页改完编辑器偏好后即时应用（由 EditorUtil.notifyPrefsChanged 触发）
+function onEditorPrefsChanged()
+  EditorUtil.applyEditorPrefs()
+end
+
 function onResume()
   Init.initBar()
   Init.initFunctionTab()
   Init.applyTabletMode()
-  EditorUtil.refreshMinimap(false)
+  EditorUtil.applyEditorPrefs()
   pcall(function() activity.invalidateOptionsMenu() end)
   -- 消费 ActivityUtil 兜底 pending（finishWith 同时写 SharedData）
   pcall(function()
@@ -229,11 +234,11 @@ function onResult(name, action, path)
 end
 
 function onConfigurationChanged(config)
-  -- 旋转/分屏后重新量侧栏与避让
+  -- 旋转/分屏后重新量侧栏与避让；昼夜切换时重施光标色
   if Init.applyTabletMode then
     drawer.post(function()
       Init.applyTabletMode()
-      EditorUtil.refreshMinimap(false)
+      EditorUtil.applyEditorPrefs()
       pcall(function() activity.invalidateOptionsMenu() end)
     end)
   end
@@ -303,6 +308,7 @@ function onCreateOptionsMenu(menu)
     addItem(codeMenu, res.string.format, Actions.formatCode, nil, icon("format"))
     addItem(codeMenu, res.string.search, Actions.showSearchBar, nil, icon("search"))
   end
+  addItem(codeMenu, res.string.block_comment, Actions.toggleBlockComment, nil, icon("comment"))
   addItem(codeMenu, res.string.check_error, Actions.checkError, nil, icon("bug_report"))
   addItem(codeMenu, "Java" .. res.string.editor, Actions.openJavaEditor, nil, icon("java"))
   addItem(codeMenu, res.string.analysis_import, Actions.openJavaAnalysis, nil, icon("code"))

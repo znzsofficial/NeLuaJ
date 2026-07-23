@@ -880,6 +880,11 @@ local function promptCreate(isDir)
         end)
         .setNegativeButton(android.R.string.cancel, nil)
         .show()
+    if isDir then
+        sublayout.file_name.setHint(res.string.new_dir)
+    else
+        sublayout.file_name.setHint(res.string.new_file)
+    end
 end
 
 -- 顶栏长按：handler 可自定义；默认 snack 说明文案
@@ -948,7 +953,8 @@ _M.bindChrome = function()
             return
         end
         local n = #fileClipboard.paths
-        local mode = fileClipboard.mode == "cut" and res.string.file_cut or res.string.copy
+        local mode = res.string.copy
+        if fileClipboard.mode == "cut" then mode = res.string.file_cut end
         MainActivity.Public.snack(string.format("%s · %d", mode, n))
     end)
 

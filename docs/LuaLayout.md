@@ -80,6 +80,7 @@ com.androlua.layout/
 | **Reflection** | 每 Class 扫一次 setXxx/fields；`getMethod` 缓存 |
 | **Tint** | ImageView / CompoundButton / ProgressBar / Material* / EditText 背景下划线；`iconTint` 仅图标 |
 | **SrcLoader** | `src`：Bitmap/Drawable 同步；`@drawable` / `@android:drawable` / `drawable/`；路径/URL Coil 异步 |
+| **TextSupport** | TextView / TIL：`hint` 外层浮动标签、`textColor`/`hintTextColor`、`singleLine` 等；TIL 内层 EditText 代理 |
 
 ---
 
@@ -184,23 +185,26 @@ LayoutReflection.canSetJavaProperty(viewClass, key) → 否则 LuaError → send
 
 应用内文档（应与实现同步）：
 
-- `res/doc/module_loadlayout.html` — 主文（用法、`src`、style）
+- `res/doc/layout_style.html` — **style / theme 写法（用户向唯一入口）**
+- `res/doc/module_loadlayout.html` — 主文（用法、`src`；style 链到上者）
 - `res/doc/layout_reference.html` — 属性速查
+- `res/doc/MaterialTextField.html` — 输入框组件 + style 名表
 - `res/doc/module_res.html` — `res.drawable` 等
 - `res/doc/md3_design.html`、`color_api.html`
 
 布局颜色：优先 `"?attr/color…"`；运行时 int 用 `themeUtil`。  
 
-**style 构造（LayoutViewFactory）**：
+**style 构造（LayoutViewFactory）** — 与 `layout_style.html` 一致，解析后按序尝试：
 
-| 布局写法 | 构造 |
-|----------|------|
-| 仅 `styleAttr = "?attr/…"` | 三参 `(Context, attrs, defStyleAttr)` |
-| `styleAttr` + `styleRes` | 四参 `(Context, attrs, defStyleAttr, defStyleRes)` |
-| 仅 `styleRes` / `style = "@style/…"` / 数字 style id | 四参 `(Context, attrs, 0, styleRes)`（**不把 style id 当 defStyleAttr**） |
-| 仅 `theme` | `ContextThemeWrapper` + 单参 `(Context)` |
+| 顺序 | 条件 | 构造 |
+|------|------|------|
+| 1 | 有 `styleRes` 且类有四参 | `(Context, attrs, styleAttr, styleRes)` |
+| 2 | 有 `styleRes`、无四参 | 三参第三参 = `styleRes`（`MaterialTextField` 等） |
+| 3 | 有 `styleAttr` | 三参第三参 = `styleAttr` |
+| 4 | 回退 | 单参 `(Context)`（可先 `theme` → `ContextThemeWrapper`） |
 
-`theme` 只用于包装 Context；style 资源不再误作 theme overlay。
+`style=` 兼容：`?attr`/`@attr` → styleAttr；`@style`/数字 style id → styleRes。  
+`theme` 只包装 Context，不作 style overlay。
 
 ---
 
@@ -213,7 +217,8 @@ LayoutReflection.canSetJavaProperty(viewClass, key) → 否则 LuaError → send
 5. **Coil `src`（非 R 路径）**：异步回调依赖 `isAttachedToWindow` / `post`，极端时序仍可能丢图；**R 同步路径无此问题**。  
 6. **`@drawable` 不着色**：与 `res.drawable(name, color)` 不同；忘记 `iconTint` 时可能像「有热区无色图」（取决于 vector 默认 fill）。  
 7. **id**：现用 `View.generateViewId()`，不再使用 `0x7f000000` 手写计数。  
-8. **无四参构造的 View**：纯 `styleRes` 时若类没有 `(Context, AttributeSet, int, int)`，会回退到仅 themed Context（style 可能未完全应用）。
+8. **style 与构造签名**：标准 View 四参把 style 放第 4 参；`MaterialTextField` 仅三参且第 3 参为 style 资源 id。工厂按「有无四参」自动分流；Widget style 走 `style`/`styleRes`，主题叠加走 `theme`。
+9. **hint（TextInputLayout）**：`LayoutTextSupport.setHint` 写外层浮动标签，并清空内部 EditText.hint，避免双层提示。
 
 ---
 

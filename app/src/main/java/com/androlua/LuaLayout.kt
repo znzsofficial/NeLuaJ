@@ -420,11 +420,13 @@ class LuaLayout(private val initialContext: Context) {
                 } else {
                     tValue.tostring().asString()
                 }
-                val tv = LayoutTextSupport.resolve(host)
-                if (tv != null) {
-                    tv.hint = s
-                } else if (!LayoutReflection.trySetJavaValue(host, "hint", s)) {
-                    view["hint"] = tValue.tostring()
+                // TextInputLayout：只设外层浮动 hint，勿落到内部 EditText（否则双 Hint）
+                runCatching {
+                    LayoutTextSupport.setHint(host, s)
+                }.onFailure {
+                    if (!LayoutReflection.trySetJavaValue(host, "hint", s)) {
+                        view["hint"] = tValue.tostring()
+                    }
                 }
                 return
             }

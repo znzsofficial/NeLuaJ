@@ -78,6 +78,7 @@ local function field(id, hint, top)
     textSize = "14sp",
     TintColor = primary,
     style = MDC_R.style.Widget_Material3_TextInputLayout_OutlinedBox,
+    boxBackgroundMode = 2,
     singleLine = true,
   }
 end
@@ -275,6 +276,7 @@ return {
           textSize = "14sp",
           TintColor = primary,
           style = MDC_R.style.Widget_Material3_TextInputLayout_OutlinedBox,
+          boxBackgroundMode = 2,
           singleLine = true,
         },
         {
@@ -289,6 +291,7 @@ return {
           textSize = "14sp",
           TintColor = primary,
           style = MDC_R.style.Widget_Material3_TextInputLayout_OutlinedBox,
+          boxBackgroundMode = 2,
           singleLine = true,
         },
       },
@@ -308,6 +311,7 @@ return {
           textSize = "14sp",
           TintColor = primary,
           style = MDC_R.style.Widget_Material3_TextInputLayout_OutlinedBox,
+          boxBackgroundMode = 2,
           singleLine = true,
         },
         {
@@ -322,6 +326,7 @@ return {
           textSize = "14sp",
           TintColor = primary,
           style = MDC_R.style.Widget_Material3_TextInputLayout_OutlinedBox,
+          boxBackgroundMode = 2,
           singleLine = true,
         },
       },

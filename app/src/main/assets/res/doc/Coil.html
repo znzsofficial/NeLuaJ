@@ -163,7 +163,7 @@ import "kotlinx.coroutines.Dispatchers"
 
 local request = ImageRequest.Builder(activity)
 .coroutineContext(Dispatchers.Main.immediate)
-.data(File/DrawableRes/Drawable/Bitmap/Uri/Byte) -- 请勿使用网络图片，否则会阻塞进程导致崩溃
+.data(File/DrawableRes/Drawable/Bitmap/Uri/Byte) -- 同步路径适合本地资源；网络图建议用异步请求
 .build()
 
 

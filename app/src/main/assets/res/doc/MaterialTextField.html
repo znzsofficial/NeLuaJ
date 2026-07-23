@@ -12,6 +12,12 @@
 <h1>MaterialTextField</h1>
 <p><code>vinx.material.textfield.MaterialTextField</code> 是对 <code>TextInputLayout</code> + <code>TextInputEditText</code> 的封装组件，解决了 LuaLayout 无法正确处理 <code>TextInputLayout</code> 嵌套 <code>TextInputEditText</code> 的问题。</p>
 <p>它会根据传入的 <code>style</code> 自动创建对应的内部 EditText，并将 EditText 的常用方法代理到自身，使你可以像操作普通 EditText 一样操作它。</p>
+<nav class="doc-nav" aria-label="相关文档">
+  <span class="doc-nav-label">相关文档</span>
+  <a class="doc-link" href="layout_style.html">布局 style / theme</a>
+  <a class="doc-link" href="module_loadlayout.html">loadlayout</a>
+  <a class="doc-link" href="color_api.html">颜色与主题</a>
+</nav>
 <hr>
 <h2>为什么需要它</h2>
 <p>在 LuaLayout 中直接使用 <code>TextInputLayout</code> 需要手动嵌套 <code>TextInputEditText</code> 作为子 View，但 LuaLayout 的属性设置机制会将属性应用到外层 <code>TextInputLayout</code> 而非内部 EditText，导致 <code>text</code>、<code>textSize</code>、<code>singleLine</code> 等属性无法正确生效。</p>
@@ -22,7 +28,11 @@
 </code></pre>
 <hr>
 <h2>支持的样式</h2>
-<p>通过 <code>style</code> 属性指定输入框样式，决定外观和内部 EditText 类型：</p>
+<p>用 <code>style</code>（或 <code>styleRes</code>）选择外观：轮廓、填充或下拉等，并带上合适的内部输入区。更通用的 style 字段说明见 <a class="doc-link" href="layout_style.html">布局 style / theme</a>；下面是本组件常用的 style 名。</p>
+<pre><code class="language-lua">style = MDC_R.style.Widget_Material3_TextInputLayout_OutlinedBox
+hint = "用户名"   -- 浮动标签
+</code></pre>
+<p>各 style 对应的外观与内部控件类型：</p>
 <h3>轮廓样式（Outlined）</h3>
 <p>内部创建 <code>TextInputEditText</code>。</p>
 <div class="table-wrapper"><table><thead><tr><th>样式</th><th>说明</th></tr></thead><tbody><tr><td><code>Widget_Material3_TextInputLayout_OutlinedBox</code></td><td>MD3 轮廓输入框</td></tr><tr><td><code>Widget_Material3_TextInputLayout_OutlinedBox_Dense</code></td><td>MD3 紧凑轮廓输入框</td></tr><tr><td><code>Widget_MaterialComponents_TextInputLayout_OutlinedBox</code></td><td>MDC 轮廓输入框</td></tr><tr><td><code>Widget_MaterialComponents_TextInputLayout_OutlinedBox_Dense</code></td><td>MDC 紧凑轮廓输入框</td></tr></tbody></table></div>
@@ -155,7 +165,7 @@ binding.langSelect.setAdapter(adapter)
 <h2>常用属性</h2>
 <h3>外观属性（TextInputLayout）</h3>
 <p>这些属性直接作用于外层 <code>TextInputLayout</code>：</p>
-<div class="table-wrapper"><table><thead><tr><th>属性</th><th>类型</th><th>说明</th></tr></thead><tbody><tr><td><code>style</code></td><td>int</td><td>输入框样式，决定外观和内部 EditText 类型</td></tr><tr><td><code>hint</code></td><td>string</td><td>浮动提示文字</td></tr><tr><td><code>helperText</code></td><td>string</td><td>底部辅助文字</td></tr><tr><td><code>helperTextEnabled</code></td><td>boolean</td><td>是否启用辅助文字</td></tr><tr><td><code>counterEnabled</code></td><td>boolean</td><td>是否启用字符计数</td></tr><tr><td><code>counterMaxLength</code></td><td>int</td><td>最大字符数</td></tr><tr><td><code>errorEnabled</code></td><td>boolean</td><td>是否启用错误提示</td></tr><tr><td><code>startIconDrawable</code></td><td>Drawable</td><td>起始图标</td></tr><tr><td><code>endIconMode</code></td><td>int</td><td>末尾图标模式</td></tr><tr><td><code>boxStrokeColor</code></td><td>int</td><td>边框颜色</td></tr><tr><td><code>boxCornerRadii</code></td><td>—</td><td>通过 <code>setBoxCornerRadii()</code> 设置</td></tr></tbody></table></div>
+<div class="table-wrapper"><table><thead><tr><th>属性</th><th>类型</th><th>说明</th></tr></thead><tbody><tr><td><code>style</code></td><td>int</td><td>输入框样式，决定外观和内部 EditText 类型</td></tr><tr><td><code>hint</code></td><td>string</td><td>浮动标签文案（显示在输入框外层）</td></tr><tr><td><code>helperText</code></td><td>string</td><td>底部辅助文字</td></tr><tr><td><code>helperTextEnabled</code></td><td>boolean</td><td>是否启用辅助文字</td></tr><tr><td><code>counterEnabled</code></td><td>boolean</td><td>是否启用字符计数</td></tr><tr><td><code>counterMaxLength</code></td><td>int</td><td>最大字符数</td></tr><tr><td><code>errorEnabled</code></td><td>boolean</td><td>是否启用错误提示</td></tr><tr><td><code>startIconDrawable</code></td><td>Drawable</td><td>起始图标</td></tr><tr><td><code>endIconMode</code></td><td>int</td><td>末尾图标模式</td></tr><tr><td><code>boxStrokeColor</code></td><td>int</td><td>边框颜色</td></tr><tr><td><code>boxCornerRadii</code></td><td>—</td><td>通过 <code>setBoxCornerRadii()</code> 设置</td></tr></tbody></table></div>
 <h3>代理属性（转发到内部 EditText）</h3>
 <p>这些属性通过 <code>MaterialTextField</code> 的代理方法转发到内部 EditText：</p>
 <div class="table-wrapper"><table><thead><tr><th>属性</th><th>类型</th><th>说明</th></tr></thead><tbody><tr><td><code>text</code></td><td>CharSequence</td><td>输入框文本内容</td></tr><tr><td><code>textSize</code></td><td>string/float</td><td>文字大小</td></tr><tr><td><code>textColor</code></td><td>int</td><td>文字颜色</td></tr><tr><td><code>singleLine</code></td><td>boolean</td><td>是否单行</td></tr><tr><td><code>maxLines</code></td><td>int</td><td>最大行数</td></tr><tr><td><code>minLines</code></td><td>int</td><td>最小行数</td></tr><tr><td><code>inputType</code></td><td>int</td><td>输入类型</td></tr><tr><td><code>imeOptions</code></td><td>int</td><td>IME 选项</td></tr><tr><td><code>filters</code></td><td>InputFilter[]</td><td>输入过滤器</td></tr><tr><td><code>movementMethod</code></td><td>MovementMethod</td><td>光标移动方式</td></tr></tbody></table></div>
@@ -291,9 +301,8 @@ activity.setContentView(loadlayout({
 </code></pre>
 <hr>
 <h2>与原生写法对比</h2>
-<h3>原生写法（LuaLayout 中不可用）</h3>
-<pre><code class="language-lua">-- 直接嵌套时：部分属性会落在外层 TextInputLayout 上
--- text / textSize 等可能到不了内部 EditText
+<h3>手写嵌套</h3>
+<pre><code class="language-lua">-- 外层 + 内层分写时，text / textSize 等宜写在 TextInputEditText 上
 {
     TextInputLayout,
     hint = "用户名",
@@ -305,7 +314,7 @@ activity.setContentView(loadlayout({
 }
 </code></pre>
 <h3>MaterialTextField 写法</h3>
-<pre><code class="language-lua">-- 单组件写法：text / textSize / singleLine 等会代理到内部 EditText
+<pre><code class="language-lua">-- 一个组件即可：hint 为浮动标签，text / textSize 等会落到内部输入区
 {
     MaterialTextField,
     hint = "用户名",

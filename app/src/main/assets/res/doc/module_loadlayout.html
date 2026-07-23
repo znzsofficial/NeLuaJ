@@ -10,10 +10,11 @@
   <body>
     <main class="markdown-export">
 <h1>loadlayout</h1>
-<p>把 Lua 布局表转成 Android View。本文讲<strong>用法与机制</strong>（参数、图片 <code>src</code>、样式、事件等）。完整属性词典请打开布局参考。</p>
+<p>把 Lua 布局表转成 Android View。本文讲<strong>用法与机制</strong>（参数、图片 <code>src</code>、事件等）。构造期 <code>style</code> / <code>theme</code> 见 <a class="doc-link" href="layout_style.html">布局 style / theme</a>；属性词典见布局参考。</p>
 <nav class="doc-nav" aria-label="相关文档">
   <span class="doc-nav-label">相关文档</span>
   <a class="doc-link" href="layout_reference.html">布局表属性参考</a>
+  <a class="doc-link" href="layout_style.html">style / theme 写法</a>
   <a class="doc-link" href="module_res.html">res 模块</a>
   <a class="doc-link" href="color_api.html">颜色与主题</a>
   <a class="doc-link" href="md3_design.html">MD3 设计</a>
@@ -56,7 +57,7 @@ print(binding.title) -- id = "title" 的 View
 <tr><td><code>textColor</code> / <code>hintTextColor</code></td><td>int / <code>#AARRGGBB</code> / <code>?attr/</code></td><td><code>"?attr/colorOnSurface"</code></td></tr>
 <tr><td><code>BackgroundColor</code> / <code>backgroundColor</code></td><td>纯色背景</td><td><code>"?attr/colorSurface"</code></td></tr>
 <tr><td><code>BackgroundTintList</code> / <code>backgroundTint</code></td><td>View 背景 tint</td><td>int 或 ColorStateList</td></tr>
-<tr><td><code>iconTint</code> / <code>IconTint</code> / <code>iconTintList</code></td><td>仅图标 tint（MaterialButton / FAB / Chip / ImageView / TextInputLayout 起止图标）。int、色串、<code>?attr/</code> 会自动包成 ColorStateList，勿再手动要求 CSL 类型</td><td><code>ColorUtil.getColorPrimary()</code></td></tr>
+<tr><td><code>iconTint</code> / <code>IconTint</code> / <code>iconTintList</code></td><td>图标 tint（MaterialButton / FAB / Chip / ImageView / TextInputLayout 起止图标）。可写 int、色串或 <code>?attr/</code>，会自动包成 ColorStateList</td><td><code>ColorUtil.getColorPrimary()</code></td></tr>
 <tr><td><code>TintColor</code> / <code>tintColor</code></td><td>按控件类型：Image 图色、CompoundButton 按钮色、ProgressBar、MaterialButton 背景+图标、Chip 图标、FAB、TextInputLayout 描边/图标、EditText 背景下划线</td><td><code>ColorUtil.getColorPrimary()</code></td></tr>
 <tr><td><code>strokeWidth</code> / <code>strokeColor</code></td><td>Card / Button / Chip 描边</td><td><code>"1dp"</code>, <code>"?attr/colorOutlineVariant"</code></td></tr>
 </tbody></table></div>
@@ -123,7 +124,7 @@ print(binding.title) -- id = "title" 的 View
 <li>工程脚本：<code>res/drawable/name.lua</code> 返回 Drawable / Bitmap。</li>
 <li>仍没有 → <strong>报错</strong>，不会静默空白。</li>
 </ol>
-<p><strong>命名</strong>：工具栏短名 <code>save</code> / <code>search</code> 可对应 <code>ic_save.xml</code>；资源文件本身已叫 <code>ic_paste</code> 时写 <code>ic_paste</code> 即可，不要写成 <code>ic_ic_paste</code>。</p>
+<p><strong>命名</strong>：工具栏短名 <code>save</code> / <code>search</code> 可对应 <code>ic_save.xml</code>。资源文件已叫 <code>ic_paste</code> 时，布局里写 <code>ic_paste</code> 即可。</p>
 <p><strong>着色</strong>：<code>"@drawable/…"</code> <strong>不会</strong>自动 tint。需要颜色时用 <code>res.drawable(name, color)</code>，或再写 <code>iconTint</code> / <code>TintColor</code>。</p>
 <nav class="doc-nav" aria-label="相关文档">
   <span class="doc-nav-label">相关文档</span>
@@ -180,83 +181,26 @@ local view = loadlayout({
 }
 </code></pre>
 <h2>style / theme 用法</h2>
-<p><code>loadlayout</code> 会在创建 View 时优先处理构造期样式字段，适合 MaterialButton、MaterialTextView、TextInputLayout、MaterialCardView 等组件。</p>
-<h3>兼容字段</h3>
-<ul>
-<li><code>style</code>：旧写法；<code>?attr/...</code> 当 <code>defStyleAttr</code>；<code>@style/...</code> 或数字 style id 当 <code>defStyleRes</code>（四参构造，第三参为 0）。</li>
-<li><code>theme</code>：仅用于 <code>ContextThemeWrapper</code>，不与 style 资源混用。</li>
-<li><code>styleAttr</code>：构造函数 <code>defStyleAttr</code>（如 <code>?attr/materialButtonOutlinedStyle</code>）。</li>
-<li><code>styleRes</code>：构造函数 <code>defStyleRes</code>；可与 <code>styleAttr</code> 组合；单独使用时走 <code>(Context, attrs, 0, styleRes)</code>。</li>
-</ul>
-<p>Material 组件推荐优先 <code>styleAttr</code>；若要用具体 style 资源 id，写 <code>styleRes</code>（或数字 id），不要把 style id 当成第三参 attr。</p>
-<p>支持的资源写法：</p>
-<div class="table-wrapper"><table><thead><tr><th>写法</th><th>说明</th></tr></thead><tbody><tr><td><code>?attr/name</code></td><td>当前主题中的属性，例如 <code>?attr/materialButtonOutlinedStyle</code>、<code>?attr/colorPrimary</code></td></tr><tr><td><code>?android:attr/name</code></td><td>Android 系统 attr</td></tr><tr><td><code>@attr/name</code></td><td>应用 attr 资源</td></tr><tr><td><code>@style/name</code></td><td>应用 style 资源</td></tr><tr><td><code>@android:style/name</code></td><td>Android 系统 style</td></tr><tr><td>数字资源 ID</td><td>直接使用 <code>R.attr.xxx</code> / <code>R.style.xxx</code> / <code>MDC_R.attr.xxx</code></td></tr></tbody></table></div>
-<h3>颜色属性</h3>
-<p>颜色字段推荐 <code>"?attr/colorPrimary"</code> 等（默认模板）。</p>
-<pre><code class="language-lua">{ MaterialTextView, textColor = "?attr/colorPrimary" }
-</code></pre>
+<p><code>loadlayout</code> 会在创建 View 时处理构造期样式字段（<code>style</code> / <code>styleAttr</code> / <code>styleRes</code> / <code>theme</code>），适合 MaterialButton、MaterialTextField、MaterialCardView 等。</p>
+<p><strong>完整字段说明、构造顺序、推荐写法与常见坑</strong>见独立文档（本文不重复展开）：</p>
 <nav class="doc-nav" aria-label="相关文档">
   <span class="doc-nav-label">相关文档</span>
+  <a class="doc-link" href="layout_style.html">布局 style / theme</a>
+  <a class="doc-link" href="MaterialTextField.html">MaterialTextField</a>
   <a class="doc-link" href="color_api.html">颜色与主题</a>
-  <a class="doc-link" href="layout_reference.html">布局属性</a>
 </nav>
-<h3>示例</h3>
-<p>旧写法仍然可用：</p>
-<pre><code class="language-lua">import "com.google.android.material.button.MaterialButton"
+<p>最短示例：</p>
+<pre><code class="language-lua">-- 按钮：主题 attr
+{ MaterialButton, text = "轮廓",
+  styleAttr = "?attr/materialButtonOutlinedStyle" }
 
-return {
-	MaterialButton,
-	text = "轮廓按钮",
-	style = "?attr/materialButtonOutlinedStyle",
-}
-</code></pre>
-<p>推荐写法：显式区分 <code>styleAttr</code> 与 <code>styleRes</code>。</p>
-<pre><code class="language-lua">import "com.google.android.material.button.MaterialButton"
+-- 输入框：Outlined 外观 + 浮动 hint
+{ MaterialTextField, hint = "名称", singleLine = true,
+  style = MDC_R.style.Widget_Material3_TextInputLayout_OutlinedBox }
 
-return {
-	MaterialButton,
-	text = "轮廓按钮",
-	styleAttr = "?attr/materialButtonOutlinedStyle",
-}
+-- 布局颜色仍用 ?attr（与 style 无关）
+{ MaterialTextView, textColor = "?attr/colorPrimary" }
 </code></pre>
-<p>同时指定 theme overlay 与样式：</p>
-<pre><code class="language-lua">import "com.google.android.material.textfield.TextInputLayout"
-import "com.google.android.material.textfield.TextInputEditText"
-
-return {
-	TextInputLayout,
-	layout_width = "match",
-	layout_height = "wrap",
-	theme = "ThemeOverlay.Material3",
-	styleAttr = "?attr/textInputOutlinedStyle",
-	{
-		TextInputEditText,
-		layout_width = "match",
-		layout_height = "wrap",
-	}
-}
-</code></pre>
-<p>如果已经拿到资源 ID，优先传数字 ID，可避免运行时字符串查找：</p>
-<pre><code class="language-lua">return {
-	MaterialButton,
-	text = "高性能写法",
-	styleAttr = MDC_R.attr.materialButtonOutlinedStyle,
-}
-
--- 纯 style 资源（IconButton 等）：styleRes / 数字 style id → 四参 defStyleRes
-return {
-	MaterialButton,
-	styleRes = MaterialR.style.Widget_Material3_Button_IconButton,
-	text = "",
-}
-</code></pre>
-<h3>说明</h3>
-<ul>
-<li><code>style</code> 仍可用于既有布局。</li>
-<li>Material 组件上 <code>styleAttr</code> / <code>styleRes</code> 较常见；也可再叠加 <code>theme</code>。</li>
-<li>字符串形式的资源引用会做缓存；列表项很多时，直接传数字资源 ID 通常更省开销。</li>
-<li>资源名无效时，运行日志里会给出较明确的提示，便于对照布局表排查。</li>
-</ul>
 <h2>CoordinatorLayout 特殊属性</h2>
 <p><code>loadlayout</code> 对部分 Material/CoordinatorLayout 布局参数做了特殊处理：</p>
 <div class="table-wrapper"><table><thead><tr><th>属性</th><th>说明</th><th>示例</th></tr></thead><tbody>

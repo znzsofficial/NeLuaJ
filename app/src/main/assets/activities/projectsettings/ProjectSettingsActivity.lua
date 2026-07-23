@@ -128,7 +128,7 @@ end
 
 local function refreshThemeUi()
   local opt = findThemeOpt(selectedThemeValue)
-  local label = opt and themeLabel(opt) or (res.string.project_theme_custom or "Custom")
+  local label = opt and themeLabel(opt) or res.string.project_theme_custom
   pcall(function()
     ps_theme_label.setText(label)
     ps_theme_value.setText(selectedThemeValue)
@@ -265,7 +265,7 @@ end
 local function refreshPermSummary()
   local text
   if #permissions == 0 then
-    text = res.string.project_permissions_empty or "(none)"
+    text = res.string.project_permissions_empty
   else
     text = table.concat(permissions, "\n")
   end
@@ -380,7 +380,7 @@ local function showThemePicker()
   local customExtra = nil
   if not findThemeOpt(selectedThemeValue) and selectedThemeValue and selectedThemeValue ~= "" then
     customExtra = selectedThemeValue
-    labels[#labels + 1] = (res.string.project_theme_custom or "Custom") .. ": " .. selectedThemeValue
+    labels[#labels + 1] = res.string.project_theme_custom .. ": " .. selectedThemeValue
     checked = #labels - 1
   end
 
@@ -443,7 +443,7 @@ local function showPermissionEditor()
   -- 用户已有、但不在系统目录中的自定义权限：始终展示且默认勾选（取消勾选才会删除）
   for _, p in ipairs(permissions) do
     if not catalogKeys[permKey(p)] then
-      local tag = res.string.project_theme_custom or "Custom"
+      local tag = res.string.project_theme_custom
       entries[#entries + 1] = {
         name = p,
         display = p .. "  (" .. tag .. ")",
@@ -493,6 +493,7 @@ showAddPermission = function()
       textSize = "14sp",
       TintColor = ColorUtil.getColorPrimary(),
       style = MDC_R.style.Widget_Material3_TextInputLayout_OutlinedBox,
+      boxBackgroundMode = 2,
       singleLine = true,
     },
   }, binding)
@@ -503,12 +504,12 @@ showAddPermission = function()
       local name = tostring(binding.perm_input.getText() or "")
       if permListAdd(name) then
         refreshPermSummary()
-        snack(res.string.project_permissions_added or name)
+        snack(res.string.project_permissions_added)
       else
         if normalizePerm(name) == "" then
           snack(res.string.project_permissions_add_hint)
         elseif permListHas(name) then
-          snack(res.string.project_permissions_exists or name)
+          snack(res.string.project_permissions_exists)
         else
           snack(res.string.project_package_invalid)
         end

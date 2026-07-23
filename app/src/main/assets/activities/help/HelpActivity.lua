@@ -43,7 +43,8 @@ local searchQuery = ""
 
 -- 文档分工（避免重复）：
 -- color_api = 取色入口；LuaThemeUtil = 字段表；md3_design = 组件/设计；
--- layout_reference = 属性大全；module_loadlayout = 加载器机制
+-- layout_reference = 属性大全；layout_style = style/theme 构造；
+-- module_loadlayout = 加载器机制
 local catalog = {
   {
     title = "入门",
@@ -54,6 +55,7 @@ local catalog = {
       { title = res.string.md3_design, desc = "MD3 组件与间距圆角约定（取色见 Color）", file = "md3_design.html", tags = "MD3 组件 设计" },
       { title = "颜色与主题", desc = "dynamicColor、?attr/、themeUtil 怎么选", file = "color_api.html", tags = "颜色 动态取色 attr 主题" },
       { title = res.string.layout_reference, desc = "布局属性、单位与控件示例", file = "layout_reference.html", tags = "布局 控件 单位 dp" },
+      { title = "布局 style / theme", desc = "styleAttr、styleRes、MaterialTextField 构造", file = "layout_style.html", tags = "style theme styleAttr Material" },
     },
   },
   {
@@ -72,7 +74,7 @@ local catalog = {
     subtitle = "资源、布局、文件与网络",
     items = {
       { title = "res", desc = "string / drawable / layout / raw", file = "module_res.html", tags = "资源 字符串 布局" },
-      { title = "loadlayout", desc = "表驱动布局与 style / ?attr", file = "module_loadlayout.html", tags = "布局 loadlayout" },
+      { title = "loadlayout", desc = "表驱动布局（style 见「布局 style / theme」）", file = "module_loadlayout.html", tags = "布局 loadlayout" },
       { title = "file", desc = "读写与目录", file = "module_file.html", tags = "文件 读写" },
       { title = "okhttp", desc = "同步 / 异步 HTTP", file = "module_okhttp.html", tags = "网络 http" },
       { title = "saf", desc = "存储访问框架", file = "module_saf.html", tags = "存储 SAF" },

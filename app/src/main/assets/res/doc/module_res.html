@@ -227,11 +227,11 @@ if cfg then
 end
 </code></pre>
 
-      <h2>注意</h2>
+      <h2>补充</h2>
       <ul>
-        <li><code>res.color</code> / <code>res.dimen</code> 依赖 Activity 配置；非 Activity 上下文可能不可用。</li>
-        <li>drawable / bitmap / font / raw 有缓存；同名资源热替换后可能需重启进程。</li>
-        <li>字符串与 plurals 的键名完全由你的资源文件定义。</li>
+        <li><code>res.color</code> / <code>res.dimen</code> 会读当前 Activity 配置；在 Activity 脚本里用最省事。</li>
+        <li>drawable / bitmap / font / raw 有缓存；换了同名文件后，重启进程可看到最新内容。</li>
+        <li>字符串与 plurals 的键名由你的资源文件定义。</li>
       </ul>
       <nav class="doc-nav doc-nav-primary" aria-label="继续阅读">
         <span class="doc-nav-label">继续阅读</span>

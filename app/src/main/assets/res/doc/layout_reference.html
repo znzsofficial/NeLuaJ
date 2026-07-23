@@ -10,10 +10,11 @@
   <body>
     <main class="markdown-export">
 <h1>布局表属性参考</h1>
-<p>属性与单位速查。用法、图片 <code>src</code>、样式构造见 loadlayout 专文；颜色优先 <code>"?attr/…"</code>。</p>
+<p>属性与单位速查。用法、图片 <code>src</code> 见 loadlayout；构造期样式见 <a class="doc-link" href="layout_style.html">布局 style / theme</a>；颜色优先 <code>"?attr/…"</code>。</p>
 <nav class="doc-nav" aria-label="相关文档">
   <span class="doc-nav-label">相关文档</span>
   <a class="doc-link" href="module_loadlayout.html">loadlayout</a>
+  <a class="doc-link" href="layout_style.html">style / theme</a>
   <a class="doc-link" href="color_api.html">颜色与主题</a>
   <a class="doc-link" href="md3_design.html">MD3 组件</a>
   <a class="doc-link" href="module_res.html">res 模块</a>
@@ -238,7 +239,7 @@ background = "bg.png"
 <h3>ScrollView</h3>
 <div class="table-wrapper"><table><thead><tr><th>属性</th><th>说明</th><th>示例</th></tr></thead><tbody><tr><td><code>fillViewport</code></td><td>内容不足时填满</td><td><code>true</code></td></tr><tr><td><code>scrollbars</code></td><td>滚动条</td><td><code>"vertical"</code>, <code>"horizontal"</code>, <code>"none"</code></td></tr></tbody></table></div>
 <blockquote>
-<p><strong>注意</strong>：<code>ScrollView</code> 只能有一个子视图，通常是 <code>LinearLayout</code>。</p>
+<p><code>ScrollView</code> 一般只放一个直接子视图，里面再放 <code>LinearLayout</code> 排布多个控件。</p>
 </blockquote>
 <h3>RecyclerView</h3>
 <p>RecyclerView 需要在 Lua 代码中设置 LayoutManager 和 Adapter：</p>
@@ -249,14 +250,19 @@ recyclerView.setAdapter(adapter)
 </code></pre>
 <hr>
 <h2>11. style 属性</h2>
-<p>通过 <code>style</code> 属性应用 Android 主题样式：</p>
-<pre><code class="language-lua">-- 使用主题属性引用
+<p>构造期样式（<code>style</code> / <code>styleAttr</code> / <code>styleRes</code> / <code>theme</code>）的完整说明见独立文档：</p>
+<nav class="doc-nav" aria-label="相关文档">
+  <span class="doc-nav-label">相关文档</span>
+  <a class="doc-link" href="layout_style.html">布局 style / theme</a>
+  <a class="doc-link" href="module_loadlayout.html">loadlayout</a>
+</nav>
+<pre><code class="language-lua">-- 按钮：主题 attr
 { MaterialButton, text = "轮廓按钮",
-  style = "?attr/materialButtonOutlinedStyle" }
+  styleAttr = "?attr/materialButtonOutlinedStyle" }
 
--- 使用资源 ID
-{ MaterialButton, text = "文字按钮",
-  style = "?attr/borderlessButtonStyle" }
+-- 输入框：Widget style（见 MaterialTextField）
+{ MaterialTextField, hint = "…",
+  style = MDC_R.style.Widget_Material3_TextInputLayout_OutlinedBox }
 </code></pre>
 <hr>
 <h2>12. 完整示例</h2>

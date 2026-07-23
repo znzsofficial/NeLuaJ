@@ -7,6 +7,7 @@ import "com.google.android.material.chip.Chip"
 import "com.google.android.material.card.MaterialCardView"
 import "com.google.android.material.materialswitch.MaterialSwitch"
 local ColorUtil = this.themeUtil
+local MDC_R = luajava.bindClass "com.google.android.material.R"
 local primary = ColorUtil.getColorPrimary()
 local onSurface = ColorUtil.getColorOnSurface()
 local onVar = ColorUtil.getColorOnSurfaceVariant()
@@ -91,26 +92,28 @@ return {
     sectionLabel(res.string.project_basic_info, "4dp"),
     {
       MaterialTextField,
+      id = "project_appName",
       hint = res.string.project_app_name_hint,
-      layout_width = "fill",
+      layout_width = "match",
       layout_height = "wrap",
       textSize = "14sp",
       TintColor = primary,
       style = MDC_R.style.Widget_Material3_TextInputLayout_OutlinedBox,
+      boxBackgroundMode = 2,
       singleLine = true,
-      id = "project_appName",
     },
     {
       MaterialTextField,
+      id = "project_packageName",
       layout_marginTop = "10dp",
       hint = res.string.project_package_hint,
-      layout_width = "fill",
+      layout_width = "match",
       layout_height = "wrap",
       textSize = "14sp",
       TintColor = primary,
       style = MDC_R.style.Widget_Material3_TextInputLayout_OutlinedBox,
+      boxBackgroundMode = 2,
       singleLine = true,
-      id = "project_packageName",
     },
     {
       MaterialTextView,

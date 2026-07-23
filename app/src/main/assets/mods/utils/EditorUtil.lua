@@ -25,6 +25,14 @@ local function isMinimapEnabled()
     return isSharedTruthy(this.getSharedData("code_minimap", true))
 end
 
+local function parseSharedColor(data, key, fallback)
+    local raw = data and data[key]
+    if not raw then return fallback end
+    local ok, c = pcall(Color.parseColor, raw)
+    if ok then return c end
+    return fallback
+end
+
 local function buildMinimapConfig(editor)
     local data = this.sharedData
     local cfg = LuaCodeMinimapView.MinimapConfig()
@@ -35,20 +43,8 @@ local function buildMinimapConfig(editor)
     -- 悬浮叠层：面板背景默认全透明（透出编辑器代码）
     cfg.backgroundColor = Color.argb(0, 0, 0, 0)
     cfg.outsideDimColor = Color.argb(0, 0, 0, 0)
-    -- MinimapBg = 缩略图面板背景（可选）
-    if data["MinimapBg"] then
-        pcall(function()
-            cfg.backgroundColor = Color.parseColor(data["MinimapBg"])
-        end)
-    end
-    -- MinimapMask = 编辑器可视区域指示色（maskColor，不是 background）
-    -- 默认半透明浅蓝
-    cfg.maskColor = Color.argb(0x28, 0x21, 0x96, 0xF3)
-    if data["MinimapMask"] then
-        pcall(function()
-            cfg.maskColor = Color.parseColor(data["MinimapMask"])
-        end)
-    end
+    cfg.backgroundColor = parseSharedColor(data, "MinimapBg", cfg.backgroundColor)
+    cfg.maskColor = parseSharedColor(data, "MinimapMask", Color.argb(0x28, 0x21, 0x96, 0xF3))
     -- 代码色条不透明度 0–255，默认 200
     cfg.codeAlpha = 200
     do
@@ -61,19 +57,12 @@ local function buildMinimapConfig(editor)
             cfg.codeAlpha = n
         end
     end
-    local function parseOr(key, fallback)
-        local raw = data[key]
-        if not raw then return fallback end
-        local ok, c = pcall(Color.parseColor, raw)
-        if ok then return c end
-        return fallback
-    end
-    cfg.colorDefault = parseOr("BaseWord", Color.argb(255, 0x44, 0x77, 0xe0))
-    cfg.colorKeyword = parseOr("KeyWord", Color.argb(255, 0xb4, 0x00, 0x2d))
-    cfg.colorString = parseOr("String", Color.argb(255, 0xc2, 0x18, 0x5b))
-    cfg.colorComment = parseOr("Comment", Color.argb(255, 0x71, 0x78, 0x7E))
-    cfg.colorNumber = parseOr("UserWord", Color.argb(255, 0x5c, 0x6b, 0xc0))
-    cfg.colorId = parseOr("Global", Color.argb(255, 0x68, 0x9f, 0x38))
+    cfg.colorDefault = parseSharedColor(data, "BaseWord", Color.argb(255, 0x44, 0x77, 0xe0))
+    cfg.colorKeyword = parseSharedColor(data, "KeyWord", Color.argb(255, 0xb4, 0x00, 0x2d))
+    cfg.colorString = parseSharedColor(data, "String", Color.argb(255, 0xc2, 0x18, 0x5b))
+    cfg.colorComment = parseSharedColor(data, "Comment", Color.argb(255, 0x71, 0x78, 0x7E))
+    cfg.colorNumber = parseSharedColor(data, "UserWord", Color.argb(255, 0x5c, 0x6b, 0xc0))
+    cfg.colorId = parseSharedColor(data, "Global", Color.argb(255, 0x68, 0x9f, 0x38))
     cfg.tileHeightPx = 1024
     cfg.maxTileCount = 8
     if editor then
@@ -128,6 +117,63 @@ function _M.refreshMinimap(full)
     mCodeMinimap.syncVisibleRangeFromEditor(false)
 end
 
+--- 选中区域切换 --[[ ... ]] 多行注释；无选区时注释当前行
+function _M.toggleBlockComment(editor)
+    if editor == nil then editor = mLuaEditor end
+    local doc = editor.getText()
+    local len = doc.length()
+    if len <= 0 then return false end
+
+    local a = editor.getSelectionStart()
+    local b = editor.getSelectionEnd()
+    if a > b then a, b = b, a end
+    if a < 0 then a = 0 end
+    if b > len then b = len end
+
+    -- 无选区：整行（按 \n 边界）；setSelection(start, length)
+    if a == b then
+        local lineStart = a
+        while lineStart > 0 and doc.charAt(lineStart - 1) ~= 10 do
+            lineStart = lineStart - 1
+        end
+        local lineEnd = b
+        while lineEnd < len and doc.charAt(lineEnd) ~= 10 do
+            lineEnd = lineEnd + 1
+        end
+        a, b = lineStart, lineEnd
+        if a == b then return false end
+        editor.setSelection(a, b - a)
+    end
+
+    local selected = tostring(editor.getSelectedText())
+    if selected == "" then return false end
+
+    local JString = bindClass "java.lang.String"
+    local out
+    -- 解包：整段为 --[==[...]==]（含 0 个 =）
+    local openEq, body = selected:match("^%-%-%[(=*)%[(.-)%]%1%]$")
+    if openEq ~= nil then
+        out = body
+    else
+        -- 内容含 ]] 时升级等号
+        local n = 0
+        while true do
+            local close = "]" .. string.rep("=", n) .. "]"
+            if not selected:find(close, 1, true) then break end
+            n = n + 1
+        end
+        local eq = string.rep("=", n)
+        out = "--[" .. eq .. "[" .. selected .. "]" .. eq .. "]"
+    end
+
+    editor.paste(out)
+    local outLen = JString(out).length()
+    local start = editor.getCaretPosition() - outLen
+    if start < 0 then start = 0 end
+    editor.setSelection(start, outLen)
+    return true
+end
+
 local function getActionMode(view)
     return ActionMode.Callback {
         onCreateActionMode = function(mode, menu)
@@ -151,6 +197,9 @@ local function getActionMode(view)
             menu.add(0, 3, 0, android.R.string.paste)
                 .setShowAsAction(2)
                 .setIcon(array.getResourceId(3, 0))
+            local commentItem = menu.add(0, 4, 0, res.string.block_comment)
+            commentItem.setShowAsAction(2) -- SHOW_AS_ACTION_ALWAYS
+            commentItem.setIcon(res.drawable("ic_comment"))
             array.recycle()
             return true
         end,
@@ -165,6 +214,9 @@ local function getActionMode(view)
                 mode.finish()
             elseif item.getItemId() == 3 then
                 view.paste()
+                mode.finish()
+            elseif item.getItemId() == 4 then
+                _M.toggleBlockComment(view)
                 mode.finish()
             end
             return false
@@ -274,17 +326,62 @@ function _M.save(path, str, editor)
     return LuaFileUtil.write(path, str)
 end
 
-function _M.setHighLight(view)
+--- 从 SharedData 应用高亮 / 光标 / 换行 / 空白 / Tab（可重复调用，即时生效）
+function _M.applyEditorPrefs(editor)
+    editor = editor or mLuaEditor
+    if not editor then return false end
     local data = this.sharedData
-    -- 默认色用 Color.argb，避免 0xff...... 在 LuaJ 中传 Java 出错
-    view.basewordColor = data["BaseWord"] and Color.parseColor(data["BaseWord"]) or Color.argb(255, 0x44, 0x77, 0xe0)
-    view.keywordColor = data["KeyWord"] and Color.parseColor(data["KeyWord"]) or Color.argb(255, 0xb4, 0x00, 0x2d)
-    view.stringColor = data["String"] and Color.parseColor(data["String"]) or Color.argb(255, 0xc2, 0x18, 0x5b)
-    view.userwordColor = data["UserWord"] and Color.parseColor(data["UserWord"]) or Color.argb(255, 0x5c, 0x6b, 0xc0)
-    view.commentColor = data["Comment"] and Color.parseColor(data["Comment"]) or Color.argb(255, 0x71, 0x78, 0x7e)
-    view.globalColor = data["Global"] and Color.parseColor(data["Global"]) or Color.argb(255, 0x68, 0x9f, 0x38)
-    view.localColor = data["Local"] and Color.parseColor(data["Local"]) or Color.argb(255, 0xb4, 0xb4, 0x84)
-    view.upvalColor = data["Upval"] and Color.parseColor(data["Upval"]) or Color.argb(255, 0x80, 0x80, 0xc0)
+
+    editor.basewordColor = parseSharedColor(data, "BaseWord", Color.argb(255, 0x44, 0x77, 0xe0))
+    editor.keywordColor = parseSharedColor(data, "KeyWord", Color.argb(255, 0xb4, 0x00, 0x2d))
+    editor.stringColor = parseSharedColor(data, "String", Color.argb(255, 0xc2, 0x18, 0x5b))
+    editor.userwordColor = parseSharedColor(data, "UserWord", Color.argb(255, 0x5c, 0x6b, 0xc0))
+    editor.commentColor = parseSharedColor(data, "Comment", Color.argb(255, 0x71, 0x78, 0x7e))
+    editor.globalColor = parseSharedColor(data, "Global", Color.argb(255, 0x68, 0x9f, 0x38))
+    editor.localColor = parseSharedColor(data, "Local", Color.argb(255, 0xb4, 0xb4, 0x84))
+    editor.upvalColor = parseSharedColor(data, "Upval", Color.argb(255, 0x80, 0x80, 0xc0))
+
+    -- 自定义光标色默认关；关闭时不写（关闭后需重启才回到默认）
+    if isSharedTruthy(this.getSharedData("editor_custom_caret", false)) then
+        local dark = this.isNightMode and this.isNightMode()
+        local caretKey = dark and "Caret_Dark" or "Caret_Light"
+        local caretDefault = dark
+            and Color.argb(255, 0x9e, 0xca, 0xff)
+            or Color.argb(255, 0x15, 0x65, 0xc0)
+        editor.setCaretColor(parseSharedColor(data, caretKey, caretDefault))
+    end
+
+    if editor.setWordWrap then
+        editor.setWordWrap(isSharedTruthy(this.getSharedData("editor_word_wrap", false)))
+    end
+    if editor.setNonPrintingCharVisibility then
+        editor.setNonPrintingCharVisibility(
+            isSharedTruthy(this.getSharedData("editor_show_whitespace", false)))
+    end
+    if editor.setTabSpaces then
+        local n = tonumber(this.getSharedData("editor_tab_spaces", 4)) or 4
+        n = math.floor(n + 0.5)
+        if n < 1 then n = 1 elseif n > 16 then n = 16 end
+        editor.setTabSpaces(n)
+    end
+
+    if mCodeMinimap then
+        _M.refreshMinimap(false)
+    end
+    return true
+end
+
+--- 兼容旧名
+function _M.setHighLight(view)
+    _M.applyEditorPrefs(view)
+end
+
+--- 设置页改完后通知主界面立即重施（Main 的 pageName 为 MainActivity）
+function _M.notifyPrefsChanged()
+    pcall(function()
+        local main = luajava.bindClass("com.androlua.LuaActivity").getActivity("MainActivity")
+        if main then main.runFunc("onEditorPrefsChanged") end
+    end)
 end
 
 function _M.init()
@@ -294,8 +391,7 @@ function _M.init()
     -- 初始化Tab
     initTab();
 
-    -- 设置高亮
-    _M.setHighLight(mLuaEditor)
+    _M.applyEditorPrefs(mLuaEditor)
 
     --设置字体
     mLuaEditor.setTypeface(res.font.code)

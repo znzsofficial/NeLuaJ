@@ -62,6 +62,7 @@ local function buildClickMap(Actions)
     save = function() Actions.saveCurrentFile() end,
     backup = function() Actions.backupCurrentProject() end,
     format = function() Actions.formatCode() end,
+    block_comment = function() Actions.toggleBlockComment() end,
     undo = function() Actions.undo() end,
     redo = function() Actions.redo() end,
     search = function() Actions.showSearchBar() end,

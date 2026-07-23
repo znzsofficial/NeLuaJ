@@ -347,14 +347,28 @@ function _M.createProject(name)
             local useAb = isActionBarTheme(themeName)
             local mainTpl, layoutTpl
             if useAb then
-                mainTpl = useSample and res.string.mcode_ab or res.string.mcode_ab_minimal
-                layoutTpl = useSample and res.string.lcode_ab or res.string.lcode_ab_minimal
+                if useSample then
+                    mainTpl = res.string.mcode_ab
+                    layoutTpl = res.string.lcode_ab
+                else
+                    mainTpl = res.string.mcode_ab_minimal
+                    layoutTpl = res.string.lcode_ab_minimal
+                end
             else
-                mainTpl = useSample and res.string.mcode or res.string.mcode_minimal
-                layoutTpl = useSample and res.string.lcode or res.string.lcode_minimal
+                if useSample then
+                    mainTpl = res.string.mcode
+                    layoutTpl = res.string.lcode
+                else
+                    mainTpl = res.string.mcode_minimal
+                    layoutTpl = res.string.lcode_minimal
+                end
             end
             if not mainTpl or mainTpl == "" then
-                mainTpl = useAb and (res.string.mcode_minimal or res.string.mcode) or res.string.mcode
+                if useAb then
+                    mainTpl = res.string.mcode_ab_minimal
+                else
+                    mainTpl = res.string.mcode
+                end
             end
             if not layoutTpl or layoutTpl == "" then
                 layoutTpl = res.string.lcode
@@ -498,6 +512,7 @@ function _M.fileMenu(path, name)
         end)
                 .setNegativeButton(android.R.string.cancel, nil)
                 .show();
+        sublayout.file_name.setHint(res.string.new_dir)
     end
     layout.button_cfile.onClick = function()
         fileDialog.dismiss()
@@ -517,6 +532,7 @@ function _M.fileMenu(path, name)
         end)
                 .setNegativeButton(android.R.string.cancel, nil)
                 .show();
+        sublayout.file_name.setHint(res.string.new_file)
     end
 end
 
@@ -735,6 +751,7 @@ function _M.projectMenu(path, name)
         end)
                 .setNegativeButton(android.R.string.cancel, nil)
                 .show()
+        sublayout.file_name.setHint(res.string.new_dir)
     end
 
     layout.button_cfile.onClick = function()
@@ -753,6 +770,7 @@ function _M.projectMenu(path, name)
         end)
                 .setNegativeButton(android.R.string.cancel, nil)
                 .show()
+        sublayout.file_name.setHint(res.string.new_file)
     end
 
     layout.button_delete.onClick = function()
@@ -841,6 +859,7 @@ function _M.dirMenu(path, name)
         end)
                 .setNegativeButton(android.R.string.cancel, nil)
                 .show();
+        sublayout.file_name.setHint(res.string.new_dir)
     end
     layout.button_cfile.onClick = function()
         dirDialog.dismiss()
@@ -861,6 +880,7 @@ function _M.dirMenu(path, name)
         end)
                 .setNegativeButton(android.R.string.cancel, nil)
                 .show();
+        sublayout.file_name.setHint(res.string.new_file)
     end
 end
 

@@ -6,6 +6,7 @@ local CATALOG = {
   { id = "save", titleKey = "save_file" },
   { id = "backup", titleKey = "backup" },
   { id = "format", titleKey = "format" },
+  { id = "block_comment", titleKey = "block_comment" },
   { id = "undo", titleKey = "undo" },
   { id = "redo", titleKey = "redo" },
   { id = "search", titleKey = "search" },
@@ -42,7 +43,7 @@ end
 function _M.resolveTitle(item)
   if not item then return "" end
   if item.titleKey == "java_editor" then
-    return "Java" .. (res.string.editor or "Editor")
+    return "Java" .. res.string.editor
   end
   local t = res.string[item.titleKey]
   if t and t ~= "" then return t end

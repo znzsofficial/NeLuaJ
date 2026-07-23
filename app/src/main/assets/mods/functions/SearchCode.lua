@@ -250,9 +250,11 @@ return function()
     end
     pcall(function()
       if search_toggle_replace then
-        search_toggle_replace.setText(
-          state.replaceOpen and res.string.search_hide_replace or res.string.replace
-        )
+        if state.replaceOpen then
+          search_toggle_replace.setText(res.string.search_hide_replace)
+        else
+          search_toggle_replace.setText(res.string.replace)
+        end
       end
     end)
   end
