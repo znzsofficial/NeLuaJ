@@ -25,6 +25,7 @@ local CATALOG = {
   { id = "logs", titleKey = "logs" },
   { id = "setting", titleKey = "setting" },
   { id = "help", titleKey = "help" },
+  { id = "ai_chat", titleKey = "ai_chat" },
 }
 
 local DEFAULT_IDS = {

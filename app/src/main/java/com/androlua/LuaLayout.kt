@@ -770,9 +770,11 @@ class LuaLayout(private val initialContext: Context) {
                 val v = view.toView()
                 if (v is MaterialCardView) {
                     v.radius = px
+                } else if (v is MaterialButton) {
+                    v.cornerRadius = px.toInt()
                 } else if (!LayoutReflection.invokeFloatSetter(v, "setRadius", px)) {
                     throw LuaError(
-                        "radius/cornerRadius 需要 MaterialCardView 或 setRadius(float)，实际为 ${v.javaClass.simpleName}"
+                        "radius/cornerRadius 需要 MaterialCardView / MaterialButton 或 setRadius(float)，实际为 ${v.javaClass.simpleName}"
                     )
                 }
                 return

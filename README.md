@@ -37,6 +37,11 @@ Based on code analysis, NeLuaJ+ offers these core capabilities:
     - **File & Data**: Integrated `json` parsing library and `file` operations module for data processing and local storage.
     - **Dynamic Dex Loading**: Supports `LuaDexLoader` to load external `.dex` or `.jar` files at runtime, enabling plugin-based extensions.
 
+- **🤖 Built-in AI Coding Assistant (`mods/agent`)**
+    - **Chat & Tool Use**: OpenAI-compatible streaming `/chat/completions` client with automatic retry/backoff, built-in file/project tools (create, edit, patch, search, run Lua in a sandbox), and a destructive-operation confirmation flow.
+    - **MCP Support**: Manages MCP servers (discover & call tools), with one-click `context7` and `deepwiki` presets, session-based Streamable HTTP handling, and per-server connection tests.
+    - **Conversation Management**: Multiple named conversations with history persistence, model presets, and i18n (`ai_*` keys in `res/string/`). See [docs/AIAgent.md](./docs/AIAgent.md).
+
 ## 🛠️ Getting Started
 
 ### Requirements

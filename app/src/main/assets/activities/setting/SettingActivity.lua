@@ -1343,6 +1343,41 @@ CustomApp.onClick = function()
 end
 
 -- ── 关于 ──
+-- AI 设置
+local function showAiSettingDialog(title, key, defaultVal, hint)
+  local views = {}
+  MaterialAlertDialogBuilder(this)
+    .setTitle(title)
+    .setView(loadlayout(input_package, views))
+    .setPositiveButton(android.R.string.ok, function()
+      local value = tostring(views.inputField.text or ""):gsub("%s", "")
+      if value ~= "" then
+        this.setSharedData(key, value)
+      else
+        this.setSharedData(key, nil)
+      end
+    end)
+    .setNegativeButton(android.R.string.cancel, nil)
+    .setNeutralButton(res.string.delete, function()
+      this.setSharedData(key, nil)
+    end)
+    .show()
+  views.inputField.text = this.getSharedData(key, defaultVal)
+  views.inputField.hint = hint
+end
+
+AiApiKeyItem.onClick = function()
+  showAiSettingDialog(res.string.ai_api_key, "ai_api_key", "", "sk-...")
+end
+
+AiApiUrlItem.onClick = function()
+  showAiSettingDialog(res.string.ai_api_url, "ai_api_url", "https://api.openai.com/v1", "https://api.openai.com/v1")
+end
+
+AiModelItem.onClick = function()
+  showAiSettingDialog(res.string.ai_model, "ai_model", "gpt-4o-mini", "gpt-4o-mini")
+end
+
 AboutItem.onClick = function()
     local version = this.getVersionName("unknown")
     local message = table.concat({

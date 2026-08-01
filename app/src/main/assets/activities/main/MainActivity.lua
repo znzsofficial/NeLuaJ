@@ -285,6 +285,7 @@ function onCreateOptionsMenu(menu)
   addAction(menu, res.string.run_code, icon("play"), showRunMenu, SHOW_AS_ACTION_ALWAYS)
   addAction(menu, res.string.undo, icon("undo"), function() mLuaEditor.undo() end, SHOW_AS_ACTION_ALWAYS)
   addAction(menu, res.string.redo, icon("redo"), function() mLuaEditor.redo() end, SHOW_AS_ACTION_ALWAYS)
+  addAction(menu, res.string.ai_chat, icon("build"), Actions.openAiChat, SHOW_AS_ACTION_IF_ROOM)
 
   if tablet then
     -- 平板：常用项 ALWAYS 上顶栏（有图标才会显示）

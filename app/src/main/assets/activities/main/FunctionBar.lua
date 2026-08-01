@@ -81,6 +81,7 @@ local function buildClickMap(Actions)
     logs = function() ActivityUtil.showLog(activity) end,
     setting = function() Actions.openSetting() end,
     help = function() Actions.openHelp() end,
+    ai_chat = function() Actions.openAiChat() end,
   }
 end
 

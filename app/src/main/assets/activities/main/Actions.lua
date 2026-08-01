@@ -258,4 +258,9 @@ function Actions.runOnDebugApp()
   )
 end
 
+function Actions.openAiChat()
+  local ChatUI = require("mods.agent.ChatUI")
+  ChatUI.show()
+end
+
 return Actions

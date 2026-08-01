@@ -47,7 +47,7 @@ class json : TwoArgFunction() {
 
         private fun toJson(value: LuaValue): Any {
             val t = value.checktable()
-            if (t.length() == t.size()) {
+            if (t.length() == t.size() && t.length() > 0) {
                 val arr = JSONArray()
                 for (i in 1 until t.length() + 1) {
                     val v = t.get(i)
