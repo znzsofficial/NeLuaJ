@@ -47,6 +47,13 @@ local searchQuery = ""
 -- module_loadlayout = 加载器机制
 local catalog = {
   {
+    title = "AI 助手",
+    subtitle = "内置 Agent 的配置、对话和文件操作",
+    items = {
+      { title = res.string.ai_chat, desc = "配置模型、发送任务并让 Agent 协助修改工程", file = "agent_" .. docLanguage .. ".html", tags = "AI Agent 助手 模型 API 文件 MCP Skill" },
+    },
+  },
+  {
     title = "入门",
     subtitle = "迁移、工程配置与设计约定",
     items = {

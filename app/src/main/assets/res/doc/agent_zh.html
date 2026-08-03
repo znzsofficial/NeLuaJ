@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="doc.css" />
+    <script src="doc.js" defer></script>
+      <title>AI 助手</title>
+  </head>
+  <body>
+    <main class="markdown-export">
+      <h1>AI 助手</h1>
+      <p>AI 助手是面向当前工程的编码 Agent，支持文件阅读、代码生成、错误分析和工程文件操作。</p>
+
+      <h2>配置</h2>
+      <ol>
+        <li>打开一个工程。</li>
+        <li>打开“AI 助手”。</li>
+        <li>点击标题栏中的模型名称，添加模型配置。</li>
+        <li>填写 API Key、API 地址和模型名称，然后选择模型。</li>
+        <li>在输入框中输入任务并发送。</li>
+      </ol>
+      <p>API 地址填写服务商的 OpenAI 兼容根地址，例如 <code>https://api.deepseek.com/v1</code>。请求接口为该地址下的 <code>/chat/completions</code>。API Key 不应写入工程文件或 Skill 文件。</p>
+
+      <h2>任务描述</h2>
+      <p>建议在任务中说明目标、文件路径、限制条件和验证方式：</p>
+      <pre><code class="language-text">请阅读 app/src/main/assets/activities/main/MainActivity.lua，
+修复打开帮助页时标题没有刷新的问题。保持现有写法，修改后说明改动并检查相关调用。</code></pre>
+      <p>助手遵循先读后改的流程。不熟悉 NeLuaJ+ API 时，可以先读取帮助页中的相关文档。</p>
+
+      <h2>文件操作</h2>
+      <p>以下操作执行前会显示确认对话框：</p>
+      <ul>
+        <li>创建或覆盖文件</li>
+        <li>创建或删除文件夹</li>
+        <li>删除文件</li>
+        <li>应用补丁、文本替换和追加内容</li>
+        <li>重命名文件</li>
+        <li>运行 Lua 代码</li>
+      </ul>
+      <p>读取文件、列出目录和搜索工程不需要确认。“自动批准”仅适用于当前工程目录内的文件操作。MCP 工具和 Lua 代码执行仍需要确认。</p>
+
+      <h2>命令菜单</h2>
+      <p>输入框旁的命令按钮提供以下功能：</p>
+      <ul>
+        <li><strong>主动压缩上下文</strong>：将较早的对话总结为背景记忆，保留较新的消息。</li>
+        <li><strong>撤销 / 恢复上一轮对话</strong>：只调整聊天记录，不会重新执行工具。</li>
+        <li><strong>撤销 / 恢复文件变更</strong>：恢复 Agent 最近一次文件事务。</li>
+        <li><strong>切换会话</strong>：会话按当前工程隔离。</li>
+        <li><strong>设置</strong>：修改 API、上下文长度、最大输出和自动批准等选项。</li>
+      </ul>
+      <p>文件撤销会校验文件指纹。检测到外部修改时会拒绝覆盖。</p>
+
+      <h2>MCP</h2>
+      <p>设置中可以添加使用 Streamable HTTP 的 MCP 服务器。连接成功后，助手会发现并调用服务器工具。</p>
+      <ul>
+        <li>服务器地址必须是可访问的 HTTP 或 HTTPS 地址。</li>
+        <li>MCP 工具属于外部系统操作，每次调用都需要确认。</li>
+        <li>不要连接不信任的服务器，也不要在服务器配置中暴露 API Key。</li>
+        <li>服务器不可用时，删除或停用该配置后重新刷新工具列表。</li>
+      </ul>
+
+      <h2>本地 Skill</h2>
+      <p>Skill 是针对特定任务的本地 Markdown 指南。助手只读取 <code>SKILL.md</code>，不执行其中的 Lua 代码，也不从网络下载 Skill。</p>
+      <p>全局 Skill：</p>
+      <pre><code>/sdcard/LuaJ/agents/skills/&lt;skill-name&gt;/SKILL.md</code></pre>
+      <p>当前工程 Skill：</p>
+      <pre><code>&lt;工程目录&gt;/.agents/skills/&lt;skill-name&gt;/SKILL.md
+&lt;工程目录&gt;/skills/&lt;skill-name&gt;/SKILL.md</code></pre>
+      <p>文件可以使用简单的 frontmatter：</p>
+      <pre><code class="language-markdown">---
+name: lua-review
+description: 检查 Lua 代码的风格和常见错误
+triggers: lua, review, 检查
+---
+
+这里写 Skill 的使用规则和检查步骤。</code></pre>
+      <p>发送消息时，助手会根据 Skill 名称、描述和关键词选择匹配项，并把正文加入当前请求。不要在 Skill 中放置密钥、隐私数据或必须无条件执行的危险操作。</p>
+
+      <h2>文件夹结构</h2>
+      <p>Agent 数据位于 <code>/sdcard/LuaJ/agents</code>，与工程源代码分开：</p>
+      <pre><code>/sdcard/LuaJ/
+├── Projects/                         工程根目录（示例）
+│   └── MyProject/
+│       ├── .agents/
+│       │   └── skills/               当前工程专用 Skill
+│       │       └── review/
+│       │           └── SKILL.md
+│       ├── skills/                   另一种工程 Skill 目录
+│       │   └── release/
+│       │       └── SKILL.md
+│       ├── init.lua                  工程入口
+│       └── ...                       工程源代码和资源
+├── agents/                           Agent 外部运行数据
+│   ├── skills/                       全局 Skill
+│   │   └── lua-review/
+│   │       └── SKILL.md
+│   └── projects/
+│       └── &lt;project-hash&gt;/          每个工程独立的数据目录
+│           └── changesets.json       文件变更撤销/恢复历史
+└── ...</code></pre>
+      <p>工程专用规则放在工程目录下；所有工程共用的规则放在 <code>/sdcard/LuaJ/agents/skills</code>。不同目录中的 Skill 建议使用不同名称。</p>
+
+      <h2>数据与安全</h2>
+      <p>聊天记录保存在应用数据中。工程级 Agent 数据保存在：</p>
+      <pre><code>/sdcard/LuaJ/agents/projects/&lt;project-hash&gt;/</code></pre>
+      <p>文件变更历史使用 <code>changesets.json</code>，最多保留最近的有限数量记录。不同工程使用不同目录，不会共用文件撤销历史。API Key 不写入上述 Agent 工程数据目录。</p>
+
+      <h2>常见问题</h2>
+      <h3>发送后没有回复</h3>
+      <p>检查 API Key、API 地址、模型名称和网络连接。也可以在模型设置中使用连接测试。部分模型不支持工具调用，助手会自动以纯文本模式请求。</p>
+      <h3>压缩上下文没有变化</h3>
+      <p>压缩需要至少两组可分离的历史消息。消息很少时没有可总结的旧内容，助手会提示无需压缩。</p>
+      <h3>文件撤销失败</h3>
+      <p>如果文件在 Agent 修改后被编辑器或其他程序改过，fingerprint 校验会阻止覆盖。先确认当前文件内容，再手动处理冲突。</p>
+      <h3>权限错误</h3>
+      <p>Agent 需要访问当前工程和 Agent 数据目录。请先授予 NeLuaJ+ 文件管理权限，并确认工程路径可读写。</p>
+    </main>
+  </body>
+</html>

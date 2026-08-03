@@ -532,7 +532,7 @@ local function compressCurrentContext()
     if MainActivity and MainActivity.Public then
       MainActivity.Public.snack(S.ai_compress_done:format(#messages))
     end
-  end)
+  end, true)
   return true
 end
 

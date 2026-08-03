@@ -110,10 +110,10 @@ local function getRawContextTokens(history)
   return used
 end
 
-function _M.buildCompressedApiMessages(history, onResult)
+function _M.buildCompressedApiMessages(history, onResult, force)
   history = history or {}
   local budget = _M.getContextBudget()
-  if getRawContextTokens(history) <= budget then
+  if not force and getRawContextTokens(history) <= budget then
     if onResult then onResult(_M.buildApiMessages(history), false) end
     return
   end
@@ -129,6 +129,11 @@ function _M.buildCompressedApiMessages(history, onResult)
     if recentUsed + unit.cost > recentBudget and recentStart <= #history then break end
     recentStart = unit.start
     recentUsed = recentUsed + unit.cost
+  end
+  -- Manual compression should still summarize an older unit when the full
+  -- history currently fits the automatic recent-message budget.
+  if force and recentStart > #history and #units > 1 then
+    recentStart = units[#units].start
   end
   if recentStart <= 1 or recentStart > #history then
     if onResult then onResult(_M.buildApiMessages(history), false) end

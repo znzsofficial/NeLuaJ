@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="doc.css" />
+    <script src="doc.js" defer></script>
+      <title>AI Assistant</title>
+  </head>
+  <body>
+    <main class="markdown-export">
+      <h1>AI Assistant</h1>
+      <p>The AI Assistant is a project-aware coding agent for reading files, generating code, analyzing errors, and operating on project files.</p>
+
+      <h2>Configuration</h2>
+      <ol>
+        <li>Open a project.</li>
+        <li>Open “AI Chat”.</li>
+        <li>Tap the model name in the title bar and add a model.</li>
+        <li>Enter an API key, API URL, and model name, then select the model.</li>
+        <li>Enter a task and send it.</li>
+      </ol>
+      <p>Set the API URL to the provider's OpenAI-compatible base URL, such as <code>https://api.deepseek.com/v1</code>. Requests use <code>/chat/completions</code> below that URL. Do not put API keys in project files or Skill files.</p>
+
+      <h2>Task Description</h2>
+      <p>Include the goal, file paths, constraints, and validation steps:</p>
+      <pre><code class="language-text">Read app/src/main/assets/activities/main/MainActivity.lua.
+Fix the help-page title refresh while preserving the existing style.
+Explain the changes and check related call sites.</code></pre>
+      <p>The assistant follows a read-before-edit workflow. It can read the relevant NeLuaJ+ help documents when an API is unfamiliar.</p>
+
+      <h2>File Operations</h2>
+      <p>These operations show a confirmation dialog before execution:</p>
+      <ul>
+        <li>Creating or overwriting files</li>
+        <li>Creating or deleting directories</li>
+        <li>Deleting files</li>
+        <li>Applying patches, replacements, and appends</li>
+        <li>Renaming files</li>
+        <li>Running Lua code</li>
+      </ul>
+      <p>Reading files, listing directories, and searching the project do not require confirmation. Auto-approve applies only to file operations inside the current project. MCP tools and Lua execution still require confirmation.</p>
+
+      <h2>Command Menu</h2>
+      <p>The command button beside the input field provides:</p>
+      <ul>
+        <li><strong>Compress context</strong>: summarize older conversation messages while keeping recent messages.</li>
+        <li><strong>Undo / redo conversation turn</strong>: change chat history without executing tools again.</li>
+        <li><strong>Undo / redo file change</strong>: restore the latest Agent file transaction.</li>
+        <li><strong>Switch conversation</strong>: conversations are isolated by project.</li>
+        <li><strong>Settings</strong>: change API, context length, output limits, and approval options.</li>
+      </ul>
+      <p>File undo checks the file fingerprint and refuses to overwrite externally modified content.</p>
+
+      <h2>MCP</h2>
+      <p>Add Streamable HTTP MCP servers in Settings. After connecting, the assistant discovers and calls their tools.</p>
+      <ul>
+        <li>The server URL must be reachable over HTTP or HTTPS.</li>
+        <li>MCP tools operate on external systems and require confirmation.</li>
+        <li>Do not connect untrusted servers or expose API keys in server settings.</li>
+        <li>If a server is unavailable, disable or remove it and refresh the tool list.</li>
+      </ul>
+
+      <h2>Local Skills</h2>
+      <p>A Skill is a local Markdown guide for a specific task. The assistant only reads <code>SKILL.md</code>; it does not execute Lua code from a Skill or download Skills.</p>
+      <p>Global Skills:</p>
+      <pre><code>/sdcard/LuaJ/agents/skills/&lt;skill-name&gt;/SKILL.md</code></pre>
+      <p>Project Skills:</p>
+      <pre><code>&lt;project&gt;/.agents/skills/&lt;skill-name&gt;/SKILL.md
+&lt;project&gt;/skills/&lt;skill-name&gt;/SKILL.md</code></pre>
+      <p>A Skill may use simple frontmatter:</p>
+      <pre><code class="language-markdown">---
+name: lua-review
+description: Check Lua style and common mistakes
+triggers: lua, review, check
+---
+
+Write the Skill rules and review steps here.</code></pre>
+      <p>When a message is sent, the assistant matches Skill names, descriptions, and keywords, then adds the selected Skill body to the request. Never put secrets, private data, or unconditional dangerous actions in a Skill.</p>
+
+      <h2>Folder Structure</h2>
+      <p>Agent data is stored in <code>/sdcard/LuaJ/agents</code>, separately from project source files:</p>
+      <pre><code>/sdcard/LuaJ/
+├── Projects/                         Project roots (example)
+│   └── MyProject/
+│       ├── .agents/
+│       │   └── skills/               Skills for this project
+│       │       └── review/
+│       │           └── SKILL.md
+│       ├── skills/                   Alternative project Skill directory
+│       │   └── release/
+│       │       └── SKILL.md
+│       ├── init.lua                  Project entry point
+│       └── ...                       Project source and resources
+├── agents/                           External Agent runtime data
+│   ├── skills/                       Global Skills
+│   │   └── lua-review/
+│   │       └── SKILL.md
+│   └── projects/
+│       └── &lt;project-hash&gt;/          Data isolated per project
+│           └── changesets.json       File undo/redo history
+└── ...</code></pre>
+      <p>Put project-specific rules in the project directory and shared rules in <code>/sdcard/LuaJ/agents/skills</code>. Use different Skill names across directories.</p>
+
+      <h2>Data and Safety</h2>
+      <p>Conversation history is stored in app data. Project-scoped Agent data is stored at:</p>
+      <pre><code>/sdcard/LuaJ/agents/projects/&lt;project-hash&gt;/</code></pre>
+      <p>File history uses <code>changesets.json</code> and keeps a limited number of recent records. Each project has a separate directory and file undo history. API keys are not written to the Agent project data directory.</p>
+
+      <h2>Troubleshooting</h2>
+      <h3>No response after sending</h3>
+      <p>Check the API key, API URL, model name, and network connection. You can use the connection test in model settings. Models without tool support are automatically requested in text-only mode.</p>
+      <h3>Context compression did not change anything</h3>
+      <p>Compression needs at least two separable groups of history. With very little conversation there is no older content to summarize.</p>
+      <h3>File undo failed</h3>
+      <p>If a file was edited after the Agent changed it, fingerprint validation prevents an overwrite. Review the current file and resolve the conflict manually.</p>
+      <h3>Permission errors</h3>
+      <p>The Agent needs access to the current project and its data directory. Grant NeLuaJ+ file-management permission and make sure the project path is readable and writable.</p>
+    </main>
+  </body>
+</html>
