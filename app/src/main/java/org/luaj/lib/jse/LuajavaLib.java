@@ -38,7 +38,7 @@ public class LuajavaLib extends VarArgFunction {
     public ArrayList<ClassLoader> e = new ArrayList<>();
     
     // 类名缓存：className -> LuaValue
-    public HashMap<String, LuaValue> f = new HashMap<>();
+    public final HashMap<String, LuaValue> f = new HashMap<>();
 
     /**
      * 将Java对象转换为Lua表（递归转换）
@@ -87,9 +87,8 @@ public class LuajavaLib extends VarArgFunction {
             for (Map.Entry<?, ?> entry : ((Map<?, ?>) object).entrySet()) {
                 table.set(CoerceJavaToLua.coerce(entry.getKey()), convertTableValue(entry.getValue(), recursive));
             }
-        } else if (object instanceof JSONObject) {
+        } else if (object instanceof JSONObject jsonObject) {
             // JSONObject类型
-            JSONObject jsonObject = (JSONObject) object;
             Iterator<?> keys = jsonObject.keys();
             while (keys.hasNext()) {
                 String key = (String) keys.next();
@@ -99,9 +98,8 @@ public class LuajavaLib extends VarArgFunction {
                     // 忽略JSON解析错误
                 }
             }
-        } else if (object instanceof JSONArray) {
+        } else if (object instanceof JSONArray jsonArray) {
             // JSONArray类型
-            JSONArray jsonArray = (JSONArray) object;
             int length = jsonArray.length();
             for (int index = 0; index < length; index++) {
                 try {
@@ -214,31 +212,30 @@ public class LuajavaLib extends VarArgFunction {
      */
     public Varargs invoke(Varargs args) {
         try {
-            switch (super.b) {
-                case 0: // load
-                    return load(args);
-                case 1: // bindClass
-                    return JavaClass.a(this.f(args.checkjstring(1)));
-                case 2: // newInstance (by class name)
-                case 3: // newInstance (by class object)
-                    return newInstance(args);
-                case 4: // createProxy
-                    return createProxy(args);
-                case 5: // loadLib
-                    return loadLib(args);
-                case 6: // astable
+            return switch (super.b) {
+                case 0 -> // load
+                        load(args);
+                case 1 -> // bindClass
+                        JavaClass.a(this.f(args.checkjstring(1))); // newInstance (by class name)
+                case 2, 3 -> // newInstance (by class object)
+                        newInstance(args);
+                case 4 -> // createProxy
+                        createProxy(args);
+                case 5 -> // loadLib
+                        loadLib(args);
+                case 6 -> {
                     if (args.istable(1)) {
-                        return args.checktable(1);
+                        yield args.checktable(1);
                     }
-                    return asTable(args.checkuserdata(1), args.optboolean(2, false));
-                case 7: // instanceof
-                    return LuaValue.valueOf(
-                        ((Class) args.arg(2).touserdata(Class.class)).isInstance(args.checkuserdata(1))
-                    );
-                default:
-                    throw new LuaError("unsupported luajava operation: " + super.b + "\n" +
+                    yield asTable(args.checkuserdata(1), args.optboolean(2, false));
+                }
+                case 7 -> // instanceof
+                        LuaValue.valueOf(
+                                ((Class) args.arg(2).touserdata(Class.class)).isInstance(args.checkuserdata(1))
+                        );
+                default -> throw new LuaError("unsupported luajava operation: " + super.b + "\n" +
                         "This is an internal error. Please report this issue.");
-            }
+            };
         } catch (LuaError error) {
             throw error;
         } catch (InvocationTargetException exception) {

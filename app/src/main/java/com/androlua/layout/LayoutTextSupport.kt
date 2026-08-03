@@ -122,7 +122,7 @@ internal object LayoutTextSupport {
         // TextInputLayout 公开 API：hint 颜色（与内部 EditText hint 不同层）
         if (host is TextInputLayout) {
             runCatching {
-                host.setHintTextColor(android.content.res.ColorStateList.valueOf(color))
+                host.hintTextColor = android.content.res.ColorStateList.valueOf(color)
                 return
             }
             runCatching {

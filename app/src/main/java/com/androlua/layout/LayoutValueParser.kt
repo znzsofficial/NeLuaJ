@@ -124,8 +124,7 @@ internal class LayoutValueParser(
         return when {
             value.isnumber() -> value.todouble().toFloat()
             value.isstring() -> {
-                val v = toValue(value.asString(), attr)
-                when (v) {
+                when (val v = toValue(value.asString(), attr)) {
                     is Number -> v.toFloat()
                     else -> throw LuaError("无法解析尺寸: ${value.asString()}")
                 }
@@ -138,8 +137,7 @@ internal class LayoutValueParser(
         return when {
             value.isnumber() -> value.toint()
             value.isstring() -> {
-                val v = toValue(value.asString(), attr)
-                when (v) {
+                when (val v = toValue(value.asString(), attr)) {
                     is Number -> v.toInt()
                     else -> throw LuaError("无法解析整数/枚举: ${value.asString()}")
                 }
@@ -152,8 +150,7 @@ internal class LayoutValueParser(
         return when {
             value.isnumber() -> value.toint()
             value.isstring() -> {
-                val v = toValue(value.asString())
-                when (v) {
+                when (val v = toValue(value.asString())) {
                     is Number -> v.toInt()
                     else -> throw LuaError("无法解析 layout 尺寸: ${value.asString()}")
                 }

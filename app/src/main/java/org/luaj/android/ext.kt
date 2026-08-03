@@ -63,8 +63,7 @@ class ext : TwoArgFunction() {
         }
 
         private fun readOption(): Option {
-            val opt = format[index++]
-            return when (opt) {
+            return when (val opt = format[index++]) {
                 'b' -> Option(Kind.INT, 1, 1)
                 'B' -> Option(Kind.UINT, 1, 1)
                 'h' -> Option(Kind.INT, 2, 2)
@@ -262,7 +261,7 @@ class ext : TwoArgFunction() {
         private fun checkUnsigned(value: Long, size: Int, arg: Int, message: String = "unsigned overflow") {
             if (size >= 8) return
             val limit = 1L shl (size * 8)
-            if (value < 0 || value >= limit) throw LuaError("bad argument #$arg ($message)")
+            if (value !in 0..<limit) throw LuaError("bad argument #$arg ($message)")
         }
 
         private fun writeInteger(out: ByteArrayOutputStream, value: Long, size: Int, order: ByteOrder) {

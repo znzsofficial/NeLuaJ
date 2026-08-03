@@ -10,6 +10,7 @@ import kotlinx.coroutines.launch
 import org.luaj.LuaFunction
 import org.luaj.LuaValue
 import kotlin.system.measureTimeMillis
+import kotlin.time.Duration.Companion.milliseconds
 
 class LuaActivityUtils(private val activity: LuaActivity) {
     
@@ -35,7 +36,7 @@ class LuaActivityUtils(private val activity: LuaActivity) {
     }
     
     fun delay(time: Long, callback: LuaValue) = activity.lifecycleScope.launch {
-        kotlinx.coroutines.delay(time)
+        kotlinx.coroutines.delay(time.milliseconds)
         runCatching { callback.call() }.onFailure { activity.sendError("delay", it as Exception) }
     }
     

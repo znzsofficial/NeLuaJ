@@ -13,6 +13,7 @@ local EditText = luajava.bindClass("android.widget.EditText")
 local ScrollView = luajava.bindClass("android.widget.ScrollView")
 local Switch = luajava.bindClass("com.google.android.material.materialswitch.MaterialSwitch")
 local HtmlCompat = luajava.bindClass("androidx.core.text.HtmlCompat")
+local LinkMovementMethod = luajava.bindClass("android.text.method.LinkMovementMethod")
 local Typeface = luajava.bindClass("android.graphics.Typeface")
 
 import "androidx.core.graphics.ColorUtils"
@@ -41,9 +42,12 @@ local messages = {}
 local dialog = nil
 local views = {}
 local isLoading = false
+local requestGeneration = 0
+local undoTurns = {}
+local redoTurns = {}
 
 -- 前向声明
-local saveHistory, loadHistory, showModelManager, showModelPicker, showConvManager, showConvList, showSettings, addMessageBubble, addToolBubble
+local saveHistory, loadHistory, showModelManager, showModelPicker, showConvManager, showConvList, showSettings, addMessageBubble, addToolBubble, updateProjectLabel
 
 -- ─── UI 辅助 ──
 
@@ -83,14 +87,70 @@ local function escapeHtml(text)
   return text
 end
 
---- 把文本段渲染为 Spanned（支持 **粗体** 和 `行内代码`）
-local function renderInline(text)
-  local html = escapeHtml(text)
-  html = html:gsub("\r\n", "\n")
-  html = html:gsub("\n", "<br>")
-  html = html:gsub("%*%*(.-)%*%*", "<b>%1</b>")
-  html = html:gsub("`([^`]+)`", "<font face='monospace'>%1</font>")
-  return HtmlCompat.fromHtml(html, HtmlCompat.FROM_HTML_MODE_LEGACY)
+--- 把文本段渲染为 Spanned，支持标题、列表、粗体、斜体和行内代码。
+local function renderMarkdown(text)
+  local function inline(source)
+    local html = escapeHtml(source)
+    local codeSpans = {}
+    html = html:gsub("`([^`]+)`", function(code)
+      local token = "\001CODE" .. tostring(#codeSpans + 1) .. "\002"
+      codeSpans[#codeSpans + 1] = "<font face='monospace'>" .. code .. "</font>"
+      return token
+    end)
+    local links = {}
+    html = html:gsub("%[([^%]]+)%]%((https?://[^%)%s]+)%)", function(label, url)
+      local token = "\001LINK" .. tostring(#links + 1) .. "\002"
+      links[#links + 1] = "<a href='" .. url:gsub("'", "&#39;") .. "'>" .. label .. "</a>"
+      return token
+    end)
+    html = html:gsub("%*%*(.-)%*%*", "<b>%1</b>")
+    html = html:gsub("__([^_]+)__", "<b>%1</b>")
+    html = html:gsub("%*([^*]-)%*", "<i>%1</i>")
+    html = html:gsub("_([^_]-)_", "<i>%1</i>")
+    html = html:gsub("\001LINK(%d+)\002", function(index) return links[tonumber(index)] end)
+    html = html:gsub("\001CODE(%d+)\002", function(index) return codeSpans[tonumber(index)] end)
+    return html
+  end
+
+  text = tostring(text or ""):gsub("\r\n", "\n")
+  local html = {}
+  local inList = nil
+  local function closeList()
+    if inList then html[#html + 1] = "</" .. inList .. ">"; inList = nil end
+  end
+  for line in (text .. "\n"):gmatch("(.-)\n") do
+    local headingLevel, heading = line:match("^%s*(#+)%s+(.+)$")
+    local bullet = line:match("^%s*[-*+]%s+(.+)$")
+    local ordered = line:match("^%s*%d+[%.%)]%s+(.+)$")
+    local quote = line:match("^%s*>%s?(.*)$")
+    if heading and #headingLevel <= 3 then
+      closeList()
+      local level = #headingLevel
+      if level == 1 then
+        html[#html + 1] = "<big><big><b>" .. inline(heading) .. "</b></big></big><br><br>"
+      elseif level == 2 then
+        html[#html + 1] = "<big><b>" .. inline(heading) .. "</b></big><br>"
+      else
+        html[#html + 1] = "<b>" .. inline(heading) .. "</b><br>"
+      end
+    elseif line:match("^%s*[-*_]%s*[-*_]%s*[-*_]%s*[-*_]%s*[-*_]%s*$") then
+      closeList(); html[#html + 1] = "<hr>"
+    elseif bullet then
+      if inList ~= "ul" then closeList(); html[#html + 1] = "<ul>"; inList = "ul" end
+      html[#html + 1] = "<li>" .. inline(bullet) .. "</li>"
+    elseif ordered then
+      if inList ~= "ol" then closeList(); html[#html + 1] = "<ol>"; inList = "ol" end
+      html[#html + 1] = "<li>" .. inline(ordered) .. "</li>"
+    elseif quote then
+      closeList(); html[#html + 1] = "<blockquote><i>" .. inline(quote) .. "</i></blockquote>"
+    elseif line:match("^%s*$") then
+      closeList(); html[#html + 1] = "<br>"
+    else
+      closeList(); html[#html + 1] = inline(line) .. "<br>"
+    end
+  end
+  closeList()
+  return HtmlCompat.fromHtml(table.concat(html), HtmlCompat.FROM_HTML_MODE_LEGACY)
 end
 
 --- 把内容拆分为文本段 + 代码块序列
@@ -190,13 +250,16 @@ addMessageBubble = function(role, content)
   local parts = splitCodeBlocks(content or "")
   for _, part in ipairs(parts) do
     if part.type == "text" then
-      inner.addView(loadlayout({
+      local markdownView = loadlayout({
         MaterialTextView,
-        text = renderInline(part.text),
+        text = renderMarkdown(part.text),
         textSize = "13sp",
         textColor = textColor,
         lineSpacingMultiplier = 1.35,
-      }))
+      })
+      markdownView.setMovementMethod(LinkMovementMethod.getInstance())
+      markdownView.setLinksClickable(true)
+      inner.addView(markdownView)
     else
       -- 代码块：等宽 + 深色背景 + 复制/插入按钮
       local codeCard = loadlayout({
@@ -367,6 +430,155 @@ local function hideLoading()
   if views.btnStop then views.btnStop.setVisibility(GONE) end
 end
 
+local function invalidateRequest()
+  requestGeneration = requestGeneration + 1
+  isLoading = false
+  okHttp.cancelAll()
+  hideLoading()
+  return requestGeneration
+end
+
+local function refreshMessageList()
+  if views.msgContainer then views.msgContainer.removeAllViews() end
+  loadHistory()
+end
+
+local function undoLastTurn()
+  if isLoading then return false end
+  local start
+  for i = #messages, 1, -1 do
+    if messages[i].role == "user" then start = i break end
+  end
+  if not start then return false end
+  local removed = {}
+  for i = start, #messages do removed[#removed + 1] = messages[i] end
+  for i = #messages, start, -1 do table.remove(messages, i) end
+  undoTurns[#undoTurns + 1] = removed
+  table.insert(redoTurns, 1, removed)
+  saveHistory()
+  refreshMessageList()
+  return true
+end
+
+local function redoLastTurn()
+  if isLoading or #redoTurns == 0 then return false end
+  local restored = table.remove(redoTurns, 1)
+  for _, message in ipairs(restored) do messages[#messages + 1] = message end
+  undoTurns[#undoTurns + 1] = restored
+  saveHistory()
+  refreshMessageList()
+  return true
+end
+
+local function applyFileChange(action)
+  if isLoading then return false end
+  requestGeneration = requestGeneration + 1
+  local generation = requestGeneration
+  showLoading()
+  local okLaunch = pcall(function()
+    xTask(function()
+      local ok, result, err = pcall(action)
+      return { ok = ok and result == true, error = ok and err or result }
+    end, function(result)
+      if generation ~= requestGeneration then return end
+      hideLoading()
+      if type(result) ~= "table" or not result.ok then
+        if MainActivity and MainActivity.Public then
+          MainActivity.Public.snack(tostring(result and result.error or "文件变更恢复失败"))
+        end
+        return
+      end
+      if MainActivity and MainActivity.RecyclerView then MainActivity.RecyclerView.update() end
+      if views.msgContainer then views.msgContainer.removeAllViews() end
+      loadHistory()
+      if MainActivity and MainActivity.Public then
+        MainActivity.Public.snack("文件变更已恢复")
+      end
+    end, "io")
+  end)
+  if not okLaunch then hideLoading() end
+  return okLaunch
+end
+
+local function undoFileChange()
+  if not AgentChat.hasFileUndo() then return false end
+  return applyFileChange(AgentChat.undoFileChange)
+end
+
+local function redoFileChange()
+  if not AgentChat.hasFileRedo() then return false end
+  return applyFileChange(AgentChat.redoFileChange)
+end
+
+local function compressCurrentContext()
+  if isLoading then return false end
+  requestGeneration = requestGeneration + 1
+  local generation = requestGeneration
+  showLoading()
+  AgentChat.buildCompressedApiMessages(messages, function(apiMessages, compressed)
+    if generation ~= requestGeneration then return end
+    hideLoading()
+    if not compressed then
+      if MainActivity and MainActivity.Public then MainActivity.Public.snack(S.ai_compress_unavailable) end
+      return
+    end
+    local compacted = {}
+    for i = 2, #apiMessages do compacted[#compacted + 1] = apiMessages[i] end
+    messages = compacted
+    undoTurns = {}
+    redoTurns = {}
+    saveHistory()
+    refreshMessageList()
+    if MainActivity and MainActivity.Public then
+      MainActivity.Public.snack(S.ai_compress_done:format(#messages))
+    end
+  end)
+  return true
+end
+
+local function showCommandMenu()
+  local labels = {
+    S.ai_compress_context,
+    S.ai_undo_turn,
+    S.ai_redo_turn,
+    S.ai_undo_file,
+    S.ai_redo_file,
+    S.ai_switch_conv,
+    S.ai_settings,
+  }
+  MaterialAlertDialogBuilder(activity)
+    .setTitle(S.ai_commands)
+    .setItems(labels, function(_, which)
+      if which == 0 then
+        if not compressCurrentContext() and MainActivity and MainActivity.Public then
+          MainActivity.Public.snack(S.ai_generating)
+        end
+      elseif which == 1 then
+        if not undoLastTurn() and MainActivity and MainActivity.Public then
+          MainActivity.Public.snack(S.ai_undo_empty)
+        end
+      elseif which == 2 then
+        if not redoLastTurn() and MainActivity and MainActivity.Public then
+          MainActivity.Public.snack(S.ai_redo_empty)
+        end
+      elseif which == 3 then
+        if not undoFileChange() and MainActivity and MainActivity.Public then
+          MainActivity.Public.snack(S.ai_undo_file_empty)
+        end
+      elseif which == 4 then
+        if not redoFileChange() and MainActivity and MainActivity.Public then
+          MainActivity.Public.snack(S.ai_redo_file_empty)
+        end
+      elseif which == 5 then
+        showConvList()
+      elseif which == 6 then
+        showSettings()
+      end
+    end)
+    .setNegativeButton(S.ai_cancel, nil)
+    .show()
+end
+
 -- ─── 确认对话框 ──
 
 local function showToolConfirm(toolName, args, onAllow, onDeny)
@@ -443,7 +655,8 @@ end
 
 -- ─── 执行工具调用链 ──
 
-local function executeToolCalls(toolCalls, index, results, onAllDone)
+local function executeToolCalls(toolCalls, index, results, onAllDone, generation)
+  if generation and generation ~= requestGeneration then return end
   if index > #toolCalls then
     -- 文件操作后刷新编辑器
     pcall(function()
@@ -484,20 +697,23 @@ local function executeToolCalls(toolCalls, index, results, onAllDone)
   tc.name = AgentChat.normalizeToolName(tc.name, args)
 
   local function proceedWithResult(resultStr)
+    if generation and generation ~= requestGeneration then return end
     results[#results + 1] = {
       tool_call_id = tc.id,
       content = resultStr,
     }
     addToolBubble(tc.name, args, resultStr)
-    executeToolCalls(toolCalls, index + 1, results, onAllDone)
+    executeToolCalls(toolCalls, index + 1, results, onAllDone, generation)
   end
 
   if AgentChat.shouldAutoApprove(tc.name, args) then
     AgentChat.executeToolAsync(tc.name, args, proceedWithResult)
   elseif AgentChat.isDestructiveTool(tc.name) then
     showToolConfirm(tc.name, args, function()
+      if generation and generation ~= requestGeneration then return end
       AgentChat.executeToolAsync(tc.name, args, proceedWithResult)
     end, function()
+      if generation and generation ~= requestGeneration then return end
       proceedWithResult(S.ai_user_denied)
     end)
   else
@@ -512,13 +728,18 @@ saveHistory = function()
 end
 
 loadHistory = function()
+  undoTurns = {}
+  redoTurns = {}
+  if AgentChat.clearActiveSkill then AgentChat.clearActiveSkill() end
   local conv, idx = AgentChat.getCurrentConv()
   if not conv or not conv.messages or #conv.messages == 0 then
     -- 自动创建新会话
     AgentChat.createConversation()
+    if updateProjectLabel then updateProjectLabel() end
     return 0
   end
   messages = conv.messages
+  if updateProjectLabel then updateProjectLabel() end
   -- 重建气泡
   local container = views.msgContainer
   if container then
@@ -535,7 +756,7 @@ loadHistory = function()
         -- 显示工具调用气泡，并记录 id 供 tool 结果回填
         if msg.tool_calls then
           for _, tc in ipairs(msg.tool_calls) do
-            local fn = tc["function"] or tc.function
+            local fn = tc["function"]
             local toolName = fn and fn.name or tc.name or ""
             local args = {}
             pcall(function() args = json.decode(fn and fn.arguments or tc.arguments or "{}") end)
@@ -567,8 +788,13 @@ end
 local lastApiMessages = nil
 local toolRoundCount = 0
 local MAX_TOOL_ROUNDS = 30
+local sendWithCompressedContext
 
 local function sendToApi(apiMessages, isContinue)
+  local generation = requestGeneration
+  local function isCurrent()
+    return generation == requestGeneration
+  end
   lastApiMessages = apiMessages
   if not isContinue then
     toolRoundCount = 0
@@ -576,20 +802,18 @@ local function sendToApi(apiMessages, isContinue)
   showLoading()
 
   -- 上下文用量显示：估算本次将发送的 token 数
-  pcall(function()
-    if views.ctxUsage then
-      local u = AgentChat.estimateContextUsage(apiMessages)
-      if type(u) == "table" then
-        local used, budget = tonumber(u.used) or 0, tonumber(u.budget) or 0
-        local ratio = budget > 0 and used / budget or 0
-        local color = ColorText
-        if ratio >= 0.95 then color = ColorError
-        elseif ratio >= 0.8 then color = 0xffe6a23c end
-        views.ctxUsage.setTextColor(color)
-        views.ctxUsage.setText(used .. " / " .. budget .. " tok")
-      end
+  if views.ctxUsage then
+    local u = AgentChat.estimateApiMessagesUsage(apiMessages)
+    if type(u) == "table" then
+      local used, budget = tonumber(u.used) or 0, tonumber(u.budget) or 0
+      local ratio = budget > 0 and used / budget or 0
+      local color = ColorText
+      if ratio >= 0.95 then color = ColorError
+      elseif ratio >= 0.8 then color = 0xffe6a23c end
+      views.ctxUsage.setTextColor(color)
+      views.ctxUsage.setText(used .. " / " .. budget .. " tok")
     end
-  end)
+  end
 
   -- 空气泡用于流式输出
   local container = views.msgContainer
@@ -624,7 +848,21 @@ local function sendToApi(apiMessages, isContinue)
   local fullResponse = ""
 
   AgentChat.sendStream(apiMessages, {
+    onPrepared = function(usage)
+      if not isCurrent() or type(usage) ~= "table" then return end
+      local used = tonumber(usage.used) or 0
+      local budget = tonumber(usage.budget) or 0
+      local ratio = budget > 0 and used / budget or 0
+      local color = ColorText
+      if ratio >= 0.95 then color = ColorError
+      elseif ratio >= 0.8 then color = 0xffe6a23c end
+      if views.ctxUsage then
+        views.ctxUsage.setTextColor(color)
+        views.ctxUsage.setText(used .. " / " .. budget .. " tok")
+      end
+    end,
     onChunk = function(chunk)
+      if not isCurrent() then return end
       fullResponse = fullResponse .. chunk
       if aiTextView then
         aiTextView.append(tostring(chunk))
@@ -633,10 +871,12 @@ local function sendToApi(apiMessages, isContinue)
     end,
     -- 自动重试前清空已流出的内容，避免失败段落重复拼接
     onRetry = function()
+      if not isCurrent() then return end
       fullResponse = ""
       if aiTextView then aiTextView.setText("") end
     end,
     onToolCalls = function(toolCalls, text)
+      if not isCurrent() then return end
       -- 不调用 hideLoading，保持加载状态直到续请求完成
       -- 移除空对话气泡（无文本内容时）
       if not text or text == "" then
@@ -670,6 +910,7 @@ local function sendToApi(apiMessages, isContinue)
 
       -- 执行工具调用
       executeToolCalls(toolCalls, 1, {}, function(results)
+        if not isCurrent() then return end
         -- 把每个 tool 结果加入 messages
         for _, r in ipairs(results) do
           messages[#messages + 1] = {
@@ -691,11 +932,11 @@ local function sendToApi(apiMessages, isContinue)
         end
 
         -- 继续对话（可能还有更多工具调用或最终文本）
-        local continueMessages = AgentChat.buildApiMessages(messages)
-        sendToApi(continueMessages, true)
-      end)
+        sendWithCompressedContext(true)
+      end, generation)
     end,
     onDone = function(text)
+      if not isCurrent() then return end
       hideLoading()
       messages[#messages + 1] = { role = "assistant", content = text }
       saveHistory()
@@ -710,6 +951,7 @@ local function sendToApi(apiMessages, isContinue)
       addMessageBubble("assistant", text)
     end,
     onError = function(err)
+      if not isCurrent() then return end
       hideLoading()
       -- 用户主动停止：保留已生成部分，不显示错误
       if tostring(err):lower():match("cancel") then
@@ -764,6 +1006,30 @@ local function sendToApi(apiMessages, isContinue)
   })
 end
 
+sendWithCompressedContext = function(isContinue, userMsg)
+  local generation = requestGeneration
+  showLoading()
+  local requestHistory = messages
+  if userMsg and userMsg ~= "" then
+    requestHistory = {}
+    for i, message in ipairs(messages) do
+      requestHistory[i] = message
+    end
+    local last = requestHistory[#requestHistory]
+    if last and last.role == "user" then
+      requestHistory[#requestHistory] = {}
+      for key, value in pairs(last) do
+        requestHistory[#requestHistory][key] = value
+      end
+      requestHistory[#requestHistory].content = userMsg
+    end
+  end
+  AgentChat.buildCompressedApiMessages(requestHistory, function(apiMessages)
+    if generation ~= requestGeneration then return end
+    sendToApi(apiMessages, isContinue)
+  end)
+end
+
 -- ─── 发送消息 ──
 
 local function sendMessage()
@@ -777,8 +1043,17 @@ local function sendMessage()
 
   input.setText("")
 
+  local skill = AgentChat.selectSkill(text)
+
   addMessageBubble("user", text)
   messages[#messages + 1] = { role = "user", content = text }
+  if skill then
+    local conv = AgentChat.getCurrentConv()
+    conv.skills = conv.skills or {}
+    conv.skills[skill.name] = true
+    saveHistory()
+  end
+  redoTurns = {}
   saveHistory()
 
   if not AgentChat.hasApiKey() then
@@ -793,16 +1068,9 @@ local function sendMessage()
     userMsg = context .. "\n\n用户问题: " .. text
   end
 
-  local apiMessages = AgentChat.buildApiMessages(messages)
-  -- Add editor context only to the request copy, not to the persisted user message.
-  local last = apiMessages[#apiMessages]
-  if last and last.role == "user" then
-    last.content = userMsg
-  else
-    apiMessages[#apiMessages + 1] = { role = "user", content = userMsg }
-  end
-
-  sendToApi(apiMessages)
+  -- 编辑器上下文只加入请求副本，不写入持久化会话；超预算时先压缩历史。
+  requestGeneration = requestGeneration + 1
+  sendWithCompressedContext(false, userMsg)
 end
 
 -- ─── 模型管理 ──
@@ -1521,7 +1789,15 @@ local function makeAvatar(name, sizeDp)
 end
 
 local function convMetaText(conv)
-  return S.ai_conv_meta:format(tostring(conv.createdAt or ""), #(conv.messages or {}))
+  local project = tostring(conv.projectPath or ""):match("([^/]+)$") or S.ai_project_unknown
+  return S.ai_conv_meta:format(tostring(conv.createdAt or ""), #(conv.messages or {})) .. "  ·  " .. project
+end
+
+updateProjectLabel = function()
+  if not views.aiProject then return end
+  local path = AgentChat.getCurrentProjectPath()
+  local project = tostring(path or ""):match("([^/]+)$") or S.ai_project_unknown
+  views.aiProject.setText(S.ai_project:format(project))
 end
 
 local function showRenameDialog(index, oldName)
@@ -1675,6 +1951,7 @@ local function buildManagerRow(conv, index, render)
       .setTitle(S.ai_delete_conv)
       .setMessage(S.ai_confirm_delete_conv:format(name))
       .setPositiveButton(S.ai_delete, function()
+        invalidateRequest()
         AgentChat.deleteConversation(index)
         if AgentChat.getCurrentConvIndex() == 0 then AgentChat.createConversation() end
         messages = {}
@@ -1699,9 +1976,15 @@ local function showConvList()
   local convs = AgentChat.loadConversations()
   local current = AgentChat.getCurrentConvIndex()
 
-  if #convs == 0 then
+  local projectPath = AgentChat.getCurrentProjectPath()
+  local visible = {}
+  for index, conv in ipairs(convs) do
+    if conv.projectPath == projectPath then visible[#visible + 1] = { index = index, conv = conv } end
+  end
+  if #visible == 0 then
     AgentChat.createConversation()
     if views.aiTitle then views.aiTitle.setText(S.ai_new_conv) end
+    if updateProjectLabel then updateProjectLabel() end
     return
   end
 
@@ -1735,7 +2018,7 @@ local function showConvList()
         {
           MaterialTextView,
           id = "convCount",
-          text = S.ai_conv_count:format(#convs),
+           text = S.ai_conv_count:format(#visible),
           textSize = "13sp", textColor = ColorText,
         },
       },
@@ -1779,15 +2062,18 @@ local function showConvList()
 
   local container = dlgViews.convList
   container.removeAllViews()
-  for i, conv in ipairs(convs) do
-    local idx = i
+  for _, item in ipairs(visible) do
+    local idx, conv = item.index, item.conv
     local row = buildConvRow(conv, idx == current, function()
       saveHistory()
+      invalidateRequest()
       AgentChat.setCurrentConv(idx)
+      if AgentChat.syncAgentProjectScope then AgentChat.syncAgentProjectScope() end
       messages = {}
       if views.msgContainer then views.msgContainer.removeAllViews() end
       loadHistory()
       if views.aiTitle then views.aiTitle.setText(convName(conv)) end
+      if updateProjectLabel then updateProjectLabel() end
       if dlg then dlg.dismiss() end
     end)
     container.addView(row)
@@ -1799,10 +2085,12 @@ local function showConvList()
   end
   dlgViews.btnNew.onClick = function()
     saveHistory()
+    invalidateRequest()
     AgentChat.createConversation()
     messages = {}
     if views.msgContainer then views.msgContainer.removeAllViews() end
     if views.aiTitle then views.aiTitle.setText(S.ai_new_conv) end
+    if updateProjectLabel then updateProjectLabel() end
     if dlg then dlg.dismiss() end
   end
 
@@ -1873,11 +2161,16 @@ showConvManager = function()
   local container = dlgViews.convList
   local function render()
     local convs2 = AgentChat.loadConversations()
+    local projectPath = AgentChat.getCurrentProjectPath()
     container.removeAllViews()
     for i, conv in ipairs(convs2) do
-      container.addView(buildManagerRow(conv, i, render))
+      if conv.projectPath == projectPath then
+        container.addView(buildManagerRow(conv, i, render))
+      end
     end
-    if dlgViews.convCount then dlgViews.convCount.setText(S.ai_conv_count:format(#convs2)) end
+    local count = 0
+    for _, conv in ipairs(convs2) do if conv.projectPath == projectPath then count = count + 1 end end
+    if dlgViews.convCount then dlgViews.convCount.setText(S.ai_conv_count:format(count)) end
   end
 
   dlgViews.btnNew.onClick = function()
@@ -1897,6 +2190,7 @@ showConvManager = function()
 end
 
 local function clearChat()
+  invalidateRequest()
   messages = {}
   saveHistory()
   if views.msgContainer then
@@ -1999,6 +2293,7 @@ function _M.show()
 
   -- 关闭时保存会话
   dialog.setOnDismissListener(function()
+    invalidateRequest()
     saveHistory()
   end)
 
@@ -2006,10 +2301,14 @@ function _M.show()
     views.btnSend.onClick = function() sendMessage() end
   end
 
+  if views.btnCommands then
+    views.btnCommands.onClick = function() showCommandMenu() end
+  end
+
   -- 停止按钮
   if views.btnStop then
     views.btnStop.onClick = function()
-      pcall(function() okHttp.cancelAll() end)
+      invalidateRequest()
     end
   end
 
@@ -2025,6 +2324,7 @@ function _M.show()
 
   if views.btnClear then
     views.btnClear.onClick = function()
+      invalidateRequest()
       saveHistory()
       AgentChat.createConversation()
       messages = {}
@@ -2053,6 +2353,7 @@ function _M.show()
     local conv = AgentChat.getCurrentConv()
     if conv then views.aiTitle.setText(convName(conv)) end
   end
+  if updateProjectLabel then updateProjectLabel() end
 
   -- 更新模型标签
   if views.modelLabel then
@@ -2106,6 +2407,16 @@ function _M.show()
   end
 
   return dialog
+end
+
+function _M.refreshProjectContext()
+  if not dialog or not dialog.isShowing() then return end
+  invalidateRequest()
+  if views.msgContainer then views.msgContainer.removeAllViews() end
+  loadHistory()
+  local conv = AgentChat.getCurrentConv()
+  if views.aiTitle then views.aiTitle.setText(conv and convName(conv) or S.ai_new_conv) end
+  updateProjectLabel()
 end
 
 -- ─── 插入代码到编辑器 ──

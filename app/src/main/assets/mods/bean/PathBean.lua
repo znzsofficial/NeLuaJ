@@ -11,6 +11,8 @@ _M.legacy_app_root_dir = _M.legacy_system_root.."/LuaJ"
 _M.system_root = tostring(Environment.getExternalStorageDirectory())
 -- 软件目录
 _M.app_root_dir = _M.system_root.."/LuaJ"
+-- Agent 运行时数据目录
+_M.agent_root_dir = _M.app_root_dir.."/agents"
 -- 工程目录
 _M.app_root_pro_dir = _M.app_root_dir.."/Projects"
 -- 当前打开的文件夹

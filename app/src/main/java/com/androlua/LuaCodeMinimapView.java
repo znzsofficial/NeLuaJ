@@ -111,12 +111,7 @@ public class LuaCodeMinimapView extends FrameLayout {
         }
     };
 
-    private final Runnable deferredScrollSync = new Runnable() {
-        @Override
-        public void run() {
-            syncVisibleRangeFromEditor(true);
-        }
-    };
+    private final Runnable deferredScrollSync = () -> syncVisibleRangeFromEditor(true);
 
     public LuaCodeMinimapView(Context context) {
         this(context, null);
@@ -579,7 +574,7 @@ public class LuaCodeMinimapView extends FrameLayout {
         return Arrays.copyOf(arr, arr.length + (arr.length >> 1) + 16);
     }
 
-    private class MinimapContent extends View {
+    private static class MinimapContent extends View {
         private int[] mData = new int[0];
         private int mDataSize = 0;
         private int[] mLineEnds = new int[0];

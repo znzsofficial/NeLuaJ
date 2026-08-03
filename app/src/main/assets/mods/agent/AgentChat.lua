@@ -3,7 +3,14 @@
 local _M = {}
 
 local MCPClient = require("mods.agent.MCPClient")
+local ChangeSet = require("mods.agent.ChangeSet")
+local AgentStorage = require("mods.agent.AgentStorage")
+local ContextManager = require("mods.agent.ContextManager")
+local OpenAIClient = require("mods.agent.OpenAIClient")
+local ToolExecutor = require("mods.agent.ToolExecutor")
+local SkillManager = require("mods.agent.SkillManager")
 local Thread = luajava.bindClass("java.lang.Thread")
+local activeSkill = nil
 
 local SYSTEM_PROMPT = [[
 你是 NeLuaJ+ 内置编码助手。NeLuaJ+ 是 Android Lua 运行时，用 Lua 在手机上写完整 App。
@@ -190,10 +197,27 @@ NeLuaJ+ 自带 API 文档，用 read_file 读取（路径写 `res/doc/文件名`
 function _M.getSystemPrompt()
   local custom = this.getSharedData("ai_system_prompt", "")
   if custom and custom ~= "" then
-    return custom
+    return custom .. SkillManager.prompt(activeSkill)
   end
-  return SYSTEM_PROMPT
+  return SYSTEM_PROMPT .. SkillManager.prompt(activeSkill)
 end
+
+function _M.configureSkills()
+  local project = Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir()
+  local root = Bean and Bean.Path and Bean.Path.agent_root_dir or (activity.getLuaDir() .. "/agents")
+  activeSkill = nil
+  SkillManager.configure(root, project)
+end
+
+function _M.selectSkill(text)
+  activeSkill = SkillManager.match(text)
+  return activeSkill
+end
+
+function _M.getActiveSkill() return activeSkill end
+function _M.clearActiveSkill() activeSkill = nil end
+
+_M.configureSkills()
 
 -- ─── 工具定义（OpenAI function calling 格式）──
 
@@ -803,90 +827,9 @@ end
 
 -- ─── 工具执行（不含确认，确认在 ChatUI 层做）──
 
-function _M.normalizeToolName(name, args)
-  name = tostring(name or ""):match("^%s*(.-)%s*$")
-  -- MCP 工具名保留原样（mcp::服务器::工具）
-  if name:match("^mcp::") then return name end
-  name = name:gsub("^tools[%.:]", "")
-    :gsub("^function[%.:]", "")
-    :gsub("^functions[%.:]", "")
-    :gsub("^tool[%.:]", "")
-  name = name:gsub("^.*__", "")
-  name = name:gsub("([a-z0-9])([A-Z])", "%1_%2"):lower()
-  local aliases = {
-    read = "read_file",
-    readfile = "read_file",
-    file_read = "read_file",
-    read_many = "read_files",
-    read_multiple = "read_files",
-    list = "list_dir",
-    list_files = "list_dir",
-    list_directory = "list_dir",
-    read_directory = "list_dir",
-    list_tree = "list_dir",
-    tree = "list_dir",
-    mkdir = "create_folder",
-    create_directory = "create_folder",
-    delete = "delete_file",
-    remove_file = "delete_file",
-    delete_directory = "delete_folder",
-    write_file = "create_file",
-    edit_file = "apply_patch",
-    modify_file = "apply_patch",
-    patch = "apply_patch",
-    replace = "replace_in_file",
-    replace_text = "replace_in_file",
-    string_replace = "replace_in_file",
-    replace_in_file = "replace_in_file",
-    grep = "search_in_files",
-    search = "search_in_files",
-    search_files = "search_in_files",
-    search_in_dir = "search_in_files",
-    search_in_project = "search_in_files",
-    find_in_files = "search_in_files",
-    append = "append_file",
-    append_text = "append_file",
-    append_to_file = "append_file",
-    rename = "rename_file",
-    move = "rename_file",
-    move_file = "rename_file",
-    env = "get_env_info",
-    environment = "get_env_info",
-    env_info = "get_env_info",
-    system_info = "get_env_info",
-    run = "run_lua",
-    execute = "run_lua",
-    eval = "run_lua",
-    run_lua_code = "run_lua",
-    execute_code = "run_lua",
-    run_code = "run_lua",
-  }
-  name = aliases[name] or name
-  if name == "" and type(args) == "table" then
-    if args.patch then
-      name = "apply_patch"
-    elseif args.old and args.path then
-      name = "replace_in_file"
-    elseif args.code then
-      name = "run_lua"
-    elseif args.pattern then
-      name = "search_in_files"
-    elseif args.paths then
-      name = "read_files"
-    elseif args.path and args.new_path then
-      name = "rename_file"
-    elseif args.content then
-      name = "create_file"
-    elseif args.path then
-      name = "read_file"
-    end
-  end
-  return name
-end
-
-function _M.executeTool(name, args)
+local function legacyExecuteTool(name, args)
   local originalName = name
-  name = _M.normalizeToolName(name, args)
+  name = ToolExecutor.normalizeToolName(name, args)
 
   -- MCP 工具调用（mcp::服务器::工具）
   if name:match("^mcp::") then
@@ -1345,96 +1288,70 @@ function _M.executeTool(name, args)
   return "未知工具: " .. tostring(originalName) .. "（规范化后: " .. tostring(name) .. "）"
 end
 
---- 异步执行工具：MCP 工具在后台 IO 线程调用，其余保持同步
---- onResult(result)（主线程回调）
-function _M.executeToolAsync(name, args, onResult)
-  name = _M.normalizeToolName(name, args)
-  if name:match("^mcp::") then
-    local ns, tool = name:sub(6):match("^([^:]+)::(.+)$")
-    if not ns or not tool then
-      if onResult then onResult("MCP 工具名格式错误: " .. name) end
-      return
-    end
-    local server = MCPClient.findServer(ns)
-    if not server then
-      if onResult then onResult("找不到 MCP 服务器: " .. ns) end
-      return
-    end
-    MCPClient.callToolAsync(server, tool, args, function(ok, text)
-      if onResult then
-        if ok then
-          onResult(text)
-        else
-          onResult("MCP 工具调用失败: " .. tostring(text or "未知错误"))
-        end
-      end
-    end)
-  else
-    if onResult then onResult(_M.executeTool(name, args)) end
+local function changeSetFileType(path)
+  local ok, kind = pcall(function() return file.type(path) end)
+  return ok and kind or nil
+end
+
+local function changeSetListFiles(path)
+  local out = {}
+  local ok, entries = pcall(function() return file.list(path) end)
+  if not ok or type(entries) ~= "table" then return out end
+  for _, name in ipairs(entries) do
+    if name ~= "." and name ~= ".." then out[#out + 1] = path .. "/" .. name end
   end
+  return out
+end
+
+local function changeSetRemove(path)
+  local kind = changeSetFileType(path)
+  if not kind then return true end
+  local ok, err = pcall(function()
+    if kind == "dir" then
+      local LuaUtil = luajava.bindClass("com.androlua.LuaUtil")
+      LuaUtil.rmDir(luajava.bindClass("java.io.File")(path))
+    else
+      luajava.bindClass("com.nekolaska.io.LuaFileUtil").INSTANCE.remove(path)
+    end
+  end)
+  return ok, err
+end
+
+AgentStorage.configure(
+  Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir(),
+  Bean and Bean.Path and Bean.Path.agent_root_dir
+)
+
+function _M.syncAgentProjectScope()
+  local path = Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir()
+  AgentStorage.configureCurrent(path, Bean and Bean.Path and Bean.Path.agent_root_dir)
+  _M.configureSkills()
+  ChangeSet.configure({
+    resolve = resolvePath,
+    type = changeSetFileType,
+    listFiles = changeSetListFiles,
+    read = function(p) local ok, c = pcall(function() return file.readall(p) end); return ok and c or nil end,
+    write = function(p, c) return pcall(function() file.save(p, c or "") end) end,
+    ensureParent = function(p) pcall(function() local F = luajava.bindClass("java.io.File"); local parent = F(p).getParentFile(); if parent then parent.mkdirs() end end) end,
+    loadState = function()
+      local stored = AgentStorage.read("changesets.json")
+      if stored and stored ~= "" then return stored end
+      local legacy = this.getSharedData("ai_changesets", "")
+      if legacy ~= "" and AgentStorage.write("changesets.json", legacy) then this.setSharedData("ai_changesets", "") end
+      return legacy
+    end,
+    saveState = function(encoded)
+      if AgentStorage.write("changesets.json", encoded or "") then this.setSharedData("ai_changesets", "") end
+    end,
+    scope = function() return normalizePath(Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir()) end,
+    mkdir = function(p) return pcall(function() file.mkdir(p) end) end,
+    remove = changeSetRemove,
+    isTracked = function(n) return n == "create_file" or n == "create_folder" or n == "delete_file" or n == "delete_folder" or n == "apply_patch" or n == "replace_in_file" or n == "append_file" or n == "rename_file" end,
+    resultSucceeded = function(r) local t = tostring(r or ""); return not t:find("失败", 1, true) and not t:find("异常", 1, true) and not t:find("拒绝", 1, true) and not t:find("禁止", 1, true) end,
+  })
 end
 
 -- ─── 判断工具是否需要用户确认 ──
-
-function _M.isDestructiveTool(name)
-  name = _M.normalizeToolName(name)
-  -- MCP 工具调用外部系统，始终需要确认
-  if name:match("^mcp::") then
-    return true
-  end
-  return name == "create_file"
-      or name == "create_folder"
-      or name == "delete_file"
-      or name == "delete_folder"
-      or name == "apply_patch"
-      or name == "replace_in_file"
-      or name == "append_file"
-      or name == "rename_file"
-      or name == "run_lua"
-end
-
--- ─── 自动批准 ──
-
-function _M.isInProjectDir(path)
-  if not path or path == "" then return true end
-  local projectDir = Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir()
-  if not projectDir or projectDir == "" then return false end
-  local resolved = normalizePath(path)
-  local projectNorm = normalizePath(projectDir)
-  if not projectNorm or projectNorm == "" then return false end
-  if resolved:sub(1, #projectNorm) ~= projectNorm then return false end
-  return #resolved == #projectNorm or resolved:sub(#projectNorm + 1, #projectNorm + 1) == "/"
-end
-
-function _M.shouldAutoApprove(name, args)
-  name = _M.normalizeToolName(name, args)
-  -- MCP 工具调用外部系统，不自动批准
-  if name:match("^mcp::") then
-    return false
-  end
-  -- 读操作总是自动批准
-  if name == "read_file" or name == "read_files" or name == "list_dir" or name == "search_in_files"
-    or name == "get_env_info" then
-    return true
-  end
-  -- 运行代码始终需要确认（会启动新窗口，不随自动批准生效）
-  if name == "run_lua" then
-    return false
-  end
-  -- 写操作：项目目录内根据设置自动批准
-  if _M.isDestructiveTool(name) then
-    local autoApprove = this.getSharedData("ai_auto_approve", "0")
-    if autoApprove == "1" then
-      local path = args.path or ""
-      if name == "rename_file" then
-        -- 移动操作：源与目标都必须在项目目录内才自动批准
-        return _M.isInProjectDir(path) and _M.isInProjectDir(args.new_path or "")
-      end
-      return _M.isInProjectDir(path)
-    end
-  end
-  return false
-end
 
 -- ─── 配置读写 ──
 
@@ -1630,7 +1547,19 @@ function _M.loadConversations()
   end
   local ok, decoded = pcall(json.decode, raw)
   if ok and type(decoded) == "table" then
+    local projectPath = normalizePath(Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir())
+    local migrated = false
+    for _, conv in ipairs(decoded) do
+      if type(conv) == "table" and not conv.projectPath then
+        conv.projectPath = projectPath
+        migrated = true
+      end
+    end
     convsCache = decoded
+    if migrated then
+      local encodedOk, encoded = pcall(json.encode, convsCache)
+      if encodedOk then this.setSharedData(CONV_KEY, encoded) end
+    end
     return convsCache
   end
   convsCache = {}
@@ -1645,10 +1574,19 @@ end
 
 function _M.getCurrentConvIndex()
   local convs = _M.loadConversations()
-  local idx = tonumber(this.getSharedData(CONV_IDX_KEY, "0")) or 0
-  if idx < 1 or idx > #convs then idx = #convs end
-  if #convs == 0 then idx = 0 end
-  return idx
+  if #convs == 0 then return 0 end
+  local projectPath = normalizePath(Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir())
+  local stored = tonumber(this.getSharedData(CONV_IDX_KEY, "0")) or 0
+  if stored >= 1 and stored <= #convs and convs[stored].projectPath == projectPath then
+    return stored
+  end
+  for index = #convs, 1, -1 do
+    if convs[index].projectPath == projectPath then
+      this.setSharedData(CONV_IDX_KEY, tostring(index))
+      return index
+    end
+  end
+  return 0
 end
 
 function _M.setCurrentConv(index)
@@ -1664,6 +1602,10 @@ function _M.getCurrentConv()
   return nil, 0
 end
 
+function _M.getCurrentProjectPath()
+  return normalizePath(Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir())
+end
+
 function _M.createConversation(name)
   local convs = _M.loadConversations()
   convSeq = convSeq + 1
@@ -1671,6 +1613,7 @@ function _M.createConversation(name)
   local conv = {
     id = id,
     name = name or "",
+    projectPath = normalizePath(Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir()),
     messages = {},
     createdAt = os.date("%m-%d %H:%M"),
   }
@@ -1686,6 +1629,7 @@ function _M.saveCurrentConv(messages)
   if idx >= 1 and idx <= #convs then
     -- 持久化全量历史，发送时才按 token 预算裁剪
     convs[idx].messages = messages
+    convs[idx].projectPath = convs[idx].projectPath or normalizePath(Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir())
     if convs[idx].name == "" or convs[idx].name == "新对话" then
       for _, m in ipairs(messages) do
         if m.role == "user" and m.content and m.content ~= "" then
@@ -1780,89 +1724,15 @@ function _M.buildContext()
   return table.concat(parts, "\n\n")
 end
 
--- ─── 上下文构建（token 估算 + 成对消息压缩）──
-
--- ─── 上下文构建（token 估算 + 成对消息压缩）──
-
-local function estimateTokens(text)
-  text = tostring(text or "")
-  local en = #text:gsub("[^\x00-\x7F]", "")
-  local cn = #text - en
-  -- 英文约 4 字符/token；中文 UTF-8 每字 3 字节、约 1 字/token，故 cn/3
-  return math.ceil(en / 4 + cn / 3)
-end
-
---- 从历史消息构建发送给 API 的消息列表。
---- 从后向前收集，保持工具调用链（assistant.tool_calls + tool 结果）成对完整。
-function _M.buildApiMessages(history)
-  local systemContent = _M.getSystemPrompt()
-  local msgs = { { role = "system", content = systemContent } }
-  -- 预算 = 上下文长度 - 输出上限 - 余量；系统提示词也占用预算
-  local budget = math.max(2000, getContextLength() - getMaxTokens() - 200)
-  local collected = {}
-  local used = estimateTokens(systemContent)
-  local pendingTool = false
-
-  for i = #history, 1, -1 do
-    local m = history[i]
-    local cost = estimateTokens(m.content)
-    if m.tool_calls then
-      local okT, enc = pcall(json.encode, m.tool_calls)
-      if okT then cost = cost + estimateTokens(enc) end
-    end
-
-    if pendingTool then
-      -- 工具结果的前置 assistant 消息必须保留
-      collected[#collected + 1] = m
-      if m.role == "assistant" then pendingTool = false end
-    elseif used + cost > budget then
-      if #collected > 0 then break end
-      collected[#collected + 1] = m
-      used = used + cost
-    else
-      used = used + cost
-      collected[#collected + 1] = m
-      if m.role == "tool" then pendingTool = true end
-    end
-  end
-
-  -- 避免以孤立的 tool 消息开头
-  while collected[#collected] and collected[#collected].role == "tool" do
-    collected[#collected] = nil
-  end
-
-  for i = #collected, 1, -1 do
-    local src = collected[i]
-    local copy = { role = src.role }
-    if src.content ~= nil then copy.content = src.content end
-    if src.tool_calls ~= nil then copy.tool_calls = src.tool_calls end
-    if src.tool_call_id ~= nil then copy.tool_call_id = src.tool_call_id end
-    if src.name ~= nil then copy.name = src.name end
-    msgs[#msgs + 1] = copy
-  end
-  return msgs
-end
-
---- 计算将发送给 API 的消息列表的总 token 估算与预算，供 UI 显示上下文用量。
---- 返回 { used = 估算用量, budget = 预算上限 }
-function _M.estimateContextUsage(history)
-  local msgs = _M.buildApiMessages(history)
-  local used = 0
-  for _, m in ipairs(msgs) do
-    used = used + estimateTokens(m.content)
-    if m.tool_calls then
-      local okT, enc = pcall(json.encode, m.tool_calls)
-      if okT then used = used + estimateTokens(enc) end
-    end
-  end
-  local budget = math.max(2000, getContextLength() - getMaxTokens() - 200)
-  return { used = used, budget = budget }
-end
+-- ─── 上下文构建兼容层 ──
+-- 实际实现位于 ContextManager.lua，公开入口在文件末尾转发。
 
 -- ─── 连接测试 ──
 
+--[[ Legacy API client implementation removed from the runtime.
+
 --- @param onResult function(ok: boolean, msg: string)
-function _M.testConnection(onResult)
+local function legacyTestConnection(onResult)
   local key = getApiKey()
   if key == "" then
     if onResult then onResult(false, "请先设置 API Key") end
@@ -1919,10 +1789,17 @@ local function cloneValue(value)
   return copy
 end
 
-function _M.sendStream(messages, callbacks)
+local function legacySendStream(messages, callbacks)
+  callbacks = callbacks or {}
+  local finished = false
+  local function finish(callback, ...)
+    if finished then return end
+    finished = true
+    if callback then callback(...) end
+  end
   local key = getApiKey()
   if key == "" then
-    if callbacks.onError then callbacks.onError("请先设置 API Key") end
+    finish(callbacks.onError, "请先设置 API Key")
     return
   end
 
@@ -1934,7 +1811,7 @@ function _M.sendStream(messages, callbacks)
 
   -- 检测模型是否支持 tools
   local modelName = getModel():lower()
-  local supportsTools = not modelName:match("reasoner") and not modelName:match("r1%-") and not modelName:match("^o1") and not modelName:match("^o3")
+  local supportsTools = not callbacks.disableTools and not modelName:match("reasoner") and not modelName:match("r1%-") and not modelName:match("^o1") and not modelName:match("^o3")
 
   -- 不支持 tools 的模型：过滤掉 tool_calls 和 tool 消息
   local sendMessages = cloneValue(messages)
@@ -1958,14 +1835,15 @@ function _M.sendStream(messages, callbacks)
   -- Repair histories created by providers that omitted tool-call ids.
   -- The id must match between assistant.tool_calls and the following tool message.
   if supportsTools then
-    local pendingToolIds = {}
     local nextToolId = 0
+    local pendingToolIds = nil
     local function fallbackToolId()
       nextToolId = nextToolId + 1
       return "call_history_" .. tostring(nextToolId)
     end
     for _, m in ipairs(sendMessages) do
       if m.role == "assistant" and m.tool_calls then
+        pendingToolIds = {}
         for _, tc in ipairs(m.tool_calls) do
           local id = tc.id
           if not id or id == "" then
@@ -1975,9 +1853,21 @@ function _M.sendStream(messages, callbacks)
           pendingToolIds[#pendingToolIds + 1] = id
         end
       elseif m.role == "tool" then
-        -- Consume the matching slot and force both messages to use the same id.
-        local expectedId = table.remove(pendingToolIds, 1)
-        m.tool_call_id = expectedId or m.tool_call_id or fallbackToolId()
+        -- 只从紧邻的 assistant tool_calls 组中修复缺失 ID，禁止跨组配对。
+        if pendingToolIds and #pendingToolIds > 0 then
+          if not m.tool_call_id or m.tool_call_id == "" then
+            m.tool_call_id = table.remove(pendingToolIds, 1)
+          else
+            for index, id in ipairs(pendingToolIds) do
+              if id == m.tool_call_id then
+                table.remove(pendingToolIds, index)
+                break
+              end
+            end
+          end
+        end
+      else
+        pendingToolIds = nil
       end
     end
   end
@@ -1986,10 +1876,6 @@ function _M.sendStream(messages, callbacks)
   for _, m in ipairs(sendMessages) do
     if m.tool_calls then
       for _, tc in ipairs(m.tool_calls) do
-        if not tc["function"] and tc.function then
-          tc["function"] = tc.function
-          tc.function = nil
-        end
       end
     end
   end
@@ -1998,7 +1884,7 @@ function _M.sendStream(messages, callbacks)
     model = getModel(),
     messages = sendMessages,
     stream = true,
-    max_tokens = getMaxTokens(),
+    max_tokens = callbacks.maxTokens or getMaxTokens(),
     temperature = getTemperature(),
   }
   if supportsTools then
@@ -2016,6 +1902,23 @@ function _M.sendStream(messages, callbacks)
       end
     end)
     body.tools = tools
+  end
+
+  -- 统计最终请求消息（含工具定义），由 UI 直接显示本次实际发送的用量。
+  if callbacks.onPrepared then
+    local usage = 0
+    for _, message in ipairs(body.messages or {}) do
+      local encoded = json.encode(message)
+      usage = usage + ContextManager.estimateTokens(encoded)
+    end
+    for _, tool in ipairs(body.tools or {}) do
+      local encoded = json.encode(tool)
+      usage = usage + ContextManager.estimateTokens(encoded)
+    end
+    callbacks.onPrepared({
+      used = math.ceil(usage / 4),
+      budget = math.max(2000, getContextLength() - getMaxTokens() - 200),
+    })
   end
 
   local headers = {
@@ -2058,7 +1961,7 @@ function _M.sendStream(messages, callbacks)
         -- 自动重试：达到设置次数或不可重试错误时停止
         if attempt <= maxRetries and isRetryableError(a1) then
           if callbacks.onRetry then callbacks.onRetry() end
-          pcall(function() Thread.sleep(math.min(1200, attempt * 300)) end)
+          Thread.sleep(math.min(1200, attempt * 300))
           doRequest()
           return
         end
@@ -2093,7 +1996,7 @@ function _M.sendStream(messages, callbacks)
         end
         errMsg = errMsg .. "\n模型: " .. getModel() .. "\n地址: " .. baseUrl
         errMsg = errMsg .. "\n请求大小: " .. #bodyStr .. " 字节"
-        if callbacks.onError then callbacks.onError(errMsg) end
+        finish(callbacks.onError, errMsg)
         return
       end
 
@@ -2110,7 +2013,7 @@ function _M.sendStream(messages, callbacks)
               if not name or name == "" then name = fn.name end
               if not arguments or arguments == "" then arguments = fn.arguments end
             end
-            local normalizedName = _M.normalizeToolName(name)
+            local normalizedName = ToolExecutor.normalizeToolName(name)
             if normalizedName ~= "" then
               toolCalls[#toolCalls + 1] = {
                 id = (tc.id and tc.id ~= "") and tc.id or ("call_" .. tostring(index)),
@@ -2119,27 +2022,94 @@ function _M.sendStream(messages, callbacks)
               }
             end
           end
-          if #toolCalls > 0 and callbacks.onToolCalls then
-            callbacks.onToolCalls(toolCalls, a1)
-          elseif #toolCalls == 0 and a1 ~= "" and callbacks.onDone then
-            callbacks.onDone(a1)
+          if #toolCalls > 0 then
+            finish(callbacks.onToolCalls, toolCalls, a1)
+            return
           end
-          if #toolCalls > 0 then return end
+          if a1 ~= "" then
+            finish(callbacks.onDone, a1)
+            return
+          end
         end
       end
 
       -- 纯文本
       if a1 == "" then
-        if callbacks.onError then callbacks.onError("AI 未返回内容\n模型: " .. getModel() .. "\n地址: " .. baseUrl) end
+        finish(callbacks.onError, "AI 未返回内容\n模型: " .. getModel() .. "\n地址: " .. baseUrl)
         return
       end
 
-      if callbacks.onDone then callbacks.onDone(a1) end
+      finish(callbacks.onDone, a1)
       end
     )
   end
 
   doRequest()
 end
+
+]]
+-- 上下文策略集中在 ContextManager；这里保留公开入口，兼容现有调用方。
+ContextManager.configure({
+  getSystemPrompt = function() return _M.getSystemPrompt() end,
+  getContextLength = getContextLength,
+  getMaxTokens = getMaxTokens,
+  sendStream = function(messages, callbacks) return _M.sendStream(messages, callbacks) end,
+})
+OpenAIClient.configure({
+  getApiKey = getApiKey,
+  getApiUrl = getApiUrl,
+  getModel = getModel,
+  getTemperature = getTemperature,
+  getMaxTokens = getMaxTokens,
+  getRetryCount = getRetryCount,
+  getHttpClient = getHttpClient,
+  getBuiltinTools = function() return _M.TOOLS end,
+  getMcpTools = function() return MCPClient.getCachedOpenAiTools() end,
+   normalizeToolName = function(name) return ToolExecutor.normalizeToolName(name) end,
+  estimateRequestUsage = function(body)
+    local used = 0
+    for _, item in ipairs(body.messages or {}) do
+      used = used + ContextManager.estimateTokens(json.encode(item))
+    end
+    for _, item in ipairs(body.tools or {}) do
+      used = used + ContextManager.estimateTokens(json.encode(item))
+    end
+    return {
+      used = used,
+      budget = math.max(2000, getContextLength() - getMaxTokens() - 200),
+    }
+  end,
+})
+ToolExecutor.configure({
+  normalizePath = normalizePath,
+  getProjectDir = function() return Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir() end,
+  getSharedData = function(key, defaultValue) return this.getSharedData(key, defaultValue) end,
+  findMcpServer = function(namespace) return MCPClient.findServer(namespace) end,
+  callMcpToolAsync = function(server, tool, args, callback)
+    return MCPClient.callToolAsync(server, tool, args, callback)
+  end,
+  callMcpTool = function(server, tool, args)
+    return MCPClient.callTool(server, tool, args)
+  end,
+  platformExecute = legacyExecuteTool,
+  changeSet = ChangeSet,
+})
+_M.testConnection = OpenAIClient.testConnection
+_M.sendStream = OpenAIClient.sendStream
+_M.normalizeToolName = ToolExecutor.normalizeToolName
+_M.executeTool = ToolExecutor.executeTool
+_M.executeToolAsync = ToolExecutor.executeToolAsync
+_M.isDestructiveTool = ToolExecutor.isDestructiveTool
+_M.isInProjectDir = ToolExecutor.isInProjectDir
+_M.shouldAutoApprove = ToolExecutor.shouldAutoApprove
+_M.undoFileChange = ChangeSet.undo
+_M.redoFileChange = ChangeSet.redo
+_M.hasFileUndo = ChangeSet.hasUndo
+_M.hasFileRedo = ChangeSet.hasRedo
+_M.clearFileChanges = ChangeSet.clear
+_M.buildApiMessages = ContextManager.buildApiMessages
+_M.buildCompressedApiMessages = ContextManager.buildCompressedApiMessages
+_M.estimateContextUsage = ContextManager.estimateContextUsage
+_M.estimateApiMessagesUsage = ContextManager.estimateApiMessagesUsage
 
 return _M

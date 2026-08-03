@@ -15,7 +15,6 @@ import android.widget.Checkable
 import android.widget.ImageView
 import android.widget.ImageView.ScaleType
 import android.widget.ListView
-import android.widget.TextView
 import androidx.core.view.ViewCompat
 import com.androlua.adapter.ArrayListAdapter
 import com.androlua.adapter.LuaAdapter
@@ -342,8 +341,7 @@ class LuaLayout(private val initialContext: Context) {
                     )
                     tValue.isstring() -> {
                         val s = tValue.asString().trim()
-                        val parsed = values.toValue(s, "textSize")
-                        when (parsed) {
+                        when (val parsed = values.toValue(s, "textSize")) {
                             is Number -> {
                                 if (s.toFloatOrNull() != null &&
                                     !s.endsWith("sp") && !s.endsWith("dp") &&
@@ -477,8 +475,7 @@ class LuaLayout(private val initialContext: Context) {
 
             "BackgroundTintList", "backgroundTintList", "backgroundTint" -> {
                 val csl = values.toColorStateList(tValue)
-                val v = view.toView()
-                when (v) {
+                when (val v = view.toView()) {
                     is MaterialButton -> v.backgroundTintList = csl
                     else -> ViewCompat.setBackgroundTintList(v, csl)
                 }
@@ -527,8 +524,7 @@ class LuaLayout(private val initialContext: Context) {
                 // CardView: setStrokeColor(int)；MaterialButton/Chip: ColorStateList
                 val csl = values.toColorStateList(tValue)
                 val color = csl.defaultColor
-                val v = view.toView()
-                when (v) {
+                when (val v = view.toView()) {
                     is MaterialCardView -> {
                         // API 有 int 与 ColorStateList 重载；int 兼容更广
                         v.strokeColor = color
@@ -563,8 +559,7 @@ class LuaLayout(private val initialContext: Context) {
             "strokeWidth", "StrokeWidth" -> {
                 val px = values.toDimensionPx(tValue)
                 val pxInt = px.toInt()
-                val v = view.toView()
-                when (v) {
+                when (val v = view.toView()) {
                     is MaterialCardView -> v.strokeWidth = pxInt
                     is MaterialButton -> v.strokeWidth = pxInt
                     is Chip -> v.chipStrokeWidth = px
@@ -781,8 +776,7 @@ class LuaLayout(private val initialContext: Context) {
             }
             "Checked", "checked" -> {
                 val on = values.toBoolean(tValue)
-                val v = view.toView()
-                when (v) {
+                when (val v = view.toView()) {
                     is Checkable -> v.isChecked = on
                     else -> {
                         if (!LayoutReflection.invokeBooleanSetter(v, "setChecked", on)) {
@@ -796,8 +790,7 @@ class LuaLayout(private val initialContext: Context) {
             }
             "checkable", "Checkable" -> {
                 val on = values.toBoolean(tValue)
-                val v = view.toView()
-                when (v) {
+                when (val v = view.toView()) {
                     is Chip -> v.isCheckable = on
                     is MaterialCardView -> v.isCheckable = on
                     is MaterialButton -> v.isCheckable = on

@@ -10,8 +10,8 @@ class ClassNamesReader(private val context: Context) {
     // 使用 Set 存储补充类，可以天然去重，且查找效率更高。
     private val supplements: Set<String> = setOf(
         "android.widget.GridView",
-        "android.widget.GridView\$InspectionCompanion",
-        "android.widget.GridView\$StretchMode",
+        $$"android.widget.GridView$InspectionCompanion",
+        $$"android.widget.GridView$StretchMode",
     )
 
     /**

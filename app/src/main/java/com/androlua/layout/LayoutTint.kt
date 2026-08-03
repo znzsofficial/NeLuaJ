@@ -58,14 +58,10 @@ internal object LayoutTint {
             }
         }
         // 第三方 / 未知：最多试常见 setter
-        if (LayoutReflection.invokeColorStateListSetter(host, "setIconTint", csl) ||
-            LayoutReflection.invokeColorStateListSetter(host, "setIconTintList", csl) ||
-            LayoutReflection.invokeColorStateListSetter(host, "setImageTintList", csl) ||
-            LayoutReflection.invokeColorStateListSetter(host, "setSupportImageTintList", csl)
-        ) {
-            return true
-        }
-        return false
+        return LayoutReflection.invokeColorStateListSetter(host, "setIconTint", csl) ||
+                LayoutReflection.invokeColorStateListSetter(host, "setIconTintList", csl) ||
+                LayoutReflection.invokeColorStateListSetter(host, "setImageTintList", csl) ||
+                LayoutReflection.invokeColorStateListSetter(host, "setSupportImageTintList", csl)
     }
 
     fun apply(host: View, csl: ColorStateList) {
@@ -75,6 +71,10 @@ internal object LayoutTint {
                 host.backgroundTintList = csl
             }
             is ImageView -> ImageViewCompat.setImageTintList(host, csl)
+            is Chip -> {
+                host.chipIconTint = csl
+                host.closeIconTint = csl
+            }
             is CompoundButton -> {
                 CompoundButtonCompat.setButtonTintList(host, csl)
                 LayoutReflection.invokeColorStateListSetter(host, "setTrackTintList", csl)
@@ -93,13 +93,9 @@ internal object LayoutTint {
                 host.backgroundTintList = csl
                 host.iconTint = csl
             }
-            is Chip -> {
-                host.chipIconTint = csl
-                host.closeIconTint = csl
-            }
             is TextInputLayout -> {
                 runCatching { host.setBoxStrokeColorStateList(csl) }
-                host.setHintTextColor(csl)
+                host.hintTextColor = csl
                 host.setStartIconTintList(csl)
                 host.setEndIconTintList(csl)
             }

@@ -568,7 +568,7 @@ class res(private val context: LuaContext) : TwoArgFunction() {
             return NIL
         }
 
-        override fun checktable(): LuaTable? {
+        override fun checktable(): LuaTable {
             val t = LuaTable()
             File(context.getLuaPath("res/raw")).list()?.forEachIndexed { index, fileName ->
                 t[index + 1] = fileName

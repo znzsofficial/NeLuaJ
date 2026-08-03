@@ -1,6 +1,8 @@
 --- MCP Streamable HTTP 客户端（仅 HTTP 系传输，不支持 stdio）
 --- 配置存于 shared data "ai_mcp_servers"（JSON 数组）
 local _M = {}
+local ReentrantLock = luajava.bindClass("java.util.concurrent.locks.ReentrantLock")
+local initLock = ReentrantLock()
 
 local SERVERS_KEY = "ai_mcp_servers"
 local DEFAULT_PROTO = "2025-06-18"
@@ -99,7 +101,9 @@ local function rpcRequest(server, method, params, id)
   if params and params.name then
     headers["Mcp-Name"] = params.name
   end
-  local paramsObj = params or {}
+  -- 不要向调用方的 arguments 表写入协议元数据。
+  local paramsObj = {}
+  for k, v in pairs(params or {}) do paramsObj[k] = v end
   paramsObj._meta = {
     ["io.modelcontextprotocol/protocolVersion"] = proto,
     ["io.modelcontextprotocol/clientInfo"] = {
@@ -109,10 +113,10 @@ local function rpcRequest(server, method, params, id)
   }
   local payload = {
     jsonrpc = "2.0",
-    id = id or 1,
     method = method,
     params = paramsObj,
   }
+  if id ~= false then payload.id = id or 1 end
   local body = json.encode(payload)
   if not body or body == "" then return nil, "请求体编码失败" end
   local okCall, res = pcall(function()
@@ -148,6 +152,8 @@ local function rpcRequest(server, method, params, id)
     end
     return nil, "HTTP " .. tostring(code) .. "（" .. tostring(method) .. "）" .. errDetail
   end
+  -- 通知没有响应体，2xx 即视为成功，不进入 JSON 解析。
+  if id == false then return true, nil end
   local okBody, respBody = pcall(function()
     return res.body().string()
   end)
@@ -192,10 +198,17 @@ end
 function _M.ensureInitialized(server)
   local url = server.url or ""
   if _M._initCache[url] then return true end
-  local proto, err = _M.initialize(server)
-  if not proto then return nil, err end
-  _M._initCache[url] = proto
-  return true
+  initLock.lock()
+  local ok, result, err = pcall(function()
+    if _M._initCache[url] then return true end
+    local proto, initErr = _M.initialize(server)
+    if not proto then return nil, initErr end
+    _M._initCache[url] = proto
+    return true
+  end)
+  initLock.unlock()
+  if not ok then return nil, "初始化异常: " .. tostring(result) end
+  return result, err
 end
 
 function _M.initialize(server)
@@ -214,6 +227,9 @@ function _M.initialize(server)
   server.protocolVersion = proto
   local st = serverState(url)
   st.protocolVersion = proto
+  -- MCP 初始化握手的第二步：通知服务器后续请求可以开始。
+  local _, notifyErr = rpcRequest(server, "notifications/initialized", {}, false)
+  if notifyErr then return nil, notifyErr end
   if server.sessionId and server.sessionId ~= "" then st.sessionId = server.sessionId end
   return proto, nil
 end
@@ -312,8 +328,8 @@ end
 function _M.getOpenAiTools()
   local merged = {}
   for _, server in ipairs(_M.getServers()) do
-    local ok, tools = pcall(_M.listTools, server)
-    if ok and type(tools) == "table" then
+    local tools = _M.listTools(server)
+    if type(tools) == "table" then
       local ns = serverNamespace(server)
       for _, tool in ipairs(tools) do
         if type(tool) == "table" and tool.name then
@@ -329,8 +345,7 @@ end
 function _M.testServer(server)
   local okInit, initErr = _M.ensureInitialized(server)
   if not okInit then return false, initErr end
-  local ok, tools = pcall(_M.listTools, server)
-  if not ok then return false, tools end
+  local tools = _M.listTools(server)
   if not tools then return false, "tools/list 失败" end
   return true, "连接成功，发现 " .. #tools .. " 个工具"
 end
@@ -340,9 +355,11 @@ end
 _M._mergedTools = nil
 _M._mergedAt = 0
 _M._refreshing = false
+_M._refreshWaiters = {}
 
 --- 后台刷新所有服务器的工具并缓存合并结果；完成后在回调中返回 merged 列表
 function _M.refreshToolsAsync(onDone)
+  if onDone then _M._refreshWaiters[#_M._refreshWaiters + 1] = onDone end
   if _M._refreshing then return end
   _M._refreshing = true
   local okLaunch = pcall(function()
@@ -356,12 +373,19 @@ function _M.refreshToolsAsync(onDone)
           _M._mergedTools = merged
           _M._mergedAt = os.time()
         end
-        if onDone then pcall(onDone, merged) end
+        local waiters = _M._refreshWaiters
+        _M._refreshWaiters = {}
+        for _, waiter in ipairs(waiters) do pcall(waiter, merged) end
       end,
       "io"
     )
   end)
-  if not okLaunch then _M._refreshing = false end
+  if not okLaunch then
+    _M._refreshing = false
+    local waiters = _M._refreshWaiters
+    _M._refreshWaiters = {}
+        for _, waiter in ipairs(waiters) do pcall(waiter, nil) end
+  end
 end
 
 --- 主线程安全：返回已缓存的合并工具（可能为 nil），触发一次后台刷新
@@ -396,7 +420,7 @@ function _M.callToolAsync(server, toolName, args, onResult)
       "io"
     )
   end)
-  if not okLaunch and onResult then onResult(false, "无法启动后台任务") end
+  if not okLaunch and onResult then pcall(onResult, false, "无法启动后台任务") end
 end
 
 --- 异步测试连接；onResult(ok, msg)（主线程回调）
@@ -419,7 +443,7 @@ function _M.testServerAsync(server, onResult)
       "io"
     )
   end)
-  if not okLaunch and onResult then onResult(false, "无法启动后台任务") end
+  if not okLaunch and onResult then pcall(onResult, false, "无法启动后台任务") end
 end
 
 return _M

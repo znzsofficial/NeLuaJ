@@ -174,9 +174,7 @@ public final class LuaPagerAdapter extends PagerAdapter {
         while (titles.size() < pagerViews.size()) {
             titles.add("");
         }
-        for (int i = 0; i < titles.size(); i++) {
-            titles.set(i, normalizeTitle(titles.get(i)));
-        }
+        titles.replaceAll(this::normalizeTitle);
     }
 
     private String normalizeTitle(String title) {
