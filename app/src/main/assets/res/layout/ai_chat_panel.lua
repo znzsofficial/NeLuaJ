@@ -62,6 +62,7 @@ return {
     {
       MaterialCardView,
       id = "modelChip",
+      contentDescription = res.string.ai_cd_switch_model,
       radius = "16dp", CardElevation = 0,
       strokeWidth = "1dp", strokeColor = ColorOutline,
       CardBackgroundColor = ColorSurface,
@@ -71,11 +72,13 @@ return {
         id = "modelLabel", text = "gpt-4o-mini",
         textSize = "11sp", textColor = ColorPrimary,
         padding = "6dp", paddingLeft = "10dp", paddingRight = "10dp",
+        maxLines = 1, ellipsize = "end", maxWidth = "112dp",
       },
     },
     {
       MaterialButton,
       id = "btnSettings",
+      contentDescription = res.string.ai_cd_settings,
       styleAttr = "?attr/materialIconButtonStyle",
       layout_width = "40dp", layout_height = "40dp",
       BackgroundTintList = ColorStateList.valueOf(0),
@@ -87,6 +90,7 @@ return {
     {
       MaterialButton,
       id = "btnClear",
+      contentDescription = res.string.ai_cd_new_conv,
       styleAttr = "?attr/materialIconButtonStyle",
       layout_width = "40dp", layout_height = "40dp",
       BackgroundTintList = ColorStateList.valueOf(0),
@@ -94,6 +98,21 @@ return {
       iconTint = ColorStateList.valueOf(ColorText),
       RippleColor = ColorStateList.valueOf(ColorRipple),
     },
+  },
+  {
+    MaterialTextView,
+    id = "autoApproveStatus",
+    text = res.string.ai_auto_approve_active,
+    contentDescription = res.string.ai_auto_approve_active_desc,
+    textSize = "11sp",
+    textColor = ColorError,
+    layout_width = "match",
+    layout_height = "wrap",
+    paddingLeft = "16dp",
+    paddingRight = "16dp",
+    paddingTop = "6dp",
+    paddingBottom = "6dp",
+    visibility = 8,
   },
   { MaterialDivider, dividerColor = ColorOutline },
   -- 消息列表
@@ -159,6 +178,7 @@ return {
       {
         MaterialButton,
         id = "btnCommands",
+        contentDescription = res.string.ai_cd_commands,
         styleAttr = "?attr/materialIconButtonStyle",
         layout_width = "44dp",
         layout_height = "44dp",
@@ -171,6 +191,7 @@ return {
       {
         MaterialButton,
         id = "btnSend",
+        contentDescription = res.string.ai_cd_send,
         styleAttr = "?attr/materialIconButtonStyle",
         layout_width = "44dp",
         layout_height = "44dp",
@@ -184,6 +205,7 @@ return {
       {
         MaterialButton,
         id = "btnStop",
+        contentDescription = res.string.ai_cd_stop,
         styleAttr = "?attr/materialIconButtonStyle",
         layout_width = "44dp",
         layout_height = "44dp",

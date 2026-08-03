@@ -20,15 +20,20 @@ import "androidx.core.graphics.ColorUtils"
 
 local AgentChat = require("mods.agent.AgentChat")
 local MCPClient = require("mods.agent.MCPClient")
+local ActivityUtil = require("mods.utils.ActivityUtil")
 import "mods.utils.EditorUtil"
 local ColorUtil = this.themeUtil
 local ColorPrimary = ColorUtil.getColorPrimary()
 local ColorOnPrimary = ColorUtil.getColorOnPrimary()
+local ColorSecondaryContainer = ColorUtil.getColorSecondaryContainer()
+local ColorOnSecondaryContainer = ColorUtil.getColorOnSecondaryContainer()
 local ColorSurface = ColorUtil.getColorSurfaceContainer()
 local ColorOnSurface = ColorUtil.getColorOnSurface()
 local ColorText = ColorUtil.getColorOnSurfaceVariant()
 local ColorOutline = ColorUtil.getColorOutlineVariant()
 local ColorError = ColorUtil.getColorError()
+local ColorErrorContainer = ColorUtil.getColorErrorContainer()
+local ColorOnErrorContainer = ColorUtil.getColorOnErrorContainer()
 local ColorRipple = ColorUtils.blendARGB(ColorPrimary, 0x00ffffff, 0.4)
 local ColorCodeBg = ColorUtils.blendARGB(ColorSurface, 0xff000000, 0.07)
 local S = res.string
@@ -53,13 +58,19 @@ local saveHistory, loadHistory, showModelManager, showModelPicker, showConvManag
 
 local function isToolError(toolName, result)
   if not result then return false end
-  -- 读取/搜索类工具返回的是任意文件内容，不是状态消息，不能按关键词判错
-  if toolName == "read_file" or toolName == "read_files"
-    or toolName == "list_dir" or toolName == "search_in_files" then
-    return false
-  end
   local r = tostring(result):lower()
-  return result:find("失败", 1, true)
+  if toolName == "read_file" or toolName == "read_files"
+      or toolName == "list_dir" or toolName == "search_in_files" then
+    return result:find("读取文件失败", 1, true)
+      or result:find("读取目录失败", 1, true)
+      or result:find("搜索失败", 1, true)
+      or r:match("^error[:：]") ~= nil
+      or r:match("^exception[:：]") ~= nil
+  end
+  return result:find("读取文件失败", 1, true)
+    or result:find("读取目录失败", 1, true)
+    or result:find("搜索失败", 1, true)
+    or result:find("失败", 1, true)
     or result:find("异常", 1, true)
     or result:find("找不到", 1, true)
     or result:find("未找到", 1, true)
@@ -70,12 +81,42 @@ local function isToolError(toolName, result)
     or r:find("not found", 1, true)
 end
 
+local function toolDisplayName(name)
+  local labels = {
+    create_file = S.ai_create_file,
+    create_folder = S.ai_create_folder,
+    delete_file = S.ai_delete_file,
+    delete_folder = S.ai_delete_folder,
+    apply_patch = S.ai_apply_patch,
+    replace_in_file = S.ai_replace_text,
+    run_lua = S.ai_run_code,
+    append_file = S.ai_append_file,
+    rename_file = S.ai_rename_file,
+    read_file = S.ai_tool_read_file,
+    read_files = S.ai_tool_read_files,
+    list_dir = S.ai_tool_list_dir,
+    search_in_files = S.ai_tool_search,
+    get_env_info = S.ai_tool_env,
+  }
+  return labels[name] or tostring(name or "")
+end
+
 local function scrollDown()
   if views.msgScroll then
     views.msgScroll.post(function()
       views.msgScroll.fullScroll(130)
     end)
   end
+end
+
+local function showAgentHelp()
+  ActivityUtil.open("help", "agent")
+end
+
+local function updateSafetyStatus()
+  if not views.autoApproveStatus then return end
+  local enabled = this.getSharedData("ai_auto_approve", "0") == "1"
+  views.autoApproveStatus.setVisibility(enabled and VISIBLE or GONE)
 end
 
 -- ─── Markdown 渲染辅助 ──
@@ -360,33 +401,43 @@ addToolBubble = function(toolName, args, result)
   elseif toolName == "rename_file" then icon = "⇄"
   elseif toolName == "get_env_info" then icon = "ℹ" end
 
-  local summary = icon .. " " .. toolName
-  if args.path then summary = summary .. "\n  " .. args.path end
+  local resultText = tostring(result or "")
+  local resultLower = resultText:lower()
+  local denied = resultText == tostring(S.ai_user_denied)
+    or resultText:find("用户拒绝", 1, true) ~= nil
+    or resultLower:find("user declined", 1, true) ~= nil
+  local status = result == nil and S.ai_tool_pending
+    or (denied and S.ai_tool_denied or (isError and S.ai_tool_failed or S.ai_tool_success))
+  local summary = icon .. " " .. toolDisplayName(toolName) .. "  ·  " .. status
+  local detailParts = {}
+  if args.path then detailParts[#detailParts + 1] = tostring(args.path) end
   if toolName == "rename_file" and args.new_path then
-    summary = summary .. " → " .. args.new_path
+    detailParts[#detailParts + 1] = "→ " .. tostring(args.new_path)
   end
   if toolName == "apply_patch" and args.patch then
     local blockCount = select(2, args.patch:gsub("<<<<<<<%s*SEARCH", ""))
     local hunkCount = select(2, args.patch:gsub("@@", ""))
     if blockCount > 0 then
-      summary = summary .. "\n  " .. S.ai_search_replace_blocks:format(blockCount)
+      detailParts[#detailParts + 1] = S.ai_search_replace_blocks:format(blockCount)
     elseif hunkCount > 0 then
-      summary = summary .. "\n  unified diff"
+      detailParts[#detailParts + 1] = "unified diff"
     end
   end
   if result then
-    -- 批量读取结果很大，界面只显示摘要，不全量渲染
     local display = result
     if toolName == "read_files" and not isError then
       local files = args.paths
       local n = type(files) == "table" and #files or (type(files) == "string" and 1 or 0)
       display = S.ai_read_files_summary:format(n)
-    elseif #display > 400 then
-      display = display:sub(1, 400) .. "\n…"
     end
-    summary = summary .. "\n  → " .. display
+    if #display > 12000 then
+      display = display:sub(1, 12000) .. "\n\n" .. S.ai_tool_output_truncated
+    end
+    detailParts[#detailParts + 1] = tostring(display)
   end
 
+  local detail = table.concat(detailParts, "\n")
+  local bubbleViews = {}
   local card = {
     MaterialCardView,
     radius = "8dp",
@@ -400,15 +451,48 @@ addToolBubble = function(toolName, args, result)
     layout_marginLeft = "48dp",
     layout_marginRight = "48dp",
     {
-      MaterialTextView,
-      text = summary,
-      textSize = "12sp",
-      textColor = isError and ColorError or ColorText,
-      padding = "10dp",
-      lineSpacingMultiplier = 1.3,
+      LinearLayout,
+      orientation = "vertical",
+      layout_width = "match",
+      layout_height = "wrap",
+      {
+        MaterialTextView,
+        id = "toolHeader",
+        text = summary .. (detail ~= "" and "  ›" or ""),
+        contentDescription = summary .. (detail ~= "" and (". " .. S.ai_tool_tap_expand) or ""),
+        textSize = "12sp",
+        textStyle = "bold",
+        textColor = isError and ColorError or ColorOnSurface,
+        padding = "10dp",
+        clickable = detail ~= "",
+        focusable = detail ~= "",
+      },
+      {
+        MaterialTextView,
+        id = "toolDetail",
+        text = detail,
+        textSize = "12sp",
+        textColor = isError and ColorError or ColorText,
+        paddingLeft = "10dp",
+        paddingRight = "10dp",
+        paddingBottom = "10dp",
+        lineSpacingMultiplier = 1.3,
+        textIsSelectable = true,
+        visibility = GONE,
+      },
     },
   }
-  container.addView(loadlayout(card))
+  container.addView(loadlayout(card, bubbleViews))
+  if detail ~= "" then
+    local expanded = false
+    bubbleViews.toolHeader.onClick = function()
+      expanded = not expanded
+      bubbleViews.toolDetail.setVisibility(expanded and VISIBLE or GONE)
+      bubbleViews.toolHeader.setText(summary .. (expanded and "  ⌄" or "  ›"))
+      bubbleViews.toolHeader.setContentDescription(summary .. ". "
+        .. (expanded and S.ai_tool_tap_collapse or S.ai_tool_tap_expand))
+    end
+  end
   scrollDown()
 end
 
@@ -420,6 +504,7 @@ local function showLoading()
   if views.btnSend then views.btnSend.setEnabled(false) end
   if views.btnSend then views.btnSend.setVisibility(GONE) end
   if views.btnStop then views.btnStop.setVisibility(VISIBLE) end
+  if views.btnStop then views.btnStop.setEnabled(true) end
 end
 
 local function hideLoading()
@@ -428,11 +513,13 @@ local function hideLoading()
   if views.btnSend then views.btnSend.setEnabled(true) end
   if views.btnSend then views.btnSend.setVisibility(VISIBLE) end
   if views.btnStop then views.btnStop.setVisibility(GONE) end
+  if views.btnStop then views.btnStop.setEnabled(true) end
 end
 
 local function invalidateRequest()
   requestGeneration = requestGeneration + 1
   isLoading = false
+  AgentChat.cancelPendingRequest()
   okHttp.cancelAll()
   hideLoading()
   return requestGeneration
@@ -440,7 +527,7 @@ end
 
 local function refreshMessageList()
   if views.msgContainer then views.msgContainer.removeAllViews() end
-  loadHistory()
+  loadHistory(false)
 end
 
 local function undoLastTurn()
@@ -492,7 +579,7 @@ local function applyFileChange(action)
       if views.msgContainer then views.msgContainer.removeAllViews() end
       loadHistory()
       if MainActivity and MainActivity.Public then
-        MainActivity.Public.snack("文件变更已恢复")
+        MainActivity.Public.snack(tostring(result.error or "文件变更已恢复"))
       end
     end, "io")
   end)
@@ -537,45 +624,64 @@ local function compressCurrentContext()
 end
 
 local function showCommandMenu()
-  local labels = {
-    S.ai_compress_context,
-    S.ai_undo_turn,
-    S.ai_redo_turn,
-    S.ai_undo_file,
-    S.ai_redo_file,
-    S.ai_switch_conv,
-    S.ai_settings,
-  }
-  MaterialAlertDialogBuilder(activity)
+  local content = LinearLayout(activity)
+  content.setOrientation(1)
+  content.setPadding(dp(8), dp(4), dp(8), dp(4))
+  local menuDialog
+
+  local function addSection(label)
+    local title = MaterialTextView(activity)
+    title.setText(label)
+    title.setTextSize(12)
+    title.setTypeface(Typeface.DEFAULT, 1)
+    title.setTextColor(ColorPrimary)
+    title.setPadding(dp(16), dp(12), dp(16), dp(4))
+    content.addView(title)
+  end
+
+  local function addAction(label, enabled, action)
+    local row = MaterialTextView(activity)
+    row.setText(label)
+    row.setTextSize(15)
+    row.setTextColor(ColorOnSurface)
+    row.setGravity(16)
+    row.setPadding(dp(16), 0, dp(16), 0)
+    row.setMinHeight(dp(48))
+    row.setEnabled(enabled)
+    row.setAlpha(enabled and 1 or 0.42)
+    if enabled then
+      row.setClickable(true)
+      row.setOnClickListener(function()
+        if menuDialog then menuDialog.dismiss() end
+        action()
+      end)
+    end
+    content.addView(row)
+  end
+
+  local hasTurn = false
+  for _, message in ipairs(messages) do
+    if message.role == "user" then hasTurn = true break end
+  end
+  addSection(S.ai_command_conversation)
+  addAction(S.ai_compress_context, not isLoading and #messages > 0, compressCurrentContext)
+  addAction(S.ai_undo_turn, not isLoading and hasTurn, undoLastTurn)
+  addAction(S.ai_redo_turn, not isLoading and #redoTurns > 0, redoLastTurn)
+  addSection(S.ai_command_files)
+  addAction(S.ai_undo_file, not isLoading and AgentChat.hasFileUndo(), undoFileChange)
+  addAction(S.ai_redo_file, not isLoading and AgentChat.hasFileRedo(), redoFileChange)
+  addSection(S.ai_command_workspace)
+  addAction(S.ai_switch_conv, true, showConvList)
+  addAction(S.ai_settings, true, showSettings)
+  addAction(S.ai_agent_help, true, showAgentHelp)
+
+  local scroll = ScrollView(activity)
+  scroll.setFillViewport(true)
+  scroll.addView(content)
+  menuDialog = MaterialAlertDialogBuilder(activity)
     .setTitle(S.ai_commands)
-    .setItems(labels, function(_, which)
-      if which == 0 then
-        if not compressCurrentContext() and MainActivity and MainActivity.Public then
-          MainActivity.Public.snack(S.ai_generating)
-        end
-      elseif which == 1 then
-        if not undoLastTurn() and MainActivity and MainActivity.Public then
-          MainActivity.Public.snack(S.ai_undo_empty)
-        end
-      elseif which == 2 then
-        if not redoLastTurn() and MainActivity and MainActivity.Public then
-          MainActivity.Public.snack(S.ai_redo_empty)
-        end
-      elseif which == 3 then
-        if not undoFileChange() and MainActivity and MainActivity.Public then
-          MainActivity.Public.snack(S.ai_undo_file_empty)
-        end
-      elseif which == 4 then
-        if not redoFileChange() and MainActivity and MainActivity.Public then
-          MainActivity.Public.snack(S.ai_redo_file_empty)
-        end
-      elseif which == 5 then
-        showConvList()
-      elseif which == 6 then
-        showSettings()
-      end
-    end)
-    .setNegativeButton(S.ai_cancel, nil)
+    .setView(scroll)
+    .setNegativeButton(S.ai_close, nil)
     .show()
 end
 
@@ -636,9 +742,20 @@ local function showToolConfirm(toolName, args, onAllow, onDeny)
     local srcPath = args.path or "?"
     local dstPath = args.new_path or args.newPath or "?"
     message = S.ai_confirm_rename:format(srcPath, dstPath)
+  elseif toolName:match("^mcp::") or toolName:match("^mcp__") then
+    title = S.ai_confirm_external_title
+    local okArgs, encodedArgs = pcall(json.encode, args or {})
+    local argsPreview = okArgs and tostring(encodedArgs) or tostring(args or "")
+    if #argsPreview > 2000 then argsPreview = argsPreview:sub(1, 2000) .. "\n…" end
+    message = S.ai_confirm_external_message:format(toolDisplayName(toolName), argsPreview)
+  elseif toolName == "read_file" or toolName == "read_files"
+      or toolName == "list_dir" or toolName == "search_in_files" then
+    title = S.ai_confirm_external_read_title
+    local target = args.path or (type(args.paths) == "table" and table.concat(args.paths, "\n")) or args.paths or "?"
+    message = S.ai_confirm_external_read_message:format(tostring(target))
   else
-    onAllow()
-    return
+    title = S.ai_confirm_tool_title
+    message = S.ai_confirm_tool_message:format(toolDisplayName(toolName))
   end
 
   MaterialAlertDialogBuilder(activity)
@@ -708,7 +825,8 @@ local function executeToolCalls(toolCalls, index, results, onAllDone, generation
 
   if AgentChat.shouldAutoApprove(tc.name, args) then
     AgentChat.executeToolAsync(tc.name, args, proceedWithResult)
-  elseif AgentChat.isDestructiveTool(tc.name) then
+  elseif (AgentChat.requiresConfirmation and AgentChat.requiresConfirmation(tc.name, args))
+      or AgentChat.isDestructiveTool(tc.name) then
     showToolConfirm(tc.name, args, function()
       if generation and generation ~= requestGeneration then return end
       AgentChat.executeToolAsync(tc.name, args, proceedWithResult)
@@ -727,9 +845,11 @@ saveHistory = function()
   AgentChat.saveCurrentConv(messages)
 end
 
-loadHistory = function()
-  undoTurns = {}
-  redoTurns = {}
+loadHistory = function(resetTurnHistory)
+  if resetTurnHistory ~= false then
+    undoTurns = {}
+    redoTurns = {}
+  end
   if AgentChat.clearActiveSkill then AgentChat.clearActiveSkill() end
   local conv, idx = AgentChat.getCurrentConv()
   if not conv or not conv.messages or #conv.messages == 0 then
@@ -743,8 +863,8 @@ loadHistory = function()
   -- 重建气泡
   local container = views.msgContainer
   if container then
-    local toolInfo = {}
-    for _, msg in ipairs(messages) do
+    local consumedTools = {}
+    for messageIndex, msg in ipairs(messages) do
       if msg.role == "user" then
         addMessageBubble("user", msg.content or "")
       elseif msg.role == "assistant" then
@@ -755,26 +875,37 @@ loadHistory = function()
         end
         -- 显示工具调用气泡，并记录 id 供 tool 结果回填
         if msg.tool_calls then
+          local resultById, resultWithoutId = {}, {}
+          local scanIndex = messageIndex + 1
+          while scanIndex <= #messages and messages[scanIndex].role == "tool" do
+            local candidate = messages[scanIndex]
+            if candidate.tool_call_id and candidate.tool_call_id ~= "" then
+              resultById[candidate.tool_call_id] = { index = scanIndex, content = candidate.content or "" }
+            else
+              resultWithoutId[#resultWithoutId + 1] = { index = scanIndex, content = candidate.content or "" }
+            end
+            scanIndex = scanIndex + 1
+          end
+          local missingIndex = 1
           for _, tc in ipairs(msg.tool_calls) do
             local fn = tc["function"]
             local toolName = fn and fn.name or tc.name or ""
             local args = {}
             pcall(function() args = json.decode(fn and fn.arguments or tc.arguments or "{}") end)
-            addToolBubble(toolName, args, nil)
             local tid = tc.id or ""
-            if tid ~= "" then
-              toolInfo[tid] = { name = toolName, args = args }
+            local matched = tid ~= "" and resultById[tid] or nil
+            if not matched then
+              matched = resultWithoutId[missingIndex]
+              if matched then missingIndex = missingIndex + 1 end
             end
+            local result = matched and matched.content or nil
+            if matched then consumedTools[matched.index] = true end
+            addToolBubble(toolName, args, result)
           end
         end
       elseif msg.role == "tool" then
-        -- 回填工具执行结果
-        local info = toolInfo[msg.tool_call_id or ""]
         local result = msg.content or ""
-        if #result > 300 then result = result:sub(1, 300) .. "…" end
-        if info then
-          addToolBubble(info.name, info.args, result)
-        elseif result ~= "" then
+        if not consumedTools[messageIndex] and result ~= "" then
           addToolBubble("tool_result", {}, result)
         end
       end
@@ -955,6 +1086,10 @@ local function sendToApi(apiMessages, isContinue)
       hideLoading()
       -- 用户主动停止：保留已生成部分，不显示错误
       if tostring(err):lower():match("cancel") then
+        if fullResponse ~= "" then
+          messages[#messages + 1] = { role = "assistant", content = fullResponse }
+          saveHistory()
+        end
         if aiTextView then
           local partial = fullResponse
           if partial == "" then partial = S.ai_stopped end
@@ -1252,6 +1387,8 @@ showSettings = function()
   local retryCount = this.getSharedData("ai_retry_count", "2")
   local systemPrompt = this.getSharedData("ai_system_prompt", "")
   local dlgViews = {}
+  local settingsDialog
+  local mcpRenderGeneration = 0
 
   local function sectionTitle(text)
     return {
@@ -1356,7 +1493,13 @@ showSettings = function()
         layout_width = "match",
         layout_height = "wrap",
         padding = "16dp",
-        sectionTitle(S.ai_behavior),
+        sectionTitle(S.ai_security),
+        {
+          MaterialTextView,
+          text = S.ai_security_desc,
+          textSize = "12sp", textColor = ColorText,
+          layout_marginBottom = "10dp",
+        },
         {
           LinearLayout,
           orientation = "horizontal",
@@ -1386,6 +1529,15 @@ showSettings = function()
             checked = autoApprove,
             layout_marginLeft = "12dp",
           },
+        },
+        {
+          MaterialTextView,
+          id = "autoApproveWarning",
+          text = S.ai_auto_approve_warning,
+          textSize = "12sp",
+          textColor = ColorError,
+          layout_marginTop = "8dp",
+          visibility = autoApprove and VISIBLE or GONE,
         },
         {
           LinearLayout,
@@ -1434,7 +1586,13 @@ showSettings = function()
         layout_width = "match",
         layout_height = "wrap",
         padding = "16dp",
-        sectionTitle(S.ai_system_prompt),
+        sectionTitle(S.ai_advanced),
+        {
+          MaterialTextView,
+          text = S.ai_system_prompt,
+          textSize = "14sp", textColor = ColorOnSurface,
+          layout_marginBottom = "2dp",
+        },
         {
           MaterialTextView,
           text = S.ai_sys_prompt_desc,
@@ -1504,8 +1662,8 @@ showSettings = function()
             layout_width = "0dp", layout_weight = 1,
             layout_marginRight = "6dp",
             includeFontPadding = false,
-            BackgroundTintList = ColorStateList.valueOf(ColorUtils.blendARGB(ColorPrimary, 0xffffffff, 0.85)),
-            textColor = ColorPrimary,
+            BackgroundTintList = ColorStateList.valueOf(ColorSecondaryContainer),
+            textColor = ColorOnSecondaryContainer,
           },
           {
             MaterialButton,
@@ -1515,8 +1673,8 @@ showSettings = function()
             layout_width = "0dp", layout_weight = 1,
             layout_marginLeft = "6dp",
             includeFontPadding = false,
-            BackgroundTintList = ColorStateList.valueOf(ColorUtils.blendARGB(ColorPrimary, 0xffffffff, 0.85)),
-            textColor = ColorPrimary,
+            BackgroundTintList = ColorStateList.valueOf(ColorSecondaryContainer),
+            textColor = ColorOnSecondaryContainer,
           },
         },
       },
@@ -1541,6 +1699,10 @@ showSettings = function()
     body,
   }, dlgViews)
 
+  dlgViews.autoApproveSwitch.setOnCheckedChangeListener(function(_, checked)
+    dlgViews.autoApproveWarning.setVisibility(checked and VISIBLE or GONE)
+  end)
+
   dlgViews.btnTestConn.onClick = function()
     AgentChat.testConnection(function(ok, msg)
       if MainActivity and MainActivity.Public then
@@ -1552,11 +1714,14 @@ showSettings = function()
   -- ─── MCP 服务器管理 ──
 
   local function renderMcpList()
+    mcpRenderGeneration = mcpRenderGeneration + 1
+    local renderGeneration = mcpRenderGeneration
     local mcpList = dlgViews.mcpList
     if not mcpList then return end
     mcpList.removeAllViews()
     local servers = MCPClient.getServers()
     for i, server in ipairs(servers) do
+      local serverItem = server
       local sname = tostring(server.name or S.ai_unnamed)
       local surl = tostring(server.url or "")
       local row = LinearLayout(activity)
@@ -1588,6 +1753,12 @@ showSettings = function()
       urlTv.setTextColor(ColorText)
       urlTv.setSingleLine(true)
       txtCol.addView(urlTv)
+      local statusTv = MaterialTextView(activity)
+      statusTv.setText("")
+      statusTv.setTextSize(11)
+      statusTv.setTextColor(ColorText)
+      statusTv.setVisibility(GONE)
+      txtCol.addView(statusTv)
       row.addView(txtCol)
 
       local function mcpBtn(text, bgColor, textColor)
@@ -1609,14 +1780,26 @@ showSettings = function()
       testBtn.setLayoutParams(testLp)
       testBtn.setOnClickListener(function()
         testBtn.setEnabled(false)
-        MCPClient.testServerAsync(server, function(ok, msg)
-          testBtn.setEnabled(true)
-          print("[MCP 测试] " .. tostring(sname) .. " -> " .. tostring(msg or (ok and "连接成功" or "连接失败")))
+        testBtn.setText(S.ai_mcp_testing)
+        statusTv.setText(S.ai_mcp_testing)
+        statusTv.setTextColor(ColorText)
+        statusTv.setVisibility(VISIBLE)
+        MCPClient.testServerAsync(serverItem, function(ok, msg)
+          if renderGeneration ~= mcpRenderGeneration
+              or not settingsDialog or not settingsDialog.isShowing() then return end
+          pcall(function()
+            testBtn.setEnabled(true)
+            testBtn.setText(S.ai_test)
+            statusTv.setText(ok and S.ai_mcp_connected or S.ai_mcp_failed)
+            statusTv.setTextColor(ok and ColorPrimary or ColorError)
+            local feedback = tostring(msg or (ok and S.ai_mcp_connected or S.ai_mcp_failed))
+            if MainActivity and MainActivity.Public then MainActivity.Public.snack(sname .. ": " .. feedback) end
+          end)
         end)
       end)
       row.addView(testBtn)
 
-      local delBtn = mcpBtn(S.ai_delete, ColorError, 0xffffffff)
+       local delBtn = mcpBtn(S.ai_delete, ColorErrorContainer, ColorOnErrorContainer)
       local delLp = LinearLayout.LayoutParams(-2, dp(34))
       delLp.leftMargin = dp(8)
       delBtn.setLayoutParams(delLp)
@@ -1722,7 +1905,7 @@ showSettings = function()
 
   renderMcpList()
 
-  MaterialAlertDialogBuilder(activity)
+  settingsDialog = MaterialAlertDialogBuilder(activity)
     .setTitle(S.ai_settings)
     .setView(content)
     .setPositiveButton(S.ai_ok, function()
@@ -1738,12 +1921,16 @@ showSettings = function()
       if ctxVal ~= "" then this.setSharedData("ai_context_length", ctxVal) end
       if retryVal ~= "" then this.setSharedData("ai_retry_count", retryVal) end
       this.setSharedData("ai_system_prompt", promptVal)
+      updateSafetyStatus()
       if MainActivity and MainActivity.Public then
         MainActivity.Public.snack(S.ai_settings_saved)
       end
     end)
     .setNegativeButton(S.ai_cancel, nil)
     .show()
+  settingsDialog.setOnDismissListener(function()
+    mcpRenderGeneration = mcpRenderGeneration + 1
+  end)
 end
 
 -- ─── 会话管理 ──
@@ -1941,11 +2128,11 @@ local function buildManagerRow(conv, index, render)
     return btn
   end
 
-  local renBtn = smallButton(S.ai_rename_btn, ColorUtils.blendARGB(ColorPrimary, 0xffffffff, 0.85), ColorPrimary)
+  local renBtn = smallButton(S.ai_rename_btn, ColorSecondaryContainer, ColorOnSecondaryContainer)
   renBtn.setOnClickListener(function() showRenameDialog(index, name) end)
   row.addView(renBtn)
 
-  local delBtn = smallButton(S.ai_delete, ColorError, 0xffffffff)
+  local delBtn = smallButton(S.ai_delete, ColorErrorContainer, ColorOnErrorContainer)
   delBtn.setOnClickListener(function()
     MaterialAlertDialogBuilder(activity)
       .setTitle(S.ai_delete_conv)
@@ -2043,8 +2230,8 @@ local function showConvList()
           textSize = "14sp",
           layout_width = "0dp", layout_weight = 1,
           layout_marginRight = "6dp",
-          BackgroundTintList = ColorStateList.valueOf(ColorUtils.blendARGB(ColorPrimary, 0xffffffff, 0.85)),
-          textColor = ColorPrimary,
+          BackgroundTintList = ColorStateList.valueOf(ColorSecondaryContainer),
+          textColor = ColorOnSecondaryContainer,
         },
         {
           MaterialButton,
@@ -2189,42 +2376,58 @@ showConvManager = function()
     .show()
 end
 
+local function addWelcomeCard(title, body)
+  if not views.msgContainer then return end
+  local welcomeViews = {}
+  local welcome = {
+    MaterialCardView,
+    radius = "12dp", CardElevation = 0,
+    CardBackgroundColor = ColorSurface,
+    layout_marginBottom = "8dp",
+    {
+      LinearLayout,
+      orientation = "vertical",
+      padding = "14dp",
+      {
+        MaterialTextView,
+        text = title,
+        textSize = "14sp",
+        textStyle = "bold",
+        textColor = ColorOnSurface,
+      },
+      {
+        MaterialTextView,
+        text = body,
+        textSize = "13sp",
+        textColor = ColorText,
+        layout_marginTop = "5dp",
+        lineSpacingMultiplier = 1.3,
+      },
+      {
+        MaterialButton,
+        id = "btnWelcomeHelp",
+        text = S.ai_agent_help,
+        textSize = "12sp",
+        layout_width = "wrap",
+        layout_height = "40dp",
+        layout_marginTop = "8dp",
+        includeFontPadding = false,
+         BackgroundTintList = ColorStateList.valueOf(ColorSecondaryContainer),
+         textColor = ColorOnSecondaryContainer,
+      },
+    },
+  }
+  views.msgContainer.addView(loadlayout(welcome, welcomeViews))
+  welcomeViews.btnWelcomeHelp.onClick = function() showAgentHelp() end
+end
+
 local function clearChat()
   invalidateRequest()
   messages = {}
   saveHistory()
   if views.msgContainer then
     views.msgContainer.removeAllViews()
-    local welcome = {
-      MaterialCardView,
-      radius = "12dp",
-      CardElevation = 0,
-      strokeWidth = "1dp",
-      strokeColor = ColorOutline,
-      CardBackgroundColor = ColorSurface,
-      layout_marginBottom = "8dp",
-      {
-        LinearLayout,
-        orientation = "vertical",
-        padding = "12dp",
-        {
-          MaterialTextView,
-          text = S.ai_welcome_title,
-          textSize = "14sp",
-          textStyle = "bold",
-          textColor = ColorPrimary,
-        },
-        {
-          MaterialTextView,
-          text = S.ai_welcome_body,
-          textSize = "13sp",
-          textColor = ColorText,
-          layout_marginTop = "4dp",
-          lineSpacingMultiplier = 1.3,
-        },
-      },
-    }
-    views.msgContainer.addView(loadlayout(welcome))
+    addWelcomeCard(S.ai_welcome_title, S.ai_welcome_body)
   end
 end
 
@@ -2308,18 +2511,31 @@ function _M.show()
   -- 停止按钮
   if views.btnStop then
     views.btnStop.onClick = function()
-      invalidateRequest()
+      views.btnStop.setEnabled(false)
+      -- 先让当前流回调保存部分响应，再使工具链和续请求的 generation 失效。
+      AgentChat.cancelPendingRequest()
+      requestGeneration = requestGeneration + 1
+      isLoading = false
+      okHttp.cancelAll()
+      hideLoading()
     end
   end
 
   -- 设置按钮
   if views.btnSettings then
-    views.btnSettings.onClick = function() showModelPicker() end
+    views.btnSettings.onClick = function() showSettings() end
   end
 
   -- 模型标签点击切换
   if views.modelChip then
     views.modelChip.onClick = function() showModelPicker() end
+  end
+
+  if views.autoApproveStatus then
+    views.autoApproveStatus.setClickable(true)
+    views.autoApproveStatus.setFocusable(true)
+    views.autoApproveStatus.onClick = function() showSettings() end
+    updateSafetyStatus()
   end
 
   if views.btnClear then
@@ -2330,25 +2546,13 @@ function _M.show()
       messages = {}
       if views.msgContainer then views.msgContainer.removeAllViews() end
       if views.aiTitle then views.aiTitle.setText(S.ai_new_conv) end
-      -- 显示欢迎消息
-      if views.msgContainer then
-        local welcome = {
-          MaterialCardView,
-          radius = "12dp", CardElevation = 0, strokeWidth = "1dp", strokeColor = ColorOutline,
-          CardBackgroundColor = ColorSurface, layout_marginBottom = "8dp",
-          {
-            LinearLayout, orientation = "vertical", padding = "12dp",
-            { MaterialTextView, text = S.ai_new_conv, textSize = "14sp", textStyle = "bold", textColor = ColorPrimary },
-            { MaterialTextView, text = S.ai_start_chat, textSize = "13sp", textColor = ColorText, layout_marginTop = "4dp" },
-          },
-        }
-        views.msgContainer.addView(loadlayout(welcome))
-      end
+      addWelcomeCard(S.ai_new_conv, S.ai_start_chat)
     end
   end
 
   -- 标题点击切换会话
   if views.aiTitle then
+    views.aiTitle.setContentDescription(S.ai_cd_switch_conv)
     views.aiTitle.onClick = function() showConvList() end
     local conv = AgentChat.getCurrentConv()
     if conv then views.aiTitle.setText(convName(conv)) end
@@ -2379,18 +2583,7 @@ function _M.show()
     views.msgContainer.removeAllViews()  -- 先移除默认欢迎消息
     local historyCount = loadHistory()
     if historyCount == 0 then
-      -- 无历史，显示欢迎消息
-      local welcome = {
-        MaterialCardView,
-        radius = "12dp", CardElevation = 0, strokeWidth = "1dp", strokeColor = ColorOutline,
-        CardBackgroundColor = ColorSurface, layout_marginBottom = "8dp",
-        {
-          LinearLayout, orientation = "vertical", padding = "12dp",
-          { MaterialTextView, text = S.ai_welcome_title, textSize = "14sp", textStyle = "bold", textColor = ColorPrimary },
-          { MaterialTextView, text = S.ai_welcome_body, textSize = "13sp", textColor = ColorText, layout_marginTop = "4dp", lineSpacingMultiplier = 1.3 },
-        },
-      }
-      views.msgContainer.addView(loadlayout(welcome))
+      addWelcomeCard(S.ai_welcome_title, S.ai_welcome_body)
     end
   end
 

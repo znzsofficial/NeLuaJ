@@ -63,7 +63,7 @@ local SYSTEM_PROMPT = [[
 
 # MCP 外部工具
 
-接入 MCP 服务器后，会额外提供 `mcp::<服务器名>::<工具名>` 形式的工具，用于调用外部系统能力（数据库、Web 搜索、业务 API 等）。任务需要外部数据/服务时优先考虑调用它们；调用前会弹窗让用户确认。
+接入 MCP 服务器后，会额外提供 `mcp__<服务器名>__<工具名>` 形式的工具，用于调用外部系统能力（数据库、Web 搜索、业务 API 等）。任务需要外部数据/服务时优先考虑调用它们；调用前会弹窗让用户确认。
 
 # 大文件分段读取
 
@@ -766,8 +766,7 @@ local function formatSize(n)
   return string.format("%.1fMB", n / 1024 / 1024)
 end
 
---- 读取单个文件内容（含候选路径解析、大小限制、行号分页），返回 (内容字符串, 错误信息)
-local function readFileContent(pathArg, offsetArg, maxArg)
+local function resolveReadablePath(pathArg)
   local path = resolvePath(pathArg)
   local candidates = { path }
   if pathArg and pathArg:sub(1, 1) ~= "/" then
@@ -781,16 +780,22 @@ local function readFileContent(pathArg, offsetArg, maxArg)
       candidates[#candidates + 1] = ideDir .. "/res/doc/" .. pathArg:gsub("^res/doc/", "")
     end
   end
+  for _, candidate in ipairs(candidates) do
+    if file.exists(candidate) then return candidate end
+  end
+  return path
+end
+
+--- 读取单个文件内容（含候选路径解析、大小限制、行号分页），返回 (内容字符串, 错误信息)
+local function readFileContent(pathArg, offsetArg, maxArg)
+  local path = resolveReadablePath(pathArg)
   local ok, content = pcall(function()
-    for _, candidate in ipairs(candidates) do
-      if file.exists(candidate) then
-        path = candidate
-        local infoOk2, info2 = pcall(function() return file.info(candidate) end)
-        if infoOk2 and info2 and info2.size and info2.size > 4 * 1024 * 1024 then
-          return "<文件过大（" .. formatSize(info2.size) .. "），请用 offset/max 参数分段读取>"
-        end
-        return file.readall(candidate)
+    if file.exists(path) then
+      local infoOk2, info2 = pcall(function() return file.info(path) end)
+      if infoOk2 and info2 and info2.size and info2.size > 4 * 1024 * 1024 then
+        return "<文件过大（" .. formatSize(info2.size) .. "），请用 offset/max 参数分段读取>"
       end
+      return file.readall(path)
     end
     return nil
   end)
@@ -799,7 +804,7 @@ local function readFileContent(pathArg, offsetArg, maxArg)
   end
   if not content then
     return nil, "文件不存在或为空: " .. tostring(pathArg)
-      .. "\n尝试路径: " .. table.concat(candidates, " | ")
+      .. "\n解析路径: " .. tostring(path)
   end
 
   -- 分页读取：按行切片，返回带行号内容
@@ -853,24 +858,21 @@ local function legacyExecuteTool(name, args)
 
   if name == "create_file" then
     local path = resolvePath(args.path)
-    local ok, err = pcall(function()
-      file.save(path, args.content or "")
-    end)
-    if ok then
+    local ok, result = pcall(function() return file.save(path, args.content or "") end)
+    if ok and result == true then
       return "文件已创建: " .. path
     else
-      return "创建文件失败\n路径: " .. path .. "\n原因: " .. tostring(err)
+      return "创建文件失败\n路径: " .. path .. "\n原因: " .. tostring(result)
     end
 
   elseif name == "create_folder" then
     local path = resolvePath(args.path)
-    local ok, err = pcall(function()
-      file.mkdir(path)
-    end)
-    if ok then
+    local ok, result = pcall(function() return file.mkdir(path) end)
+    local dirOk, isDir = pcall(function() return luajava.bindClass("java.io.File")(path).isDirectory() end)
+    if ok and (result == true or (dirOk and isDir)) then
       return "文件夹已创建: " .. path
     else
-      return "创建文件夹失败\n路径: " .. path .. "\n原因: " .. tostring(err)
+      return "创建文件夹失败\n路径: " .. path .. "\n原因: " .. tostring(result)
     end
 
   elseif name == "delete_file" then
@@ -878,14 +880,14 @@ local function legacyExecuteTool(name, args)
     if isProjectRootOrAncestor(path) then
       return "出于安全原因，禁止删除项目根目录或其上级目录: " .. args.path
     end
-    local ok, err = pcall(function()
+    local ok, result = pcall(function()
       local LuaFileUtil = luajava.bindClass("com.nekolaska.io.LuaFileUtil").INSTANCE
-      LuaFileUtil.remove(path)
+      return LuaFileUtil.remove(path)
     end)
-    if ok then
+    if ok and result == true then
       return "文件已删除: " .. path
     else
-      return "删除文件失败\n路径: " .. path .. "\n原因: " .. tostring(err)
+      return "删除文件失败\n路径: " .. path .. "\n原因: " .. tostring(result)
     end
 
   elseif name == "delete_folder" then
@@ -893,15 +895,15 @@ local function legacyExecuteTool(name, args)
     if isProjectRootOrAncestor(path) then
       return "出于安全原因，禁止删除项目根目录或其上级目录: " .. args.path
     end
-    local ok, err = pcall(function()
+    local ok, result = pcall(function()
       local LuaUtil = luajava.bindClass("com.androlua.LuaUtil")
       local File = luajava.bindClass("java.io.File")
-      LuaUtil.rmDir(File(path))
+      return LuaUtil.rmDir(File(path))
     end)
-    if ok then
+    if ok and result == true then
       return "文件夹已删除: " .. path
     else
-      return "删除文件夹失败\n路径: " .. path .. "\n原因: " .. tostring(err)
+      return "删除文件夹失败\n路径: " .. path .. "\n原因: " .. tostring(result)
     end
 
   elseif name == "read_file" then
@@ -1172,11 +1174,9 @@ local function legacyExecuteTool(name, args)
       return "补丁应用失败\n文件: " .. path .. "\n原因: " .. tostring(countOrErr)
     end
 
-    local writeOk, writeErr = pcall(function()
-      file.save(path, newContent)
-    end)
-    if not writeOk then
-      return "补丁写入失败\n文件: " .. path .. "\n原因: " .. tostring(writeErr)
+    local writeOk, writeResult = pcall(function() return file.save(path, newContent) end)
+    if not writeOk or writeResult ~= true then
+      return "补丁写入失败\n文件: " .. path .. "\n原因: " .. tostring(writeResult)
     end
     local count = type(countOrErr) == "number" and countOrErr or 1
     return "补丁已应用（" .. count .. " 处修改）: " .. path
@@ -1205,11 +1205,9 @@ local function legacyExecuteTool(name, args)
     if replaced == 0 then
       return "未找到要替换的文本: " .. old
     end
-    local writeOk, writeErr = pcall(function()
-      file.save(path, newContent)
-    end)
-    if not writeOk then
-      return "替换写入失败\n文件: " .. path .. "\n原因: " .. tostring(writeErr)
+    local writeOk, writeResult = pcall(function() return file.save(path, newContent) end)
+    if not writeOk or writeResult ~= true then
+      return "替换写入失败\n文件: " .. path .. "\n原因: " .. tostring(writeResult)
     end
     return "已替换 " .. replaced .. " 处: " .. path
 
@@ -1290,13 +1288,14 @@ end
 
 local function changeSetFileType(path)
   local ok, kind = pcall(function() return file.type(path) end)
-  return ok and kind or nil
+  if not ok then return nil, tostring(kind) end
+  return kind, nil
 end
 
 local function changeSetListFiles(path)
   local out = {}
   local ok, entries = pcall(function() return file.list(path) end)
-  if not ok or type(entries) ~= "table" then return out end
+  if not ok or type(entries) ~= "table" then return nil end
   for _, name in ipairs(entries) do
     if name ~= "." and name ~= ".." then out[#out + 1] = path .. "/" .. name end
   end
@@ -1304,17 +1303,18 @@ local function changeSetListFiles(path)
 end
 
 local function changeSetRemove(path)
-  local kind = changeSetFileType(path)
+  local kind, typeErr = changeSetFileType(path)
+  if typeErr then return false, typeErr end
   if not kind then return true end
-  local ok, err = pcall(function()
+  local ok, result = pcall(function()
     if kind == "dir" then
       local LuaUtil = luajava.bindClass("com.androlua.LuaUtil")
-      LuaUtil.rmDir(luajava.bindClass("java.io.File")(path))
+      return LuaUtil.rmDir(luajava.bindClass("java.io.File")(path))
     else
-      luajava.bindClass("com.nekolaska.io.LuaFileUtil").INSTANCE.remove(path)
+      return luajava.bindClass("com.nekolaska.io.LuaFileUtil").INSTANCE.remove(path)
     end
   end)
-  return ok, err
+  return ok and result == true, result
 end
 
 AgentStorage.configure(
@@ -1331,7 +1331,7 @@ function _M.syncAgentProjectScope()
     type = changeSetFileType,
     listFiles = changeSetListFiles,
     read = function(p) local ok, c = pcall(function() return file.readall(p) end); return ok and c or nil end,
-    write = function(p, c) return pcall(function() file.save(p, c or "") end) end,
+    write = function(p, c) local ok, result = pcall(function() return file.save(p, c or "") end); return ok and result == true end,
     ensureParent = function(p) pcall(function() local F = luajava.bindClass("java.io.File"); local parent = F(p).getParentFile(); if parent then parent.mkdirs() end end) end,
     loadState = function()
       local stored = AgentStorage.read("changesets.json")
@@ -1341,13 +1341,25 @@ function _M.syncAgentProjectScope()
       return legacy
     end,
     saveState = function(encoded)
-      if AgentStorage.write("changesets.json", encoded or "") then this.setSharedData("ai_changesets", "") end
+      local saved = AgentStorage.write("changesets.json", encoded or "")
+      if saved then this.setSharedData("ai_changesets", "") end
+      return saved
     end,
     scope = function() return normalizePath(Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir()) end,
-    mkdir = function(p) return pcall(function() file.mkdir(p) end) end,
+    mkdir = function(p) local ok, result = pcall(function() return file.mkdir(p) end); return ok and (result == true or changeSetFileType(p) == "dir") end,
     remove = changeSetRemove,
     isTracked = function(n) return n == "create_file" or n == "create_folder" or n == "delete_file" or n == "delete_folder" or n == "apply_patch" or n == "replace_in_file" or n == "append_file" or n == "rename_file" end,
-    resultSucceeded = function(r) local t = tostring(r or ""); return not t:find("失败", 1, true) and not t:find("异常", 1, true) and not t:find("拒绝", 1, true) and not t:find("禁止", 1, true) end,
+    resultSucceeded = function(r)
+      local t = tostring(r or "")
+      return t:find("文件已创建:", 1, true) == 1
+        or t:find("文件夹已创建:", 1, true) == 1
+        or t:find("文件已删除:", 1, true) == 1
+        or t:find("文件夹已删除:", 1, true) == 1
+        or t:find("补丁已应用", 1, true) == 1
+        or t:find("已替换 ", 1, true) == 1
+        or t:find("已追加到文件:", 1, true) == 1
+        or t:find("已重命名/移动:", 1, true) == 1
+    end,
   })
 end
 
@@ -1394,7 +1406,7 @@ local function getRetryCount()
   local v = tonumber(this.getSharedData("ai_retry_count", "2"))
   if not v then return 2 end
   if v < 0 then return 0 end
-  return math.floor(v)
+  return math.min(5, math.floor(v))
 end
 
 -- 自签名证书开关：开启时用忽略证书校验的客户端
@@ -2082,9 +2094,22 @@ OpenAIClient.configure({
 })
 ToolExecutor.configure({
   normalizePath = normalizePath,
+  resolvePath = resolvePath,
+  resolveReadPath = resolveReadablePath,
+  getProjectScope = function()
+    return normalizePath(Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir())
+  end,
+  canonicalPath = function(path)
+    local ok, value = pcall(function()
+      return tostring(luajava.bindClass("java.io.File")(resolvePath(path)).getCanonicalPath())
+    end)
+    return ok and normalizePath(value) or normalizePath(resolvePath(path))
+  end,
   getProjectDir = function() return Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir() end,
+  getPathType = changeSetFileType,
   getSharedData = function(key, defaultValue) return this.getSharedData(key, defaultValue) end,
   findMcpServer = function(namespace) return MCPClient.findServer(namespace) end,
+  resolveMcpTool = function(name) return MCPClient.resolveToolRoute(name) end,
   callMcpToolAsync = function(server, tool, args, callback)
     return MCPClient.callToolAsync(server, tool, args, callback)
   end,
@@ -2096,10 +2121,12 @@ ToolExecutor.configure({
 })
 _M.testConnection = OpenAIClient.testConnection
 _M.sendStream = OpenAIClient.sendStream
+_M.cancelPendingRequest = OpenAIClient.cancelPending
 _M.normalizeToolName = ToolExecutor.normalizeToolName
 _M.executeTool = ToolExecutor.executeTool
 _M.executeToolAsync = ToolExecutor.executeToolAsync
 _M.isDestructiveTool = ToolExecutor.isDestructiveTool
+_M.requiresConfirmation = ToolExecutor.requiresConfirmation
 _M.isInProjectDir = ToolExecutor.isInProjectDir
 _M.shouldAutoApprove = ToolExecutor.shouldAutoApprove
 _M.undoFileChange = ChangeSet.undo

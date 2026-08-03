@@ -53,10 +53,27 @@ local function scanRoot(root, scope)
 end
 
 function _M.configure(globalRoot, projectRoot)
+  local byName = {}
+  local function merge(root, scope, priority)
+    local scanned = scanRoot(root, scope)
+    table.sort(scanned, function(a, b) return tostring(a.name):lower() < tostring(b.name):lower() end)
+    for _, skill in ipairs(scanned) do
+      local key = tostring(skill.name):lower()
+      if not byName[key] or priority >= byName[key]._priority then
+        skill._priority = priority
+        byName[key] = skill
+      end
+    end
+  end
+  merge(tostring(globalRoot or "") .. "/skills", "global", 1)
+  merge(tostring(projectRoot or "") .. "/skills", "project", 2)
+  merge(tostring(projectRoot or "") .. "/.agents/skills", "project", 3)
   skills = {}
-  for _, skill in ipairs(scanRoot(tostring(globalRoot or "") .. "/skills", "global")) do skills[#skills + 1] = skill end
-  for _, skill in ipairs(scanRoot(tostring(projectRoot or "") .. "/.agents/skills", "project")) do skills[#skills + 1] = skill end
-  for _, skill in ipairs(scanRoot(tostring(projectRoot or "") .. "/skills", "project")) do skills[#skills + 1] = skill end
+  for _, skill in pairs(byName) do skills[#skills + 1] = skill end
+  table.sort(skills, function(a, b)
+    if a._priority ~= b._priority then return a._priority > b._priority end
+    return tostring(a.name):lower() < tostring(b.name):lower()
+  end)
   loaded = true
 end
 
@@ -80,7 +97,10 @@ function _M.match(text)
     for _, trigger in ipairs(skill.triggers) do
       if text:find(trigger, 1, true) then current = current + 2 end
     end
-    if current > score then best, score = skill, current end
+    if current > score or (current == score and current > 0
+        and (not best or skill._priority > (best._priority or 0))) then
+      best, score = skill, current
+    end
   end
   return best
 end

@@ -13,6 +13,24 @@ local DEFAULT_SERVERS = {
   { name = "deepwiki", url = "https://mcp.deepwiki.com/mcp", headers = {} },
 }
 
+local function serverKey(server)
+  local parts = { tostring(server.url or "") }
+  local headers = server.headers
+  if type(headers) == "table" then
+    local keys = {}
+    for key in pairs(headers) do keys[#keys + 1] = tostring(key) end
+    table.sort(keys)
+    for _, key in ipairs(keys) do parts[#parts + 1] = key .. "=" .. tostring(headers[key]) end
+  end
+  return table.concat(parts, "\n")
+end
+
+local function shortHash(text)
+  local value = 0
+  for index = 1, #text do value = (value * 131 + text:byte(index)) % 2147483647 end
+  return string.format("%08x", value)
+end
+
 local function cloneServers(list)
   local out = {}
   for _, s in ipairs(list or {}) do
@@ -59,6 +77,8 @@ function _M.setServers(list)
     _M._serverState = {}
     _M._mergedTools = nil
     _M._mergedAt = 0
+    _M._toolRoutes = {}
+    _M._configGeneration = (_M._configGeneration or 0) + 1
   end
 end
 
@@ -77,7 +97,8 @@ local function rpcRequest(server, method, params, id)
   local url = server.url or ""
   if url == "" then return nil, "服务器地址为空" end
   -- 恢复持久化的会话状态（getServers 每次返回新表，不能只存 server 字段）
-  local st = _M._serverState and _M._serverState[url]
+  local key = serverKey(server)
+  local st = _M._serverState and _M._serverState[key]
   if st then
     if not server.sessionId and st.sessionId then server.sessionId = st.sessionId end
     if not server.protocolVersion and st.protocolVersion then server.protocolVersion = st.protocolVersion end
@@ -96,6 +117,7 @@ local function rpcRequest(server, method, params, id)
     headers["Mcp-Session-Id"] = server.sessionId
   end
   local proto = server.protocolVersion or DEFAULT_PROTO
+  local sentSessionId = server.sessionId
   headers["MCP-Protocol-Version"] = proto
   headers["Mcp-Method"] = method
   if params and params.name then
@@ -134,9 +156,11 @@ local function rpcRequest(server, method, params, id)
     return nil
   end)
   if okSid and sid and sid ~= "" then
-    server.sessionId = sid
-    local st2 = _M._serverState[url]
-    if st2 then st2.sessionId = sid else _M._serverState[url] = { sessionId = sid } end
+    local st2 = _M._serverState[key]
+    if not sentSessionId or not st2 or not st2.sessionId or st2.sessionId == sentSessionId then
+      server.sessionId = sid
+      if st2 then st2.sessionId = sid else _M._serverState[key] = { sessionId = sid } end
+    end
   end
   local okCode, code = pcall(function() return res.code() end)
   if okCode and type(code) == "number" and code >= 400 then
@@ -150,10 +174,25 @@ local function rpcRequest(server, method, params, id)
       if #e > 150 then e = e:sub(1, 150) .. "…" end
       errDetail = "：" .. e
     end
+    if code == 404 and sentSessionId and sentSessionId ~= "" then
+      local currentState = _M._serverState[key]
+      if currentState and currentState.sessionId and currentState.sessionId ~= sentSessionId then
+        server.sessionId = currentState.sessionId
+      else
+        if server.sessionId == sentSessionId then server.sessionId = nil end
+        _M._serverState[key] = nil
+        _M._initCache[key] = nil
+      end
+      _M._toolsCache[key] = nil
+      return nil, "MCP_SESSION_EXPIRED"
+    end
     return nil, "HTTP " .. tostring(code) .. "（" .. tostring(method) .. "）" .. errDetail
   end
   -- 通知没有响应体，2xx 即视为成功，不进入 JSON 解析。
-  if id == false then return true, nil end
+  if id == false then
+    pcall(function() res.close() end)
+    return true, nil
+  end
   local okBody, respBody = pcall(function()
     return res.body().string()
   end)
@@ -196,14 +235,14 @@ local function serverState(url)
 end
 
 function _M.ensureInitialized(server)
-  local url = server.url or ""
-  if _M._initCache[url] then return true end
+  local key = serverKey(server)
+  if _M._initCache[key] then return true end
   initLock.lock()
   local ok, result, err = pcall(function()
-    if _M._initCache[url] then return true end
+    if _M._initCache[key] then return true end
     local proto, initErr = _M.initialize(server)
     if not proto then return nil, initErr end
-    _M._initCache[url] = proto
+    _M._initCache[key] = proto
     return true
   end)
   initLock.unlock()
@@ -212,7 +251,7 @@ function _M.ensureInitialized(server)
 end
 
 function _M.initialize(server)
-  local url = server.url or ""
+  local key = serverKey(server)
   local res, err = rpcRequest(server, "initialize", {
     protocolVersion = DEFAULT_PROTO,
     capabilities = {},
@@ -225,7 +264,7 @@ function _M.initialize(server)
     proto = tostring(res.result.protocolVersion)
   end
   server.protocolVersion = proto
-  local st = serverState(url)
+  local st = serverState(key)
   st.protocolVersion = proto
   -- MCP 初始化握手的第二步：通知服务器后续请求可以开始。
   local _, notifyErr = rpcRequest(server, "notifications/initialized", {}, false)
@@ -239,31 +278,49 @@ end
 _M._toolsCache = {}
 
 function _M.listTools(server)
-  local url = server.url or ""
-  local cached = _M._toolsCache[url]
+  local key = serverKey(server)
+  local cached = _M._toolsCache[key]
   if cached and cached.time and (os.time() - cached.time) < 300 then
     return cached.tools
   end
-  local okInit, initErr = _M.ensureInitialized(server)
-  if not okInit then return nil, initErr end
-  local res, err = rpcRequest(server, "tools/list", {})
-  if not res then return nil, err end
-  if res.error then return nil, rpcErrorText(res.error) end
-  local tools = {}
-  if res.result and type(res.result.tools) == "table" then
-    tools = res.result.tools
+  for attempt = 1, 2 do
+    local okInit, initErr = _M.ensureInitialized(server)
+    if not okInit then return nil, initErr end
+    local tools, cursor = {}, nil
+    for page = 1, 20 do
+      local res, err = rpcRequest(server, "tools/list", cursor and { cursor = cursor } or {})
+      if not res then
+        if err == "MCP_SESSION_EXPIRED" and attempt == 1 then break end
+        return nil, err
+      end
+      if res.error then return nil, rpcErrorText(res.error) end
+      if res.result and type(res.result.tools) == "table" then
+        for _, tool in ipairs(res.result.tools) do tools[#tools + 1] = tool end
+      end
+      cursor = res.result and res.result.nextCursor
+      if not cursor or cursor == "" then
+        _M._toolsCache[key] = { time = os.time(), tools = tools }
+        return tools
+      end
+      if page == 20 then return nil, "MCP 工具分页超过 20 页上限" end
+    end
   end
-  _M._toolsCache[url] = { time = os.time(), tools = tools }
-  return tools
+  return nil, "MCP 会话已过期"
 end
 
 function _M.callTool(server, toolName, args)
   local okInit, initErr = _M.ensureInitialized(server)
   if not okInit then return nil, initErr end
-  local res, err = rpcRequest(server, "tools/call", {
+  local params = {
     name = toolName,
     arguments = args or {},
-  })
+  }
+  local res, err = rpcRequest(server, "tools/call", params)
+  if err == "MCP_SESSION_EXPIRED" then
+    local retryInit, retryErr = _M.ensureInitialized(server)
+    if not retryInit then return nil, retryErr end
+    res, err = rpcRequest(server, "tools/call", params)
+  end
   if not res then return nil, err end
   if res.error then return nil, rpcErrorText(res.error) end
   local result = res.result or {}
@@ -296,22 +353,38 @@ end
 
 local function serverNamespace(server)
   local sname = tostring(server.name or "mcp")
-  return sname:gsub("[^%w_%-%.]", "_")
+  return sname:gsub("[^%w_%-]", "_")
 end
 
-local function toolToOpenAi(ns, tool)
+local function toolToOpenAi(server, serverIndex, ns, tool)
   local inputSchema = tool.inputSchema or tool.input_schema
   if type(inputSchema) ~= "table" then
     inputSchema = { type = "object", properties = {} }
   end
+  local cleanTool = tostring(tool.name):gsub("[^%w_%-]", "_")
+  local publicIdentity = tostring(server.name or "") .. "\n" .. tostring(server.url or "")
+    .. "\n" .. tostring(serverIndex) .. "\n" .. tostring(tool.name)
+  local suffix = shortHash(publicIdentity)
+  local publicName = ("mcp__" .. ns .. "__" .. cleanTool):sub(1, 54) .. "__" .. suffix
   return {
     type = "function",
     ["function"] = {
-      name = "mcp::" .. ns .. "::" .. tostring(tool.name),
+      name = publicName,
       description = tostring(tool.description or ""),
       parameters = inputSchema,
     },
-  }
+  }, publicName
+end
+
+_M._toolRoutes = {}
+
+function _M.resolveToolRoute(name)
+  local route = _M._toolRoutes[tostring(name or "")]
+  if not route then return nil end
+  for _, server in ipairs(_M.getServers()) do
+    if serverKey(server) == serverKey(route.server) then return route end
+  end
+  return nil
 end
 
 function _M.findServer(ns)
@@ -325,18 +398,25 @@ end
 
 --- 返回可直接并入 body.tools 的 OpenAI 工具列表
 --- 同步版本：仅在后台线程调用，禁止在主线程执行（会触发 NetworkOnMainThreadException）
-function _M.getOpenAiTools()
+function _M.getOpenAiTools(generation)
   local merged = {}
-  for _, server in ipairs(_M.getServers()) do
+  local routes = {}
+  for serverIndex, server in ipairs(_M.getServers()) do
     local tools = _M.listTools(server)
     if type(tools) == "table" then
       local ns = serverNamespace(server)
       for _, tool in ipairs(tools) do
         if type(tool) == "table" and tool.name then
-          merged[#merged + 1] = toolToOpenAi(ns, tool)
+          local converted, publicName = toolToOpenAi(server, serverIndex, ns, tool)
+          converted["function"].name = publicName
+          merged[#merged + 1] = converted
+          routes[publicName] = { server = server, tool = tostring(tool.name) }
         end
       end
     end
+  end
+  if generation == nil or generation == (_M._configGeneration or 0) then
+    for publicName, route in pairs(routes) do _M._toolRoutes[publicName] = route end
   end
   return merged
 end
@@ -362,13 +442,18 @@ function _M.refreshToolsAsync(onDone)
   if onDone then _M._refreshWaiters[#_M._refreshWaiters + 1] = onDone end
   if _M._refreshing then return end
   _M._refreshing = true
+  local generation = _M._configGeneration or 0
   local okLaunch = pcall(function()
     xTask(
       function()
-        return _M.getOpenAiTools()
+        return _M.getOpenAiTools(generation)
       end,
       function(merged)
         _M._refreshing = false
+        if generation ~= (_M._configGeneration or 0) then
+          _M.refreshToolsAsync()
+          return
+        end
         if type(merged) == "table" then
           _M._mergedTools = merged
           _M._mergedAt = os.time()

@@ -1,7 +1,10 @@
 --- OpenAI-compatible chat completions client.
 --- Owns request construction, tool-call normalization, streaming and retries.
 local _M = {}
-local Thread = luajava.bindClass("java.lang.Thread")
+local Handler = luajava.bindClass("android.os.Handler")
+local Looper = luajava.bindClass("android.os.Looper")
+local retryHandler = Handler(Looper.getMainLooper())
+local pendingRequest
 
 local config
 
@@ -23,10 +26,11 @@ end
 
 local function endpoint()
   local url = requireConfig().getApiUrl()
-  if not url:match("/chat/completions$") then
-    url = url:gsub("/+$", "") .. "/chat/completions"
+  local base, query = url:match("^([^?]*)(.*)$")
+  if not base:match("/chat/completions$") then
+    base = base:gsub("/+$", "") .. "/chat/completions"
   end
-  return url
+  return base .. query
 end
 
 local function supportsTools(callbacks)
@@ -39,31 +43,53 @@ local function supportsTools(callbacks)
 end
 
 local function repairToolHistory(messages)
-  local pending
+  local repaired = {}
   local sequence = 0
   local function fallbackId()
     sequence = sequence + 1
     return "call_history_" .. tostring(sequence)
   end
-  for _, message in ipairs(messages) do
+  local index = 1
+  while index <= #messages do
+    local message = messages[index]
     if message.role == "assistant" and message.tool_calls then
-      pending = {}
+      local pending = {}
+      local callOrder = {}
       for _, call in ipairs(message.tool_calls) do
         call.id = call.id and call.id ~= "" and call.id or fallbackId()
-        pending[#pending + 1] = call.id
+        pending[call.id] = true
+        callOrder[#callOrder + 1] = call.id
       end
-    elseif message.role == "tool" and pending and #pending > 0 then
-      if not message.tool_call_id or message.tool_call_id == "" then
-        message.tool_call_id = table.remove(pending, 1)
-      else
-        for index, id in ipairs(pending) do
-          if id == message.tool_call_id then table.remove(pending, index) break end
+      local group = { message }
+      local nextIndex = index + 1
+      local missingIndex = 1
+      while nextIndex <= #messages and messages[nextIndex].role == "tool" do
+        local toolMessage = messages[nextIndex]
+        if not toolMessage.tool_call_id or toolMessage.tool_call_id == "" then
+          while callOrder[missingIndex] and not pending[callOrder[missingIndex]] do
+            missingIndex = missingIndex + 1
+          end
+          toolMessage.tool_call_id = callOrder[missingIndex]
         end
+        if toolMessage.tool_call_id and pending[toolMessage.tool_call_id] then
+          pending[toolMessage.tool_call_id] = nil
+          group[#group + 1] = toolMessage
+        end
+        nextIndex = nextIndex + 1
       end
+      if next(pending) == nil then
+        for _, item in ipairs(group) do repaired[#repaired + 1] = item end
+      elseif message.content and message.content ~= "" then
+        message.tool_calls = nil
+        repaired[#repaired + 1] = message
+      end
+      index = nextIndex
     else
-      pending = nil
+      if message.role ~= "tool" then repaired[#repaired + 1] = message end
+      index = index + 1
     end
   end
+  return repaired
 end
 
 local function prepareMessages(messages, toolsEnabled)
@@ -83,8 +109,7 @@ local function prepareMessages(messages, toolsEnabled)
     end
     return filtered
   end
-  repairToolHistory(sendMessages)
-  return sendMessages
+  return repairToolHistory(sendMessages)
 end
 
 local function finishOnce(callbacks)
@@ -128,6 +153,14 @@ function _M.sendStream(messages, callbacks)
     ["Content-Type"] = "application/json",
   }
   local retries, attempt = cfg.getRetryCount(), 0
+  local requestState = { cancelled = false }
+  pendingRequest = requestState
+  function requestState.cancel()
+    if requestState.cancelled then return end
+    requestState.cancelled = true
+    if requestState.retry then retryHandler.removeCallbacks(requestState.retry) end
+    finish(callbacks.onError, "cancelled")
+  end
   local function retryable(message)
     message = tostring(message)
     if message:lower():match("cancel") then return false end
@@ -136,17 +169,21 @@ function _M.sendStream(messages, callbacks)
     return true
   end
   local function request()
+    if requestState.cancelled then return end
     attempt = attempt + 1
     cfg.getHttpClient().postJsonStream(endpoint(), bodyStr, headers,
-      function(text) if callbacks.onChunk then callbacks.onChunk(tostring(text)) end end,
-      function(arg1, arg2)
+      function(text)
+        if not requestState.cancelled and callbacks.onChunk then callbacks.onChunk(tostring(text)) end
+      end,
+      function(arg1, arg2, explicitError)
+        if requestState.cancelled then return end
         local text = tostring(arg1 or "")
-        local isError = text:match("^HTTP") or text:match("^Stream") or text:match("^ERROR:") or text:match("^java")
+        local isError = explicitError == true or text:match("^HTTP %d%d%d$") or text:match("^ERROR:")
         if isError then
           if attempt <= retries and retryable(text) then
             if callbacks.onRetry then callbacks.onRetry() end
-            Thread.sleep(math.min(1200, attempt * 300))
-            request()
+            requestState.retry = function() request() end
+            retryHandler.postDelayed(requestState.retry, math.min(1200, attempt * 300))
             return
           end
           local detail = tostring(arg2 or "")
@@ -181,6 +218,12 @@ function _M.sendStream(messages, callbacks)
       end)
   end
   request()
+end
+
+function _M.cancelPending()
+  local request = pendingRequest
+  pendingRequest = nil
+  if request and request.cancel then request.cancel() end
 end
 
 function _M.testConnection(onResult)

@@ -25,7 +25,9 @@ import org.luaj.LuaFunction
 import org.luaj.LuaString
 import org.luaj.LuaTable
 import org.luaj.LuaValue
+import org.luaj.LuaValue.FALSE
 import org.luaj.LuaValue.NIL
+import org.luaj.LuaValue.TRUE
 import org.luaj.Varargs
 import org.luaj.lib.TwoArgFunction
 import org.luaj.lib.VarArgFunction
@@ -224,7 +226,7 @@ class AsyncOkHttp(
                 if (currentStreamCall === call) currentStreamCall = null
                 context.runOnUiThread {
                     try {
-                        onDone.call(LuaString.valueOf("ERROR: " + (e.message ?: "Network error")))
+                        onDone.call(LuaString.valueOf("ERROR: " + (e.message ?: "Network error")), NIL, TRUE)
                     } catch (e: Exception) {
                         context.sendMsg("Stream failure: ${e.message}")
                     }
@@ -232,7 +234,6 @@ class AsyncOkHttp(
             }
 
             override fun onResponse(call: Call, response: Response) {
-                if (currentStreamCall === call) currentStreamCall = null
                 try {
                     if (!response.isSuccessful) {
                         val responseCode = response.code
@@ -242,7 +243,8 @@ class AsyncOkHttp(
                             try {
                                 onDone.call(
                                     LuaString.valueOf("HTTP $responseCode"),
-                                    LuaString.valueOf(errBody)
+                                    LuaString.valueOf(errBody),
+                                    TRUE
                                 )
                             } catch (e: Exception) {
                                 context.sendMsg("Stream callback: ${e.message}")
@@ -426,9 +428,10 @@ class AsyncOkHttp(
 
                     context.runOnUiThread {
                         try {
-                            onDone.call(
-                                LuaString.valueOf(fullTextStr),
-                                if (toolCallsStr != null) LuaString.valueOf(toolCallsStr) else NIL
+                                onDone.call(
+                                    LuaString.valueOf(fullTextStr),
+                                    if (toolCallsStr != null) LuaString.valueOf(toolCallsStr) else NIL,
+                                    FALSE
                             )
                         } catch (_: Exception) { }
                     }
@@ -436,12 +439,15 @@ class AsyncOkHttp(
                     context.runOnUiThread {
                         try {
                                 onDone.call(
-                                    LuaString.valueOf("ERROR: " + (e.message ?: "Stream error"))
+                                    LuaString.valueOf("ERROR: " + (e.message ?: "Stream error")), NIL, TRUE
                                 )
                         } catch (e2: Exception) {
                             context.sendMsg("Stream error callback: ${e2.message}")
                         }
                     }
+                } finally {
+                    response.close()
+                    if (currentStreamCall === call) currentStreamCall = null
                 }
             }
         })

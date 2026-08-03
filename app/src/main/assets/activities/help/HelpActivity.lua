@@ -1,4 +1,5 @@
 require "mods.bootstrap"
+local initialDoc = ...
 import "android.view.WindowManager"
 import "android.view.View"
 import "android.graphics.drawable.ColorDrawable"
@@ -488,6 +489,10 @@ pcall(function()
   settings.setLoadWithOverviewMode(true)
   settings.setUseWideViewPort(true)
 end)
+
+if initialDoc == "agent" then
+  openDoc(catalog[1].items[1])
+end
 
 function onOptionsItemSelected(m)
   if m.getItemId() == android.R.id.home then
