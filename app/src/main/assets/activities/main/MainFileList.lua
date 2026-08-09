@@ -38,6 +38,7 @@ local R = R
 
 local _M = {}
 local FileList
+local updateGeneration = 0
 local Anim
 local selectMode = false
 local selected = {} -- path -> true
@@ -320,7 +321,8 @@ _M.init = function()
                     return 0
                 end,
                 getPopupText = function(_, position)
-                    return utf8.sub(FileList[position + 1].file_name, 1, 1)
+                    local item = FileList and FileList[position + 1]
+                    return item and utf8.sub(item.file_name, 1, 1) or ""
                 end,
                 onCreateViewHolder = function(parent, viewType)
                     local view = inflater.inflate(itemRes, parent, false)
@@ -337,6 +339,7 @@ _M.init = function()
                 onBindViewHolder = function(holder, position)
                     local view = holder.bind()
                     local v = FileList[position + 1]
+                    if not v then return end
                     local v_path = v.path
                     local bind_token = v_path .. "\0" .. tostring(v.img) .. "\0" .. tostring(v.file_name)
                     local tag = holder.Tag
@@ -512,20 +515,20 @@ local sortByName = function(a, b)
     return a.file_name < b.file_name
 end
 
-local getList = function()
-    local path = tostring(Bean_Path.this_dir)
+local getList = function(path, systemRoot, projectRoot)
     local table_sort = table.sort
     local match = string.match
+    local list = {}
 
     local dir = File(path)
     if not dir.canRead() then
-        return
+        return list
     end
 
     -- 使用 listFiles() 直接获取 File[]，避免对每个文件名重新构造 File 对象
     local files = dir.listFiles()
     if not files then
-        return
+        return list
     end
 
     local dirs = {}
@@ -560,11 +563,9 @@ local getList = function()
     table_sort(regulars, sortByName)
 
     -- 判断当前目录状态
-    local isRoot = (path == Bean_Path.system_root)
-    local isProjectDir = (path == Bean_Path.app_root_pro_dir)
+    local isRoot = (path == systemRoot)
+    local isProjectDir = (path == projectRoot)
 
-    -- 直接构建最终 FileList，不再二次复制
-    local list = {}
     local idx = 0
 
     -- 非根目录时插入返回上级项（固定 folder_up，不受 isProjectDir 影响）
@@ -597,7 +598,7 @@ local getList = function()
         list[idx] = f
     end
 
-    FileList = list
+    return list
 end
 
 local function selectablePaths()
@@ -638,28 +639,25 @@ local function pruneSelected()
     selected = keep
 end
 
-local updateCallback = function()
-    pruneSelected()
-    if adapter_rv then adapter_rv.notifyDataSetChanged() end
-    Anim.start()
-    swipeRefresh.setRefreshing(false)
-    _M.refreshSelectUi()
-end
-
 _M.update = function()
     if not Bean_Path then return _M end
-    xTask(getList, updateCallback)
+    updateGeneration = updateGeneration + 1
+    local generation = updateGeneration
+    local path = tostring(Bean_Path.this_dir or "")
+    local systemRoot = tostring(Bean_Path.system_root or "")
+    local projectRoot = tostring(Bean_Path.app_root_pro_dir or "")
+    xTask(function()
+        return getList(path, systemRoot, projectRoot)
+    end, function(list)
+        -- A newer navigation or refresh already owns the visible dataset.
+        if generation ~= updateGeneration or path ~= tostring(Bean_Path.this_dir or "") then return end
+        FileList = type(list) == "table" and list or {}
+        pruneSelected()
+        if Anim then Anim.start() end
+        swipeRefresh.setRefreshing(false)
+        _M.refreshSelectUi()
+    end, "io")
     return _M
-end
-
-_M.delete = function(path)
-    for k, v in ipairs(FileList) do
-        if v.path == path then
-            table.remove(FileList, k)
-            return k
-        end
-    end
-    return nil
 end
 
 _M.isSelectMode = function()

@@ -116,13 +116,9 @@ end
 
 function _M.deleteFile(path)
     LuaUtil.rmDir(File(path))
-    -- 通过 path 查找实际索引，避免对话框确认后 position 过时
-    local pos = MainActivity.RecyclerView.delete(path)
-    if pos then
-        adapter_rv.notifyItemRemoved(pos - 1) -- Lua 1-based → adapter 0-based
-    else
-        adapter_rv.notifyDataSetChanged()
-    end
+    -- Rebuild on the normal refresh path so a pending directory scan cannot
+    -- interleave an item-range update with a complete dataset replacement.
+    MainActivity.RecyclerView.update()
 end
 
 function _M.newDir(path)
