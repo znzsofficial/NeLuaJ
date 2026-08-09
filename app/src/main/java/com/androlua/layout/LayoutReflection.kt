@@ -2,6 +2,9 @@ package com.androlua.layout
 
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
+import java.lang.ref.WeakReference
+import java.util.Collections
+import java.util.WeakHashMap
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -11,15 +14,23 @@ internal object LayoutReflection {
 
     private val NO_METHOD = Any()
 
-    private val classPropertyNames = ConcurrentHashMap<Class<*>, Set<String>>()
-    private val booleanSetterCache = ConcurrentHashMap<String, Any>()
-    private val floatSetterCache = ConcurrentHashMap<String, Any>()
-    private val intSetterCache = ConcurrentHashMap<String, Any>()
-    private val colorStateListSetterCache = ConcurrentHashMap<String, Any>()
-    private val objectSetterCache = ConcurrentHashMap<String, Any>()
+    // Project views can come from replaceable DexClassLoaders. Cache by the actual Class object,
+    // not its name, and never let a cached Method retain the class loader.
+    private val classPropertyNames = Collections.synchronizedMap(WeakHashMap<Class<*>, Set<String>>())
+    private val booleanSetterCache: MutableMap<Class<*>, ConcurrentHashMap<String, Any>> =
+        Collections.synchronizedMap(WeakHashMap())
+    private val floatSetterCache: MutableMap<Class<*>, ConcurrentHashMap<String, Any>> =
+        Collections.synchronizedMap(WeakHashMap())
+    private val intSetterCache: MutableMap<Class<*>, ConcurrentHashMap<String, Any>> =
+        Collections.synchronizedMap(WeakHashMap())
+    private val colorStateListSetterCache: MutableMap<Class<*>, ConcurrentHashMap<String, Any>> =
+        Collections.synchronizedMap(WeakHashMap())
+    private val objectSetterCache: MutableMap<Class<*>, ConcurrentHashMap<String, Any>> =
+        Collections.synchronizedMap(WeakHashMap())
 
     fun propertyNamesFor(clazz: Class<*>): Set<String> {
-        return classPropertyNames.computeIfAbsent(clazz) {
+        synchronized(classPropertyNames) {
+            classPropertyNames[clazz]?.let { return it }
             val names = HashSet<String>(64)
             for (m in clazz.methods) {
                 if (Modifier.isStatic(m.modifiers)) continue
@@ -43,7 +54,8 @@ internal object LayoutReflection {
                 }
                 c = c.superclass
             }
-            names
+            classPropertyNames[clazz] = names
+            return names
         }
     }
 
@@ -62,18 +74,16 @@ internal object LayoutReflection {
     }
 
     fun cachedMethod(
-        cache: ConcurrentHashMap<String, Any>,
+        cache: MutableMap<Class<*>, ConcurrentHashMap<String, Any>>,
         clazz: Class<*>,
         name: String,
         vararg paramTypes: Class<*>
     ): Method? {
-        // 单参 setter 热路径：避免 buildString；多参仍拼 key
+        // Class is the cache key so classes with the same name from separate project loaders cannot collide.
         val key = if (paramTypes.size == 1) {
-            clazz.name + '#' + name + '#' + paramTypes[0].name
+            name + '#' + paramTypes[0].name
         } else {
-            buildString(clazz.name.length + name.length + 16) {
-                append(clazz.name)
-                append('#')
+            buildString(name.length + 16) {
                 append(name)
                 for (p in paramTypes) {
                     append('#')
@@ -81,20 +91,27 @@ internal object LayoutReflection {
                 }
             }
         }
-        val hit = cache[key]
+        val methods = synchronized(cache) {
+            cache.getOrPut(clazz) { ConcurrentHashMap() }
+        }
+        val hit = methods[key]
         if (hit === NO_METHOD) return null
-        if (hit is Method) return hit
+        if (hit is WeakReference<*>) {
+            val method = hit.get() as? Method
+            if (method != null) return method
+            methods.remove(key, hit)
+        }
         var c: Class<*>? = clazz
         while (c != null && c != Any::class.java) {
             try {
                 val m = c.getMethod(name, *paramTypes)
-                cache[key] = m
+                methods[key] = WeakReference(m)
                 return m
             } catch (_: NoSuchMethodException) {
                 c = c.superclass
             }
         }
-        cache[key] = NO_METHOD
+        methods[key] = NO_METHOD
         return null
     }
 
@@ -242,8 +259,8 @@ internal object LayoutReflection {
         return false
     }
 
-    fun intSetterCache(): ConcurrentHashMap<String, Any> = intSetterCache
-    fun floatSetterCache(): ConcurrentHashMap<String, Any> = floatSetterCache
-    fun objectSetterCache(): ConcurrentHashMap<String, Any> = objectSetterCache
-    fun colorStateListSetterCache(): ConcurrentHashMap<String, Any> = colorStateListSetterCache
+    fun intSetterCache(): MutableMap<Class<*>, ConcurrentHashMap<String, Any>> = intSetterCache
+    fun floatSetterCache(): MutableMap<Class<*>, ConcurrentHashMap<String, Any>> = floatSetterCache
+    fun objectSetterCache(): MutableMap<Class<*>, ConcurrentHashMap<String, Any>> = objectSetterCache
+    fun colorStateListSetterCache(): MutableMap<Class<*>, ConcurrentHashMap<String, Any>> = colorStateListSetterCache
 }

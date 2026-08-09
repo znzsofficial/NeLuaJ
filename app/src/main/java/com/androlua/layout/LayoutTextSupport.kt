@@ -4,8 +4,10 @@ import android.view.View
 import android.widget.TextView
 import com.google.android.material.textfield.TextInputLayout
 import org.luaj.LuaError
+import java.lang.ref.WeakReference
 import java.lang.reflect.Method
-import java.util.concurrent.ConcurrentHashMap
+import java.util.Collections
+import java.util.WeakHashMap
 
 /**
  * TextView 专用属性目标解析：
@@ -15,7 +17,8 @@ import java.util.concurrent.ConcurrentHashMap
 internal object LayoutTextSupport {
 
     private val NO_GET_EDIT_TEXT = Any()
-    private val getEditTextCache = ConcurrentHashMap<Class<*>, Any>()
+    // The resolved Method retains its declaring project View class and loader.
+    private val getEditTextCache = Collections.synchronizedMap(WeakHashMap<Class<*>, Any>())
 
     fun resolve(host: View): TextView? {
         when (host) {
@@ -214,11 +217,15 @@ internal object LayoutTextSupport {
 
     private fun invokeGetEditText(host: View): TextView? {
         val clazz = host.javaClass
-        val cached = getEditTextCache[clazz]
-        if (cached === NO_GET_EDIT_TEXT) return null
-        val method = if (cached is Method) {
-            cached
-        } else {
+        val method = synchronized(getEditTextCache) {
+            val cached = getEditTextCache[clazz]
+            if (cached === NO_GET_EDIT_TEXT) return null
+            if (cached is WeakReference<*>) {
+                val resolved = cached.get() as? Method
+                if (resolved != null) return@synchronized resolved
+                getEditTextCache.remove(clazz, cached)
+            }
+
             val found = runCatching {
                 clazz.methods.firstOrNull {
                     it.name == "getEditText" && it.parameterTypes.isEmpty()
@@ -228,7 +235,7 @@ internal object LayoutTextSupport {
                 getEditTextCache[clazz] = NO_GET_EDIT_TEXT
                 return null
             }
-            getEditTextCache[clazz] = found
+            getEditTextCache[clazz] = WeakReference(found)
             found
         }
         return runCatching { method.invoke(host) as? TextView }.getOrNull()

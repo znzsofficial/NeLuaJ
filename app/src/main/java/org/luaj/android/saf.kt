@@ -21,7 +21,7 @@ import androidx.core.net.toUri
 import com.nekolaska.ktx.byteLength
 import com.nekolaska.ktx.bytes
 import com.nekolaska.ktx.offset
-import com.nekolaska.ktx.toLuaValue
+import com.nekolaska.ktx.toLuaInstance
 import org.luaj.lib.OneArgFunction
 
 class saf(private val context: LuaActivity) {
@@ -116,7 +116,7 @@ class saf(private val context: LuaActivity) {
                 }
                 rootUri = uri
                 context.setSharedData(PREF_KEY, uri.toString())
-                onSelectCallback?.safeCall(uri.toLuaValue())
+                onSelectCallback?.safeCall(uri.toLuaInstance())
             } else {
                 onSelectCallback?.safeCall(LuaValue.NIL)
             }

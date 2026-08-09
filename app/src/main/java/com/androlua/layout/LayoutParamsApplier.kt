@@ -20,7 +20,9 @@ import com.nekolaska.ktx.toLuaValue
 import org.luaj.LuaError
 import org.luaj.LuaValue
 import org.luaj.LuaValue.NIL
-import java.util.concurrent.ConcurrentHashMap
+import java.lang.ref.WeakReference
+import java.util.Collections
+import java.util.WeakHashMap
 
 /**
  * layout_* 参数、margin、padding、Coordinator behavior。
@@ -33,7 +35,8 @@ internal class LayoutParamsApplier(
 
     companion object {
         private val NO_LP = Any()
-        private val nestedLpClassCache = ConcurrentHashMap<Class<*>, Any>()
+        // A nested LayoutParams class retains its declaring project View class and loader.
+        private val nestedLpClassCache = Collections.synchronizedMap(WeakHashMap<Class<*>, Any>())
 
         /**
          * 解析父 View 类给子节点用的 LayoutParams **类**。
@@ -41,27 +44,33 @@ internal class LayoutParamsApplier(
          */
         fun resolveNestedLayoutParamsClass(parentClass: Class<*>): Class<*>? {
             if (!ViewGroup::class.java.isAssignableFrom(parentClass)) return null
-            val hit = nestedLpClassCache[parentClass]
-            if (hit === NO_LP) return null
-            if (hit is Class<*>) return hit
+            synchronized(nestedLpClassCache) {
+                val hit = nestedLpClassCache[parentClass]
+                if (hit === NO_LP) return null
+                if (hit is WeakReference<*>) {
+                    val cached = hit.get() as? Class<*>
+                    if (cached != null) return cached
+                    nestedLpClassCache.remove(parentClass, hit)
+                }
 
-            var c: Class<*>? = parentClass
-            while (c != null && ViewGroup::class.java.isAssignableFrom(c)) {
-                val nested = c.declaredClasses.firstOrNull { nested ->
-                    nested.simpleName == "LayoutParams" &&
-                        ViewGroup.LayoutParams::class.java.isAssignableFrom(nested)
-                } ?: c.classes.firstOrNull { nested ->
-                    nested.simpleName == "LayoutParams" &&
-                        ViewGroup.LayoutParams::class.java.isAssignableFrom(nested)
+                var c: Class<*>? = parentClass
+                while (c != null && ViewGroup::class.java.isAssignableFrom(c)) {
+                    val nested = c.declaredClasses.firstOrNull { nested ->
+                        nested.simpleName == "LayoutParams" &&
+                            ViewGroup.LayoutParams::class.java.isAssignableFrom(nested)
+                    } ?: c.classes.firstOrNull { nested ->
+                        nested.simpleName == "LayoutParams" &&
+                            ViewGroup.LayoutParams::class.java.isAssignableFrom(nested)
+                    }
+                    if (nested != null) {
+                        nestedLpClassCache[parentClass] = WeakReference(nested)
+                        return nested
+                    }
+                    c = c.superclass
                 }
-                if (nested != null) {
-                    nestedLpClassCache[parentClass] = nested
-                    return nested
-                }
-                c = c.superclass
+                nestedLpClassCache[parentClass] = NO_LP
+                return null
             }
-            nestedLpClassCache[parentClass] = NO_LP
-            return null
         }
 
         fun resolveNestedLayoutParamsLua(parentClassValue: LuaValue): LuaValue {

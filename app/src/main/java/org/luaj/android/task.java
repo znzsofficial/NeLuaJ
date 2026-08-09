@@ -7,7 +7,7 @@ import com.androlua.LuaGcable;
 import org.luaj.LuaValue;
 import org.luaj.Varargs;
 import org.luaj.lib.VarArgFunction;
-import org.luaj.lib.jse.CoerceJavaToLua;
+import org.luaj.lib.jse.JavaInstance;
 
 public class task extends VarArgFunction implements LuaGcable {
     private final LuaContext mContext;
@@ -55,7 +55,7 @@ public class task extends VarArgFunction implements LuaGcable {
             }
         };
         mTask.execute();
-        return CoerceJavaToLua.coerce(mTask);
+        return new JavaInstance(mTask);
     }
 
     @Override

@@ -11,6 +11,7 @@ import androidx.core.net.toUri
 import com.androlua.LuaActivity
 import com.androlua.LuaActivityX
 import com.nekolaska.ktx.overridePendingTransition
+import com.nekolaska.ktx.toLuaInstance
 import com.nekolaska.ktx.toLuaValue
 import org.luaj.LuaFunction
 import java.io.FileNotFoundException
@@ -44,7 +45,7 @@ class LuaActivityNavigation(private val activity: LuaActivity) {
     private val sharedResultLauncher: ActivityResultLauncher<Intent> =
         activity.registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             launcherActivityResultDispatched = true
-            pendingResultCallbacks.pollFirst()?.safeCall(result.toLuaValue())
+            pendingResultCallbacks.pollFirst()?.safeCall(result.toLuaInstance())
         }
     
     private val sharedPermissionLauncher: ActivityResultLauncher<String> =

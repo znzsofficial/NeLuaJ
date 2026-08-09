@@ -8,6 +8,7 @@ import com.nekolaska.ktx.asString
 import com.nekolaska.ktx.firstArg
 import com.nekolaska.ktx.ifIsFunction
 import com.nekolaska.ktx.secondArg
+import com.nekolaska.ktx.toLuaInstance
 import com.nekolaska.ktx.toLuaValue
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -27,10 +28,6 @@ class LuaJobWrapper(@Volatile var job: Job?) : LuaGcable {
 
     override fun isGc(): Boolean {
         return job == null || (job?.isCompleted == true)
-    }
-
-    fun toLuaValue(): LuaValue {
-        return org.luaj.lib.jse.CoerceJavaToLua.coerce(this)
     }
 
     fun cancel() = gc()
@@ -93,7 +90,7 @@ class xTask(private val mContext: LuaActivity) : VarArgFunction() {
                 }
             }
         }
-        return LuaJobWrapper(job).toLuaValue()
+        return LuaJobWrapper(job).toLuaInstance()
     }
 
     private suspend fun reportError(title: String, exception: Exception) {

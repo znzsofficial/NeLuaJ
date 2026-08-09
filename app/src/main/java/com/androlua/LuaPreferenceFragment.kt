@@ -5,7 +5,7 @@ import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import org.luaj.LuaError
 import org.luaj.LuaTable
-import org.luaj.lib.jse.CoerceJavaToLua
+import org.luaj.lib.jse.JavaInstance
 
 class LuaPreferenceFragment(private var mPreferences: LuaTable) : PreferenceFragmentCompat(),
     Preference.OnPreferenceChangeListener,
@@ -37,7 +37,7 @@ class LuaPreferenceFragment(private var mPreferences: LuaTable) : PreferenceFrag
                 val preference = clazz.jcall(activity) as Preference
                 preference.onPreferenceChangeListener = this
                 preference.onPreferenceClickListener = this
-                val coerced = CoerceJavaToLua.coerce(preference)
+                val coerced = JavaInstance(preference)
                 for (et in p.keys()) {
                     if (et.isstring()) {
                         try {
