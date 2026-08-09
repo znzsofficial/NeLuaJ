@@ -1,7 +1,9 @@
 package com.androlua
 
 import android.app.Application
+import android.app.ActivityManager
 import android.content.Context
+import android.os.Process
 import android.os.Build.VERSION.SDK_INT
 import android.os.Environment
 import androidx.preference.PreferenceManager
@@ -23,6 +25,7 @@ class LuaApplication : Application(), LuaContext, SingletonImageLoader.Factory {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        if (!isMainProcess()) return
         getExternalFilesDir("dexfiles")?.let { rmDir(it) }
         CrashHandler.instance.init(this)
         //DynamicColors.applyToActivitiesIfAvailable(this)
@@ -206,6 +209,16 @@ class LuaApplication : Application(), LuaContext, SingletonImageLoader.Factory {
         } catch (_: Exception) {
         }
         return false
+    }
+
+    private fun isMainProcess(): Boolean {
+        if (SDK_INT >= 28) {
+            return Application.getProcessName() == packageName
+        }
+        val processes = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        return processes.runningAppProcesses
+            ?.firstOrNull { it.pid == Process.myPid() }
+            ?.processName == packageName
     }
 
     override fun findFile(filename: String): String {

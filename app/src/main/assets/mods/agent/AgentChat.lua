@@ -181,6 +181,7 @@ NeLuaJ+ 自带 API 文档，用 read_file 读取（路径写 `res/doc/文件名`
 - module_loadlayout.html — 布局语法完整参考
 - LuaActivity.html — Activity API
 - java_interop.html — Java 互操作
+- sandbox_zh.html — AI Lua 沙盒限制与可用库
 - module_file.html — 文件 API
 - module_okhttp.html — HTTP API
 - module_res.html — 资源模块
@@ -881,7 +882,7 @@ local function legacyExecuteTool(name, args)
       return "出于安全原因，禁止删除项目根目录或其上级目录: " .. args.path
     end
     local ok, result = pcall(function()
-      local LuaFileUtil = luajava.bindClass("com.nekolaska.io.LuaFileUtil").INSTANCE
+      local LuaFileUtil = luajava.kotlinObject("com.nekolaska.io.LuaFileUtil")
       return LuaFileUtil.remove(path)
     end)
     if ok and result == true then
@@ -1116,7 +1117,7 @@ local function legacyExecuteTool(name, args)
     if code == "" then
       return "run_lua 需要 code 参数"
     end
-    -- 加载沙盒（executeTool 无 pcall 包裹，异常会卡住 UI，这里统一兜底）
+    -- 加载沙盒并统一兜底异常
     local okBind, LuaSandbox = pcall(function()
       return luajava.bindClass("com.androlua.LuaSandbox")
     end)
@@ -1133,8 +1134,8 @@ local function legacyExecuteTool(name, args)
     if syntaxErr then
       return "Lua 语法错误:\n" .. tostring(syntaxErr)
     end
-    -- 受限沙盒原地运行：捕获 print 输出与运行时错误，超时保护
-    -- （同步阻塞主线程，默认 3s、上限 8s，避免长卡顿触发 ANR）
+    -- 受限沙盒在独立进程运行：捕获 print 输出与运行时错误，超时会结束该进程。
+    -- ToolExecutor 已在 xTask 工作线程调用本函数；默认 3s、上限 8s。
     local timeout = math.max(1000, math.min(8000, tonumber(args.timeout) or 3000))
     local okRun, res = pcall(function()
       return LuaSandbox.run(code, timeout)
@@ -1311,7 +1312,7 @@ local function changeSetRemove(path)
       local LuaUtil = luajava.bindClass("com.androlua.LuaUtil")
       return LuaUtil.rmDir(luajava.bindClass("java.io.File")(path))
     else
-      return luajava.bindClass("com.nekolaska.io.LuaFileUtil").INSTANCE.remove(path)
+      return luajava.kotlinObject("com.nekolaska.io.LuaFileUtil").remove(path)
     end
   end)
   return ok and result == true, result

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="doc.css" />
+    <script src="doc.js" defer></script>
+    <title>AI Lua 沙盒</title>
+  </head>
+  <body>
+    <main class="markdown-export">
+      <h1>AI Lua 沙盒</h1>
+      <p>AI 助手调用“运行 Lua 代码”时，代码会在独立的受限 Lua 环境中执行。它用于验证小型、纯 Lua 的计算或字符串处理，不是工程脚本、Activity 脚本或模块的运行方式。</p>
+
+      <h2>适合做什么</h2>
+      <ul>
+        <li>验证 Lua 语法和小段算法。</li>
+        <li>测试 table、string、math、utf8、协程和 <code>bit32</code> 的纯 Lua 逻辑。</li>
+        <li>通过 <code>print(...)</code> 查看计算结果。</li>
+      </ul>
+
+      <h2>可用环境</h2>
+      <p>沙盒提供基础 Lua 函数，以及 <code>coroutine</code>、<code>string</code>、<code>table</code>、<code>math</code>、<code>utf8</code> 和 <code>bit32</code>。</p>
+      <pre><code class="language-lua">local total = 0
+for i = 1, 10 do
+  total = total + i
+end
+print(total) -- 55
+</code></pre>
+
+      <h2>不可用能力</h2>
+      <p>沙盒刻意不提供 Java、Android、文件、网络或进程入口。以下名称不可用：</p>
+      <pre><code>luajava  import  require  package  debug
+io  os  dofile  loadfile  collectgarbage
+</code></pre>
+      <p>因此不能在沙盒中访问 <code>activity</code>、调用 Android API、读取工程文件、加载模块、发起 HTTP 请求或执行 shell 命令。需要这些能力时，应修改并在工程正常运行环境中测试相应 Lua 文件，而不是在 AI 沙盒中执行。</p>
+
+      <h2>输出与限制</h2>
+      <ul>
+        <li>代码以 UTF-8 计最多 128 KiB。</li>
+        <li><code>print</code> 输出和运行错误会返回给 AI；输出最多 64 KiB，超出部分会标记为截断。</li>
+        <li>执行时间受限。超时时该次运行失败，AI 应改用更小的输入或更高效的算法。</li>
+        <li>无限循环或阻塞代码不会继续占用应用主进程；超时后沙盒执行进程会被结束。</li>
+      </ul>
+
+      <h2>常见问题</h2>
+      <h3>为什么 <code>require</code> 或 <code>luajava</code> 是 nil？</h3>
+      <p>这是沙盒限制，目的是让 AI 执行的临时代码不能访问工程、设备或 Java bridge。将需要验证的纯函数提取为独立代码测试，或在工程环境中运行。</p>
+      <h3>为什么没有输出？</h3>
+      <p>只有 <code>print</code> 和运行错误会被捕获。Lua chunk 的返回值不会自动显示，请显式 <code>print(value)</code>。</p>
+      <h3>为什么运行超时？</h3>
+      <p>检查是否有无限循环、递归没有终止条件，或输入规模过大。把任务拆小，并避免在沙盒中进行大规模枚举。</p>
+    </main>
+  </body>
+</html>

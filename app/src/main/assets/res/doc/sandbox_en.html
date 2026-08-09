@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="doc.css" />
+    <script src="doc.js" defer></script>
+    <title>AI Lua Sandbox</title>
+  </head>
+  <body>
+    <main class="markdown-export">
+      <h1>AI Lua Sandbox</h1>
+      <p>When the AI Assistant uses “Run Lua code”, the code runs in a separate restricted Lua environment. It is for checking small, pure-Lua calculations or string processing. It is not the runtime for project scripts, Activity scripts, or modules.</p>
+
+      <h2>Appropriate Uses</h2>
+      <ul>
+        <li>Check Lua syntax and small algorithms.</li>
+        <li>Test pure Lua logic using table, string, math, utf8, coroutines, and <code>bit32</code>.</li>
+        <li>Inspect calculation results with <code>print(...)</code>.</li>
+      </ul>
+
+      <h2>Available Environment</h2>
+      <p>The sandbox provides basic Lua functions plus <code>coroutine</code>, <code>string</code>, <code>table</code>, <code>math</code>, <code>utf8</code>, and <code>bit32</code>.</p>
+      <pre><code class="language-lua">local total = 0
+for i = 1, 10 do
+  total = total + i
+end
+print(total) -- 55
+</code></pre>
+
+      <h2>Unavailable Capabilities</h2>
+      <p>The sandbox intentionally has no Java, Android, file, network, or process entry points. These names are unavailable:</p>
+      <pre><code>luajava  import  require  package  debug
+io  os  dofile  loadfile  collectgarbage
+</code></pre>
+      <p>You cannot access <code>activity</code>, call Android APIs, read project files, load modules, make HTTP requests, or execute shell commands there. For those tasks, edit and test the relevant Lua file in the normal project runtime instead.</p>
+
+      <h2>Output and Limits</h2>
+      <ul>
+        <li>UTF-8 source is limited to 128 KiB.</li>
+        <li><code>print</code> output and runtime errors are returned to the AI. Output is limited to 64 KiB and is marked when truncated.</li>
+        <li>Execution is time-limited. A timed-out run fails; use smaller inputs or a more efficient algorithm.</li>
+        <li>An infinite loop or blocked run does not remain in the app process. The sandbox execution process is ended after timeout.</li>
+      </ul>
+
+      <h2>Troubleshooting</h2>
+      <h3>Why are <code>require</code> and <code>luajava</code> nil?</h3>
+      <p>This is intentional. Temporary AI code cannot access the project, device, or Java bridge. Test an extracted pure function, or run the code from the normal project environment.</p>
+      <h3>Why is there no output?</h3>
+      <p>Only <code>print</code> output and runtime errors are captured. Chunk return values are not shown automatically, so use <code>print(value)</code>.</p>
+      <h3>Why did execution time out?</h3>
+      <p>Check for an infinite loop, recursion without a terminating condition, or overly large input. Split the work and avoid large enumerations in the sandbox.</p>
+    </main>
+  </body>
+</html>

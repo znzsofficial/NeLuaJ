@@ -91,6 +91,10 @@
             android:enabled="true"
             android:foregroundServiceType="shortService" />
         <service
+            android:name="com.androlua.LuaSandboxService"
+            android:exported="false"
+            android:process=":lua_sandbox" />
+        <service
             android:name="com.androlua.LuaNotificationListenerService"
             android:exported="true"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">

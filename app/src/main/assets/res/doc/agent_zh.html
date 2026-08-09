@@ -40,6 +40,9 @@
       </ul>
       <p>读取文件、列出目录和搜索工程不需要确认。“自动批准”仅适用于当前工程目录内的文件操作。MCP 工具和 Lua 代码执行仍需要确认。</p>
 
+      <h2>运行 Lua 代码</h2>
+      <p>AI 执行临时代码时使用受限沙盒，而不是当前工程的正常 Lua 环境。沙盒可用于纯 Lua 语法和算法验证，但不能访问 <code>activity</code>、Java/Android API、文件、网络、<code>require</code> 或 <code>luajava</code>。请阅读 <a href="sandbox_zh.html">AI Lua 沙盒</a> 了解可用库、输出和超时限制。</p>
+
       <h2>命令菜单</h2>
       <p>输入框旁的命令按钮提供以下功能：</p>
       <ul>

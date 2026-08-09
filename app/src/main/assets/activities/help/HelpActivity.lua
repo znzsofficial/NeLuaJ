@@ -52,6 +52,7 @@ local catalog = {
     subtitle = "内置 Agent 的配置、对话和文件操作",
     items = {
       { title = res.string.ai_chat, desc = "配置模型、发送任务并让 Agent 协助修改工程", file = "agent_" .. docLanguage .. ".html", tags = "AI Agent 助手 模型 API 文件 MCP Skill" },
+      { title = "AI Lua 沙盒", desc = "AI 临时代码的可用库与限制", file = "sandbox_" .. docLanguage .. ".html", tags = "AI 沙盒 sandbox 运行 Lua 安全" },
     },
   },
   {

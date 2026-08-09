@@ -41,6 +41,9 @@ Explain the changes and check related call sites.</code></pre>
       </ul>
       <p>Reading files, listing directories, and searching the project do not require confirmation. Auto-approve applies only to file operations inside the current project. MCP tools and Lua execution still require confirmation.</p>
 
+      <h2>Running Lua Code</h2>
+      <p>Temporary AI code runs in a restricted sandbox, not in the current project's normal Lua environment. It can check pure Lua syntax and algorithms, but cannot access <code>activity</code>, Java/Android APIs, files, networking, <code>require</code>, or <code>luajava</code>. See <a href="sandbox_en.html">AI Lua Sandbox</a> for available libraries, output handling, and timeout limits.</p>
+
       <h2>Command Menu</h2>
       <p>The command button beside the input field provides:</p>
       <ul>
