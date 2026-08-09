@@ -1,9 +1,9 @@
 package org.luaj.android
 
-import com.nekolaska.ktx.finder
-import com.nekolaska.ktx.m_bytes
-import com.nekolaska.ktx.m_length
-import com.nekolaska.ktx.m_offset
+import com.nekolaska.ktx.byteLength
+import com.nekolaska.ktx.bytes
+import com.nekolaska.ktx.offset
+import com.nekolaska.ktx.resourceFinder
 import org.luaj.Globals
 import org.luaj.LuaString
 import org.luaj.LuaTable
@@ -41,7 +41,7 @@ class file : TwoArgFunction() {
     private inner class readall : OneArgFunction() {
         override fun call(arg: LuaValue): LuaValue? {
             return try {
-                LuaString.valueOf(readAll(mGlobals.finder.findFile(arg.tojstring())))
+                LuaString.valueOf(readAll(mGlobals.resourceFinder.findFile(arg.tojstring())))
             } catch (_: Exception) {
                 NIL
             }
@@ -50,13 +50,13 @@ class file : TwoArgFunction() {
 
     private inner class list : OneArgFunction() {
         override fun call(arg: LuaValue): LuaValue? {
-            return LuajavaLib.asTable(list(mGlobals.finder.findFile(arg.tojstring())))
+            return LuajavaLib.asTable(list(mGlobals.resourceFinder.findFile(arg.tojstring())))
         }
     }
 
     private inner class _type : OneArgFunction() {
         override fun call(arg: LuaValue): LuaValue? {
-            val path = mGlobals.finder.findFile(arg.tojstring()) ?: arg.tojstring()
+            val path = mGlobals.resourceFinder.findFile(arg.tojstring()) ?: arg.tojstring()
             return valueOf(if (File(path).isDirectory) "dir" else "file")
         }
     }
@@ -64,7 +64,7 @@ class file : TwoArgFunction() {
     private inner class info : OneArgFunction() {
         override fun call(arg: LuaValue): LuaValue {
             val pathStr = arg.tojstring()
-            val resolvedPath = mGlobals.finder.findFile(pathStr) ?: pathStr
+            val resolvedPath = mGlobals.resourceFinder.findFile(pathStr) ?: pathStr
             val f = File(resolvedPath)
             
             val ret = LuaTable()
@@ -85,7 +85,7 @@ class file : TwoArgFunction() {
 
     private inner class mkdir : OneArgFunction() {
         override fun call(arg: LuaValue): LuaValue? {
-            val path = mGlobals.finder.findFile(arg.tojstring()) ?: arg.tojstring()
+            val path = mGlobals.resourceFinder.findFile(arg.tojstring()) ?: arg.tojstring()
             return valueOf(File(path).mkdirs())
         }
     }
@@ -93,7 +93,7 @@ class file : TwoArgFunction() {
     private inner class exists : OneArgFunction() {
         override fun call(arg: LuaValue): LuaValue? {
             return try {
-                valueOf(exists(mGlobals.finder.findFile(arg.tojstring())))
+                valueOf(exists(mGlobals.resourceFinder.findFile(arg.tojstring())))
             } catch (_: Exception) {
                 NIL
             }
@@ -104,7 +104,7 @@ class file : TwoArgFunction() {
         override fun call(arg1: LuaValue, arg2: LuaValue): LuaValue? {
             return valueOf(
                 save(
-                    mGlobals.finder.findFile(arg1.tojstring()),
+                    mGlobals.resourceFinder.findFile(arg1.tojstring()),
                     arg2.checkstring()
                 )
             )
@@ -130,7 +130,7 @@ class file : TwoArgFunction() {
             return try {
                 File(path).parentFile?.mkdirs()
                 FileOutputStream(path).use { fos ->
-                    fos.write(text.m_bytes, text.m_offset, text.m_length)
+                    fos.write(text.bytes, text.offset, text.byteLength)
                 }
                 true
             } catch (e: Exception) {

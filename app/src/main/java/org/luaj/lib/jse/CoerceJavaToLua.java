@@ -12,15 +12,15 @@ import org.luaj.LuaInteger;
 import org.luaj.LuaString;
 import org.luaj.LuaValue;
 
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 将Java对象转换为Lua值的工具类。
  * 使用策略模式和缓存机制来优化转换性能。
  */
 public class CoerceJavaToLua {
-    // 使用ConcurrentHashMap保证线程安全的缓存
+    // Keep the fixed cache safe for worker-thread callbacks such as xTask without retaining project classes.
     private static final Map<Class<?>, Coercion> coercionCache = new ConcurrentHashMap<>();
     
     // 预定义的常用 coercion 策略（保持原有字段名以保证兼容性）
@@ -124,26 +124,22 @@ public class CoerceJavaToLua {
         if (inputObject == null) {
             return LuaValue.NIL;
         }
+        if (inputObject instanceof LuaValue) {
+            return (LuaValue) inputObject;
+        }
 
         Class<?> inputClass = inputObject.getClass();
         
-        // 从缓存中获取coercion策略
+        // Only boxed primitives, strings, and Class objects have a specialized coercion.
         Coercion coercion = coercionCache.get(inputClass);
-
-        if (coercion == null) {
-            // 根据类型选择合适的coercion策略
-            if (inputClass.isArray()) {
-                coercion = c; // 数组类型
-            } else if (inputObject instanceof LuaValue) {
-                coercion = d; // 已经是LuaValue
-            } else {
-                coercion = b; // 通用对象实例
-            }
-            // 缓存结果以供后续使用
-            coercionCache.put(inputClass, coercion);
+        if (coercion != null) {
+            return coercion.coerce(inputObject);
         }
 
-        return coercion.coerce(inputObject);
+        if (inputClass.isArray()) {
+            return c.coerce(inputObject);
+        }
+        return b.coerce(inputObject);
     }
 
     /**

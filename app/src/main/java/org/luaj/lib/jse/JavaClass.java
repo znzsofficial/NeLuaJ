@@ -12,6 +12,7 @@ import org.luaj.LuaValue;
 import org.luaj.Varargs;
 import org.luaj.lib.OneArgFunction;
 
+import java.lang.ref.WeakReference;
 import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
@@ -22,6 +23,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.WeakHashMap;
 
 /**
  * 表示Java类的Lua值。
@@ -32,11 +34,9 @@ public class JavaClass extends JavaInstance implements CoerceJavaToLua.Coercion 
     // Class类的方法缓存（保持原有字段名以保证兼容性）
     static final HashMap<LuaValue, LuaValue> i = new HashMap<>();
     
-    // JavaClass实例缓存：Class -> JavaClass
-    static final Map<Class<?>, JavaClass> j = Collections.synchronizedMap(new HashMap<>());
-    
-    // JavaClass实例缓存：类名 -> JavaClass
-    static final Map<String, JavaClass> k = Collections.synchronizedMap(new HashMap<>());
+    // Neither cache keys nor values may retain unloaded project DexClassLoaders.
+    static final Map<Class<?>, WeakReference<JavaClass>> j =
+        Collections.synchronizedMap(new WeakHashMap<>());
     
     // "new"关键字的Lua值常量
     static final LuaValue l = LuaValue.valueOf("new");
@@ -80,7 +80,15 @@ public class JavaClass extends JavaInstance implements CoerceJavaToLua.Coercion 
      * @return 对应的JavaClass实例
      */
     static JavaClass a(Class<?> clazz) {
-        return j.computeIfAbsent(clazz, JavaClass::new);
+        synchronized (j) {
+            WeakReference<JavaClass> reference = j.get(clazz);
+            JavaClass javaClass = reference != null ? reference.get() : null;
+            if (javaClass == null) {
+                javaClass = new JavaClass(clazz);
+                j.put(clazz, new WeakReference<>(javaClass));
+            }
+            return javaClass;
+        }
     }
 
     /**
@@ -91,12 +99,7 @@ public class JavaClass extends JavaInstance implements CoerceJavaToLua.Coercion 
      * @throws ClassNotFoundException 如果类未找到
      */
     static JavaClass a(String className, ClassLoader classLoader) throws ClassNotFoundException {
-        JavaClass cached = k.get(className);
-        if (cached == null) {
-            cached = a(Class.forName(className, true, classLoader));
-            k.put(className, cached);
-        }
-        return cached;
+        return a(Class.forName(className, true, classLoader));
     }
 
     /**
@@ -106,12 +109,7 @@ public class JavaClass extends JavaInstance implements CoerceJavaToLua.Coercion 
      * @throws ClassNotFoundException 如果类未找到
      */
     static JavaClass f(String className) throws ClassNotFoundException {
-        JavaClass cached = k.get(className);
-        if (cached == null) {
-            cached = a(Class.forName(className));
-            k.put(className, cached);
-        }
-        return cached;
+        return a(Class.forName(className));
     }
 
     /**
@@ -232,8 +230,6 @@ public class JavaClass extends JavaInstance implements CoerceJavaToLua.Coercion 
         // 如果是数字，创建数组
         if (key.isnumber())
             return CoerceJavaToLua.c.coerce(Array.newInstance((Class<?>) touserdata(), key.toint()));
-        
-        // 根据关键字返回特殊属性
         return switch (key.tojstring()) {
             case "override" -> new LuajavaLib.override(this);
             case "new" -> getMethod(key);
@@ -281,9 +277,6 @@ public class JavaClass extends JavaInstance implements CoerceJavaToLua.Coercion 
             
             // 处理构造函数
             Constructor<?>[] constructors = ((Class<?>) super.b).getConstructors();
-            if (constructors.length == 0) {
-                constructors = ((Class<?>) super.b).getDeclaredConstructors();
-            }
 
             ArrayList<JavaConstructor> constructorList = new ArrayList<>();
             for (Constructor<?> constructor : constructors) {

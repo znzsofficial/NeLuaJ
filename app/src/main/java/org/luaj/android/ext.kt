@@ -1,8 +1,8 @@
 package org.luaj.android
 
-import com.nekolaska.ktx.m_bytes
-import com.nekolaska.ktx.m_length
-import com.nekolaska.ktx.m_offset
+import com.nekolaska.ktx.byteLength
+import com.nekolaska.ktx.bytes
+import com.nekolaska.ktx.offset
 import org.luaj.LuaError
 import org.luaj.LuaString
 import org.luaj.LuaTable
@@ -236,7 +236,7 @@ class ext : TwoArgFunction() {
     companion object {
         private fun Int.isPowerOfTwo(): Boolean = this > 0 && (this and (this - 1)) == 0
 
-        private fun LuaString.toBytes(): ByteArray = m_bytes.copyOfRange(m_offset, m_offset + m_length)
+        private fun LuaString.toBytes(): ByteArray = bytes.copyOfRange(offset, offset + byteLength)
 
         private fun ByteArray.indexOfZero(start: Int): Int {
             for (i in start until size) if (this[i].toInt() == 0) return i

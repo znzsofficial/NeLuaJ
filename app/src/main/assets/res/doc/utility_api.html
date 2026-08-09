@@ -90,7 +90,23 @@ Http.get("https://api.example.com/data", function(code, body)
 end)
 </code></pre>
 <hr>
-<h2>6. xTask — 协程异步任务</h2>
+<h2>6. Kotlin 类互操作</h2>
+<pre><code class="language-lua">-- Kotlin object：不需要手动读取 .INSTANCE
+local LuaFileUtil = luajava.kotlinObject("com.nekolaska.io.LuaFileUtil")
+LuaFileUtil.writeOrCreate(path, content)
+
+-- Kotlin companion object：不需要手动读取 .Companion
+local Tool = luajava.kotlinCompanion("com.example.Tool")
+Tool.run()
+
+-- 标注 @JvmStatic 的 companion 方法可直接从类调用
+local ToolClass = luajava.bindClass("com.example.Tool")
+ToolClass.runStatic()
+</code></pre>
+<p><code>kotlinObject</code> 与 <code>kotlinCompanion</code> 都接受类名、<code>bindClass</code> 的结果或 Java <code>Class</code>。</p>
+<p>Java 与 Kotlin 成员使用点调用 <code>object.method(...)</code>。带默认参数的 Kotlin 方法请标注 <code>@JvmOverloads</code>，或从 Lua 显式传入全部参数。</p>
+<hr>
+<h2>7. xTask — 协程异步任务</h2>
 <pre><code class="language-lua">-- 在后台线程执行，结果回到主线程
 xTask(function()
     -- 后台线程（可执行耗时操作）
@@ -102,7 +118,7 @@ end, function(result)
 end)
 </code></pre>
 <hr>
-<h2>7. task — 异步任务</h2>
+<h2>8. task — 异步任务</h2>
 <pre><code class="language-lua">-- 基本用法
 task(function()
     return "后台结果"
@@ -111,7 +127,7 @@ end, function(result)
 end)
 </code></pre>
 <hr>
-<h2>8. thread — 线程</h2>
+<h2>9. thread — 线程</h2>
 <pre><code class="language-lua">-- 在新线程中执行
 thread(function()
     -- 耗时操作
@@ -120,7 +136,7 @@ thread(function()
 end)
 </code></pre>
 <hr>
-<h2>9. timer — 定时器</h2>
+<h2>10. timer — 定时器</h2>
 <pre><code class="language-lua">-- 创建定时器（毫秒）
 local t = timer(function()
     print("每秒执行")
@@ -133,7 +149,7 @@ t.stop()
 t.setEnabled(false)
 </code></pre>
 <hr>
-<h2>10. lazy — 懒加载</h2>
+<h2>11. lazy — 懒加载</h2>
 <pre><code class="language-lua">-- 延迟初始化，首次访问时才执行
 local heavyObject = lazy(function()
     return createExpensiveObject()
@@ -143,7 +159,7 @@ end)
 print(heavyObject.value.someMethod())
 </code></pre>
 <hr>
-<h2>11. saf — 存储访问框架</h2>
+<h2>12. saf — 存储访问框架</h2>
 <pre><code class="language-lua">-- 选择文件
 saf.openDocument(function(uri)
     local content = saf.readText(uri)
@@ -161,7 +177,7 @@ saf.openDocumentTree(function(uri)
 end)
 </code></pre>
 <hr>
-<h2>12. loadlayout — 布局加载</h2>
+<h2>13. loadlayout — 布局加载</h2>
 <pre><code class="language-lua">local view = loadlayout(layoutTable)
 
 local binding = {}
@@ -177,7 +193,7 @@ local view = loadlayout(res.layout.main)
   <a class="doc-link" href="module_res.html">res.drawable</a>
 </nav>
 <hr>
-<h2>13. print / printf — 打印</h2>
+<h2>14. print / printf — 打印</h2>
 <pre><code class="language-lua">-- 打印到日志（会显示 Toast）
 print("Hello", "World")
 
@@ -185,13 +201,13 @@ print("Hello", "World")
 printf("名字: %s, 年龄: %d", "张三", 25)
 </code></pre>
 <hr>
-<h2>14. import / Java 互操作</h2>
+<h2>15. import / Java 互操作</h2>
 <p>import、luajava.bindClass、createProxy、override、属性语法糖等已单独整理到 <code>java_interop.html</code>（文档中心 → 语言与环境 → Java 互操作）。</p>
 <pre><code class="language-lua">import "android.widget.TextView"
 local File = luajava.bindClass "java.io.File"
 </code></pre>
 <hr>
-<h2>15. MaterialAlertDialogBuilder — 对话框</h2>
+<h2>16. MaterialAlertDialogBuilder — 对话框</h2>
 <pre><code class="language-lua">import "com.google.android.material.dialog.MaterialAlertDialogBuilder"
 
 -- 基本对话框
@@ -223,7 +239,7 @@ MaterialAlertDialogBuilder(activity)
     .show()
 </code></pre>
 <hr>
-<h2>16. BottomSheetDialog — 底部弹出</h2>
+<h2>17. BottomSheetDialog — 底部弹出</h2>
 <pre><code class="language-lua">import "com.google.android.material.bottomsheet.BottomSheetDialog"
 
 local dialog = BottomSheetDialog(activity)
@@ -232,7 +248,7 @@ dialog.dismissWithAnimation = true
 dialog.show()
 </code></pre>
 <hr>
-<h2>17. Snackbar — 底部提示</h2>
+<h2>18. Snackbar — 底部提示</h2>
 <pre><code class="language-lua">import "com.google.android.material.snackbar.Snackbar"
 
 Snackbar.make(rootView, "操作成功", Snackbar.LENGTH_SHORT)

@@ -46,6 +46,8 @@ import org.luaj.lib.ResourceFinder;
 import org.luaj.lib.jse.JavaPackage;
 import org.luaj.lib.jse.JsePlatform;
 
+import static com.nekolaska.ktx.LuaValueFixKt.setResourceFinder;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -145,9 +147,9 @@ public class LuaService extends Service
         mLuaDexLoader = new LuaDexLoader(this, luaDir);
         mLuaDexLoader.loadLibs();
         globals = JsePlatform.standardGlobals();
-        globals.m = this;
+        setResourceFinder(globals, this);
         initENV();
-        globals.s.e = mLuaDexLoader.getClassLoaders();
+        JsePlatform.publishClassLoaders(globals, mLuaDexLoader.getClassLoaders());
         try {
             globals.jset("notification", this);
             globals.jset("service", this);
@@ -163,10 +165,10 @@ public class LuaService extends Service
             globals.load(new file());
             globals.jset("Http", Http.class);
             globals.jset("http", http.class);
-            globals.set("android", new JavaPackage("android"));
-            globals.set("java", new JavaPackage("java"));
-            globals.set("com", new JavaPackage("com"));
-            globals.set("org", new JavaPackage("org"));
+            globals.set("android", new JavaPackage("android", globals.s));
+            globals.set("java", new JavaPackage("java", globals.s));
+            globals.set("com", new JavaPackage("com", globals.s));
+            globals.set("org", new JavaPackage("org", globals.s));
             globals.loadfile(luaFile).jcall();
             runFunc("onCreate");
         } catch (final Exception e) {
@@ -298,7 +300,7 @@ public class LuaService extends Service
 
     @Override
     public ArrayList<ClassLoader> getClassLoaders() {
-        return null;
+        return mLuaDexLoader != null ? mLuaDexLoader.getClassLoaders() : null;
     }
 
     @Override

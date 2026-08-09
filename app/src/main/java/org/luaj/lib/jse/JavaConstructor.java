@@ -8,9 +8,10 @@ package org.luaj.lib.jse;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.ref.WeakReference;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.WeakHashMap;
 
 import org.luaj.LuaError;
 import org.luaj.LuaValue;
@@ -23,7 +24,9 @@ import org.luaj.lib.VarArgFunction;
  */
 class JavaConstructor extends JavaMember {
     // 构造函数缓存：Constructor -> JavaConstructor（保持原有字段名以保证兼容性）
-    static final Map<Constructor<?>, JavaConstructor> h = Collections.synchronizedMap(new HashMap<>());
+    // Both sides must be weak: JavaConstructor retains Constructor and its declaring ClassLoader.
+    static final Map<Constructor<?>, WeakReference<JavaConstructor>> h =
+        Collections.synchronizedMap(new WeakHashMap<>());
     
     // 原始Constructor对象
     final Constructor i;
@@ -43,7 +46,15 @@ class JavaConstructor extends JavaMember {
      * @return 对应的JavaConstructor实例
      */
     static JavaConstructor a(Constructor<?> constructor) {
-        return h.computeIfAbsent(constructor, JavaConstructor::new);
+        synchronized (h) {
+            WeakReference<JavaConstructor> reference = h.get(constructor);
+            JavaConstructor cached = reference != null ? reference.get() : null;
+            if (cached == null) {
+                cached = new JavaConstructor(constructor);
+                h.put(constructor, new WeakReference<>(cached));
+            }
+            return cached;
+        }
     }
 
     /**

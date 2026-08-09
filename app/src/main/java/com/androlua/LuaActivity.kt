@@ -44,6 +44,7 @@ import com.androlua.activity.LuaActivityTheme
 import com.androlua.activity.LuaActivityUI
 import com.androlua.activity.LuaActivityUtils
 import com.nekolaska.ktx.firstArg
+import com.nekolaska.ktx.resourceFinder
 import com.nekolaska.ktx.toLuaInstance
 import dalvik.system.DexClassLoader
 import github.daisukiKaffuChino.utils.LuaThemeUtil
@@ -155,8 +156,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         mLuaDexLoader = LuaDexLoader(this, luaRootDir)
         mLuaDexLoader.loadLibs()
         globals = JsePlatform.standardGlobals()
-        // globals.finder = this;
-        globals.m = this
+        globals.resourceFinder = this
         logAdapter = LogAdapter()
         lifecycleScope.launch {
             logEvents.collect { msg ->
@@ -184,7 +184,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
             return valueOf("\n\tno class '" + classname + "'");
         }
     });*/
-        globals.s.e = mLuaDexLoader.classLoaders
+        JsePlatform.publishClassLoaders(globals, mLuaDexLoader.classLoaders)
         sActivity = this
         try {
             globals.let {
@@ -213,7 +213,7 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
                 it.jset("Http", Http::class.java)
                 it.jset("http", http)
                 it.jset("R", R::class.java)
-                it.set("android", JavaPackage("android"))
+                it.set("android", JavaPackage("android", it.s))
                 var arg = intent.getSerializableExtra(ARG) as Array<Any?>?
                 if (arg == null) arg = arrayOfNulls(0)
                 doFile(luaFile, *arg)
@@ -497,8 +497,11 @@ open class LuaActivity : AppCompatActivity(), ResourceFinder, LuaContext, OnRece
         return mLuaDexLoader.classLoaders
     }
     
+    @Synchronized
     fun loadDex(path: String?): DexClassLoader? {
-        return mLuaDexLoader.loadDex(path)
+        return mLuaDexLoader.loadDex(path).also {
+            JsePlatform.publishClassLoaders(globals, mLuaDexLoader.classLoaders)
+        }
     }
     
     override fun call(func: String?, vararg args: Any?) {

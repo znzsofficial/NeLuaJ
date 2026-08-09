@@ -13,9 +13,10 @@ import org.luaj.Varargs;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.lang.ref.WeakReference;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.WeakHashMap;
 
 /**
  * 表示Java方法的Lua值。
@@ -23,7 +24,8 @@ import java.util.Map;
  */
 class JavaMethod extends JavaMember {
     // 方法缓存：Method -> JavaMethod（保持原有字段名以保证兼容性）
-    static final Map<Method, LuaValue> h = Collections.synchronizedMap(new HashMap<>());
+    // Both sides must be weak: JavaMethod retains Method, which otherwise pins dynamic DexClassLoaders.
+    static final Map<Method, WeakReference<JavaMethod>> h = Collections.synchronizedMap(new WeakHashMap<>());
     
     // 返回类型
     private final Class<?> i;
@@ -65,16 +67,22 @@ class JavaMethod extends JavaMember {
      * @return 对应的JavaMethod实例
      */
     static JavaMethod a(Method method) {
-        JavaMethod cached = (JavaMethod) h.get(method);
-        if (cached == null) {
+        synchronized (h) {
+            WeakReference<JavaMethod> reference = h.get(method);
+            JavaMethod cached = reference != null ? reference.get() : null;
+            if (cached != null) {
+                return cached;
+            }
+
             try {
                 cached = new JavaMethod(method);
-                h.put(method, cached);
+                h.put(method, new WeakReference<>(cached));
+                return cached;
             } catch (Throwable ignored) {
                 // 跳过无法创建的方法
+                return null;
             }
         }
-        return cached;
     }
 
     /**
@@ -278,6 +286,7 @@ class JavaMethod extends JavaMember {
         public String typename() {
             return this.method.typename();
         }
+
     }
 
     /**

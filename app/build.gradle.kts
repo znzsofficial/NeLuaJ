@@ -1,5 +1,5 @@
 import com.android.build.api.dsl.Packaging
-import com.android.build.gradle.internal.api.BaseVariantOutputImpl
+import org.gradle.api.tasks.testing.Test
 import org.gradle.jvm.tasks.Jar
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.io.FileInputStream
@@ -23,7 +23,7 @@ android {
     val versionPropsFile = file("version.properties")
     versionProps.load(FileInputStream(versionPropsFile))
     val verCode = Integer.parseInt(versionProps["VERSION_CODE"] as String)
-    if (":app:assembleRelease" in  gradle.startParameter.taskNames) {
+    if (":app:assembleRelease" in gradle.startParameter.taskNames) {
         versionProps["VERSION_CODE"] = (verCode + 1).toString()
         versionProps.store(versionPropsFile.writer(), null)
     }
@@ -76,26 +76,41 @@ android {
         exclude(group = "androidx.localbroadcastmanager", module = "localbroadcastmanager")
         exclude(group = "androidx.slidingpanelayout", module = "slidingpanelayout")
     }
-    applicationVariants.all {
-        outputs.all {
-            // 定义时间格式
-            val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH_mm_ss")
-            // 格式化时间并打印输出
-            val formattedDateTime = LocalDateTime.now().format(formatter)
-            val apkName = "${project.name}-${defaultConfig.versionCode}-$formattedDateTime.APK"
-            //val minSdk = project.extensions.getByType(BaseAppModuleExtension::class.java).defaultConfig.minSdk
-            //val abi = filters.find { it.filterType == "ABI" }?.identifier ?: "all"
-            (this as BaseVariantOutputImpl).outputFileName = apkName
+    androidComponents {
+        onVariants(selector().all()) { variant ->
+            variant.outputs.forEach { output ->
+                val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH_mm_ss")
+                val formattedDateTime = LocalDateTime.now().format(formatter)
+                val apkName = "${project.name}-${defaultConfig.versionCode}-$formattedDateTime.APK"
+                output.outputFileName.set(apkName)
+            }
         }
     }
 }
 
-val filteredLuajppJar by tasks.registering(Jar::class) {
+val filteredLuajppJar = tasks.register<Jar>("filteredLuajppJar") {
     archiveFileName.set("luajpp_nocglib_without_luajava.jar")
     destinationDirectory.set(layout.buildDirectory.dir("filtered-libs"))
     from(zipTree(layout.projectDirectory.file("libs/luajpp_nocglib.jar"))) {
+        exclude("org/luaj/LuaString*.class")
+        exclude("org/luaj/LuaUtf8String*.class")
         exclude("org/luaj/lib/jse/LuajavaLib*.class")
+        exclude("org/luaj/lib/jse/CoerceJavaToLua*.class")
+        exclude("org/luaj/lib/jse/CoerceLuaToJava*.class")
+        exclude("org/luaj/lib/jse/JavaClass.class")
+        exclude("org/luaj/lib/jse/JavaConstructor*.class")
+        exclude("org/luaj/lib/jse/JavaInstance.class")
+        exclude("org/luaj/lib/jse/JavaMethod*.class")
+        exclude("org/luaj/lib/jse/JavaPackage.class")
+        exclude("org/luaj/lib/jse/JsePlatform.class")
+        exclude("org/luaj/lib/jse/JseIoLib*.class")
     }
+}
+
+// The legacy Luaj++ JAR omits StackMapTable entries; ART accepts its DEX output,
+// while the desktop JVM used for local unit tests requires verification to be disabled.
+tasks.withType<Test>().configureEach {
+    jvmArgs("-noverify")
 }
 
 dependencies {

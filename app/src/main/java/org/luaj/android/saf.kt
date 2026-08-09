@@ -18,7 +18,9 @@ import org.luaj.lib.VarArgFunction
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import androidx.core.net.toUri
-import com.nekolaska.ktx.m_bytes
+import com.nekolaska.ktx.byteLength
+import com.nekolaska.ktx.bytes
+import com.nekolaska.ktx.offset
 import com.nekolaska.ktx.toLuaValue
 import org.luaj.lib.OneArgFunction
 
@@ -264,7 +266,7 @@ class saf(private val context: LuaActivity) {
             // 3. 写入内容
             if (targetUri != null) {
                 context.contentResolver.openOutputStream(targetUri, "wt")?.use {
-                    it.write(content.m_bytes)
+                    it.write(content.bytes, content.offset, content.byteLength)
                 }
                 return LuaValue.TRUE
             }
@@ -319,7 +321,7 @@ class saf(private val context: LuaActivity) {
             if (uri != null) {
                 try {
                     context.contentResolver.openOutputStream(uri, "wt")?.use {
-                        it.write(content.m_bytes)
+                        it.write(content.bytes, content.offset, content.byteLength)
                     }
                     callback.safeCall(LuaValue.TRUE)
                 } catch (e: Exception) {

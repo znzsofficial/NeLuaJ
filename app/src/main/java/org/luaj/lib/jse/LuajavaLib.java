@@ -16,14 +16,19 @@ import org.luaj.lib.OneArgFunction;
 import org.luaj.lib.VarArgFunction;
 
 import java.lang.reflect.Array;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
 
 /**
@@ -32,13 +37,24 @@ import java.util.Map;
  */
 public class LuajavaLib extends VarArgFunction {
     // 函数名称数组（保持原有字段名以保证兼容性）
-    static final String[] d = new String[]{"bindClass", "newInstance", "new", "createProxy", "loadLib", "astable", "instanceof"};
+    static final String[] d = new String[]{
+        "bindClass", "newInstance", "new", "createProxy", "loadLib", "astable", "instanceof",
+        "kotlinObject", "kotlinCompanion", "toTable", "toList", "toSet", "toMap",
+        "constructor", "method", "iterate"
+    };
+    private static final LuaValue INSTANCE = LuaValue.valueOf("INSTANCE");
+    private static final LuaValue COMPANION = LuaValue.valueOf("Companion");
     
     // 自定义类加载器列表
     public ArrayList<ClassLoader> e = new ArrayList<>();
-    
-    // 类名缓存：className -> LuaValue
-    public final HashMap<String, LuaValue> f = new HashMap<>();
+    private volatile ClassLoader[] classLoaders = new ClassLoader[0];
+    private volatile long classLoaderGeneration;
+
+    /**
+     * Retained for binary compatibility with the bundled Luaj++ API. Runtime lookups deliberately
+     * do not populate this name-only cache because it cannot distinguish dynamic ClassLoaders.
+     */
+    public HashMap<String, LuaValue> f = new HashMap<>();
 
     /**
      * 将Java对象转换为Lua表（递归转换）
@@ -56,36 +72,59 @@ public class LuajavaLib extends VarArgFunction {
      * @return 转换后的Lua表
      */
     public static LuaValue asTable(Object object, boolean recursive) {
-        return asTableInternal(object, recursive);
+        return asTableInternal(object, recursive, recursive ? new IdentityHashMap<>() : null);
     }
 
     /**
      * 内部实现：将Java对象转换为Lua表
      */
-    private static LuaValue asTableInternal(Object object, boolean recursive) {
+    private static LuaValue asTableInternal(
+        Object object,
+        boolean recursive,
+        IdentityHashMap<Object, LuaTable> convertedTables
+    ) {
         if (object == null) {
             return LuaValue.NIL;
         }
 
-        LuaTable table = new LuaTable();
         Class<?> objectClass = object.getClass();
+        boolean container = objectClass.isArray() || object instanceof Collection || object instanceof Map ||
+            object instanceof JSONObject || object instanceof JSONArray;
+        if (!container) {
+            return CoerceJavaToLua.coerce(object);
+        }
+
+        if (convertedTables != null) {
+            LuaTable converted = convertedTables.get(object);
+            if (converted != null) {
+                return converted;
+            }
+        }
+
+        LuaTable table = new LuaTable();
+        if (convertedTables != null) {
+            convertedTables.put(object, table);
+        }
         
         if (objectClass.isArray()) {
             // 数组类型
             int length = Array.getLength(object);
             for (int index = 0; index < length; index++) {
-                table.set(index + 1, convertTableValue(Array.get(object, index), recursive));
+                table.set(index + 1, convertTableValue(Array.get(object, index), recursive, convertedTables));
             }
         } else if (object instanceof Collection) {
             // 集合类型
             int index = 1;
             for (Object item : (Collection<?>) object) {
-                table.set(index++, convertTableValue(item, recursive));
+                table.set(index++, convertTableValue(item, recursive, convertedTables));
             }
         } else if (object instanceof Map) {
             // Map类型
             for (Map.Entry<?, ?> entry : ((Map<?, ?>) object).entrySet()) {
-                table.set(CoerceJavaToLua.coerce(entry.getKey()), convertTableValue(entry.getValue(), recursive));
+                table.set(
+                    CoerceJavaToLua.coerce(entry.getKey()),
+                    convertTableValue(entry.getValue(), recursive, convertedTables)
+                );
             }
         } else if (object instanceof JSONObject jsonObject) {
             // JSONObject类型
@@ -93,7 +132,7 @@ public class LuajavaLib extends VarArgFunction {
             while (keys.hasNext()) {
                 String key = (String) keys.next();
                 try {
-                    table.set(key, convertTableValue(jsonObject.get(key), recursive));
+                    table.set(key, convertTableValue(jsonObject.get(key), recursive, convertedTables));
                 } catch (JSONException ignored) {
                     // 忽略JSON解析错误
                 }
@@ -103,14 +142,11 @@ public class LuajavaLib extends VarArgFunction {
             int length = jsonArray.length();
             for (int index = 0; index < length; index++) {
                 try {
-                    table.set(index + 1, convertTableValue(jsonArray.get(index), recursive));
+                    table.set(index + 1, convertTableValue(jsonArray.get(index), recursive, convertedTables));
                 } catch (JSONException ignored) {
                     // 忽略JSON解析错误
                 }
             }
-        } else {
-            // 其他类型，直接转换
-            return CoerceJavaToLua.coerce(object);
         }
 
         return table;
@@ -119,11 +155,15 @@ public class LuajavaLib extends VarArgFunction {
     /**
      * 转换表中的值
      */
-    private static LuaValue convertTableValue(Object value, boolean recursive) {
+    private static LuaValue convertTableValue(
+        Object value,
+        boolean recursive,
+        IdentityHashMap<Object, LuaTable> convertedTables
+    ) {
         if (value == null || value == JSONObject.NULL) {
             return LuaValue.NIL;
         }
-        return recursive ? asTableInternal(value, true) : CoerceJavaToLua.coerce(value);
+        return recursive ? asTableInternal(value, true, convertedTables) : CoerceJavaToLua.coerce(value);
     }
 
     /**
@@ -167,37 +207,30 @@ public class LuajavaLib extends VarArgFunction {
         return JavaClass.a((new LuaEnhancer(type)).create(value));
     }
 
-    /**
-     * 绑定Java类（带缓存）
-     * @param className 类名
-     * @return 对应的JavaClass
-     * @throws ClassNotFoundException 如果类未找到
-     */
-    public LuaValue bindClassForName(String className) throws ClassNotFoundException {
-        // 检查缓存
-        LuaValue cached = this.f.get(className);
-        if (cached != null) {
-            return cached;
-        }
-
+    /** Binds a Java class using the current project class loader snapshot. */
+    public LuaValue bindClassForName(String className) {
         try {
-            // 尝试使用默认ClassLoader
-            LuaValue javaClass = JavaClass.f(className);
-            this.f.put(className, javaClass);
-            return javaClass;
-        } catch (Exception ignored) {
-            // 尝试使用自定义ClassLoader
-            for (ClassLoader classLoader : this.e) {
-                try {
-                    LuaValue javaClass = JavaClass.a(className, classLoader);
-                    this.f.put(className, javaClass);
-                    return javaClass;
-                } catch (Exception ignored2) {
-                    // 继续尝试下一个ClassLoader
-                }
-            }
-            throw new ClassNotFoundException(className);
+            return JavaClass.a(resolveClass(className));
+        } catch (ClassNotFoundException exception) {
+            return throwUnchecked(exception);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T, E extends Throwable> T throwUnchecked(Throwable exception) throws E {
+        throw (E) exception;
+    }
+
+    /**
+     * Publishes a stable loader snapshot after LuaDexLoader changes. The public list field remains
+     * available for legacy callers; callers that mutate it must publish the change again.
+     */
+    public synchronized void setClassLoaders(ArrayList<ClassLoader> classLoaders) {
+        if (classLoaders == null) {
+            throw new NullPointerException("classLoaders");
+        }
+        this.e = classLoaders;
+        publishClassLoaders(classLoaders);
     }
 
     /**
@@ -205,6 +238,33 @@ public class LuajavaLib extends VarArgFunction {
      */
     protected Class<?> f(String className) throws ClassNotFoundException {
         return Class.forName(className);
+    }
+
+    Class<?> resolveClass(String className) throws ClassNotFoundException {
+        try {
+            return f(className);
+        } catch (ClassNotFoundException notFound) {
+            for (ClassLoader classLoader : classLoaders) {
+                if (classLoader == null) {
+                    continue;
+                }
+                try {
+                    return Class.forName(className, true, classLoader);
+                } catch (ClassNotFoundException ignored) {
+                    // Continue through the project loader chain.
+                }
+            }
+            throw notFound;
+        }
+    }
+
+    private void publishClassLoaders(ArrayList<ClassLoader> classLoaders) {
+        this.classLoaders = new ArrayList<>(classLoaders).toArray(new ClassLoader[0]);
+        classLoaderGeneration++;
+    }
+
+    long classLoaderGeneration() {
+        return classLoaderGeneration;
     }
 
     /**
@@ -216,23 +276,26 @@ public class LuajavaLib extends VarArgFunction {
                 case 0 -> // load
                         load(args);
                 case 1 -> // bindClass
-                        JavaClass.a(this.f(args.checkjstring(1))); // newInstance (by class name)
+                        bindClassForName(args.checkjstring(1));
                 case 2, 3 -> // newInstance (by class object)
                         newInstance(args);
                 case 4 -> // createProxy
                         createProxy(args);
                 case 5 -> // loadLib
                         loadLib(args);
-                case 6 -> {
-                    if (args.istable(1)) {
-                        yield args.checktable(1);
-                    }
-                    yield asTable(args.checkuserdata(1), args.optboolean(2, false));
-                }
+                case 6, 10 -> toTable(args);
                 case 7 -> // instanceof
                         LuaValue.valueOf(
                                 ((Class) args.arg(2).touserdata(Class.class)).isInstance(args.checkuserdata(1))
                         );
+                case 8 -> kotlinMember(args, INSTANCE, "Kotlin object");
+                case 9 -> kotlinMember(args, COMPANION, "Kotlin companion object");
+                case 11 -> toList(args.checktable(1));
+                case 12 -> toSet(args.checktable(1));
+                case 13 -> toMap(args.checktable(1));
+                case 14 -> constructor(args);
+                case 15 -> method(args);
+                case 16 -> iterate(args);
                 default -> throw new LuaError("unsupported luajava operation: " + super.b + "\n" +
                         "This is an internal error. Please report this issue.");
             };
@@ -282,12 +345,140 @@ public class LuajavaLib extends VarArgFunction {
         Class<?> type;
         if (super.b == 2) {
             // 通过类名创建
-            type = this.f(target.tojstring());
+            type = resolveClass(target.tojstring());
         } else {
             // 通过Class对象创建
             type = (Class<?>) target.checkuserdata(Class.class);
         }
         return JavaClass.a(type).getConstructor().invoke(args.subargs(2));
+    }
+
+    /** Returns one public constructor selected by its exact parameter types. */
+    private LuaValue constructor(Varargs args) throws ClassNotFoundException, NoSuchMethodException {
+        Class<?> type = toClass(args.checkvalue(1));
+        Constructor<?> constructor = type.getConstructor(parameterTypes(args.checktable(2)));
+        return JavaConstructor.a(constructor);
+    }
+
+    /** Returns one public method selected by its exact parameter types and bound to its target. */
+    private LuaValue method(Varargs args) throws ClassNotFoundException, NoSuchMethodException {
+        LuaValue target = args.checkvalue(1);
+        JavaInstance instance;
+        Object targetObject;
+
+        if (target.type() == LuaValue.TSTRING) {
+            Class<?> type = resolveClassName(target.checkjstring());
+            instance = JavaClass.a(type);
+            targetObject = type;
+        } else {
+            targetObject = target.checkuserdata();
+            instance = target instanceof JavaInstance
+                ? (JavaInstance) target
+                : targetObject instanceof Class
+                    ? JavaClass.a((Class<?>) targetObject)
+                    : new JavaInstance(targetObject);
+        }
+
+        Class<?> type = targetObject instanceof Class ? (Class<?>) targetObject : targetObject.getClass();
+        Method method = type.getMethod(args.checkjstring(2), parameterTypes(args.checktable(3)));
+        if (targetObject instanceof Class && !Modifier.isStatic(method.getModifiers())) {
+            throw new LuaError("method '" + method.getName() + "' requires an instance of '" + type.getName() + "'");
+        }
+
+        JavaMethod javaMethod = JavaMethod.a(method);
+        if (javaMethod == null) {
+            throw new LuaError("cannot access Java method '" + method + "'");
+        }
+        return new JavaMethod.JavaOOMethod(instance, javaMethod);
+    }
+
+    /** Returns a stateful Lua iterator for Java arrays, maps, iterables, iterators, and Kotlin sequences. */
+    private LuaValue iterate(Varargs args) {
+        Object value = args.checkuserdata(1);
+        if (value instanceof Map) {
+            return new JavaIterator(((Map<?, ?>) value).entrySet().iterator(), true);
+        }
+        if (value instanceof Iterator) {
+            return new JavaIterator((Iterator<?>) value, false);
+        }
+        if (value instanceof Iterable) {
+            return new JavaIterator(((Iterable<?>) value).iterator(), false);
+        }
+        if (value.getClass().isArray()) {
+            return new JavaIterator(new ArrayIterator(value), false);
+        }
+
+        try {
+            Method iterator = value.getClass().getMethod("iterator");
+            Object result = iterator.invoke(value);
+            if (result instanceof Iterator) {
+                return new JavaIterator((Iterator<?>) result, false);
+            }
+        } catch (NoSuchMethodException ignored) {
+            // Continue to the bridge-specific error below.
+        } catch (Exception exception) {
+            throw new LuaError("failed to create Java iterator: " + exception.getMessage());
+        }
+        throw new LuaError("luajava.iterate expects a Java array, Map, Iterable, Iterator, or Kotlin Sequence");
+    }
+
+    /**
+     * Converts Java arrays, collections, and maps to a Lua table. Nested values remain userdata
+     * unless recursive conversion is explicitly requested.
+     */
+    private LuaValue toTable(Varargs args) {
+        if (args.istable(1)) {
+            return args.checktable(1);
+        }
+        return asTable(args.checkuserdata(1), args.optboolean(2, false));
+    }
+
+    /** Converts the array part of a Lua table (indexes 1 through #table) to an ArrayList. */
+    private static LuaValue toList(LuaTable table) {
+        int length = table.length();
+        ArrayList<Object> result = new ArrayList<>(length);
+        for (int index = 1; index <= length; index++) {
+            result.add(CoerceLuaToJava.coerce(table.get(index), Object.class));
+        }
+        return CoerceJavaToLua.coerce(result);
+    }
+
+    /** Converts the array part of a Lua table (indexes 1 through #table) to an ordered Set. */
+    private static LuaValue toSet(LuaTable table) {
+        int length = table.length();
+        LinkedHashSet<Object> result = new LinkedHashSet<>(length);
+        for (int index = 1; index <= length; index++) {
+            result.add(CoerceLuaToJava.coerce(table.get(index), Object.class));
+        }
+        return CoerceJavaToLua.coerce(result);
+    }
+
+    /** Converts all Lua table entries to a Java Map in the table's current iteration order. */
+    private static LuaValue toMap(LuaTable table) {
+        LinkedHashMap<Object, Object> result = new LinkedHashMap<>(table.size());
+        LuaValue key = LuaValue.NIL;
+        Varargs entry;
+        while (!(entry = table.next(key)).isnil(1)) {
+            key = entry.arg1();
+            result.put(
+                CoerceLuaToJava.coerce(key, Object.class),
+                CoerceLuaToJava.coerce(entry.arg(2), Object.class)
+            );
+        }
+        return CoerceJavaToLua.coerce(result);
+    }
+
+    /**
+     * Returns a Kotlin singleton or companion object without requiring Lua callers to know the
+     * generated INSTANCE or Companion field names.
+     */
+    private LuaValue kotlinMember(Varargs args, LuaValue fieldName, String memberKind) throws ClassNotFoundException {
+        Class<?> type = toClass(args.checkvalue(1));
+        LuaValue member = JavaClass.a(type).get(fieldName);
+        if (member.isnil()) {
+            throw new LuaError(memberKind + " is not available on class '" + type.getName() + "'");
+        }
+        return member;
     }
 
     /**
@@ -317,8 +508,8 @@ public class LuajavaLib extends VarArgFunction {
      * 将LuaValue转换为Class对象
      */
     private Class<?> toClass(LuaValue value) throws ClassNotFoundException {
-        if (value.isstring()) {
-            return this.f(value.checkjstring());
+        if (value.type() == LuaValue.TSTRING) {
+            return resolveClassName(value.checkjstring());
         }
         Object userdata = value.touserdata(Class.class);
         if (userdata instanceof Class) {
@@ -328,9 +519,42 @@ public class LuajavaLib extends VarArgFunction {
         if (userdata instanceof JavaClass) {
             return (Class<?>) ((JavaClass) userdata).touserdata(Class.class);
         }
-        throw new LuaError("expected a Java interface class, got " + value.typename() + "\n" +
+        throw new LuaError("expected a Java class, got " + value.typename() + "\n" +
             "Value: " + value + "\n" +
             "Hint: Use luajava.bindClass() to get a Java class reference.");
+    }
+
+    private Class<?>[] parameterTypes(LuaTable table) throws ClassNotFoundException {
+        int length = table.length();
+        Class<?>[] result = new Class<?>[length];
+        for (int index = 0; index < length; index++) {
+            result[index] = toClass(table.get(index + 1));
+        }
+        return result;
+    }
+
+    private Class<?> resolveClassName(String className) throws ClassNotFoundException {
+        int dimensions = 0;
+        while (className.endsWith("[]")) {
+            dimensions++;
+            className = className.substring(0, className.length() - 2);
+        }
+
+        Class<?> type = switch (className) {
+            case "boolean" -> Boolean.TYPE;
+            case "byte" -> Byte.TYPE;
+            case "char" -> Character.TYPE;
+            case "short" -> Short.TYPE;
+            case "int" -> Integer.TYPE;
+            case "long" -> Long.TYPE;
+            case "float" -> Float.TYPE;
+            case "double" -> Double.TYPE;
+            default -> resolveClass(className);
+        };
+        while (dimensions-- > 0) {
+            type = Array.newInstance(type, 0).getClass();
+        }
+        return type;
     }
 
     /**
@@ -382,13 +606,67 @@ public class LuajavaLib extends VarArgFunction {
         }
     }
 
+    private static final class JavaIterator extends VarArgFunction {
+        private final Iterator<?> iterator;
+        private final boolean mapEntries;
+        private int index;
+
+        private JavaIterator(Iterator<?> iterator, boolean mapEntries) {
+            this.iterator = iterator;
+            this.mapEntries = mapEntries;
+        }
+
+        @Override
+        public Varargs invoke(Varargs args) {
+            if (!iterator.hasNext()) {
+                return LuaValue.NIL;
+            }
+
+            Object value = iterator.next();
+            if (mapEntries) {
+                Map.Entry<?, ?> entry = (Map.Entry<?, ?>) value;
+                return LuaValue.varargsOf(
+                    CoerceJavaToLua.coerce(entry.getKey()),
+                    CoerceJavaToLua.coerce(entry.getValue()),
+                    LuaValue.NONE
+                );
+            }
+            return LuaValue.varargsOf(
+                CoerceJavaToLua.coerce(index++),
+                CoerceJavaToLua.coerce(value),
+                LuaValue.NONE
+            );
+        }
+    }
+
+    private static final class ArrayIterator implements Iterator<Object> {
+        private final Object array;
+        private final int length;
+        private int index;
+
+        private ArrayIterator(Object array) {
+            this.array = array;
+            this.length = Array.getLength(array);
+        }
+
+        @Override
+        public boolean hasNext() {
+            return index < length;
+        }
+
+        @Override
+        public Object next() {
+            return Array.get(array, index++);
+        }
+    }
+
     /**
      * 加载Java库
      */
     private Varargs loadLib(Varargs args) throws Exception {
         String className = args.checkjstring(1);
         String methodName = args.checkjstring(2);
-        Class<?> type = this.f(className);
+        Class<?> type = resolveClass(className);
         Object result = type.getMethod(methodName).invoke(type);
         if (result instanceof LuaValue) {
             return (LuaValue) result;
@@ -416,7 +694,9 @@ public class LuajavaLib extends VarArgFunction {
                 LuaValue javaClass = this.luajava.bindClassForName(className);
                 this.env.set(simpleName, javaClass);
                 return javaClass;
-            } catch (ClassNotFoundException exception) {
+            } catch (LuaError error) {
+                throw error;
+            } catch (Exception exception) {
                 throw new LuaError(exception);
             }
         }
