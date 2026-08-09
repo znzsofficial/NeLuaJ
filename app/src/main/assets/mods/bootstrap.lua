@@ -32,7 +32,7 @@ Bean = Bean or {}
 Bean.Path = require "mods.bean.PathBean"
 Bean.Project = require "mods.bean.ProjectBean"
 
-LuaFileUtil = bindClass "com.nekolaska.io.LuaFileUtil".INSTANCE
+LuaFileUtil = luajava.kotlinObject "com.nekolaska.io.LuaFileUtil"
 PathManager = require "mods.utils.PathManager"
 
 local File = bindClass "java.io.File"

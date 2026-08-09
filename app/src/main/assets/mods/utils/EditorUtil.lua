@@ -512,7 +512,7 @@ function _M.init()
                   .addPackage("ext", { "pack", "packsize", "unpack" })
                   .addPackage("res", { "bitmap", "color", "dimen", "drawable", "font", "layout", "language", "plurals", "raw", "string", "view", })
                   .addPackage("saf", { "delete", "exists", "list", "mkdir", "read", "rename", "save", "type" })
-                  .addPackage("luajava", { "astable", "bindClass", "createProxy", "instanceof", "loadLib", "new", "newInstance" })
+                   .addPackage("luajava", { "astable", "bindClass", "constructor", "createProxy", "instanceof", "iterate", "kotlinCompanion", "kotlinObject", "loadLib", "method", "new", "newInstance", "toList", "toMap", "toSet", "toTable" })
                   .addPackage("io", { "close", "flush", "input", "lines", "open", "output", "popen", "read", "tmpfile", "type", "write" })
     end, mLuaEditor, bindClass)
 

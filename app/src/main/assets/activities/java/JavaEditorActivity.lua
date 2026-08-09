@@ -2,7 +2,7 @@
 require "mods.bootstrap"
 import "res"
 local ColorUtil = this.themeUtil
-local LuaFileUtil = luajava.bindClass "com.nekolaska.io.LuaFileUtil".INSTANCE
+local LuaFileUtil = luajava.kotlinObject "com.nekolaska.io.LuaFileUtil"
 local File = bindClass "java.io.File"
 local path = tostring(...)
 this.dynamicColor()

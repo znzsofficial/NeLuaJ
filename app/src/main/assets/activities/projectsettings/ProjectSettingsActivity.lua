@@ -17,7 +17,7 @@ import "com.google.android.material.dialog.MaterialAlertDialogBuilder"
 import "vinx.material.textfield.MaterialTextField"
 
 -- 必须用 INSTANCE；import 类会覆盖 environment 里的单例
-local LuaFileUtil = luajava.bindClass("com.nekolaska.io.LuaFileUtil").INSTANCE
+local LuaFileUtil = luajava.kotlinObject("com.nekolaska.io.LuaFileUtil")
 local InitLuaUtil = require "mods.project.InitLuaUtil"
 local ActivityUtil = require "mods.utils.ActivityUtil"
 
