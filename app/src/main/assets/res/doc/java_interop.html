@@ -10,7 +10,14 @@
   <body>
     <main class="markdown-export">
       <h1>Java 互操作</h1>
-      <p>本文汇总 NeLuaJ+ / LuaJ++ 中与 Java 交互的常用方式，内容提取自「便捷 API」与「LuaJ++」文档，便于单独查阅。</p>
+      <p>本文汇总 NeLuaJ+ / LuaJ++ 中与 Java 交互的常用方式。<code>luajava.bindClass()</code> 提供类包装，Java/Kotlin 成员以 <code>对象.方法(...)</code> 形式调用。</p>
+
+      <h2>调用特点</h2>
+      <ul>
+        <li>Java 数组、List、Map 的下标遵循 Java 规则，从 <code>0</code> 开始；Lua table 的数组部分仍从 <code>1</code> 开始。</li>
+        <li>Java/Kotlin 方法使用点调用，例如 <code>view.setText(&quot;hello&quot;)</code>。冒号调用会将接收者作为首个 Java 参数，因而具有不同的参数数量语义。</li>
+        <li>普通调用带有自动重载选择；<code>luajava.constructor()</code> 与 <code>luajava.method()</code> 提供对应的精确签名入口，适用于 <code>nil</code>、数值宽度、数组或相近接口类型等场景。</li>
+      </ul>
 
       <h2>1. 绑定类与创建实例</h2>
       <pre><code class="language-lua">-- 绑定 Java 类
@@ -29,8 +36,23 @@ local tv = TextView(activity)
 </code></pre>
 
       <h2>2. 表与数组转换</h2>
-      <pre><code class="language-lua">-- Java 集合 / 数组转 Lua 表
-local luaTable = luajava.astable(javaList)
+      <pre><code class="language-lua">local ArrayList = luajava.bindClass("java.util.ArrayList")
+local sourceList = ArrayList()
+sourceList.add("one")
+sourceList.add("two")
+
+-- Java 集合 / 数组转 Lua 表
+local luaTable = luajava.astable(sourceList)
+-- astable 的可读别名；默认转换第一层，true 表示递归转换嵌套集合
+local copied = luajava.toTable(sourceList)
+
+-- Lua 数组表转 Java 集合，读取下标 1 到 #table
+local javaList = luajava.toList({"one", "two"})
+local javaSet = luajava.toSet({"one", "two", "one"})
+
+-- Lua 表的全部 entry 转保持当前遍历顺序的 Java LinkedHashMap
+local javaMap = luajava.toMap({name = "Lua", version = 1})
+print(javaList[0], javaMap["name"])
 
 -- 创建 Java 数组
 local a = int[10]
@@ -39,43 +61,61 @@ local c = Integer[10]
 
 -- 数组长度与下标
 print(#a)
-print(a[1])      -- 或 a["1"] 视实现而定
+print(a[0])      -- Java 数组下标从 0 开始
+print(b[2])      -- 取得 int{1, 2, 3} 的第三项
+
+-- Map 和任意 Java Collection（包括 Set）也支持 #
+print(#javaSet)
 </code></pre>
 
-      <h2>3. 类扩展：array / new / class / override</h2>
-      <pre><code class="language-lua">Object.array{}     -- 创建数组
-print(Object.new)  -- 构造器
-print(Object.class) -- Class 对象
-Object.override{}  -- 覆盖方法（见下文）
-</code></pre>
+      <h2>3. Java 数组</h2>
+      <div class="table-wrapper"><table>
+        <thead><tr><th>写法</th><th>结果</th></tr></thead>
+        <tbody>
+          <tr><td><code>String[5]</code></td><td>长度为 5 的 <code>String[]</code></td></tr>
+          <tr><td><code>int{1, 2, 3}</code></td><td>由 Lua table 的数组部分转换而来的 <code>int[]</code></td></tr>
+          <tr><td><code>String.array({&quot;one&quot;, &quot;two&quot;})</code></td><td>由 Lua table 转换而来的 <code>String[]</code></td></tr>
+          <tr><td><code>array[0]</code></td><td>Java 数组的第一个元素</td></tr>
+          <tr><td><code>#array</code> / <code>array.length</code></td><td>Java 数组长度</td></tr>
+          <tr><td><code>array.class</code></td><td>数组对应的 Java Class，例如 <code>String[].class</code></td></tr>
+        </tbody>
+      </table></div>
+      <p><code>类型[n]</code> 中的数值索引由类包装识别为数组长度，并创建以该类型为组件的 Java 数组；table 形式读取 Lua table 的 <code>1..#table</code> 后写入 Java 数组的 <code>0..length - 1</code>。</p>
 
-      <h2>4. 构造实例与接口实现</h2>
-      <pre><code class="language-lua">-- 直接 () 构造
+      <h2>4. 类成员：array / new / class / override</h2>
+      <pre><code class="language-lua">local String = luajava.bindClass("java.lang.String")
+
+local values = String.array({"one", "two"}) -- 创建 String[]
+print(String.new)       -- 构造器
+print(String.class)     -- 对应的 Java Class 包装
+print(String.override)  -- 覆盖方法入口（见下文）
+</code></pre>
+      <p><code>类型[n]</code> 创建长度为 <code>n</code> 的数组；<code>类型.array(table)</code> 将 Lua table 转为该组件类型的数组。</p>
+
+      <h2>5. 构造实例与接口实现</h2>
+      <pre><code class="language-lua">local ArrayList = luajava.bindClass("java.util.ArrayList")
+local HashMap = luajava.bindClass("java.util.HashMap")
+local Runnable = luajava.bindClass("java.lang.Runnable")
+
+-- 直接 () 构造
 local b = ArrayList()
 local m = HashMap()
 
--- 接口 / 抽象类表实现
-local i = interface {
-  methodName = function(arg)
-  end
-}
-local c = abstract {
-  methodName = function(super, arg)
+-- 接口表实现
+local r1 = Runnable {
+  run = function()
+    print("run")
   end
 }
 
 -- 单方法接口可直接传函数
-local r1 = interface(function(arg)
-  print(arg)
-end)
-
--- 已绑定的接口类同样支持
-Runnable(function()
-  print("run")
+local r2 = Runnable(function()
+  print("run once")
 end)
 </code></pre>
+      <p>抽象类或普通类的覆写由下一节的 <code>类型.override { ... }</code> 提供；<code>luajava.createProxy()</code> 提供显式的接口代理形式。</p>
 
-      <h2>5. createProxy 代理</h2>
+      <h2>6. createProxy 代理</h2>
       <pre><code class="language-lua">-- 字符串接口名 + 实现表
 local runnable = luajava.createProxy("java.lang.Runnable", {
   run = function()
@@ -95,6 +135,8 @@ local runnable3 = luajava.createProxy(Runnable, function()
 end)
 
 -- 多接口：最后一个参数为表或函数；按全部接口查找方法
+local Map = luajava.bindClass("java.util.Map")
+local Closeable = luajava.bindClass("java.io.Closeable")
 local proxy = luajava.createProxy(
   Map,
   Closeable,
@@ -110,7 +152,7 @@ local proxy = luajava.createProxy(
 </code></pre>
       <p>未显式实现 <code>equals</code> / <code>hashCode</code> / <code>toString</code> 时，使用 Java 默认对象语义，避免作为 Map 键时匹配失败。</p>
 
-      <h2>6. override 覆盖方法</h2>
+      <h2>7. override 覆盖方法</h2>
       <p><code>override</code> 生成增强子类，只覆盖表中提供的方法。覆盖方法的第一个参数是 <code>superCall</code>，调用可执行父类原方法。</p>
       <pre><code class="language-lua">local ArrayList = luajava.bindClass("java.util.ArrayList")
 
@@ -128,6 +170,8 @@ list = ArrayList {
 }
 
 -- 抽象类 / 普通类
+local FileObserver = luajava.bindClass("android.os.FileObserver")
+local path = activity.getLuaDir()
 local MyObserver = FileObserver.override {
   onEvent = function(superCall, event, path)
     print(event, path)
@@ -137,90 +181,142 @@ local observer = MyObserver(path)
 </code></pre>
       <p>未在表中提供的方法保持 Java 原有行为。<code>superCall(...)</code> 会按 Java 签名转换参数。</p>
 
-      <h2>7. 属性与 getter/setter 语法糖</h2>
-      <pre><code class="language-lua">-- set/get 可写成属性
-b.setText("")
--- 等价
-b.text = ""
+      <h2>8. 属性与 getter/setter 语法糖</h2>
+      <pre><code class="language-lua">local TextView = luajava.bindClass("android.widget.TextView")
+local textView = TextView(activity)
 
-t = b.getText()
+-- set/get 可写成属性
+textView.setText("")
 -- 等价
-t = b.text
+textView.text = ""
+
+local text = textView.getText()
+-- 等价
+text = textView.text
 
 -- isXxx 简写
-view.isActivated()
+textView.isActivated()
 -- 可写作
-view.Activated
+textView.Activated
 
 -- 批量设置属性
-Button(this) {
+local Button = luajava.bindClass("android.widget.Button")
+Button(activity) {
   text = "test",
   enabled = false
 }
 </code></pre>
 
-      <h2>8. 监听器与函数式接口</h2>
-      <pre><code class="language-lua">-- 完整写法
-mBtn.setOnClickListener(View.OnClickListener {
+      <h2>9. 监听器与函数式接口</h2>
+      <pre><code class="language-lua">local View = luajava.bindClass("android.view.View")
+local Button = luajava.bindClass("android.widget.Button")
+local button = Button(activity)
+
+-- 完整写法
+button.setOnClickListener(View.OnClickListener {
   onClick = function(v)
     print(v)
   end
 })
 
--- 可省略接口类型
-mBtn.setOnClickListener({
+-- 接口类型由参数位置确定
+button.setOnClickListener({
   onClick = function(v)
     print(v)
   end
 })
 
 -- 单方法接口可直接传函数
-mBtn.setOnClickListener(function(v)
+button.setOnClickListener(function(v)
   print(v)
 end)
 
 -- 属性式
-mBtn.onClick = function(v)
+button.onClick = function(v)
   print(v)
 end
-
--- 非必要接口类型可省略
-mViewPager.addOnPageChangeListener {
-  onPageSelected = function(_)
-  end
-}
-
-obj.run(function()
-  -- do something
-end)
 </code></pre>
 
-      <h2>9. 元方法与其它</h2>
-      <pre><code class="language-lua">function Button:print()
-  print(self)
-end
-Button(this):print()
+      <h2>10. Kotlin 类</h2>
+      <p>Kotlin 的 <code>object</code> 与 companion object 在 JVM 上分别会生成 <code>INSTANCE</code> 与 <code>Companion</code> 字段。使用专用函数可避免 Lua 代码依赖这些生成字段名。</p>
+      <pre><code class="language-lua">-- Kotlin object
+local LuaFileUtil = luajava.kotlinObject("com.nekolaska.io.LuaFileUtil")
+LuaFileUtil.writeOrCreate(path, content)
 
--- Java 方法用 . 调用；(!) 表示无参等惯用法（视版本）
-b.add(!)
+-- Kotlin companion object
+local Tool = luajava.kotlinCompanion("com.example.Tool")
+Tool.run()
 
--- 表键可用关键字字面量
-t = {}
-t.end = 123
+-- companion 内标注 @JvmStatic 的方法可直接通过类调用
+local ToolClass = luajava.bindClass("com.example.Tool")
+ToolClass.runStatic()
+</code></pre>
+      <p>Java 和 Kotlin 成员均使用点调用 <code>object.method(...)</code>。Kotlin 默认参数不会自动生成 Java 重载；<code>@JvmOverloads</code> 会生成可从 Lua 调用的重载，而未生成重载的方法以完整 Java 参数签名出现。</p>
+
+      <h2>11. LuaJ++ 点号字符串索引</h2>
+      <pre><code class="language-lua">local t = {}
+
+-- 索引时，点号后可直接写字符串
+t."key with spaces" = 123
+t."end" = "keyword is also allowed"
+print(t."key with spaces", t."end")
+
+-- 等价的标准 Lua 写法
+print(t["key with spaces"], t["end"])
 </code></pre>
 
-      <h2>10. 类型判断</h2>
-      <pre><code class="language-lua">if luajava.instanceof(view, ViewGroup) then
+      <h2>12. 类型判断</h2>
+      <pre><code class="language-lua">local View = luajava.bindClass("android.view.View")
+local Button = luajava.bindClass("android.widget.Button")
+local button = Button(activity)
+
+if luajava.instanceof(button, View) then
   -- ...
 end
 </code></pre>
 
+      <h2>13. 指定重载、数组类型与迭代</h2>
+      <p>普通调用带有自动重载选择。精确签名形式对应某一个公开构造器或方法，可表达 <code>nil</code>、数值、数组与相近接口类型之间的明确选择。</p>
+      <pre><code class="language-lua">-- parameterTypes 是类型 array；元素可写类名、primitive 名称、Java Class 或 bindClass 的结果
+local constructor = luajava.constructor("java.lang.StringBuilder", {"int"})
+local builder = constructor(32)
+
+local String = luajava.bindClass("java.lang.String")
+
+-- 返回已绑定到实例的精确方法
+local append = luajava.method(builder, "append", {String})
+append("Lua")
+
+-- class / 类名 target 对应 static 方法
+local valueOf = luajava.method(String, "valueOf", {"int"})
+print(valueOf(42))
+
+-- 数组参数的类名形式
+local join = luajava.method(String, "join", {"java.lang.CharSequence", "java.lang.CharSequence[]"})
+
+-- 数组实例的 .class 对应数组类型，例如 String[]
+local StringArray = String.array({}).class
+local Intent = luajava.bindClass("android.content.Intent")
+local intent = Intent()
+local putExtra = luajava.method(intent, "putExtra", {String, StringArray})
+putExtra("names", String.array({"one", "two"}))
+
+-- 独立 iterator：数组、Map、Iterable、Iterator 与 Kotlin Sequence
+for index, value in luajava.iterate(javaSet) do
+  print(index, value) -- index 从 0 开始
+end
+for key, value in luajava.iterate(javaMap) do
+  print(key, value)
+end
+</code></pre>
+      <p><code>luajava.method(target, name, parameterTypes)</code> 返回已绑定方法；target 为实例时对应实例方法，target 为类或类名时对应 static 方法。<code>iterate()</code> 在调用时取得 Java iterator，其集合修改可见性与 userdata 的 <code>pairs()</code> / <code>next()</code> 不同。</p>
+
       <h2>相关文档</h2>
-      <ul>
-        <li><code>LuaJ++.html</code> — 语法扩展（switch、lambda、import 等）</li>
-        <li><code>utility_api.html</code> — 文件、网络、对话框等便捷 API</li>
-        <li><code>global_env.html</code> — 全局对象与模块一览</li>
-      </ul>
+      <nav class="doc-nav" aria-label="相关文档">
+        <a class="doc-link" href="LuaJ++.html">LuaJ++ 语法扩展</a>
+        <a class="doc-link" href="utility_api.html">便捷 API</a>
+        <a class="doc-link" href="global_env.html">全局环境</a>
+      </nav>
     </main>
   </body>
 </html>
