@@ -25,6 +25,10 @@ local function isMinimapEnabled()
     return isSharedTruthy(this.getSharedData("code_minimap", true))
 end
 
+local function isActionModeCommentEnabled()
+    return isSharedTruthy(this.getSharedData("editor_actionmode_comment", true))
+end
+
 local function parseSharedColor(data, key, fallback)
     local raw = data and data[key]
     if not raw then return fallback end
@@ -197,11 +201,16 @@ local function getActionMode(view)
             menu.add(0, 3, 0, android.R.string.paste)
                 .setShowAsAction(2)
                 .setIcon(array.getResourceId(3, 0))
-            local commentItem = menu.add(0, 4, 0, res.string.block_comment)
-            commentItem.setShowAsAction(2) -- SHOW_AS_ACTION_ALWAYS
-            commentItem.setIcon(res.drawable("ic_comment"))
+            if isActionModeCommentEnabled() then
+                local commentItem = menu.add(0, 4, 0, res.string.block_comment)
+                commentItem.setShowAsAction(2) -- SHOW_AS_ACTION_ALWAYS
+                commentItem.setIcon(res.drawable("ic_comment"))
+            end
             array.recycle()
             return true
+        end,
+        onPrepareActionMode = function()
+            return false
         end,
         onActionItemClicked = function(mode, item)
             if item.getItemId() == 0 then
@@ -219,7 +228,7 @@ local function getActionMode(view)
                 _M.toggleBlockComment(view)
                 mode.finish()
             end
-            return false
+            return true
         end,
         onDestroyActionMode = function(mode)
             view.selectText(false)

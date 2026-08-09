@@ -1132,6 +1132,14 @@ EditorWhitespaceItem.onClick = function()
     notifyEditorPrefs()
 end
 
+-- ── 选中文本操作栏中的多行注释按钮 ──
+EditorActionModeCommentItemSwitch.checked = isSharedTruthy(this.getSharedData("editor_actionmode_comment", true))
+EditorActionModeCommentItem.onClick = function()
+    local enabled = not EditorActionModeCommentItemSwitch.isChecked()
+    EditorActionModeCommentItemSwitch.checked = enabled
+    this.setSharedData("editor_actionmode_comment", enabled)
+end
+
 -- ── Tab 宽度（空格数） ──
 local DEFAULT_TAB_SPACES = 4
 local TAB_SPACE_OPTIONS = { 2, 4, 8 }

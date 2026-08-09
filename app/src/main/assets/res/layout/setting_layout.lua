@@ -328,6 +328,8 @@ return {
             divider(),
             switchItem("EditorWhitespaceItem", res.string.editor_show_whitespace, res.string.editor_show_whitespace_desc, "format"),
             divider(),
+            switchItem("EditorActionModeCommentItem", res.string.editor_actionmode_comment, res.string.editor_actionmode_comment_desc, "format"),
+            divider(),
             settingItem("EditorTabSpacesItem", res.string.editor_tab_spaces, res.string.editor_tab_spaces_desc, "format"),
             divider(),
             switchItem("CodeMinimapItem", res.string.code_minimap, res.string.code_minimap_desc, "article"),
