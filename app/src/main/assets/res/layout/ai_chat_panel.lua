@@ -99,21 +99,6 @@ return {
       RippleColor = ColorStateList.valueOf(ColorRipple),
     },
   },
-  {
-    MaterialTextView,
-    id = "autoApproveStatus",
-    text = res.string.ai_auto_approve_active,
-    contentDescription = res.string.ai_auto_approve_active_desc,
-    textSize = "11sp",
-    textColor = ColorError,
-    layout_width = "match",
-    layout_height = "wrap",
-    paddingLeft = "16dp",
-    paddingRight = "16dp",
-    paddingTop = "6dp",
-    paddingBottom = "6dp",
-    visibility = 8,
-  },
   { MaterialDivider, dividerColor = ColorOutline },
   -- 消息列表
   {
@@ -237,6 +222,7 @@ return {
       },
       {
         MaterialTextView,
+        id = "loadingText",
         text = res.string.ai_generating,
         textSize = "12sp",
         textColor = ColorText,

@@ -1,12 +1,11 @@
---- OpenAI-compatible chat completions client.
---- Owns request construction, tool-call normalization, streaming and retries.
+--- OpenAI-compatible request lifecycle: streaming, retries and cancellation.
 local _M = {}
+local Protocol = require("mods.agent.OpenAIProtocol")
 local Handler = luajava.bindClass("android.os.Handler")
 local Looper = luajava.bindClass("android.os.Looper")
 local retryHandler = Handler(Looper.getMainLooper())
-local pendingRequest
-
 local config
+local pendingRequest
 
 function _M.configure(options)
   config = options or {}
@@ -15,101 +14,6 @@ end
 local function requireConfig()
   if not config then error("OpenAIClient 未配置") end
   return config
-end
-
-local function cloneValue(value)
-  if type(value) ~= "table" then return value end
-  local copy = {}
-  for key, item in pairs(value) do copy[key] = cloneValue(item) end
-  return copy
-end
-
-local function endpoint()
-  local url = requireConfig().getApiUrl()
-  local base, query = url:match("^([^?]*)(.*)$")
-  if not base:match("/chat/completions$") then
-    base = base:gsub("/+$", "") .. "/chat/completions"
-  end
-  return base .. query
-end
-
-local function supportsTools(callbacks)
-  local model = requireConfig().getModel():lower()
-  return not callbacks.disableTools
-    and not model:match("reasoner")
-    and not model:match("r1%-")
-    and not model:match("^o1")
-    and not model:match("^o3")
-end
-
-local function repairToolHistory(messages)
-  local repaired = {}
-  local sequence = 0
-  local function fallbackId()
-    sequence = sequence + 1
-    return "call_history_" .. tostring(sequence)
-  end
-  local index = 1
-  while index <= #messages do
-    local message = messages[index]
-    if message.role == "assistant" and message.tool_calls then
-      local pending = {}
-      local callOrder = {}
-      for _, call in ipairs(message.tool_calls) do
-        call.id = call.id and call.id ~= "" and call.id or fallbackId()
-        pending[call.id] = true
-        callOrder[#callOrder + 1] = call.id
-      end
-      local group = { message }
-      local nextIndex = index + 1
-      local missingIndex = 1
-      while nextIndex <= #messages and messages[nextIndex].role == "tool" do
-        local toolMessage = messages[nextIndex]
-        if not toolMessage.tool_call_id or toolMessage.tool_call_id == "" then
-          while callOrder[missingIndex] and not pending[callOrder[missingIndex]] do
-            missingIndex = missingIndex + 1
-          end
-          toolMessage.tool_call_id = callOrder[missingIndex]
-        end
-        if toolMessage.tool_call_id and pending[toolMessage.tool_call_id] then
-          pending[toolMessage.tool_call_id] = nil
-          group[#group + 1] = toolMessage
-        end
-        nextIndex = nextIndex + 1
-      end
-      if next(pending) == nil then
-        for _, item in ipairs(group) do repaired[#repaired + 1] = item end
-      elseif message.content and message.content ~= "" then
-        message.tool_calls = nil
-        repaired[#repaired + 1] = message
-      end
-      index = nextIndex
-    else
-      if message.role ~= "tool" then repaired[#repaired + 1] = message end
-      index = index + 1
-    end
-  end
-  return repaired
-end
-
-local function prepareMessages(messages, toolsEnabled)
-  local sendMessages = cloneValue(messages)
-  if not toolsEnabled then
-    local filtered = {}
-    for _, message in ipairs(sendMessages) do
-      if message.role == "tool" then
-      elseif message.role == "assistant" and message.tool_calls then
-        if message.content and message.content ~= "" then
-          message.tool_calls = nil
-          filtered[#filtered + 1] = message
-        end
-      else
-        filtered[#filtered + 1] = message
-      end
-    end
-    return filtered
-  end
-  return repairToolHistory(sendMessages)
 end
 
 local function finishOnce(callbacks)
@@ -121,6 +25,21 @@ local function finishOnce(callbacks)
   end
 end
 
+local function formatError(text, detail, cfg, requestUrl)
+  detail = tostring(detail or "")
+  if #detail > 500 then detail = detail:sub(1, 500) .. "…" end
+  return tostring(text) .. (detail ~= "" and "\n响应: " .. detail or "")
+    .. "\n模型: " .. cfg.getModel() .. "\n地址: " .. requestUrl
+end
+
+local function unstructuredToolCallError(text, cfg, requestUrl)
+  local preview = tostring(text or "")
+  if #preview > 500 then preview = preview:sub(1, 500) .. "…" end
+  return "模型表示将调用工具，但未返回结构化 tool_calls。为避免把未执行的操作当作已完成，已停止本轮。"
+    .. "\n模型回复: " .. preview
+    .. "\n模型: " .. cfg.getModel() .. "\n地址: " .. requestUrl
+end
+
 function _M.sendStream(messages, callbacks)
   callbacks = callbacks or {}
   local finish = finishOnce(callbacks)
@@ -128,93 +47,81 @@ function _M.sendStream(messages, callbacks)
   local key = cfg.getApiKey()
   if key == "" then finish(callbacks.onError, "请先设置 API Key") return end
 
-  local enabled = supportsTools(callbacks)
-  local body = {
-    model = cfg.getModel(),
-    messages = prepareMessages(messages, enabled),
-    stream = true,
-    max_tokens = callbacks.maxTokens or cfg.getMaxTokens(),
-    temperature = cfg.getTemperature(),
-  }
-  if enabled then
-    body.tools = {}
-    for _, tool in ipairs(cfg.getBuiltinTools()) do body.tools[#body.tools + 1] = tool end
-    local mcpTools = cfg.getMcpTools()
-    if type(mcpTools) == "table" then
-      for _, tool in ipairs(mcpTools) do body.tools[#body.tools + 1] = tool end
-    end
-  end
+  local body, useResponses, lastMessage, requestProfile = Protocol.buildRequest(cfg, messages, callbacks)
+  local followsToolResult = lastMessage and lastMessage.role == "tool"
   if callbacks.onPrepared then callbacks.onPrepared(cfg.estimateRequestUsage(body)) end
-
   local bodyStr = json.encode(body)
   if not bodyStr or bodyStr == "" then finish(callbacks.onError, "请求体编码失败") return end
-  local headers = {
-    ["Authorization"] = "Bearer " .. key,
-    ["Content-Type"] = "application/json",
-  }
+
+  local requestUrl = Protocol.endpoint(cfg.getApiUrl(), useResponses)
+  local headers = Protocol.requestHeaders(cfg.getApiUrl(), key)
+  local httpClient = cfg.getHttpClient()
   local retries, attempt = cfg.getRetryCount(), 0
   local requestState = { cancelled = false }
   pendingRequest = requestState
+  local function finishRequest(callback, ...)
+    if pendingRequest == requestState then pendingRequest = nil end
+    finish(callback, ...)
+  end
   function requestState.cancel()
     if requestState.cancelled then return end
     requestState.cancelled = true
     if requestState.retry then retryHandler.removeCallbacks(requestState.retry) end
-    finish(callbacks.onError, "cancelled")
+    pcall(function() httpClient.cancelAll() end)
+    finishRequest(callbacks.onError, "cancelled")
   end
-  local function retryable(message)
-    message = tostring(message)
-    if message:lower():match("cancel") then return false end
-    if message:match("^HTTP 429") then return true end
-    if message:match("^HTTP 4") then return false end
-    return true
-  end
+
   local function request()
     if requestState.cancelled then return end
     attempt = attempt + 1
-    cfg.getHttpClient().postJsonStream(endpoint(), bodyStr, headers,
+    httpClient.postJsonStream(requestUrl, bodyStr, headers,
       function(text)
         if not requestState.cancelled and callbacks.onChunk then callbacks.onChunk(tostring(text)) end
       end,
-      function(arg1, arg2, explicitError)
+      function(arg1, arg2, explicitError, incomplete, rawResponseOutput, rawReasoningContent)
         if requestState.cancelled then return end
         local text = tostring(arg1 or "")
+        local streamedReasoning = rawReasoningContent and tostring(rawReasoningContent) or nil
+        if streamedReasoning == "" then streamedReasoning = nil end
         local isError = explicitError == true or text:match("^HTTP %d%d%d$") or text:match("^ERROR:")
         if isError then
-          if attempt <= retries and retryable(text) then
+          if attempt <= retries and Protocol.isRetryable(text) then
             if callbacks.onRetry then callbacks.onRetry() end
             requestState.retry = function() request() end
             retryHandler.postDelayed(requestState.retry, math.min(1200, attempt * 300))
             return
           end
-          local detail = tostring(arg2 or "")
-          if #detail > 500 then detail = detail:sub(1, 500) .. "…" end
-          finish(callbacks.onError, text .. (detail ~= "" and "\n响应: " .. detail or "")
-            .. "\n模型: " .. cfg.getModel() .. "\n地址: " .. endpoint())
+          finishRequest(callbacks.onError, formatError(text, arg2, cfg, requestUrl))
           return
         end
         if arg2 and arg2 ~= "" then
-          local ok, calls = pcall(json.decode, tostring(arg2))
-          if ok and type(calls) == "table" then
-            local parsed = {}
-            for index, call in ipairs(calls) do
-              local fn = call["function"]
-              local name = call.name or (type(fn) == "table" and fn.name)
-              local args = call.arguments or (type(fn) == "table" and fn.arguments)
-              name = cfg.normalizeToolName(name)
-              if name ~= "" then
-                parsed[#parsed + 1] = {
-                  id = call.id and call.id ~= "" and call.id or "call_" .. tostring(index),
-                  name = name,
-                  arguments = type(args) == "table" and json.encode(args) or (args or "{}"),
-                }
-              end
+          local parsed, reasoningContent = Protocol.parseToolCalls(arg2, cfg.normalizeToolName)
+          if parsed and #parsed > 0 then
+            reasoningContent = reasoningContent or streamedReasoning
+            if incomplete == true then
+              if text ~= "" then finishRequest(callbacks.onDone, text, true, nil, nil, streamedReasoning)
+              else finishRequest(callbacks.onError, "Responses 输出在工具调用完成前被截断") end
+            else
+              local responseOutput = requestProfile.nativeResponsesHistory
+                and Protocol.parseResponseOutput(rawResponseOutput) or nil
+              finishRequest(callbacks.onToolCalls, parsed, text, reasoningContent, responseOutput, requestProfile.responsesOrigin)
             end
-            if #parsed > 0 then finish(callbacks.onToolCalls, parsed, text) return end
-            if text ~= "" then finish(callbacks.onDone, text) return end
+            return
           end
         end
-        if text == "" then finish(callbacks.onError, "AI 未返回内容\n模型: " .. cfg.getModel()) return end
-        finish(callbacks.onDone, text)
+        if text ~= "" and type(body.tools) == "table" and #body.tools > 0
+            and Protocol.hasUnstructuredToolIntent(text) then
+          finishRequest(callbacks.onError, unstructuredToolCallError(text, cfg, requestUrl))
+          return
+        end
+        if text == "" then
+          if followsToolResult and callbacks.onEmptyAfterTools then finishRequest(callbacks.onEmptyAfterTools)
+          else finishRequest(callbacks.onError, "AI 未返回内容\n模型: " .. cfg.getModel()) end
+          return
+        end
+        local responseOutput = requestProfile.nativeResponsesHistory
+          and Protocol.parseResponseOutput(rawResponseOutput) or nil
+        finishRequest(callbacks.onDone, text, incomplete == true, responseOutput, requestProfile.responsesOrigin, streamedReasoning)
       end)
   end
   request()
@@ -229,8 +136,12 @@ end
 function _M.testConnection(onResult)
   local cfg = requireConfig()
   if cfg.getApiKey() == "" then if onResult then onResult(false, "请先设置 API Key") end return end
-  local body = json.encode({ model = cfg.getModel(), messages = {{ role = "user", content = "ping" }}, max_tokens = 1, stream = false })
-  cfg.getHttpClient().postJson(endpoint(), body, { ["Authorization"] = "Bearer " .. cfg.getApiKey() }, function(code)
+  local useResponses = cfg.useResponses and cfg.useResponses() == true
+  local body = useResponses
+    and json.encode({ model = cfg.getModel(), input = "ping", max_output_tokens = 1 })
+    or json.encode({ model = cfg.getModel(), messages = {{ role = "user", content = "ping" }}, max_tokens = 1, stream = false })
+  local url = Protocol.endpoint(cfg.getApiUrl(), useResponses)
+  cfg.getHttpClient().postJson(url, body, Protocol.requestHeaders(cfg.getApiUrl(), cfg.getApiKey()), function(code)
     local ok = tonumber(tostring(code or "")) == 200
     if onResult then onResult(ok, ok and "连接成功，模型 " .. cfg.getModel() or "HTTP " .. tostring(code)) end
   end)

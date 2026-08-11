@@ -15,6 +15,8 @@ local Switch = luajava.bindClass("com.google.android.material.materialswitch.Mat
 local HtmlCompat = luajava.bindClass("androidx.core.text.HtmlCompat")
 local LinkMovementMethod = luajava.bindClass("android.text.method.LinkMovementMethod")
 local Typeface = luajava.bindClass("android.graphics.Typeface")
+local WindowManager = luajava.bindClass("android.view.WindowManager")
+local DialogInterface = luajava.bindClass("android.content.DialogInterface")
 
 import "androidx.core.graphics.ColorUtils"
 
@@ -28,6 +30,7 @@ local ColorOnPrimary = ColorUtil.getColorOnPrimary()
 local ColorSecondaryContainer = ColorUtil.getColorSecondaryContainer()
 local ColorOnSecondaryContainer = ColorUtil.getColorOnSecondaryContainer()
 local ColorSurface = ColorUtil.getColorSurfaceContainer()
+local ColorSurfaceContainerHigh = ColorUtil.getColorSurfaceContainerHigh()
 local ColorOnSurface = ColorUtil.getColorOnSurface()
 local ColorText = ColorUtil.getColorOnSurfaceVariant()
 local ColorOutline = ColorUtil.getColorOutlineVariant()
@@ -48,13 +51,24 @@ local dialog = nil
 local views = {}
 local isLoading = false
 local requestGeneration = 0
+local stopRequested = false
+local activeToolConfirm = nil
+local activeToolStop = nil
+local editingMessageIndex = nil
 local undoTurns = {}
 local redoTurns = {}
+local activeConversationIndex = 0
+local activeStream = nil
+local requestRetryPayloads = setmetatable({}, { __mode = "k" })
 
 -- 前向声明
-local saveHistory, loadHistory, showModelManager, showModelPicker, showConvManager, showConvList, showSettings, addMessageBubble, addToolBubble, updateProjectLabel
+local saveHistory, loadHistory, showModelManager, showModelPicker, showConvManager, showConvList, showSettings, addMessageBubble, addToolBubble, updateProjectLabel, sendMessage, sendToApi, sendWithCompressedContext, addRequestErrorBubble
 
 -- ─── UI 辅助 ──
+
+local function isPanelVisible()
+  return dialog and dialog.isShowing()
+end
 
 local function isToolError(toolName, result)
   if not result then return false end
@@ -72,6 +86,7 @@ local function isToolError(toolName, result)
     or result:find("搜索失败", 1, true)
     or result:find("失败", 1, true)
     or result:find("异常", 1, true)
+    or result:find("语法错误", 1, true)
     or result:find("找不到", 1, true)
     or result:find("未找到", 1, true)
     or result:find("无法识别", 1, true)
@@ -97,6 +112,8 @@ local function toolDisplayName(name)
     list_dir = S.ai_tool_list_dir,
     search_in_files = S.ai_tool_search,
     get_env_info = S.ai_tool_env,
+    check_lua_syntax = S.ai_tool_check_syntax,
+    fetch_url = S.ai_tool_fetch_url,
   }
   return labels[name] or tostring(name or "")
 end
@@ -111,12 +128,6 @@ end
 
 local function showAgentHelp()
   ActivityUtil.open("help", "agent")
-end
-
-local function updateSafetyStatus()
-  if not views.autoApproveStatus then return end
-  local enabled = this.getSharedData("ai_auto_approve", "0") == "1"
-  views.autoApproveStatus.setVisibility(enabled and VISIBLE or GONE)
 end
 
 -- ─── Markdown 渲染辅助 ──
@@ -229,19 +240,52 @@ local function splitCodeBlocks(content)
 end
 
 --- 复制文本到剪贴板
-local function copyText(text)
+local function copyText(text, button)
   pcall(function()
     local ClipboardManager = luajava.bindClass("android.content.ClipboardManager")
     local ClipData = luajava.bindClass("android.content.ClipData")
     local cm = activity.getSystemService("clipboard")
     cm.setPrimaryClip(ClipData.newPlainText("agent_code", text))
-    if MainActivity and MainActivity.Public then
-      MainActivity.Public.snack(S.ai_copied)
+    if button then
+      button.setText(S.ai_copied)
+      button.postDelayed(function() button.setText(S.ai_copy) end, 1200)
+    else
+      print(S.ai_copied)
     end
   end)
 end
 
-addMessageBubble = function(role, content)
+local function continuationLabel(state)
+  if state == "incomplete" then return S.ai_incomplete_tag end
+  if state == "stopped" then return S.ai_stopped_tag end
+  if state == "empty_after_tools" then return S.ai_empty_after_tools end
+end
+
+local function createContinueButton()
+  return loadlayout({
+    MaterialButton,
+    text = S.ai_continue,
+    textSize = "12sp",
+    textColor = ColorPrimary,
+    BackgroundTintList = ColorStateList.valueOf(0),
+    layout_width = "wrap",
+    layout_height = "wrap",
+  })
+end
+
+local function clearContinuationState(stateMessage)
+  if not stateMessage then return end
+  stateMessage.continuation_state = nil
+  if stateMessage.role == "assistant" and tostring(stateMessage.content or "") == ""
+      and not stateMessage.tool_calls then
+    for index, message in ipairs(messages) do
+      if message == stateMessage then table.remove(messages, index); break end
+    end
+  end
+  saveHistory()
+end
+
+addMessageBubble = function(role, content, stateMessage)
   local container = views.msgContainer
   if not container then return end
 
@@ -338,7 +382,7 @@ addMessageBubble = function(role, content)
               textColor = ColorPrimary,
               RippleColor = ColorStateList.valueOf(ColorRipple),
               layout_marginRight = "6dp",
-              onClick = function() copyText(part.code) end,
+              onClick = function(v) copyText(part.code, v) end,
             },
             {
               MaterialButton,
@@ -356,6 +400,39 @@ addMessageBubble = function(role, content)
       })
       inner.addView(codeCard)
     end
+  end
+
+  local continuation = not isUser and stateMessage and continuationLabel(stateMessage.continuation_state)
+  if continuation then
+    local marker = MaterialTextView(activity)
+    marker.setText(continuation)
+    marker.setTextSize(12)
+    marker.setTextColor(ColorText)
+    marker.setPadding(0, dp(6), 0, 0)
+    inner.addView(marker)
+    local continueBtn = createContinueButton()
+    continueBtn.setOnClickListener(function()
+      if isLoading then return end
+      clearContinuationState(stateMessage)
+      local parent = continueBtn.getParent()
+      if parent then parent.removeView(marker); parent.removeView(continueBtn) end
+      stopRequested = false
+      requestGeneration = requestGeneration + 1
+      sendWithCompressedContext(true)
+    end)
+    inner.addView(continueBtn)
+  end
+
+  if not isUser and content and content ~= "" then
+    local copyReply = MaterialButton(activity)
+    copyReply.setText(S.ai_copy)
+    copyReply.setTextSize(11)
+    copyReply.setAllCaps(false)
+    copyReply.setTextColor(ColorPrimary)
+    copyReply.setBackgroundTintList(ColorStateList.valueOf(0))
+    copyReply.setLayoutParams(LinearLayout.LayoutParams(-2, dp(30)))
+    copyReply.setOnClickListener(function(v) copyText(content, v) end)
+    inner.addView(copyReply)
   end
 
   local card = {
@@ -399,7 +476,8 @@ addToolBubble = function(toolName, args, result)
   elseif toolName == "apply_patch" then icon = "✎"
   elseif toolName == "append_file" then icon = "＋"
   elseif toolName == "rename_file" then icon = "⇄"
-  elseif toolName == "get_env_info" then icon = "ℹ" end
+  elseif toolName == "get_env_info" then icon = "ℹ"
+  elseif toolName == "fetch_url" then icon = "↗" end
 
   local resultText = tostring(result or "")
   local resultLower = resultText:lower()
@@ -409,8 +487,19 @@ addToolBubble = function(toolName, args, result)
   local status = result == nil and S.ai_tool_pending
     or (denied and S.ai_tool_denied or (isError and S.ai_tool_failed or S.ai_tool_success))
   local summary = icon .. " " .. toolDisplayName(toolName) .. "  ·  " .. status
+  local resultPreview = ""
   local detailParts = {}
   if args.path then detailParts[#detailParts + 1] = tostring(args.path) end
+  if args.url then detailParts[#detailParts + 1] = tostring(args.url) end
+  if toolName == "read_files" and result == nil then
+    local files = args.paths
+    if type(files) == "table" then
+      for _, path in ipairs(files) do detailParts[#detailParts + 1] = tostring(path) end
+    elseif type(files) == "string" and files ~= "" then
+      detailParts[#detailParts + 1] = files
+    end
+  end
+
   if toolName == "rename_file" and args.new_path then
     detailParts[#detailParts + 1] = "→ " .. tostring(args.new_path)
   end
@@ -429,10 +518,24 @@ addToolBubble = function(toolName, args, result)
       local files = args.paths
       local n = type(files) == "table" and #files or (type(files) == "string" and 1 or 0)
       display = S.ai_read_files_summary:format(n)
+      local fileLines = {}
+      if type(files) == "table" then
+        for _, path in ipairs(files) do fileLines[#fileLines + 1] = tostring(path) end
+      elseif type(files) == "string" and files ~= "" then
+        fileLines[1] = files
+      end
+      if #fileLines > 0 then
+        display = display .. "\n" .. table.concat(fileLines, "\n")
+        resultPreview = table.concat(fileLines, " · ")
+      end
     end
     if #display > 12000 then
       display = display:sub(1, 12000) .. "\n\n" .. S.ai_tool_output_truncated
     end
+    if not denied and display ~= "" and resultPreview == "" then
+      resultPreview = tostring(display):gsub("[\r\n].*", "")
+    end
+    if #resultPreview > 240 then resultPreview = resultPreview:sub(1, 240) .. "…" end
     detailParts[#detailParts + 1] = tostring(display)
   end
 
@@ -469,6 +572,18 @@ addToolBubble = function(toolName, args, result)
       },
       {
         MaterialTextView,
+        text = resultPreview,
+        textSize = "11sp",
+        textColor = ColorText,
+        paddingLeft = "10dp",
+        paddingRight = "10dp",
+        paddingBottom = resultPreview ~= "" and "8dp" or "0dp",
+        maxLines = 1,
+        ellipsize = "end",
+        visibility = resultPreview ~= "" and VISIBLE or GONE,
+      },
+      {
+        MaterialTextView,
         id = "toolDetail",
         text = detail,
         textSize = "12sp",
@@ -482,7 +597,8 @@ addToolBubble = function(toolName, args, result)
       },
     },
   }
-  container.addView(loadlayout(card, bubbleViews))
+  local bubble = loadlayout(card, bubbleViews)
+  container.addView(bubble)
   if detail ~= "" then
     local expanded = false
     bubbleViews.toolHeader.onClick = function()
@@ -494,17 +610,38 @@ addToolBubble = function(toolName, args, result)
     end
   end
   scrollDown()
+  return bubble
 end
 
 -- ─── 加载状态 ──
 
 local function showLoading()
   isLoading = true
+  if views.loadingText then views.loadingText.setText(S.ai_generating) end
   if views.loadingBar then views.loadingBar.setVisibility(VISIBLE) end
   if views.btnSend then views.btnSend.setEnabled(false) end
   if views.btnSend then views.btnSend.setVisibility(GONE) end
   if views.btnStop then views.btnStop.setVisibility(VISIBLE) end
   if views.btnStop then views.btnStop.setEnabled(true) end
+end
+
+local function setLoadingStatus(text)
+  if views.loadingText and isLoading then views.loadingText.setText(tostring(text or S.ai_generating)) end
+end
+
+local function updateContextUsage(usage)
+  if type(usage) ~= "table" or not views.ctxUsage then return end
+  local used = tonumber(usage.used) or 0
+  local budget = tonumber(usage.budget) or 0
+  local ratio = budget > 0 and used / budget or 0
+  local color, label = ColorText, S.ai_ctx_ok
+  if ratio >= 0.95 then
+    color, label = ColorError, S.ai_ctx_full
+  elseif ratio >= 0.8 then
+    color, label = 0xffe6a23c, S.ai_ctx_near_limit
+  end
+  views.ctxUsage.setTextColor(color)
+  views.ctxUsage.setText(label .. " · " .. used .. "/" .. budget)
 end
 
 local function hideLoading()
@@ -517,15 +654,23 @@ local function hideLoading()
 end
 
 local function invalidateRequest()
+  stopRequested = true
+  if activeToolConfirm then activeToolConfirm.cancel() end
   requestGeneration = requestGeneration + 1
+  stopRequested = false
   isLoading = false
+  activeStream = nil
   AgentChat.cancelPendingRequest()
-  okHttp.cancelAll()
+  if AgentChat.cancelPendingTools then AgentChat.cancelPendingTools() end
+  local stopTool = activeToolStop
+  activeToolStop = nil
+  if stopTool then pcall(stopTool) end
   hideLoading()
   return requestGeneration
 end
 
 local function refreshMessageList()
+  if not isPanelVisible() then return end
   if views.msgContainer then views.msgContainer.removeAllViews() end
   loadHistory(false)
 end
@@ -570,17 +715,13 @@ local function applyFileChange(action)
       if generation ~= requestGeneration then return end
       hideLoading()
       if type(result) ~= "table" or not result.ok then
-        if MainActivity and MainActivity.Public then
-          MainActivity.Public.snack(tostring(result and result.error or "文件变更恢复失败"))
-        end
+        print(tostring(result and result.error or "文件变更恢复失败"))
         return
       end
       if MainActivity and MainActivity.RecyclerView then MainActivity.RecyclerView.update() end
       if views.msgContainer then views.msgContainer.removeAllViews() end
       loadHistory()
-      if MainActivity and MainActivity.Public then
-        MainActivity.Public.snack(tostring(result.error or "文件变更已恢复"))
-      end
+      print(tostring(result.error or "文件变更已恢复"))
     end, "io")
   end)
   if not okLaunch then hideLoading() end
@@ -597,7 +738,7 @@ local function redoFileChange()
   return applyFileChange(AgentChat.redoFileChange)
 end
 
-local function compressCurrentContext()
+local function compressCurrentContext(onDone)
   if isLoading then return false end
   requestGeneration = requestGeneration + 1
   local generation = requestGeneration
@@ -606,7 +747,7 @@ local function compressCurrentContext()
     if generation ~= requestGeneration then return end
     hideLoading()
     if not compressed then
-      if MainActivity and MainActivity.Public then MainActivity.Public.snack(S.ai_compress_unavailable) end
+      print(S.ai_compress_unavailable)
       return
     end
     local compacted = {}
@@ -616,9 +757,8 @@ local function compressCurrentContext()
     redoTurns = {}
     saveHistory()
     refreshMessageList()
-    if MainActivity and MainActivity.Public then
-      MainActivity.Public.snack(S.ai_compress_done:format(#messages))
-    end
+    print(S.ai_compress_done:format(#messages))
+    if onDone then pcall(onDone) end
   end, true)
   return true
 end
@@ -700,10 +840,10 @@ local function showToolConfirm(toolName, args, onAllow, onDeny)
     message = S.ai_confirm_folder:format(args.path)
   elseif toolName == "delete_file" then
     title = S.ai_delete_file
-    message = S.ai_confirm_delete:format(args.path)
+    message = S.ai_confirm_delete:format(args.path) .. "\n\n" .. S.ai_confirm_undo_hint
   elseif toolName == "delete_folder" then
     title = S.ai_delete_folder
-    message = S.ai_confirm_delete_folder:format(args.path)
+    message = S.ai_confirm_delete_folder:format(args.path) .. "\n\n" .. S.ai_confirm_undo_hint
   elseif toolName == "apply_patch" then
     title = S.ai_apply_patch
     local preview = args.patch or ""
@@ -729,9 +869,23 @@ local function showToolConfirm(toolName, args, onAllow, onDeny)
     message = S.ai_replace_message:format(args.path, oldPreview, newPreview)
   elseif toolName == "run_lua" then
     title = S.ai_run_code
-    local preview = args.code or ""
-    if #preview > 600 then preview = preview:sub(1, 600) .. "\n…" end
+    local preview = args.code or args.content or ""
     message = S.ai_confirm_code:format(preview)
+    local hosts = args.network_hosts or args.networkHosts
+    if type(hosts) == "string" then hosts = { hosts } end
+    if type(hosts) == "table" and #hosts > 0 then
+      local hostLines = {}
+      for _, host in ipairs(hosts) do
+        host = tostring(host):gsub("\r", "\\r"):gsub("\n", "\\n")
+        hostLines[#hostLines + 1] = "• " .. host
+      end
+      message = message .. S.ai_confirm_code_network:format(table.concat(hostLines, "\n"))
+    end
+  elseif toolName == "fetch_url" then
+    title = S.ai_fetch_url
+    local method = tostring(args.method or "GET"):upper():gsub("\r", "\\r"):gsub("\n", "\\n")
+    local url = tostring(args.url or "?"):gsub("\r", "\\r"):gsub("\n", "\\n")
+    message = S.ai_confirm_fetch_url:format(method, url)
   elseif toolName == "append_file" then
     title = S.ai_append_file
     local preview = args.content or ""
@@ -748,6 +902,7 @@ local function showToolConfirm(toolName, args, onAllow, onDeny)
     local argsPreview = okArgs and tostring(encodedArgs) or tostring(args or "")
     if #argsPreview > 2000 then argsPreview = argsPreview:sub(1, 2000) .. "\n…" end
     message = S.ai_confirm_external_message:format(toolDisplayName(toolName), argsPreview)
+      .. "\n\n" .. S.ai_confirm_external_hint
   elseif toolName == "read_file" or toolName == "read_files"
       or toolName == "list_dir" or toolName == "search_in_files" then
     title = S.ai_confirm_external_read_title
@@ -758,22 +913,35 @@ local function showToolConfirm(toolName, args, onAllow, onDeny)
     message = S.ai_confirm_tool_message:format(toolDisplayName(toolName))
   end
 
-  MaterialAlertDialogBuilder(activity)
+  local decided = false
+  local function denyOnce()
+    if decided then return end
+    decided = true
+    activeToolConfirm = nil
+    if onDeny then onDeny() end
+  end
+  local confirm = MaterialAlertDialogBuilder(activity)
     .setTitle(title)
     .setMessage(message)
     .setPositiveButton(S.ai_allow, function()
+      if decided then return end
+      decided = true
+      activeToolConfirm = nil
       if onAllow then onAllow() end
     end)
     .setNegativeButton(S.ai_deny, function()
-      if onDeny then onDeny() end
+      denyOnce()
     end)
     .show()
+  activeToolConfirm = confirm
+  confirm.setOnCancelListener(function() denyOnce() end)
 end
 
 -- ─── 执行工具调用链 ──
 
 local function executeToolCalls(toolCalls, index, results, onAllDone, generation)
   if generation and generation ~= requestGeneration then return end
+  if stopRequested then return end
   if index > #toolCalls then
     -- 文件操作后刷新编辑器
     pcall(function()
@@ -812,52 +980,124 @@ local function executeToolCalls(toolCalls, index, results, onAllDone, generation
   pcall(function() args = json.decode(tc.arguments) end)
   if type(args) ~= "table" then args = {} end
   tc.name = AgentChat.normalizeToolName(tc.name, args)
+  if tc.name == "run_lua" and (not args.code or args.code == "") and args.content then
+    args.code = args.content
+    args.content = nil
+  end
+
+  setLoadingStatus(S.ai_tool_pending .. " · " .. toolDisplayName(tc.name))
+  local stopped = false
+  local stopHandle
+
+  local function finishStopped(firstRemaining)
+    if stopped then return end
+    stopped = true
+    if activeToolStop == stopHandle then activeToolStop = nil end
+    -- Return an output for this and all remaining calls. Responses APIs require
+    -- every function_call to be paired with function_call_output, even on stop.
+    for remaining = firstRemaining or index, #toolCalls do
+      local call = toolCalls[remaining]
+      local callArgs = args
+      if remaining ~= index then
+        callArgs = {}
+        pcall(function() callArgs = json.decode(call.arguments) end)
+        if type(callArgs) ~= "table" then callArgs = {} end
+      end
+      addToolBubble(call.name, callArgs, S.ai_stopped)
+      messages[#messages + 1] = {
+        role = "tool",
+        tool_call_id = call.id,
+        content = S.ai_stopped,
+      }
+    end
+    local stateMessage = messages[#messages]
+    if stateMessage and stateMessage.role == "tool" then
+      stateMessage.continuation_state = "stopped"
+    end
+    saveHistory()
+    refreshMessageList()
+    pcall(function()
+      if MainActivity and MainActivity.RecyclerView then MainActivity.RecyclerView.update() end
+    end)
+  end
 
   local function proceedWithResult(resultStr)
+    if activeToolStop == stopHandle then activeToolStop = nil end
     if generation and generation ~= requestGeneration then return end
     results[#results + 1] = {
       tool_call_id = tc.id,
       content = resultStr,
     }
-    addToolBubble(tc.name, args, resultStr)
+    -- Persist each completed tool before proceeding. A later stop must not
+    -- lose evidence of already-executed operations from the conversation.
+    messages[#messages + 1] = {
+      role = "tool",
+      tool_call_id = tc.id,
+      content = resultStr,
+    }
+    saveHistory()
+    refreshMessageList()
+    if stopRequested then
+      finishStopped(index + 1)
+      return
+    end
     executeToolCalls(toolCalls, index + 1, results, onAllDone, generation)
   end
 
-  if AgentChat.shouldAutoApprove(tc.name, args) then
+  local function executeCurrentTool()
+    stopHandle = function() finishStopped() end
+    activeToolStop = stopHandle
     AgentChat.executeToolAsync(tc.name, args, proceedWithResult)
+  end
+
+  if AgentChat.shouldAutoApprove(tc.name, args) then
+    executeCurrentTool()
   elseif (AgentChat.requiresConfirmation and AgentChat.requiresConfirmation(tc.name, args))
       or AgentChat.isDestructiveTool(tc.name) then
     showToolConfirm(tc.name, args, function()
-      if generation and generation ~= requestGeneration then return end
-      AgentChat.executeToolAsync(tc.name, args, proceedWithResult)
+      if (generation and generation ~= requestGeneration) or stopRequested then
+        finishStopped()
+        return
+      end
+      executeCurrentTool()
     end, function()
-      if generation and generation ~= requestGeneration then return end
+      if (generation and generation ~= requestGeneration) or stopRequested then
+        finishStopped()
+        return
+      end
       proceedWithResult(S.ai_user_denied)
     end)
   else
-    AgentChat.executeToolAsync(tc.name, args, proceedWithResult)
+    executeCurrentTool()
   end
 end
 
 -- ─── 会话持久化 ──
 
 saveHistory = function()
-  AgentChat.saveCurrentConv(messages)
+  if activeConversationIndex > 0 and AgentChat.saveConversation then
+    AgentChat.saveConversation(activeConversationIndex, messages)
+  else
+    AgentChat.saveCurrentConv(messages)
+  end
 end
 
 loadHistory = function(resetTurnHistory)
   if resetTurnHistory ~= false then
     undoTurns = {}
     redoTurns = {}
+    if AgentChat.clearActiveSkill then AgentChat.clearActiveSkill() end
   end
-  if AgentChat.clearActiveSkill then AgentChat.clearActiveSkill() end
   local conv, idx = AgentChat.getCurrentConv()
   if not conv or not conv.messages or #conv.messages == 0 then
     -- 自动创建新会话
-    AgentChat.createConversation()
+    local created
+    created, activeConversationIndex = AgentChat.createConversation()
+    messages = created and created.messages or {}
     if updateProjectLabel then updateProjectLabel() end
     return 0
   end
+  activeConversationIndex = idx
   messages = conv.messages
   if updateProjectLabel then updateProjectLabel() end
   -- 重建气泡
@@ -870,8 +1110,8 @@ loadHistory = function(resetTurnHistory)
       elseif msg.role == "assistant" then
         -- 跳过纯工具调用（无文本内容）的空 assistant 消息
         local content = msg.content or ""
-        if content ~= "" then
-          addMessageBubble("assistant", content)
+        if content ~= "" or msg.continuation_state then
+          addMessageBubble("assistant", content, msg)
         end
         -- 显示工具调用气泡，并记录 id 供 tool 结果回填
         if msg.tool_calls then
@@ -908,116 +1148,113 @@ loadHistory = function(resetTurnHistory)
         if not consumedTools[messageIndex] and result ~= "" then
           addToolBubble("tool_result", {}, result)
         end
+        if msg.continuation_state then addMessageBubble("assistant", "", msg) end
       end
     end
+    for messageIndex = #messages, 1, -1 do
+      local message = messages[messageIndex]
+      if message.role == "user" and message.request_error then
+        addRequestErrorBubble(tostring(message.request_error), messageIndex)
+        break
+      end
+    end
+  end
+  if activeStream and activeStream.generation == requestGeneration and activeStream.render then
+    activeStream.render()
   end
   return #messages
 end
 
 -- ─── 发送消息核心 ──
 
-local lastApiMessages = nil
 local toolRoundCount = 0
 local MAX_TOOL_ROUNDS = 30
-local sendWithCompressedContext
-
-local function sendToApi(apiMessages, isContinue)
+sendToApi = function(apiMessages, isContinue)
   local generation = requestGeneration
+  local requestUserIndex
+  for index = #messages, 1, -1 do
+    if messages[index].role == "user" then requestUserIndex = index; break end
+  end
+  stopRequested = false
   local function isCurrent()
     return generation == requestGeneration
   end
-  lastApiMessages = apiMessages
   if not isContinue then
     toolRoundCount = 0
   end
   showLoading()
 
   -- 上下文用量显示：估算本次将发送的 token 数
-  if views.ctxUsage then
-    local u = AgentChat.estimateApiMessagesUsage(apiMessages)
-    if type(u) == "table" then
-      local used, budget = tonumber(u.used) or 0, tonumber(u.budget) or 0
-      local ratio = budget > 0 and used / budget or 0
-      local color = ColorText
-      if ratio >= 0.95 then color = ColorError
-      elseif ratio >= 0.8 then color = 0xffe6a23c end
-      views.ctxUsage.setTextColor(color)
-      views.ctxUsage.setText(used .. " / " .. budget .. " tok")
-    end
-  end
+  updateContextUsage(AgentChat.estimateApiMessagesUsage(apiMessages))
 
-  -- 空气泡用于流式输出
-  local container = views.msgContainer
-  local streamViews = {}
-  local card = {
-    MaterialCardView,
-    radius = "12dp",
-    CardElevation = 0,
-    strokeWidth = "1dp",
-    strokeColor = ColorOutline,
-    CardBackgroundColor = ColorSurface,
-    layout_width = "match",
-    layout_height = "wrap",
-    layout_marginBottom = "8dp",
-    layout_marginRight = "32dp",
-    {
-      LinearLayout,
-      orientation = "vertical",
-      padding = "12dp",
-      {
-        MaterialTextView,
-        id = "aiStreamText",
-        text = "",
-        textSize = "13sp",
-        textColor = ColorOnSurface,
-        lineSpacingMultiplier = 1.35,
-      },
-    },
-  }
-  container.addView(loadlayout(card, streamViews))
-  local aiTextView = streamViews.aiStreamText
   local fullResponse = ""
+  local streamState = { generation = generation, text = "" }
+  activeStream = streamState
+  streamState.render = function()
+    if activeStream ~= streamState or not isPanelVisible() or not views.msgContainer then return end
+    if streamState.container ~= views.msgContainer or not streamState.bubble
+        or not streamState.bubble.getParent() then
+      local streamViews = {}
+      local bubble = loadlayout({
+        MaterialCardView,
+        radius = "12dp",
+        CardElevation = 0,
+        strokeWidth = "1dp",
+        strokeColor = ColorOutline,
+        CardBackgroundColor = ColorSurface,
+        layout_width = "match",
+        layout_height = "wrap",
+        layout_marginBottom = "8dp",
+        layout_marginRight = "32dp",
+        {
+          LinearLayout,
+          orientation = "vertical",
+          padding = "12dp",
+          {
+            MaterialTextView,
+            id = "aiStreamText",
+            textSize = "13sp",
+            textColor = ColorOnSurface,
+            lineSpacingMultiplier = 1.35,
+          },
+        },
+      }, streamViews)
+      streamState.container = views.msgContainer
+      streamState.bubble = bubble
+      streamState.textView = streamViews.aiStreamText
+      streamState.container.addView(bubble)
+    end
+    if streamState.textView then streamState.textView.setText(streamState.text) end
+    scrollDown()
+  end
+  streamState.render()
 
   AgentChat.sendStream(apiMessages, {
     onPrepared = function(usage)
       if not isCurrent() or type(usage) ~= "table" then return end
-      local used = tonumber(usage.used) or 0
-      local budget = tonumber(usage.budget) or 0
-      local ratio = budget > 0 and used / budget or 0
-      local color = ColorText
-      if ratio >= 0.95 then color = ColorError
-      elseif ratio >= 0.8 then color = 0xffe6a23c end
-      if views.ctxUsage then
-        views.ctxUsage.setTextColor(color)
-        views.ctxUsage.setText(used .. " / " .. budget .. " tok")
-      end
+      updateContextUsage(usage)
     end,
     onChunk = function(chunk)
       if not isCurrent() then return end
+      setLoadingStatus(S.ai_generating)
       fullResponse = fullResponse .. chunk
-      if aiTextView then
-        aiTextView.append(tostring(chunk))
-        scrollDown()
-      end
+      streamState.text = fullResponse
+      streamState.render()
     end,
     -- 自动重试前清空已流出的内容，避免失败段落重复拼接
     onRetry = function()
       if not isCurrent() then return end
       fullResponse = ""
-      if aiTextView then aiTextView.setText("") end
+      streamState.text = ""
+      setLoadingStatus(S.ai_retrying)
+      streamState.render()
     end,
-    onToolCalls = function(toolCalls, text)
-      if not isCurrent() then return end
+    onToolCalls = function(toolCalls, text, reasoningContent, responseOutput, responseOrigin)
+      if not isCurrent() or stopRequested then return end
       -- 不调用 hideLoading，保持加载状态直到续请求完成
-      -- 移除空对话气泡（无文本内容时）
-      if not text or text == "" then
-        local parent = aiTextView and aiTextView.getParent()
-        if parent then
-          local grandparent = parent.getParent()
-          if grandparent then
-            container.removeView(grandparent)
-          end
-        end
+      if text and text ~= "" and text ~= fullResponse then
+        fullResponse = text
+        streamState.text = text
       end
 
       -- 保存 assistant 消息（含 tool_calls）
@@ -1025,10 +1262,18 @@ local function sendToApi(apiMessages, isContinue)
       if text and text ~= "" then
         assistantMsg.content = text
       end
+      if reasoningContent and tostring(reasoningContent) ~= "" then
+        assistantMsg.reasoning_content = tostring(reasoningContent)
+      end
+      if type(responseOutput) == "table" and #responseOutput > 0 and responseOrigin and responseOrigin ~= "" then
+        assistantMsg.response_output = responseOutput
+        assistantMsg.response_origin = responseOrigin
+      end
       assistantMsg.tool_calls = {}
       for _, tc in ipairs(toolCalls) do
         assistantMsg.tool_calls[#assistantMsg.tool_calls + 1] = {
           id = tc.id,
+          item_id = tc.item_id,
           type = "function",
           ["function"] = {
             name = tc.name,
@@ -1038,27 +1283,20 @@ local function sendToApi(apiMessages, isContinue)
       end
       messages[#messages + 1] = assistantMsg
       saveHistory()
+      activeStream = nil
+      refreshMessageList()
 
       -- 执行工具调用
       executeToolCalls(toolCalls, 1, {}, function(results)
-        if not isCurrent() then return end
-        -- 把每个 tool 结果加入 messages
-        for _, r in ipairs(results) do
-          messages[#messages + 1] = {
-            role = "tool",
-            tool_call_id = r.tool_call_id,
-            content = r.content,
-          }
-          saveHistory()
-        end
-
+        if not isCurrent() or stopRequested then return end
         -- 防止无限循环
         toolRoundCount = toolRoundCount + 1
         if toolRoundCount >= MAX_TOOL_ROUNDS then
           hideLoading()
-          addMessageBubble("assistant", S.ai_max_tool_rounds:format(MAX_TOOL_ROUNDS))
           messages[#messages + 1] = { role = "assistant", content = S.ai_max_tool_rounds:format(MAX_TOOL_ROUNDS) }
           saveHistory()
+          activeStream = nil
+          refreshMessageList()
           return
         end
 
@@ -1066,79 +1304,151 @@ local function sendToApi(apiMessages, isContinue)
         sendWithCompressedContext(true)
       end, generation)
     end,
-    onDone = function(text)
+    onEmptyAfterTools = function()
       if not isCurrent() then return end
       hideLoading()
-      messages[#messages + 1] = { role = "assistant", content = text }
-      saveHistory()
-      -- 移除流式空气泡，用 Markdown 重新渲染最终内容
-      local parent = aiTextView and aiTextView.getParent()
-      if parent then
-        local grandparent = parent.getParent()
-        if grandparent then
-          container.removeView(grandparent)
-        end
+      activeStream = nil
+      -- The tool result is already in history. Do not add a blank assistant
+      -- message, otherwise the next continuation may lose the tool context.
+      local stateMessage = messages[#messages]
+      if stateMessage and stateMessage.role == "tool" then
+        stateMessage.continuation_state = "empty_after_tools"
+        saveHistory()
       end
-      addMessageBubble("assistant", text)
+      refreshMessageList()
+    end,
+    onDone = function(text, incomplete, responseOutput, responseOrigin, reasoningContent)
+      if not isCurrent() then return end
+      hideLoading()
+      activeStream = nil
+      local assistantMsg = { role = "assistant", content = text }
+      if type(responseOutput) == "table" and #responseOutput > 0 and responseOrigin and responseOrigin ~= "" then
+        assistantMsg.response_output = responseOutput
+        assistantMsg.response_origin = responseOrigin
+      end
+      if reasoningContent and tostring(reasoningContent) ~= "" then
+        assistantMsg.reasoning_content = tostring(reasoningContent)
+      end
+      if incomplete == true then assistantMsg.continuation_state = "incomplete" end
+      messages[#messages + 1] = assistantMsg
+      saveHistory()
+      refreshMessageList()
     end,
     onError = function(err)
       if not isCurrent() then return end
       hideLoading()
+      activeStream = nil
       -- 用户主动停止：保留已生成部分，不显示错误
       if tostring(err):lower():match("cancel") then
-        if fullResponse ~= "" then
-          messages[#messages + 1] = { role = "assistant", content = fullResponse }
-          saveHistory()
-        end
-        if aiTextView then
-          local partial = fullResponse
-          if partial == "" then partial = S.ai_stopped end
-          aiTextView.setText(partial .. "\n\n" .. S.ai_stopped_tag)
-        end
+        local stateMessage = { role = "assistant", content = fullResponse, continuation_state = "stopped" }
+        messages[#messages + 1] = stateMessage
+        saveHistory()
+        refreshMessageList()
+        requestGeneration = requestGeneration + 1
+        stopRequested = false
         return
       end
-      -- 替换气泡内容为错误 + 重试按钮
-      local parent = aiTextView and aiTextView.getParent()
-      if parent then
-        parent.removeAllViews()
-        parent.addView(loadlayout({
-          MaterialTextView,
-          text = tostring(err),
-          textSize = "13sp",
-          textColor = ColorError,
-          padding = "12dp",
-          lineSpacingMultiplier = 1.3,
-        }))
-        parent.addView(loadlayout({
-          MaterialButton,
-          text = S.ai_retry,
-          textSize = "12sp",
-          textColor = ColorPrimary,
-          layout_width = "wrap",
-          layout_height = "32dp",
-          layout_marginTop = "6dp",
-          BackgroundTintList = ColorStateList.valueOf(0),
-          icon = res.drawable("sync"),
-          iconTint = ColorStateList.valueOf(ColorPrimary),
-          onClick = function()
-            if lastApiMessages then
-              -- 移除错误气泡
-              local grandparent = parent.getParent()
-              if grandparent then
-                container.removeView(grandparent)
-              end
-              -- 移除错误消息（最后一条 assistant 消息）
-              if messages[#messages] and messages[#messages].role == "assistant" then
-                table.remove(messages)
-              end
-              -- 重试
-              sendToApi(lastApiMessages)
-            end
-          end,
-        }))
+      local requestMessage = requestUserIndex and messages[requestUserIndex]
+      if requestMessage and requestMessage.role == "user" then
+        requestMessage.request_error = tostring(err)
+        requestRetryPayloads[requestMessage] = apiMessages
       end
+      saveHistory()
+      refreshMessageList()
     end,
   })
+end
+
+addRequestErrorBubble = function(err, messageIndex)
+  if not views.msgContainer then return end
+  local lowerError = tostring(err):lower()
+  local action = S.ai_retry
+  local opensSettings = lowerError:find("http 401", 1, true) or lowerError:find("http 403", 1, true)
+    or lowerError:find("api key", 1, true) or lowerError:find("unauthorized", 1, true)
+  local compresses = lowerError:find("context", 1, true) or lowerError:find("token", 1, true)
+    or lowerError:find("too large", 1, true)
+  if opensSettings then action = S.ai_open_settings
+  elseif compresses then action = S.ai_compress_retry end
+
+  local errorViews = {}
+  views.msgContainer.addView(loadlayout({
+    MaterialCardView,
+    radius = "8dp",
+    CardElevation = 0,
+    strokeWidth = "1dp",
+    strokeColor = ColorError,
+    CardBackgroundColor = ColorSurface,
+    layout_width = "match",
+    layout_height = "wrap",
+    layout_marginBottom = "8dp",
+    layout_marginLeft = "48dp",
+    layout_marginRight = "48dp",
+    {
+      LinearLayout,
+      orientation = "vertical",
+      padding = "12dp",
+      {
+        MaterialTextView,
+        text = tostring(err),
+        textSize = "13sp",
+        textColor = ColorError,
+        lineSpacingMultiplier = 1.3,
+        textIsSelectable = true,
+      },
+      {
+        LinearLayout,
+        orientation = "horizontal",
+        layout_marginTop = "6dp",
+        {
+          MaterialButton,
+          id = "recoverButton",
+          text = action,
+          layout_width = "wrap",
+        },
+        {
+          MaterialButton,
+          id = "editButton",
+          text = S.ai_edit_request,
+          layout_width = "wrap",
+        },
+      },
+    },
+  }, errorViews))
+
+  errorViews.recoverButton.onClick = function()
+    if isLoading then return end
+    local message = messages[messageIndex]
+    if not message or message.role ~= "user" or not message.request_error then
+      print(S.ai_request_expired)
+      return
+    end
+    if opensSettings then
+      showSettings()
+      return
+    end
+    local retryPayload = requestRetryPayloads[message]
+    message.request_error = nil
+    saveHistory()
+    refreshMessageList()
+    if compresses then
+      compressCurrentContext(function() sendWithCompressedContext(false) end)
+    else
+      requestGeneration = requestGeneration + 1
+      if retryPayload then sendToApi(retryPayload, false)
+      else sendWithCompressedContext(false) end
+    end
+  end
+
+  errorViews.editButton.onClick = function()
+    local message = messages[messageIndex]
+    if not message or message.role ~= "user" or not views.msgInput then
+      print(S.ai_request_expired)
+      return
+    end
+    editingMessageIndex = messageIndex
+    views.msgInput.setText(tostring(message.content or ""))
+    views.msgInput.requestFocus()
+  end
 end
 
 sendWithCompressedContext = function(isContinue, userMsg)
@@ -1160,14 +1470,14 @@ sendWithCompressedContext = function(isContinue, userMsg)
     end
   end
   AgentChat.buildCompressedApiMessages(requestHistory, function(apiMessages)
-    if generation ~= requestGeneration then return end
+    if generation ~= requestGeneration or stopRequested then return end
     sendToApi(apiMessages, isContinue)
   end)
 end
 
 -- ─── 发送消息 ──
 
-local function sendMessage()
+sendMessage = function()
   if isLoading then return end
 
   local input = views.msgInput
@@ -1180,8 +1490,22 @@ local function sendMessage()
 
   local skill = AgentChat.selectSkill(text)
 
-  addMessageBubble("user", text)
-  messages[#messages + 1] = { role = "user", content = text }
+  for _, message in ipairs(messages) do
+    if message.role == "user" then message.request_error = nil end
+  end
+
+  local editedIndex = editingMessageIndex
+  editingMessageIndex = nil
+  if editedIndex and messages[editedIndex] and messages[editedIndex].role == "user" then
+    messages[editedIndex].content = text
+    messages[editedIndex].request_error = nil
+    for index = #messages, editedIndex + 1, -1 do table.remove(messages, index) end
+    if views.msgContainer then views.msgContainer.removeAllViews() end
+    loadHistory(false)
+  else
+    addMessageBubble("user", text)
+    messages[#messages + 1] = { role = "user", content = text }
+  end
   if skill then
     local conv = AgentChat.getCurrentConv()
     conv.skills = conv.skills or {}
@@ -1204,13 +1528,15 @@ local function sendMessage()
   end
 
   -- 编辑器上下文只加入请求副本，不写入持久化会话；超预算时先压缩历史。
+  stopRequested = false
   requestGeneration = requestGeneration + 1
   sendWithCompressedContext(false, userMsg)
 end
 
 -- ─── 模型管理 ──
 
-local function showModelEditor(existingIndex, existingName, existingUrl, existingKey, existingModel)
+local function showModelEditor(existingIndex, existingName, existingUrl, existingKey, existingModel,
+    existingResponses, existingContextLength, existingMaxTokens)
   local inputLayout = {
     LinearLayout,
     orientation = "vertical",
@@ -1265,10 +1591,45 @@ local function showModelEditor(existingIndex, existingName, existingUrl, existin
       textSize = "14sp", singleLine = true, hint = "deepseek-v4-flash",
       layout_marginTop = "8dp",
     },
+    {
+      MaterialTextView,
+      text = S.ai_context_len,
+      textSize = "13sp", textColor = ColorText,
+      layout_marginTop = "12dp",
+    },
+    {
+      EditText, id = "contextInput",
+      layout_width = "match", layout_height = "wrap", minHeight = "44dp",
+      textSize = "14sp", singleLine = true, inputType = 0x0002,
+      hint = S.ai_ctx_hint,
+    },
+    {
+      MaterialTextView,
+      text = S.ai_max_tokens,
+      textSize = "13sp", textColor = ColorText,
+      layout_marginTop = "8dp",
+    },
+    {
+      EditText, id = "maxTokensInput",
+      layout_width = "match", layout_height = "wrap", minHeight = "44dp",
+      textSize = "14sp", singleLine = true, inputType = 0x0002,
+    },
+    {
+      Switch, id = "responsesSwitch",
+      text = S.ai_use_responses,
+      layout_width = "match", layout_height = "wrap",
+      layout_marginTop = "12dp",
+    },
   }
 
   local dialogViews = {}
-  local content = loadlayout(inputLayout, dialogViews)
+  local content = loadlayout({
+    ScrollView,
+    layout_width = "match",
+    layout_height = "wrap",
+    fillViewport = true,
+    inputLayout,
+  }, dialogViews)
 
   MaterialAlertDialogBuilder(activity)
     .setTitle(existingIndex and S.ai_edit_model or S.ai_add_model)
@@ -1278,20 +1639,23 @@ local function showModelEditor(existingIndex, existingName, existingUrl, existin
       local key = tostring(dialogViews.keyInput.getText() or ""):gsub("^%s*(.-)%s*$", "%1")
       local url = tostring(dialogViews.urlInput.getText() or ""):gsub("^%s*(.-)%s*$", "%1")
       local model = tostring(dialogViews.modelInput.getText() or ""):gsub("^%s*(.-)%s*$", "%1")
+      local contextLength = tostring(dialogViews.contextInput.getText() or ""):gsub("^%s*(.-)%s*$", "%1")
+      local maxTokens = tostring(dialogViews.maxTokensInput.getText() or ""):gsub("^%s*(.-)%s*$", "%1")
+      local responses = dialogViews.responsesSwitch.isChecked()
       if name == "" then name = model end
       if key == "" then
-        if MainActivity and MainActivity.Public then MainActivity.Public.snack(S.ai_need_api_key) end
+        print(S.ai_need_api_key)
         return
       end
       if existingIndex then
-        AgentChat.updateModel(existingIndex, name, url, key, model)
+        AgentChat.updateModel(existingIndex, name, url, key, model, responses, contextLength, maxTokens)
         AgentChat.setCurrentModel(existingIndex)
       else
-        local newIndex = AgentChat.addModel(name, url, key, model)
+        local newIndex = AgentChat.addModel(name, url, key, model, responses, contextLength, maxTokens)
         AgentChat.setCurrentModel(newIndex)
       end
       if views.modelLabel then views.modelLabel.setText(AgentChat.getCurrentModelName()) end
-      if MainActivity and MainActivity.Public then MainActivity.Public.snack(S.ai_saved) end
+      print(S.ai_saved)
       showModelPicker()  -- 刷新列表
     end)
     .setNegativeButton(S.ai_cancel, nil)
@@ -1301,6 +1665,9 @@ local function showModelEditor(existingIndex, existingName, existingUrl, existin
   dialogViews.keyInput.setText(existingKey or "")
   dialogViews.urlInput.setText(existingUrl or "")
   dialogViews.modelInput.setText(existingModel or "")
+  dialogViews.contextInput.setText(tostring(existingContextLength or 30000))
+  dialogViews.maxTokensInput.setText(tostring(existingMaxTokens or 4096))
+  dialogViews.responsesSwitch.setChecked(existingResponses == true)
 end
 
 showModelManager = function()
@@ -1321,13 +1688,18 @@ showModelManager = function()
       local m = models[which + 1]
       MaterialAlertDialogBuilder(activity)
         .setTitle(m.name)
-        .setMessage(S.ai_api_key .. ": " .. m.key:sub(1, 12) .. "…\n" .. S.ai_api_url .. ": " .. m.url .. "\n" .. S.ai_model .. ": " .. m.model)
+        .setMessage(S.ai_api_key .. ": " .. m.key:sub(1, 12) .. "…\n"
+          .. S.ai_api_url .. ": " .. m.url .. "\n"
+          .. S.ai_model .. ": " .. m.model .. "\n"
+          .. S.ai_context_len .. ": " .. tostring(m.contextLength or 30000) .. "\n"
+          .. S.ai_max_tokens .. ": " .. tostring(m.maxTokens or 4096))
         .setPositiveButton(S.ai_edit, function()
-          showModelEditor(which + 1, m.name, m.url, m.key, m.model)
+          showModelEditor(which + 1, m.name, m.url, m.key, m.model, m.responses,
+            m.contextLength, m.maxTokens)
         end)
         .setNegativeButton(S.ai_delete, function()
           AgentChat.removeModel(which + 1)
-          if MainActivity and MainActivity.Public then MainActivity.Public.snack(S.ai_deleted_name:format(m.name)) end
+          print(S.ai_deleted_name:format(m.name))
           if views.modelLabel then views.modelLabel.setText(AgentChat.getCurrentModelName()) end
           showModelManager()
         end)
@@ -1365,7 +1737,7 @@ showModelPicker = function()
       else
         AgentChat.setCurrentModel(which + 1)
         if views.modelLabel then views.modelLabel.setText(AgentChat.getCurrentModelName()) end
-        if MainActivity and MainActivity.Public then MainActivity.Public.snack(S.ai_switched_to:format(models[which + 1].name)) end
+        print(S.ai_switched_to:format(models[which + 1].name))
       end
     end)
     .setNegativeButton(S.ai_manage, function()
@@ -1380,10 +1752,9 @@ end
 
 showSettings = function()
   local autoApprove = this.getSharedData("ai_auto_approve", "0") == "1"
+  local autoApproveNetwork = this.getSharedData("ai_auto_approve_network", "1") == "1"
   local allowSelfSigned = this.getSharedData("ai_allow_selfsigned", "0") == "1"
   local temp = this.getSharedData("ai_temperature", "0.7")
-  local maxTokens = this.getSharedData("ai_max_tokens", "4096")
-  local contextLen = this.getSharedData("ai_context_length", "30000")
   local retryCount = this.getSharedData("ai_retry_count", "2")
   local systemPrompt = this.getSharedData("ai_system_prompt", "")
   local dlgViews = {}
@@ -1436,35 +1807,6 @@ showSettings = function()
         },
         {
           MaterialTextView,
-          text = S.ai_max_tokens,
-          textSize = "13sp", textColor = ColorText,
-        },
-        {
-          EditText,
-          id = "maxTokensInput",
-          text = tostring(maxTokens),
-          layout_width = "match", layout_height = "wrap", minHeight = "40dp",
-          textSize = "14sp", singleLine = true,
-          inputType = 0x0002,
-          layout_marginBottom = "8dp",
-        },
-        {
-          MaterialTextView,
-          text = S.ai_context_len,
-          textSize = "13sp", textColor = ColorText,
-        },
-        {
-          EditText,
-          id = "contextInput",
-          text = tostring(contextLen),
-          layout_width = "match", layout_height = "wrap", minHeight = "40dp",
-          textSize = "14sp", singleLine = true,
-          inputType = 0x0002,
-          hint = S.ai_ctx_hint,
-          layout_marginBottom = "8dp",
-        },
-        {
-          MaterialTextView,
           text = S.ai_retry_count_label,
           textSize = "13sp", textColor = ColorText,
         },
@@ -1506,6 +1848,37 @@ showSettings = function()
           gravity = "center_vertical",
           layout_width = "match",
           layout_height = "wrap",
+          layout_marginTop = "12dp",
+          {
+            LinearLayout,
+            orientation = "vertical",
+            layout_width = "0dp",
+            layout_weight = 1,
+            {
+              MaterialTextView,
+              text = S.ai_auto_approve_network,
+              textSize = "14sp", textColor = ColorOnSurface,
+            },
+            {
+              MaterialTextView,
+              text = S.ai_auto_approve_network_desc,
+              textSize = "12sp", textColor = ColorText,
+              layout_marginTop = "2dp",
+            },
+          },
+          {
+            Switch,
+            id = "autoApproveNetworkSwitch",
+            checked = autoApproveNetwork,
+            layout_marginLeft = "12dp",
+          },
+        },
+        {
+          LinearLayout,
+          orientation = "horizontal",
+          gravity = "center_vertical",
+          layout_width = "match",
+          layout_height = "wrap",
           {
             LinearLayout,
             orientation = "vertical",
@@ -1529,15 +1902,6 @@ showSettings = function()
             checked = autoApprove,
             layout_marginLeft = "12dp",
           },
-        },
-        {
-          MaterialTextView,
-          id = "autoApproveWarning",
-          text = S.ai_auto_approve_warning,
-          textSize = "12sp",
-          textColor = ColorError,
-          layout_marginTop = "8dp",
-          visibility = autoApprove and VISIBLE or GONE,
         },
         {
           LinearLayout,
@@ -1699,15 +2063,9 @@ showSettings = function()
     body,
   }, dlgViews)
 
-  dlgViews.autoApproveSwitch.setOnCheckedChangeListener(function(_, checked)
-    dlgViews.autoApproveWarning.setVisibility(checked and VISIBLE or GONE)
-  end)
-
   dlgViews.btnTestConn.onClick = function()
     AgentChat.testConnection(function(ok, msg)
-      if MainActivity and MainActivity.Public then
-        MainActivity.Public.snack(msg)
-      end
+      print(msg)
     end)
   end
 
@@ -1725,21 +2083,19 @@ showSettings = function()
       local sname = tostring(server.name or S.ai_unnamed)
       local surl = tostring(server.url or "")
       local row = LinearLayout(activity)
-      row.setOrientation(0)
-      row.setGravity(16)
+      row.setOrientation(1)
       row.setPadding(dp(12), dp(10), dp(12), dp(10))
       local lp = LinearLayout.LayoutParams(-1, -2)
       lp.bottomMargin = dp(8)
       row.setLayoutParams(lp)
       local bg = GradientDrawable()
-      bg.setColor(ColorUtils.blendARGB(ColorSurface, 0xffffffff, 0.35))
-      bg.setCornerRadius(dp(14))
+      bg.setColor(ColorSurfaceContainerHigh)
+      bg.setCornerRadius(dp(12))
       row.setBackground(bg)
 
       local txtCol = LinearLayout(activity)
       txtCol.setOrientation(1)
-      txtCol.setLayoutParams(LinearLayout.LayoutParams(0, -2, 1))
-      txtCol.setPadding(0, 0, dp(8), 0)
+      txtCol.setLayoutParams(LinearLayout.LayoutParams(-1, -2))
       local nameTv = MaterialTextView(activity)
       nameTv.setText(sname)
       nameTv.setTextSize(14)
@@ -1774,9 +2130,16 @@ showSettings = function()
         return btn
       end
 
-      local testBtn = mcpBtn(S.ai_test, ColorPrimary, ColorOnPrimary)
+      local actions = LinearLayout(activity)
+      actions.setOrientation(0)
+      actions.setGravity(5) -- Gravity.RIGHT
+      local actionsLp = LinearLayout.LayoutParams(-1, -2)
+      actionsLp.topMargin = dp(8)
+      actions.setLayoutParams(actionsLp)
+
+      local testBtn = mcpBtn(S.ai_test, ColorSecondaryContainer, ColorOnSecondaryContainer)
       local testLp = LinearLayout.LayoutParams(-2, dp(34))
-      testLp.leftMargin = dp(8)
+      testLp.rightMargin = dp(8)
       testBtn.setLayoutParams(testLp)
       testBtn.setOnClickListener(function()
         testBtn.setEnabled(false)
@@ -1793,15 +2156,14 @@ showSettings = function()
             statusTv.setText(ok and S.ai_mcp_connected or S.ai_mcp_failed)
             statusTv.setTextColor(ok and ColorPrimary or ColorError)
             local feedback = tostring(msg or (ok and S.ai_mcp_connected or S.ai_mcp_failed))
-            if MainActivity and MainActivity.Public then MainActivity.Public.snack(sname .. ": " .. feedback) end
+            print(sname .. ": " .. feedback)
           end)
         end)
       end)
-      row.addView(testBtn)
+      actions.addView(testBtn)
 
-       local delBtn = mcpBtn(S.ai_delete, ColorErrorContainer, ColorOnErrorContainer)
+      local delBtn = mcpBtn(S.ai_delete, ColorErrorContainer, ColorOnErrorContainer)
       local delLp = LinearLayout.LayoutParams(-2, dp(34))
-      delLp.leftMargin = dp(8)
       delBtn.setLayoutParams(delLp)
       delBtn.setOnClickListener(function()
         local compact = {}
@@ -1812,7 +2174,8 @@ showSettings = function()
         MCPClient.refreshToolsAsync()
         renderMcpList()
       end)
-      row.addView(delBtn)
+      actions.addView(delBtn)
+      row.addView(actions)
       mcpList.addView(row)
     end
   end
@@ -1852,17 +2215,21 @@ showSettings = function()
       ScrollView, layout_width = "match", layout_height = "wrap", fillViewport = true,
       form,
     }, inViews)
-    MaterialAlertDialogBuilder(activity)
+    local addDialog = MaterialAlertDialogBuilder(activity)
       .setTitle(S.ai_add_mcp)
       .setView(formContent)
-      .setPositiveButton(S.ai_ok, function()
+      .setPositiveButton(S.ai_ok, nil)
+      .setNegativeButton(S.ai_cancel, nil)
+      .create()
+    addDialog.setOnShowListener(function()
+      local positive = addDialog.getButton(DialogInterface.BUTTON_POSITIVE)
+      if not positive then return end
+      positive.onClick = function()
         local sname = tostring(inViews.nameInput.getText() or ""):gsub("^%s*(.-)%s*$", "%1")
         local surl = tostring(inViews.urlInput.getText() or ""):gsub("^%s*(.-)%s*$", "%1")
         local sheaders = tostring(inViews.headerInput.getText() or "")
         if sname == "" or surl == "" then
-          if MainActivity and MainActivity.Public then
-            MainActivity.Public.snack(S.ai_name_url_required)
-          end
+          print(S.ai_name_url_required)
           return
         end
         local headers = {}
@@ -1870,23 +2237,27 @@ showSettings = function()
           local k, v = line:match("^%s*([^:%s]+)%s*:%s*(.*)%s*$")
           if k then headers[k] = v end
         end
+        local valid = MCPClient.validateServer({ url = surl, headers = headers })
+        if not valid then
+          print(S.ai_mcp_url_invalid)
+          return
+        end
         local servers = MCPClient.getServers()
         servers[#servers + 1] = { name = sname, url = surl, headers = headers }
         MCPClient.setServers(servers)
         MCPClient.refreshToolsAsync()
         renderMcpList()
-      end)
-      .setNegativeButton(S.ai_cancel, nil)
-      .show()
+        addDialog.dismiss()
+      end
+    end)
+    addDialog.show()
   end
 
   local function addPresetServer(name, url)
     local servers = MCPClient.getServers()
     for _, s in ipairs(servers) do
       if tostring(s.name or "") == name then
-        if MainActivity and MainActivity.Public then
-          MainActivity.Public.snack(S.ai_exists:format(name))
-        end
+        print(S.ai_exists:format(name))
         return
       end
     end
@@ -1910,21 +2281,15 @@ showSettings = function()
     .setView(content)
     .setPositiveButton(S.ai_ok, function()
       this.setSharedData("ai_auto_approve", dlgViews.autoApproveSwitch.isChecked() and "1" or "0")
+      this.setSharedData("ai_auto_approve_network", dlgViews.autoApproveNetworkSwitch.isChecked() and "1" or "0")
       this.setSharedData("ai_allow_selfsigned", dlgViews.selfSignedSwitch.isChecked() and "1" or "0")
       local tempVal = tostring(dlgViews.tempInput.getText() or ""):gsub("^%s*(.-)%s*$", "%1")
-      local mtVal = tostring(dlgViews.maxTokensInput.getText() or ""):gsub("^%s*(.-)%s*$", "%1")
-      local ctxVal = tostring(dlgViews.contextInput.getText() or ""):gsub("^%s*(.-)%s*$", "%1")
       local retryVal = tostring(dlgViews.retryInput.getText() or ""):gsub("^%s*(.-)%s*$", "%1")
       local promptVal = tostring(dlgViews.promptInput.getText() or "")
       if tempVal ~= "" then this.setSharedData("ai_temperature", tempVal) end
-      if mtVal ~= "" then this.setSharedData("ai_max_tokens", mtVal) end
-      if ctxVal ~= "" then this.setSharedData("ai_context_length", ctxVal) end
       if retryVal ~= "" then this.setSharedData("ai_retry_count", retryVal) end
       this.setSharedData("ai_system_prompt", promptVal)
-      updateSafetyStatus()
-      if MainActivity and MainActivity.Public then
-        MainActivity.Public.snack(S.ai_settings_saved)
-      end
+      print(S.ai_settings_saved)
     end)
     .setNegativeButton(S.ai_cancel, nil)
     .show()
@@ -2139,8 +2504,14 @@ local function buildManagerRow(conv, index, render)
       .setMessage(S.ai_confirm_delete_conv:format(name))
       .setPositiveButton(S.ai_delete, function()
         invalidateRequest()
-        AgentChat.deleteConversation(index)
-        if AgentChat.getCurrentConvIndex() == 0 then AgentChat.createConversation() end
+        if not AgentChat.deleteConversation(index) then
+          print(S.ai_delete_failed)
+          return
+        end
+        if AgentChat.getCurrentConvIndex() == 0 then
+          local _
+          _, activeConversationIndex = AgentChat.createConversation()
+        end
         messages = {}
         if views.msgContainer then views.msgContainer.removeAllViews() end
         loadHistory()
@@ -2148,7 +2519,7 @@ local function buildManagerRow(conv, index, render)
           local c = AgentChat.getCurrentConv()
           if c then views.aiTitle.setText(convName(c)) end
         end
-        if MainActivity and MainActivity.Public then MainActivity.Public.snack(S.ai_deleted) end
+        print(S.ai_deleted)
         render()
       end)
       .setNegativeButton(S.ai_cancel, nil)
@@ -2169,7 +2540,8 @@ local function showConvList()
     if conv.projectPath == projectPath then visible[#visible + 1] = { index = index, conv = conv } end
   end
   if #visible == 0 then
-    AgentChat.createConversation()
+    local _
+    _, activeConversationIndex = AgentChat.createConversation()
     if views.aiTitle then views.aiTitle.setText(S.ai_new_conv) end
     if updateProjectLabel then updateProjectLabel() end
     return
@@ -2255,6 +2627,7 @@ local function showConvList()
       saveHistory()
       invalidateRequest()
       AgentChat.setCurrentConv(idx)
+      activeConversationIndex = idx
       if AgentChat.syncAgentProjectScope then AgentChat.syncAgentProjectScope() end
       messages = {}
       if views.msgContainer then views.msgContainer.removeAllViews() end
@@ -2273,7 +2646,8 @@ local function showConvList()
   dlgViews.btnNew.onClick = function()
     saveHistory()
     invalidateRequest()
-    AgentChat.createConversation()
+    local _
+    _, activeConversationIndex = AgentChat.createConversation()
     messages = {}
     if views.msgContainer then views.msgContainer.removeAllViews() end
     if views.aiTitle then views.aiTitle.setText(S.ai_new_conv) end
@@ -2362,7 +2736,9 @@ showConvManager = function()
 
   dlgViews.btnNew.onClick = function()
     saveHistory()
-    AgentChat.createConversation()
+    invalidateRequest()
+    local _
+    _, activeConversationIndex = AgentChat.createConversation()
     messages = {}
     if views.msgContainer then views.msgContainer.removeAllViews() end
     if views.aiTitle then views.aiTitle.setText(S.ai_new_conv) end
@@ -2407,18 +2783,47 @@ local function addWelcomeCard(title, body)
         MaterialButton,
         id = "btnWelcomeHelp",
         text = S.ai_agent_help,
-        textSize = "12sp",
         layout_width = "wrap",
-        layout_height = "40dp",
         layout_marginTop = "8dp",
-        includeFontPadding = false,
-         BackgroundTintList = ColorStateList.valueOf(ColorSecondaryContainer),
-         textColor = ColorOnSecondaryContainer,
+      },
+      {
+        LinearLayout,
+        orientation = "horizontal",
+        layout_width = "match",
+        layout_marginTop = "4dp",
+        {
+          MaterialButton,
+          id = "btnWelcomeExplain",
+          text = S.ai_welcome_explain,
+          layout_width = "0dp", layout_weight = 1,
+          layout_marginRight = "4dp",
+        },
+        {
+          MaterialButton,
+          id = "btnWelcomeCheck",
+          text = S.ai_welcome_check,
+          layout_width = "0dp", layout_weight = 1,
+          layout_marginLeft = "4dp",
+        },
       },
     },
   }
   views.msgContainer.addView(loadlayout(welcome, welcomeViews))
   welcomeViews.btnWelcomeHelp.onClick = function() showAgentHelp() end
+  welcomeViews.btnWelcomeExplain.onClick = function()
+    if not (Bean and Bean.Path and Bean.Path.this_file) then
+      print(S.ai_need_open_file)
+    elseif views.msgInput then
+      views.msgInput.setText(S.ai_welcome_explain_prompt)
+      sendMessage()
+    end
+  end
+  welcomeViews.btnWelcomeCheck.onClick = function()
+    if views.msgInput then
+      views.msgInput.setText(S.ai_welcome_check_prompt)
+      sendMessage()
+    end
+  end
 end
 
 local function clearChat()
@@ -2464,6 +2869,15 @@ local function expandSheet(dlg, content)
   end)
 end
 
+local function hideEditorKeyboard()
+  local focused = activity.getCurrentFocus()
+  if not focused then return end
+  pcall(function()
+    local imm = activity.getSystemService("input_method")
+    if imm then imm.hideSoftInputFromWindow(focused.getWindowToken(), 0) end
+  end)
+end
+
 -- ─── 显示聊天面板 ──
 
 function _M.show()
@@ -2474,6 +2888,10 @@ function _M.show()
 
   views = {}
   local content = loadlayout(res.layout.ai_chat_panel, views)
+  -- The editor may still own the IME while its symbol bar is visible. Hide it
+  -- before measuring the full-height sheet so the first expansion uses the
+  -- activity height rather than the keyboard-reduced editor area.
+  hideEditorKeyboard()
 
   -- 后台预取 MCP 工具缓存（避免主线程同步网络请求）
   pcall(function()
@@ -2491,12 +2909,13 @@ function _M.show()
     if window then
       window.getAttributes().gravity = 80  -- Gravity.BOTTOM
       window.setBackgroundDrawableResource(android.R.color.transparent)
+      window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN
+        | WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
     end
   end)
 
-  -- 关闭时保存会话
+  -- 关闭面板只保存会话，不取消后台请求；停止按钮和上下文切换负责取消。
   dialog.setOnDismissListener(function()
-    invalidateRequest()
     saveHistory()
   end)
 
@@ -2512,11 +2931,15 @@ function _M.show()
   if views.btnStop then
     views.btnStop.onClick = function()
       views.btnStop.setEnabled(false)
-      -- 先让当前流回调保存部分响应，再使工具链和续请求的 generation 失效。
+      -- Keep this generation alive until the cancel callback stores partial text.
+      stopRequested = true
+      if activeToolConfirm then activeToolConfirm.cancel() end
       AgentChat.cancelPendingRequest()
-      requestGeneration = requestGeneration + 1
+      if AgentChat.cancelPendingTools then AgentChat.cancelPendingTools() end
+      local stopTool = activeToolStop
+      activeToolStop = nil
+      if stopTool then pcall(stopTool) end
       isLoading = false
-      okHttp.cancelAll()
       hideLoading()
     end
   end
@@ -2531,18 +2954,12 @@ function _M.show()
     views.modelChip.onClick = function() showModelPicker() end
   end
 
-  if views.autoApproveStatus then
-    views.autoApproveStatus.setClickable(true)
-    views.autoApproveStatus.setFocusable(true)
-    views.autoApproveStatus.onClick = function() showSettings() end
-    updateSafetyStatus()
-  end
-
   if views.btnClear then
     views.btnClear.onClick = function()
       invalidateRequest()
       saveHistory()
-      AgentChat.createConversation()
+      local _
+      _, activeConversationIndex = AgentChat.createConversation()
       messages = {}
       if views.msgContainer then views.msgContainer.removeAllViews() end
       if views.aiTitle then views.aiTitle.setText(S.ai_new_conv) end
@@ -2581,7 +2998,7 @@ function _M.show()
   -- 恢复上次会话
   if views.msgContainer then
     views.msgContainer.removeAllViews()  -- 先移除默认欢迎消息
-    local historyCount = loadHistory()
+    local historyCount = loadHistory(not isLoading)
     if historyCount == 0 then
       addWelcomeCard(S.ai_welcome_title, S.ai_welcome_body)
     end
@@ -2592,6 +3009,8 @@ function _M.show()
   end)
   dialog.show()
   expandSheet(dialog, content)
+  if isLoading then showLoading() end
+  if activeStream and activeStream.render then activeStream.render() end
 
   if not AgentChat.hasApiKey() then
     content.post(function()
@@ -2603,8 +3022,11 @@ function _M.show()
 end
 
 function _M.refreshProjectContext()
-  if not dialog or not dialog.isShowing() then return end
+  saveHistory()
   invalidateRequest()
+  messages = {}
+  activeConversationIndex = 0
+  if not dialog or not dialog.isShowing() then return end
   if views.msgContainer then views.msgContainer.removeAllViews() end
   loadHistory()
   local conv = AgentChat.getCurrentConv()
@@ -2616,9 +3038,7 @@ end
 
 function _M.insertCode(code)
   if not mLuaEditor or mLuaEditor.getVisibility() ~= 0 then
-    if MainActivity and MainActivity.Public then
-      MainActivity.Public.snack(S.ai_need_open_file)
-    end
+    print(S.ai_need_open_file)
     return
   end
 
@@ -2628,9 +3048,7 @@ function _M.insertCode(code)
   mLuaEditor.setText(newText)
   mLuaEditor.setSelection(startPos + #code)
 
-  if MainActivity and MainActivity.Public then
-    MainActivity.Public.snack(S.ai_inserted)
-  end
+  print(S.ai_inserted)
 end
 
 return _M

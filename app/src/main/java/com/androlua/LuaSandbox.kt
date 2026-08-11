@@ -38,11 +38,35 @@ object LuaSandbox {
     @JvmStatic
     @Synchronized
     fun run(code: String, timeoutMs: Long): LuaTable {
-        val timeout = timeoutMs.coerceIn(MIN_TIMEOUT_MS, MAX_TIMEOUT_MS)
-        return request(LuaSandboxService.ACTION_RUN, code, timeout).toLuaTable()
+        return run(code, timeoutMs, "")
     }
 
-    private fun request(action: String, code: String, timeout: Long): SandboxResult {
+    /** Runs with newline-delimited HTTPS hosts explicitly authorized by the user. */
+    @JvmStatic
+    @Synchronized
+    fun run(code: String, timeoutMs: Long, allowedHosts: String): LuaTable {
+        val normalizedHosts = try {
+            SandboxHttp.parseAllowedHosts(allowedHosts).joinToString("\n")
+        } catch (failure: Throwable) {
+            return SandboxResult(false, "", failure.message ?: "invalid sandbox HTTP hosts", 0).toLuaTable()
+        }
+        val timeout = timeoutMs.coerceIn(MIN_TIMEOUT_MS, MAX_TIMEOUT_MS)
+        return request(LuaSandboxService.ACTION_RUN, code, timeout, normalizedHosts).toLuaTable()
+    }
+
+    /** Stops the remote sandbox process, including a blocked HTTP call. */
+    @JvmStatic
+    fun cancelPending() {
+        runCatching {
+            LuaApplication.instance.startService(
+                Intent(LuaApplication.instance, LuaSandboxService::class.java).apply {
+                    action = LuaSandboxService.ACTION_CANCEL
+                }
+            )
+        }
+    }
+
+    private fun request(action: String, code: String, timeout: Long, allowedHosts: String = ""): SandboxResult {
         val start = System.currentTimeMillis()
         val deadline = SystemClock.elapsedRealtime() + timeout
         val receiver = SandboxResultReceiver()
@@ -53,6 +77,7 @@ object LuaSandbox {
                     putExtra(LuaSandboxService.KEY_CODE, code)
                     putExtra(LuaSandboxService.KEY_TIMEOUT_MS, timeout)
                     putExtra(LuaSandboxService.KEY_DEADLINE_ELAPSED_MS, deadline)
+                    putExtra(LuaSandboxService.KEY_ALLOWED_HOSTS, allowedHosts)
                     putExtra(LuaSandboxService.KEY_RECEIVER, receiver)
                 }
             )
@@ -110,14 +135,14 @@ internal object SandboxExecution {
     fun checkSyntax(code: String): String? {
         validateCode(code)?.let { return it }
         return try {
-            JsePlatform.sandboxGlobals().load(code, "@agent_sandbox")
+            sandboxGlobals().load(code, "@agent_sandbox")
             null
         } catch (error: Throwable) {
             error.message ?: "syntax error"
         }
     }
 
-    fun run(code: String): SandboxResult {
+    fun run(code: String, allowedHosts: Set<String> = emptySet()): SandboxResult {
         val start = System.currentTimeMillis()
         validateCode(code)?.let { return SandboxResult(false, "", it, elapsedSince(start)) }
 
@@ -126,11 +151,22 @@ internal object SandboxExecution {
         var ok = false
         var error = ""
         try {
-            val globals = JsePlatform.sandboxGlobals()
+            val globals = sandboxGlobals()
+            val httpSession = SandboxHttp.install(globals, allowedHosts)
             globals.standardOutput = stream
             globals.standardError = stream
-            globals.load(code, "@agent_sandbox").call()
-            ok = true
+            try {
+                val returned = globals.load(code, "@agent_sandbox").invoke()
+                if (returned.narg() > 0) {
+                    if (!output.isEmpty()) stream.println()
+                    val values = ArrayList<String>(returned.narg())
+                    for (index in 1..returned.narg()) values.add(SandboxLibraries.inspect(returned.arg(index)))
+                    stream.println("[return] ${values.joinToString(", ")}")
+                }
+                ok = true
+            } finally {
+                httpSession.close()
+            }
         } catch (failure: Throwable) {
             error = SandboxResult.boundError(failure.message ?: "runtime error")
         } finally {
@@ -139,6 +175,8 @@ internal object SandboxExecution {
         }
         return SandboxResult(ok, output.text(), error, elapsedSince(start))
     }
+
+    private fun sandboxGlobals() = JsePlatform.sandboxGlobals().also(SandboxLibraries::install)
 
     private fun validateCode(code: String): String? =
         if (code.toByteArray(StandardCharsets.UTF_8).size > MAX_CODE_BYTES) {
@@ -176,6 +214,8 @@ internal object SandboxExecution {
             val value = buffer.toString(StandardCharsets.UTF_8.name())
             return if (truncated) "$value\n...[output truncated at ${limit / 1024} KiB]" else value
         }
+
+        fun isEmpty(): Boolean = buffer.size() == 0
     }
 }
 

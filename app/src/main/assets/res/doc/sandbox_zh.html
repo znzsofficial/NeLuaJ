@@ -16,7 +16,9 @@
       <ul>
         <li>验证 Lua 语法和小段算法。</li>
         <li>测试 table、string、math、utf8、协程和 <code>bit32</code> 的纯 Lua 逻辑。</li>
-        <li>通过 <code>print(...)</code> 查看计算结果。</li>
+        <li>验证 JSON、Base64、Hex、URL 编解码和 SHA-256 摘要。</li>
+        <li>在明确批准精确主机名后测试公网 HTTPS API。</li>
+        <li>通过 <code>print(...)</code> 或 chunk 返回值查看计算结果。</li>
       </ul>
 
       <h2>可用环境</h2>
@@ -28,17 +30,49 @@ end
 print(total) -- 55
 </code></pre>
 
+      <h3>安全工具</h3>
+      <ul>
+        <li><code>json.encode(value)</code> / <code>json.decode(text)</code>：JSON 编解码；<code>json.null</code> 表示 null，<code>json.array()</code> 可创建或标记空数组。</li>
+        <li><code>codec.base64_encode</code> / <code>base64_decode</code>：Base64 编解码。</li>
+        <li><code>codec.hex_encode</code> / <code>hex_decode</code>：Hex 编解码。</li>
+        <li><code>codec.url_encode</code> / <code>url_decode</code>：UTF-8 URL 表单编码。</li>
+        <li><code>hash.sha256(text)</code>：返回小写十六进制 SHA-256。</li>
+        <li><code>inspect(value)</code>：稳定、带循环保护的 table 展示。</li>
+        <li><code>assert_equal(actual, expected, message)</code>：递归比较值，失败时显示差异。</li>
+        <li><code>http.request(url, options)</code>：受限同步 HTTPS 请求；精确主机名还必须写入工具的 <code>network_hosts</code> 参数并由用户批准。</li>
+      </ul>
+      <pre><code class="language-lua">local value = json.decode('{"items":[1,2,3]}')
+assert_equal(value.items, {1, 2, 3})
+return hash.sha256(json.encode(value))
+</code></pre>
+
+      <h3>受限 HTTPS</h3>
+      <pre><code class="language-lua">local response = http.request("https://api.example.com/items", {
+  method = "POST",
+  headers = { ["Content-Type"] = "application/json" },
+  body = json.encode({ query = "Lua" }),
+  timeout = 4000,
+})
+assert_equal(response.status, 200)
+return json.decode(response.body)
+</code></pre>
+      <p>对应的 <code>run_lua</code> 调用必须包含 <code>network_hosts = {"api.example.com"}</code>。授权只匹配精确主机：批准 <code>example.com</code> 不会同时批准它的子域名。</p>
+      <p>响应 table 包含 <code>ok</code>、<code>status</code>、<code>message</code>、<code>url</code>、<code>headers</code>、保留重复响应头数组的 <code>header_values</code>，以及二进制安全的 <code>body</code>。</p>
+
       <h2>不可用能力</h2>
-      <p>沙盒刻意不提供 Java、Android、文件、网络或进程入口。以下名称不可用：</p>
+      <p>沙盒刻意不提供 Java、Android、文件、不受限网络或进程入口。以下名称不可用：</p>
       <pre><code>luajava  import  require  package  debug
 io  os  dofile  loadfile  collectgarbage
 </code></pre>
-      <p>因此不能在沙盒中访问 <code>activity</code>、调用 Android API、读取工程文件、加载模块、发起 HTTP 请求或执行 shell 命令。需要这些能力时，应修改并在工程正常运行环境中测试相应 Lua 文件，而不是在 AI 沙盒中执行。</p>
+      <p>因此不能在沙盒中访问 <code>activity</code>、调用 Android API、读取工程文件、加载模块、打开任意 socket 或执行 shell 命令。网络仅限 <code>http.request</code> 和用户批准的公网 HTTPS 主机。需要更完整能力时，应修改并在工程正常运行环境中测试相应 Lua 文件。</p>
 
       <h2>输出与限制</h2>
       <ul>
         <li>代码以 UTF-8 计最多 128 KiB。</li>
-        <li><code>print</code> 输出和运行错误会返回给 AI；输出最多 64 KiB，超出部分会标记为截断。</li>
+        <li><code>print</code>、chunk 返回值和运行错误会返回给 AI；输出最多 64 KiB，超出部分会标记为截断。</li>
+        <li>JSON、编码和摘要工具的单次输入或结果最多 1 MiB；JSON 最多 10,000 个节点、嵌套 64 层。</li>
+        <li>HTTP 仅允许 HTTPS 443 端口；每次最多批准 8 个精确主机、发起 4 个请求。重定向、代理、URL 凭据、IP 字面量、localhost、私网/链路本地地址和非公网 DNS 结果都会被拒绝。</li>
+        <li>HTTP 请求体最多 256 KiB，响应体最多 512 KiB，每个请求超时限制为 1–6 秒；不会自动附加 Cookie 或应用凭据。</li>
         <li>执行时间受限。超时时该次运行失败，AI 应改用更小的输入或更高效的算法。</li>
         <li>无限循环或阻塞代码不会继续占用应用主进程；超时后沙盒执行进程会被结束。</li>
       </ul>
@@ -47,7 +81,7 @@ io  os  dofile  loadfile  collectgarbage
       <h3>为什么 <code>require</code> 或 <code>luajava</code> 是 nil？</h3>
       <p>这是沙盒限制，目的是让 AI 执行的临时代码不能访问工程、设备或 Java bridge。将需要验证的纯函数提取为独立代码测试，或在工程环境中运行。</p>
       <h3>为什么没有输出？</h3>
-      <p>只有 <code>print</code> 和运行错误会被捕获。Lua chunk 的返回值不会自动显示，请显式 <code>print(value)</code>。</p>
+      <p><code>print</code> 和 Lua chunk 的返回值都会显示。函数内部的普通返回值不会自动显示，需要从 chunk 返回或显式 <code>print(value)</code>。</p>
       <h3>为什么运行超时？</h3>
       <p>检查是否有无限循环、递归没有终止条件，或输入规模过大。把任务拆小，并避免在沙盒中进行大规模枚举。</p>
     </main>

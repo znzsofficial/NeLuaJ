@@ -17,10 +17,11 @@
         <li>Open a project.</li>
         <li>Open “AI Chat”.</li>
         <li>Tap the model name in the title bar and add a model.</li>
-        <li>Enter an API key, API URL, and model name, then select the model.</li>
+        <li>Enter an API key, API URL, model name, context window, and maximum output, then select the model.</li>
         <li>Enter a task and send it.</li>
       </ol>
-      <p>Set the API URL to the provider's OpenAI-compatible base URL, such as <code>https://api.deepseek.com/v1</code>. Requests use <code>/chat/completions</code> below that URL. Do not put API keys in project files or Skill files.</p>
+      <p>Set the API URL to the provider's OpenAI-compatible base URL, such as <code>https://api.deepseek.com/v1</code>. Models use <code>/chat/completions</code> by default. Enable “Use Responses API” only when the provider explicitly supports it; requests will then use <code>/responses</code>. Do not put API keys in project files or Skill files.</p>
+      <p>Responses API model availability, parameters, and endpoint behavior depend on the provider. Compatible relays may expose the same route without supporting official output-state replay; after switching providers or protocols, the assistant uses portable tool-call history.</p>
 
       <h2>Task Description</h2>
       <p>Include the goal, file paths, constraints, and validation steps:</p>
@@ -28,6 +29,7 @@
 Fix the help-page title refresh while preserving the existing style.
 Explain the changes and check related call sites.</code></pre>
       <p>The assistant follows a read-before-edit workflow. It can read the relevant NeLuaJ+ help documents when an API is unfamiliar.</p>
+      <p>Closing the AI Assistant panel does not stop an active generation or tool chain; reopening it restores the current progress. Use the stop button beside the input area to terminate the task. Switching projects, creating a new conversation, or clearing the conversation cancels the active task.</p>
 
       <h2>File Operations</h2>
       <p>These operations show a confirmation dialog before execution:</p>
@@ -37,12 +39,18 @@ Explain the changes and check related call sites.</code></pre>
         <li>Deleting files</li>
         <li>Applying patches, replacements, and appends</li>
         <li>Renaming files</li>
-        <li>Running Lua code</li>
+        <li>Running Lua code without network hosts</li>
+        <li>Fetching public HTTPS pages or APIs (when “Auto-approve network requests” is disabled)</li>
       </ul>
-      <p>Reading files, listing directories, and searching the project do not require confirmation. Auto-approve applies only to file operations inside the current project. MCP tools and Lua execution still require confirmation.</p>
+      <p>Reading files, listing directories, searching the project, and compile-only Lua syntax checks do not require confirmation. Auto-approve applies only to file operations inside the current project. Purely local Lua execution still requires confirmation.</p>
+      <p>“Auto-approve network requests” is on by default. When enabled, fetches outside the sandbox, sandbox code with <code>network_hosts</code>, and MCP tool calls run directly. When disabled, each of these network calls displays a confirmation dialog. This setting does not affect model API requests, connection tests started by the user, or MCP tool-list refreshes.</p>
 
       <h2>Running Lua Code</h2>
-      <p>Temporary AI code runs in a restricted sandbox, not in the current project's normal Lua environment. It can check pure Lua syntax and algorithms, but cannot access <code>activity</code>, Java/Android APIs, files, networking, <code>require</code>, or <code>luajava</code>. See <a href="sandbox_en.html">AI Lua Sandbox</a> for available libraries, output handling, and timeout limits.</p>
+      <p>The assistant can compile code with the built-in LuaJ++ parser to check syntax without executing it or requiring confirmation. Runtime validation uses a restricted sandbox instead of the current project's normal Lua environment. The sandbox can validate pure Lua algorithms and explicitly approved public HTTPS APIs, but cannot access <code>activity</code>, Java/Android APIs, files, private networks, <code>require</code>, or <code>luajava</code>. See <a href="sandbox_en.html">AI Lua Sandbox</a> for available libraries, network authorization, output handling, and timeout limits.</p>
+
+      <h2>Fetching Network Content</h2>
+      <p>The assistant can read public HTTPS pages, documentation, and textual APIs; per-call confirmation is controlled by “Auto-approve network requests.” This tool only supports <code>GET</code> / <code>HEAD</code>. It accepts no custom request headers, separate credentials, cookies, request body, or self-signed certificate, and it never saves a response to a file automatically. Query parameters already present in the URL are sent as written and are shown in the dialog when auto-approval is disabled.</p>
+      <p>Network reads reject IP literals, localhost, private networks, non-443 ports, and non-HTTPS URLs. Every DNS result must be public. Up to three redirects are allowed, and each target is fully revalidated. Response bodies are limited to text, JSON, XML, or JavaScript and are subject to timeout and size limits. Web content is untrusted data and cannot override user requests or built-in safety rules.</p>
 
       <h2>Command Menu</h2>
       <p>The command button beside the input field provides:</p>
@@ -51,15 +59,16 @@ Explain the changes and check related call sites.</code></pre>
         <li><strong>Undo / redo conversation turn</strong>: change chat history without executing tools again.</li>
         <li><strong>Undo / redo file change</strong>: restore the latest Agent file transaction.</li>
         <li><strong>Switch conversation</strong>: conversations are isolated by project.</li>
-        <li><strong>Settings</strong>: change API, context length, output limits, and approval options.</li>
+        <li><strong>Settings</strong>: change sampling temperature, retries, safety options, additional instructions, and MCP servers. Additional instructions do not replace built-in safety or tool rules.</li>
       </ul>
       <p>File undo checks the file fingerprint and refuses to overwrite externally modified content.</p>
+      <p>The context window and maximum output belong to each model configuration. Switching models switches both limits; values from the previous global settings are migrated to existing models.</p>
 
       <h2>MCP</h2>
-      <p>Add Streamable HTTP MCP servers in Settings. After connecting, the assistant discovers and calls their tools.</p>
+      <p>Add HTTP-based MCP servers in Settings. The assistant prefers current stateless Streamable HTTP and supports older session-based Streamable HTTP and legacy HTTP+SSE. It does not support <code>stdio</code> servers or launch local commands.</p>
       <ul>
         <li>The server URL must be reachable over HTTP or HTTPS.</li>
-        <li>MCP tools operate on external systems and require confirmation.</li>
+        <li>MCP tools operate on external systems and require per-call confirmation when “Auto-approve network requests” is disabled.</li>
         <li>Do not connect untrusted servers or expose API keys in server settings.</li>
         <li>If a server is unavailable, disable or remove it and refresh the tool list.</li>
       </ul>
@@ -112,7 +121,7 @@ Write the Skill rules and review steps here.</code></pre>
 
       <h2>Troubleshooting</h2>
       <h3>No response after sending</h3>
-      <p>Check the API key, API URL, model name, and network connection. You can use the connection test in model settings. Models without tool support are automatically requested in text-only mode.</p>
+      <p>Check the API key, API URL, model name, Chat Completions / Responses selection, and network connection. You can use the connection test in model settings. The coding Agent requires structured tool calling from both the model and provider; unsupported models may return an API error or provide text only.</p>
       <h3>Context compression did not change anything</h3>
       <p>Compression needs at least two separable groups of history. With very little conversation there is no older content to summarize.</p>
       <h3>File undo failed</h3>

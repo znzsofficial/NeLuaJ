@@ -77,14 +77,6 @@ end)
 okHttp.post("https://api.example.com/data", "key=value", function(code, body)
 end)
 
--- 流式请求（SSE，适合 ChatGPT 等）
-okHttp.postJsonStream(url, body, headers, function(data)
-  -- 每行 data: JSON 回调
-  print(data)
-end, function(error, errorBody)
-  -- 流结束，error 非空表示失败
-end)
-
 -- 使用 Http 类
 Http.get("https://api.example.com/data", function(code, body)
 end)

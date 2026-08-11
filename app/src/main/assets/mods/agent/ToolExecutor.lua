@@ -2,6 +2,8 @@
 --- 具体文件算法通过 configure 注入，避免执行层依赖 AgentChat 的全局状态。
 local _M = {}
 local config
+local activeJob
+local activeToolName
 
 local aliases = {
   read = "read_file", readfile = "read_file", file_read = "read_file",
@@ -17,6 +19,8 @@ local aliases = {
   env = "get_env_info", environment = "get_env_info", env_info = "get_env_info", system_info = "get_env_info",
   run = "run_lua", execute = "run_lua", eval = "run_lua", run_lua_code = "run_lua",
   execute_code = "run_lua", run_code = "run_lua",
+  check_syntax = "check_lua_syntax", syntax_check = "check_lua_syntax",
+  fetch = "fetch_url", web_fetch = "fetch_url", read_url = "fetch_url", http_get = "fetch_url",
 }
 
 function _M.configure(options)
@@ -70,6 +74,7 @@ function _M.normalizeToolName(name, args)
     if args.patch then name = "apply_patch"
     elseif args.old and args.path then name = "replace_in_file"
     elseif args.code then name = "run_lua"
+    elseif args.url then name = "fetch_url"
     elseif args.pattern then name = "search_in_files"
     elseif args.paths then name = "read_files"
     elseif args.path and args.new_path then name = "rename_file"
@@ -93,7 +98,7 @@ function _M.executeTool(name, args)
   end
   local platformExecute = requireConfig().platformExecute
   if not platformExecute then return "工具平台执行器未配置: " .. tostring(name) end
-  local changes = requireConfig().changeSet
+  local changes = _M.isDestructiveTool(name) and requireConfig().changeSet or nil
   if args and args.__agent_scope and requireConfig().getProjectScope
       and args.__agent_scope ~= requireConfig().getProjectScope() then
     return "项目已切换，文件操作未执行"
@@ -125,24 +130,30 @@ function _M.executeToolAsync(name, args, onResult)
       if onResult then onResult("找不到 MCP 服务器: " .. ns) end
       return
     end
-    requireConfig().callMcpToolAsync(server, tool, args, function(ok, text)
+    local job
+    job = requireConfig().callMcpToolAsync(server, tool, args, function(ok, text)
+      if activeJob == job then activeJob = nil; activeToolName = nil end
       if not onResult then return end
       if ok then onResult(text)
       else onResult("MCP 工具调用失败: " .. tostring(text or "未知错误")) end
     end)
-    return
+    activeJob = job
+    activeToolName = job and name or nil
+    return job
   end
   if not onResult then return end
   args = freezeFileArgs(name, args)
-  -- 文件和沙盒工具也必须离开 UI 线程；xTask 的完成回调回到主线程。
+  -- 文件、网络和沙盒工具也必须离开 UI 线程；xTask 的完成回调回到主线程。
+  local job
   local okLaunch = pcall(function()
-    xTask(
+    job = xTask(
       function()
         local ok, result = pcall(_M.executeTool, name, args)
         if ok then return { ok = true, result = result } end
         return { ok = false, result = tostring(result) }
       end,
       function(result)
+        if activeJob == job then activeJob = nil; activeToolName = nil end
         if type(result) == "table" then
           onResult(result.ok and result.result or "工具执行异常: " .. tostring(result.result))
         else
@@ -153,6 +164,26 @@ function _M.executeToolAsync(name, args, onResult)
     )
   end)
   if not okLaunch then onResult("无法启动后台工具任务") end
+  if okLaunch then activeJob = job; activeToolName = job and name or nil end
+  return job
+end
+
+function _M.cancelPending()
+  local job = activeJob
+  local name = activeToolName
+  activeJob = nil
+  activeToolName = nil
+  if not job then return false end
+  if job then pcall(function() job.cancel() end) end
+  local cfg = requireConfig()
+  if (name:match("^mcp::") or name:match("^mcp__")) and cfg.cancelMcpCalls then
+    pcall(cfg.cancelMcpCalls)
+  elseif name == "fetch_url" and cfg.cancelFetch then
+    pcall(cfg.cancelFetch)
+  elseif (name == "run_lua" or name == "check_lua_syntax") and cfg.cancelSandbox then
+    pcall(cfg.cancelSandbox)
+  end
+  return true
 end
 
 function _M.isDestructiveTool(name)
@@ -183,20 +214,63 @@ end
 
 local function allPathsInProject(name, args)
   args = args or {}
+  local function readPathAllowed(path)
+    if _M.isInProjectDir(path) then return true end
+    local trusted = requireConfig().isTrustedReadPath
+    return trusted and trusted(path) == true or false
+  end
   if name == "read_files" then
     local paths = args.paths
     if type(paths) == "string" then paths = { paths } end
     if type(paths) ~= "table" or #paths == 0 then return false end
-    for _, path in ipairs(paths) do if not _M.isInProjectDir(path) then return false end end
+    for _, path in ipairs(paths) do if not readPathAllowed(path) then return false end end
     return true
   end
+  if name == "read_file" then return readPathAllowed(args.path or "") end
   return _M.isInProjectDir(args.path or "")
+end
+
+function _M.normalizeNetworkHosts(value)
+  if value == nil then return {} end
+  if type(value) == "string" then
+    local host = value:match("^%s*(.-)%s*$")
+    return host ~= "" and { host } or {}
+  end
+  if type(value) ~= "table" then return nil, "network_hosts 必须是字符串数组" end
+  local count = 0
+  for key, host in pairs(value) do
+    if type(key) ~= "number" or key < 1 or key % 1 ~= 0 or type(host) ~= "string" then
+      return nil, "network_hosts 必须是连续的字符串数组"
+    end
+    count = count + 1
+  end
+  local hosts = {}
+  for index = 1, count do
+    local host = value[index]
+    if type(host) ~= "string" then return nil, "network_hosts 必须是连续的字符串数组" end
+    host = host:match("^%s*(.-)%s*$")
+    if host ~= "" then hosts[#hosts + 1] = host end
+  end
+  return hosts
+end
+
+local function isNetworkRequest(name, args)
+  if name:match("^mcp::") or name:match("^mcp__") or name == "fetch_url" then return true end
+  if name ~= "run_lua" then return false end
+  local hosts = _M.normalizeNetworkHosts(args and (args.network_hosts or args.networkHosts))
+  return hosts and #hosts > 0 or false
+end
+
+local function autoApprovesNetworkRequests()
+  return requireConfig().getSharedData("ai_auto_approve_network", "1") == "1"
 end
 
 function _M.requiresConfirmation(name, args)
   name = _M.normalizeToolName(name, args)
+  if isNetworkRequest(name, args) and autoApprovesNetworkRequests() then return false end
   if name:match("^mcp::") or name:match("^mcp__") then return true end
   if _M.isDestructiveTool(name) then return true end
+  if name == "fetch_url" then return true end
   if name == "read_file" or name == "read_files" or name == "list_dir" or name == "search_in_files" then
     return not allPathsInProject(name, args)
   end
@@ -205,8 +279,9 @@ end
 
 function _M.shouldAutoApprove(name, args)
   name = _M.normalizeToolName(name, args)
+  if isNetworkRequest(name, args) and autoApprovesNetworkRequests() then return true end
   if name:match("^mcp::") or name:match("^mcp__") then return false end
-  if name == "get_env_info" then return true end
+  if name == "get_env_info" or name == "check_lua_syntax" then return true end
   if name == "read_file" or name == "read_files" or name == "list_dir" or name == "search_in_files" then
     return allPathsInProject(name, args)
   end

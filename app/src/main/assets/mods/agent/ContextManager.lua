@@ -59,12 +59,19 @@ function _M.estimateTokens(text)
 end
 
 function _M.estimateMessageTokens(message)
-  local cost = _M.estimateTokens(message and message.content)
+  local portableCost = _M.estimateTokens(message and message.content)
   if message and message.tool_calls then
     local ok, encoded = pcall(json.encode, message.tool_calls)
-    if ok then cost = cost + _M.estimateTokens(encoded) end
+    if ok then portableCost = portableCost + _M.estimateTokens(encoded) end
   end
-  return cost
+  if message and message.reasoning_content then
+    portableCost = portableCost + _M.estimateTokens(message.reasoning_content)
+  end
+  if message and message.response_output then
+    local ok, encoded = pcall(json.encode, message.response_output)
+    if ok then return math.max(portableCost, _M.estimateTokens(encoded)) end
+  end
+  return portableCost
 end
 
 function _M.getContextBudget()
@@ -76,6 +83,9 @@ local function copyMessage(src)
   if src.content ~= nil then copy.content = src.content end
   if src.tool_calls ~= nil then copy.tool_calls = src.tool_calls end
   if src.tool_call_id ~= nil then copy.tool_call_id = src.tool_call_id end
+  if src.reasoning_content ~= nil then copy.reasoning_content = src.reasoning_content end
+  if src.response_output ~= nil then copy.response_output = src.response_output end
+  if src.response_origin ~= nil then copy.response_origin = src.response_origin end
   if src.name ~= nil then copy.name = src.name end
   return copy
 end

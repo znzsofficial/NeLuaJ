@@ -62,19 +62,6 @@ end)
 <pre><code class="language-lua">okHttp.postJson(url, body, headers, function(code, body, response)
 end)
 </code></pre>
-<h3>okHttp.postJsonStream</h3>
-<p>SSE 流式请求，逐行回调 <code>data:</code> 行的 JSON 内容。适用于 ChatGPT 等流式 API。</p>
-<p>错误时 <code>onDone</code> 第一个参数为错误消息，第二个参数为响应体。</p>
-<pre><code class="language-lua">okHttp.postJsonStream(url, body, headers, function(data)
-  -- onChunk: 每行 SSE data JSON 字符串
-  local decoded = json.decode(data)
-  local text = decoded.choices[1].delta.content
-  if text then print(text) end
-end, function(error, errorBody)
-  -- onDone: 流结束，error 非空表示失败
-  if error then print("错误:", error, errorBody) end
-end)
-</code></pre>
     </main>
   </body>
 </html>

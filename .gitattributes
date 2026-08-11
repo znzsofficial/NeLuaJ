@@ -1,2 +1,15 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# Keep repository text deterministic across Windows and Unix.
+* text=auto eol=lf
+
+# Windows command scripts require CRLF in some environments.
+*.bat text eol=crlf
+
+# Never run binary assets through text normalization.
+*.dex binary
+*.gif binary
+*.jar binary
+*.jpeg binary
+*.jpg binary
+*.png binary
+*.ttf binary
+*.zip binary

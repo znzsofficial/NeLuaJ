@@ -8,12 +8,12 @@ end
 _M.updateDir = function(path)
   Bean.Path.this_dir = path
   pcall(function()
-    local AgentChat = require "mods.agent.AgentChat"
-    if AgentChat.syncAgentProjectScope then AgentChat.syncAgentProjectScope() end
-  end)
-  pcall(function()
     local ChatUI = require "mods.agent.ChatUI"
     if ChatUI.refreshProjectContext then ChatUI.refreshProjectContext() end
+  end)
+  pcall(function()
+    local AgentChat = require "mods.agent.AgentChat"
+    if AgentChat.syncAgentProjectScope then AgentChat.syncAgentProjectScope() end
   end)
 end
 

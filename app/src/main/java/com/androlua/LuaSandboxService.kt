@@ -20,6 +20,10 @@ class LuaSandboxService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val action = intent?.action
+        if (action == ACTION_CANCEL) {
+            Process.killProcess(Process.myPid())
+            return START_NOT_STICKY
+        }
         val code = intent?.getStringExtra(KEY_CODE)
         val timeout = intent?.getLongExtra(KEY_TIMEOUT_MS, DEFAULT_TIMEOUT_MS)
             ?.coerceIn(MIN_TIMEOUT_MS, MAX_TIMEOUT_MS)
@@ -28,6 +32,7 @@ class LuaSandboxService : Service() {
             KEY_DEADLINE_ELAPSED_MS,
             SystemClock.elapsedRealtime() + timeout
         ) ?: SystemClock.elapsedRealtime() + timeout
+        val allowedHosts = intent?.getStringExtra(KEY_ALLOWED_HOSTS).orEmpty()
         @Suppress("DEPRECATION")
         val receiver = intent?.getParcelableExtra<ResultReceiver>(KEY_RECEIVER)
 
@@ -38,7 +43,7 @@ class LuaSandboxService : Service() {
         }
 
         worker.execute {
-            val result = execute(code, deadline, action)
+            val result = execute(code, deadline, action, allowedHosts)
             receiver.send(0, result.toBundle())
             stopSelf(startId)
         }
@@ -50,7 +55,7 @@ class LuaSandboxService : Service() {
         super.onDestroy()
     }
 
-    private fun execute(code: String, deadline: Long, action: String): SandboxResult {
+    private fun execute(code: String, deadline: Long, action: String, allowedHosts: String): SandboxResult {
         val start = System.currentTimeMillis()
         val remaining = deadline - SystemClock.elapsedRealtime()
         if (remaining <= 0) {
@@ -65,7 +70,7 @@ class LuaSandboxService : Service() {
 
         return try {
             val result = if (action == ACTION_RUN) {
-                SandboxExecution.run(code)
+                SandboxExecution.run(code, SandboxHttp.parseAllowedHosts(allowedHosts))
             } else {
                 val error = SandboxExecution.checkSyntax(code)
                 SandboxResult(error == null, "", error.orEmpty(), System.currentTimeMillis() - start)
@@ -94,9 +99,11 @@ class LuaSandboxService : Service() {
     companion object {
         const val ACTION_RUN = "com.androlua.action.RUN_LUA_SANDBOX"
         const val ACTION_CHECK_SYNTAX = "com.androlua.action.CHECK_LUA_SANDBOX_SYNTAX"
+        const val ACTION_CANCEL = "com.androlua.action.CANCEL_LUA_SANDBOX"
         const val KEY_CODE = "code"
         const val KEY_TIMEOUT_MS = "timeoutMs"
         const val KEY_DEADLINE_ELAPSED_MS = "deadlineElapsedMs"
+        const val KEY_ALLOWED_HOSTS = "allowedHosts"
         const val KEY_RECEIVER = "receiver"
         const val KEY_OK = "ok"
         const val KEY_OUTPUT = "output"

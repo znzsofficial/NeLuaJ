@@ -16,7 +16,9 @@
       <ul>
         <li>Check Lua syntax and small algorithms.</li>
         <li>Test pure Lua logic using table, string, math, utf8, coroutines, and <code>bit32</code>.</li>
-        <li>Inspect calculation results with <code>print(...)</code>.</li>
+        <li>Validate JSON, Base64, Hex, URL encoding, and SHA-256 digests.</li>
+        <li>Test a public HTTPS API after explicitly approving its exact host.</li>
+        <li>Inspect results with <code>print(...)</code> or chunk return values.</li>
       </ul>
 
       <h2>Available Environment</h2>
@@ -28,17 +30,49 @@ end
 print(total) -- 55
 </code></pre>
 
+      <h3>Safe Utilities</h3>
+      <ul>
+        <li><code>json.encode(value)</code> / <code>json.decode(text)</code>: JSON encoding and decoding; use <code>json.null</code> for null and <code>json.array()</code> to create or mark an empty array.</li>
+        <li><code>codec.base64_encode</code> / <code>base64_decode</code>: Base64 encoding and decoding.</li>
+        <li><code>codec.hex_encode</code> / <code>hex_decode</code>: Hex encoding and decoding.</li>
+        <li><code>codec.url_encode</code> / <code>url_decode</code>: UTF-8 URL form encoding.</li>
+        <li><code>hash.sha256(text)</code>: lowercase hexadecimal SHA-256.</li>
+        <li><code>inspect(value)</code>: stable table formatting with cycle protection.</li>
+        <li><code>assert_equal(actual, expected, message)</code>: recursive equality with a readable failure diff.</li>
+        <li><code>http.request(url, options)</code>: restricted synchronous HTTPS request. The exact host must also be listed in the tool's <code>network_hosts</code> argument and approved by the user.</li>
+      </ul>
+      <pre><code class="language-lua">local value = json.decode('{"items":[1,2,3]}')
+assert_equal(value.items, {1, 2, 3})
+return hash.sha256(json.encode(value))
+</code></pre>
+
+      <h3>Restricted HTTPS</h3>
+      <pre><code class="language-lua">local response = http.request("https://api.example.com/items", {
+  method = "POST",
+  headers = { ["Content-Type"] = "application/json" },
+  body = json.encode({ query = "Lua" }),
+  timeout = 4000,
+})
+assert_equal(response.status, 200)
+return json.decode(response.body)
+</code></pre>
+      <p>The corresponding <code>run_lua</code> call must include <code>network_hosts = {"api.example.com"}</code>. Authorization is exact-host only: approving <code>example.com</code> does not approve its subdomains.</p>
+      <p>The response table contains <code>ok</code>, <code>status</code>, <code>message</code>, <code>url</code>, <code>headers</code>, <code>header_values</code> (arrays preserving repeated headers), and binary-safe <code>body</code>.</p>
+
       <h2>Unavailable Capabilities</h2>
-      <p>The sandbox intentionally has no Java, Android, file, network, or process entry points. These names are unavailable:</p>
+      <p>The sandbox intentionally has no Java, Android, file, unrestricted network, or process entry points. These names are unavailable:</p>
       <pre><code>luajava  import  require  package  debug
 io  os  dofile  loadfile  collectgarbage
 </code></pre>
-      <p>You cannot access <code>activity</code>, call Android APIs, read project files, load modules, make HTTP requests, or execute shell commands there. For those tasks, edit and test the relevant Lua file in the normal project runtime instead.</p>
+      <p>You cannot access <code>activity</code>, call Android APIs, read project files, load modules, open arbitrary sockets, or execute shell commands there. Network access is limited to <code>http.request</code> and user-approved public HTTPS hosts. For broader capabilities, edit and test the relevant Lua file in the normal project runtime instead.</p>
 
       <h2>Output and Limits</h2>
       <ul>
         <li>UTF-8 source is limited to 128 KiB.</li>
-        <li><code>print</code> output and runtime errors are returned to the AI. Output is limited to 64 KiB and is marked when truncated.</li>
+        <li><code>print</code> output, chunk return values, and runtime errors are returned to the AI. Output is limited to 64 KiB and is marked when truncated.</li>
+        <li>JSON, codec, and digest inputs or results are limited to 1 MiB per operation. JSON is limited to 10,000 nodes and 64 nesting levels.</li>
+        <li>HTTP is limited to HTTPS port 443, eight exact approved hosts, and four requests per run. Redirects, proxies, URL credentials, IP literals, localhost, private/link-local addresses, and non-public DNS results are rejected.</li>
+        <li>HTTP request bodies are limited to 256 KiB, response bodies to 512 KiB, and per-request timeouts to 1–6 seconds. Cookies and application credentials are never added automatically.</li>
         <li>Execution is time-limited. A timed-out run fails; use smaller inputs or a more efficient algorithm.</li>
         <li>An infinite loop or blocked run does not remain in the app process. The sandbox execution process is ended after timeout.</li>
       </ul>
@@ -47,7 +81,7 @@ io  os  dofile  loadfile  collectgarbage
       <h3>Why are <code>require</code> and <code>luajava</code> nil?</h3>
       <p>This is intentional. Temporary AI code cannot access the project, device, or Java bridge. Test an extracted pure function, or run the code from the normal project environment.</p>
       <h3>Why is there no output?</h3>
-      <p>Only <code>print</code> output and runtime errors are captured. Chunk return values are not shown automatically, so use <code>print(value)</code>.</p>
+      <p>Both <code>print</code> output and Lua chunk return values are shown. Ordinary values returned inside a function are not shown unless the chunk returns or prints them.</p>
       <h3>Why did execution time out?</h3>
       <p>Check for an infinite loop, recursion without a terminating condition, or overly large input. Split the work and avoid large enumerations in the sandbox.</p>
     </main>
