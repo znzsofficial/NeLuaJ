@@ -2,6 +2,7 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <queries>
+        <package android:name="com.nekolaska.Builder" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
         </intent>

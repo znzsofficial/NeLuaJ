@@ -393,12 +393,6 @@ return {
         -- ── 关于 ──
         sectionTitle(res.string.about, "info"),
         card(
-            settingItem("AiApiKeyItem", res.string.ai_api_key, res.string.ai_api_key_desc, "ic_build"),
-            divider(),
-            settingItem("AiApiUrlItem", res.string.ai_api_url, res.string.ai_api_url_desc, "sync"),
-            divider(),
-            settingItem("AiModelItem", res.string.ai_model, res.string.ai_model_desc, "code"),
-            divider(),
             settingItem("AboutItem", "NeLuaJ+", this.getVersionName("unknown"), "info"),
             divider(),
             settingItem("CopyrightItem", res.string.copyright_title, res.string.copyright, "menu_book")

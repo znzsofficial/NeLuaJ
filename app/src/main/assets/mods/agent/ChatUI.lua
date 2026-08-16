@@ -70,6 +70,12 @@ local function isPanelVisible()
   return dialog and dialog.isShowing()
 end
 
+local function updateModelLabel()
+  if not views.modelLabel then return end
+  local name = AgentChat.getCurrentModelName()
+  views.modelLabel.setText(name ~= "" and name or S.ai_add_model)
+end
+
 local function isToolError(toolName, result)
   if not result then return false end
   local r = tostring(result):lower()
@@ -1654,7 +1660,7 @@ local function showModelEditor(existingIndex, existingName, existingUrl, existin
         local newIndex = AgentChat.addModel(name, url, key, model, responses, contextLength, maxTokens)
         AgentChat.setCurrentModel(newIndex)
       end
-      if views.modelLabel then views.modelLabel.setText(AgentChat.getCurrentModelName()) end
+      updateModelLabel()
       print(S.ai_saved)
       showModelPicker()  -- 刷新列表
     end)
@@ -1700,7 +1706,7 @@ showModelManager = function()
         .setNegativeButton(S.ai_delete, function()
           AgentChat.removeModel(which + 1)
           print(S.ai_deleted_name:format(m.name))
-          if views.modelLabel then views.modelLabel.setText(AgentChat.getCurrentModelName()) end
+          updateModelLabel()
           showModelManager()
         end)
         .setNeutralButton(S.ai_cancel, nil)
@@ -1736,7 +1742,7 @@ showModelPicker = function()
         showModelEditor()
       else
         AgentChat.setCurrentModel(which + 1)
-        if views.modelLabel then views.modelLabel.setText(AgentChat.getCurrentModelName()) end
+        updateModelLabel()
         print(S.ai_switched_to:format(models[which + 1].name))
       end
     end)
@@ -2977,9 +2983,7 @@ function _M.show()
   if updateProjectLabel then updateProjectLabel() end
 
   -- 更新模型标签
-  if views.modelLabel then
-    views.modelLabel.setText(AgentChat.getCurrentModelName())
-  end
+  updateModelLabel()
 
   if views.msgInput then
     pcall(function()

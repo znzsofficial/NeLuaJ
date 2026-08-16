@@ -1311,16 +1311,31 @@ end
 
 -- ─── 配置读写 ──
 
-local function getApiKey()
+local function getLegacyApiKey()
   return this.getSharedData("ai_api_key", "")
 end
 
-local function getApiUrl()
+local function getLegacyApiUrl()
   return this.getSharedData("ai_api_url", "https://api.deepseek.com/v1")
 end
 
-local function getModel()
+local function getLegacyModel()
   return this.getSharedData("ai_model", "deepseek-v4-flash")
+end
+
+local function getApiKey()
+  local current = _M.getCurrentModelConfig and _M.getCurrentModelConfig()
+  return current and tostring(current.key or "") or ""
+end
+
+local function getApiUrl()
+  local current = _M.getCurrentModelConfig and _M.getCurrentModelConfig()
+  return current and tostring(current.url or "") or ""
+end
+
+local function getModel()
+  local current = _M.getCurrentModelConfig and _M.getCurrentModelConfig()
+  return current and tostring(current.model or "") or ""
 end
 
 local function getTemperature()
@@ -1384,9 +1399,6 @@ function _M.hasApiKey()
   return getApiKey() ~= ""
 end
 
-function _M.setApiKey(key) this.setSharedData("ai_api_key", key) end
-function _M.setApiUrl(url) this.setSharedData("ai_api_url", url) end
-function _M.setModel(model) this.setSharedData("ai_model", model) end
 function _M.getApiKey() return getApiKey() end
 function _M.getApiUrl() return getApiUrl() end
 function _M.getModel() return getModel() end
@@ -1402,8 +1414,9 @@ function _M.loadModels()
   local raw = this.getSharedData(MODELS_KEY, "")
   if raw == "" then
     -- 迁移旧版单模型到多模型列表
-    local key = getApiKey()
+    local key = getLegacyApiKey()
     if key ~= "" then
+      local model = getLegacyModel()
       local contextLength, maxTokens = normalizeModelLimits(
         this.getSharedData("ai_context_length", "30000"),
         this.getSharedData("ai_max_tokens", "4096"),
@@ -1411,7 +1424,7 @@ function _M.loadModels()
         DEFAULT_MAX_TOKENS
       )
       modelsCache = { {
-        name = _M.getModel(), url = getApiUrl(), key = key, model = _M.getModel(), responses = false,
+        name = model, url = getLegacyApiUrl(), key = key, model = model, responses = false,
         contextLength = contextLength,
         maxTokens = maxTokens,
       } }
@@ -1468,15 +1481,10 @@ function _M.getCurrentModelIndex()
 end
 
 function _M.setCurrentModel(index)
-  this.setSharedData(MODEL_INDEX_KEY, tostring(index))
   local models = _M.loadModels()
-  if index >= 1 and index <= #models then
-    local m = models[index]
-    _M.setApiKey(m.key)
-    _M.setApiUrl(m.url)
-    _M.setModel(m.model)
-    this.setSharedData("ai_use_responses", m.responses == true and "1" or "0")
-  end
+  if #models == 0 then index = 0
+  elseif index < 1 or index > #models then index = 1 end
+  this.setSharedData(MODEL_INDEX_KEY, tostring(index))
 end
 
 function _M.getCurrentModelName()
@@ -1485,7 +1493,7 @@ function _M.getCurrentModelName()
   if idx >= 1 and idx <= #models then
     return models[idx].name
   end
-  return _M.getModel()
+  return ""
 end
 
 function _M.getCurrentModelConfig()
@@ -1552,22 +1560,6 @@ function _M.removeModel(index)
   end
   return false
 end
-
--- 初始化：确保当前模型设置生效
-local function initCurrentModel()
-  local models = _M.loadModels()
-  if #models > 0 then
-    local idx = _M.getCurrentModelIndex()
-    if idx >= 1 and idx <= #models then
-      local m = models[idx]
-      _M.setApiKey(m.key)
-      _M.setApiUrl(m.url)
-      _M.setModel(m.model)
-      this.setSharedData("ai_use_responses", m.responses == true and "1" or "0")
-    end
-  end
-end
-initCurrentModel()
 
 -- ─── 多会话管理 ──
 

@@ -4,6 +4,8 @@ import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.AttributeSet;
+import android.view.MotionEvent;
+import android.view.ViewParent;
 import android.widget.TextView;
 
 import com.google.android.material.tabs.TabLayout;
@@ -34,6 +36,21 @@ public class LuaFileTabView extends TabLayout {
 
     public void addFileTabListener(FileTabInterface fileTabInterface) {
         this.fileTabInterface = fileTabInterface;
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent event) {
+        ViewParent parent = getParent();
+        if (parent != null && event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+            parent.requestDisallowInterceptTouchEvent(true);
+        }
+
+        boolean handled = super.dispatchTouchEvent(event);
+        if (parent != null && (event.getActionMasked() == MotionEvent.ACTION_UP
+                || event.getActionMasked() == MotionEvent.ACTION_CANCEL)) {
+            parent.requestDisallowInterceptTouchEvent(false);
+        }
+        return handled;
     }
 
     public void setDirectPath(String path) {

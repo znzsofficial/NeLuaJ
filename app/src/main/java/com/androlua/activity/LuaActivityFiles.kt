@@ -11,19 +11,22 @@ import com.androlua.LuaActivity
 import org.luaj.LuaClosure
 import org.luaj.LuaError
 import org.luaj.LuaFunction
+import org.luaj.LuaTable
+import org.luaj.LuaValue
 import org.luaj.compiler.DumpState
 import org.luaj.lib.jse.JsePlatform
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
-import java.io.IOException
 import java.io.InputStream
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.Files
+import java.nio.file.FileAlreadyExistsException
+import java.nio.file.StandardCopyOption
 
 class LuaActivityFiles(private val activity: LuaActivity) {
-    
-    private val dumpGlobals by lazy { JsePlatform.standardGlobals() }
-    
+
     fun findResource(name: String): InputStream? {
         try {
             val file = File(name)
@@ -180,24 +183,120 @@ class LuaActivityFiles(private val activity: LuaActivity) {
             )
         }.getOrNull()
     
-    private fun getByteArray(path: String?): ByteArray {
-        val closure = dumpGlobals.loadfile(path).checkfunction(1) as LuaClosure
-        val stream = ByteArrayOutputStream()
+    fun dumpFile(input: String?, output: String?): LuaTable =
+        LuaBytecodeCompiler.compile(input, output).toLuaTable()
+}
+
+internal data class LuaBytecodeCompileResult(
+    val ok: Boolean,
+    val output: String,
+    val error: String = "",
+    val line: Int? = null
+) {
+    fun toLuaTable() = LuaTable().apply {
+        set("ok", LuaValue.valueOf(ok))
+        set("output", LuaValue.valueOf(output))
+        set("error", LuaValue.valueOf(error))
+        line?.takeIf { it > 0 }?.let { set("line", LuaValue.valueOf(it)) }
+    }
+}
+
+internal object LuaBytecodeCompiler {
+    private val globals by lazy { JsePlatform.standardGlobals() }
+    private val syntaxError = Regex("(\\d+):\\s*syntax error:\\s*([^\\r\\n]*)", RegexOption.IGNORE_CASE)
+
+    @Synchronized
+    fun compile(inputPath: String?, outputPath: String?): LuaBytecodeCompileResult {
+        if (inputPath.isNullOrBlank() || outputPath.isNullOrBlank()) {
+            return LuaBytecodeCompileResult(false, outputPath.orEmpty(), "Input or output path is empty")
+        }
+
+        val input = File(inputPath)
+        val output = File(outputPath)
+        if (!input.isFile) {
+            return LuaBytecodeCompileResult(false, output.absolutePath, "Source file does not exist: ${input.absolutePath}")
+        }
+        if (input.canonicalFile == output.canonicalFile) {
+            return LuaBytecodeCompileResult(false, output.absolutePath, "Output path must differ from source path")
+        }
+
+        val bytecode = try {
+            compileBytecode(input.absolutePath)
+        } catch (error: Exception) {
+            val diagnostic = diagnostic(error)
+            return LuaBytecodeCompileResult(false, output.absolutePath, diagnostic.first, diagnostic.second)
+        }
+
+        val parent = output.absoluteFile.parentFile
+            ?: return LuaBytecodeCompileResult(false, output.absolutePath, "Output directory is unavailable")
+        if (!parent.exists() && !parent.mkdirs()) {
+            return LuaBytecodeCompileResult(false, output.absolutePath, "Cannot create output directory: ${parent.absolutePath}")
+        }
+
+        val temp = File(parent, ".luac-${System.nanoTime()}.tmp")
         return try {
-            DumpState.dump(closure.c, stream, true)
-            stream.toByteArray()
-        } catch (e: Exception) {
-            throw LuaError(e)
+            FileOutputStream(temp).use { stream ->
+                stream.write(bytecode)
+                stream.fd.sync()
+            }
+            replaceOutput(temp, output)
+            LuaBytecodeCompileResult(true, output.absolutePath)
+        } catch (error: Exception) {
+            LuaBytecodeCompileResult(
+                false,
+                output.absolutePath,
+                error.message?.trim().orEmpty().ifEmpty { error.javaClass.simpleName }
+            )
+        } finally {
+            temp.delete()
         }
     }
-    
-    fun dumpFile(input: String?, output: String?) {
-        try {
-            val fos = FileOutputStream(output)
-            fos.write(getByteArray(input))
-            fos.close()
-        } catch (e: IOException) {
-            activity.sendError("dumpFile", e)
+
+    private fun compileBytecode(path: String): ByteArray {
+        val closure = globals.loadfile(path).checkfunction(1) as LuaClosure
+        return ByteArrayOutputStream().use { stream ->
+            try {
+                DumpState.dump(closure.c, stream, true)
+                stream.toByteArray()
+            } catch (error: Exception) {
+                throw LuaError(error)
+            }
         }
+    }
+
+    private fun replaceOutput(temp: File, output: File) {
+        try {
+            Files.move(
+                temp.toPath(),
+                output.toPath(),
+                StandardCopyOption.ATOMIC_MOVE,
+                StandardCopyOption.REPLACE_EXISTING
+            )
+        } catch (_: AtomicMoveNotSupportedException) {
+            Files.move(temp.toPath(), output.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        } catch (_: UnsupportedOperationException) {
+            Files.move(temp.toPath(), output.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        } catch (_: FileAlreadyExistsException) {
+            Files.move(temp.toPath(), output.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        }
+    }
+
+    private fun diagnostic(error: Throwable): Pair<String, Int?> {
+        val messages = generateSequence(error) { it.cause }
+            .mapNotNull { it.message?.trim() }
+            .filter { it.isNotEmpty() }
+            .toList()
+        for (message in messages.asReversed()) {
+            val match = syntaxError.find(message) ?: continue
+            val line = match.groupValues[1].toIntOrNull()
+            val detail = match.groupValues[2].trim().ifEmpty { "syntax error" }
+            return detail to line
+        }
+        val message = messages.lastOrNull()
+            ?.substringBefore("\nstack traceback:")
+            ?.replace(Regex("^org\\.luaj\\.[\\w.$]+:\\s*"), "")
+            ?.trim()
+            .orEmpty()
+        return message.ifEmpty { error.javaClass.simpleName } to null
     }
 }

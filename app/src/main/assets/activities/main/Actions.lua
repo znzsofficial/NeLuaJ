@@ -1,5 +1,7 @@
 --- 主界面菜单 / 功能栏动作
 import "java.io.File"
+import "android.content.Intent"
+import "android.content.ComponentName"
 import "android.animation.AnimatorSet"
 import "android.animation.ObjectAnimator"
 import "com.google.android.material.dialog.MaterialAlertDialogBuilder"
@@ -18,8 +20,21 @@ local GONE = 8
 
 local Actions = {}
 
+local BUILDER_PACKAGE = "com.nekolaska.Builder"
+local BUILDER_ACTIVITY = "com.nekolaska.MainActivity"
+local BUILDER_OPEN_PROJECT = "com.nekolaska.Builder.action.OPEN_PROJECT"
+local BUILDER_PROJECT_PATH = "com.nekolaska.Builder.extra.PROJECT_PATH"
+
 local function snack(msg)
   MainActivity.Public.snack(msg)
+end
+
+local function showCompileResult(title, message)
+  MaterialAlertDialogBuilder(activity)
+    .setTitle(title)
+    .setMessage(message)
+    .setPositiveButton(android.R.string.ok, nil)
+    .show()
 end
 
 local function requireOpenFile()
@@ -118,8 +133,28 @@ end
 function Actions.compileCurrentFile()
   if not requireOpenFile() then return end
   local path = Bean.Path.this_file
-  this.dumpFile(path, path .. "c")
-  MainActivity.RecyclerView.update()
+  local saved = EditorUtil.save()
+  if saved ~= true and saved ~= "same" then
+    showCompileResult(res.string.compile_failed, res.string.compile_save_failed)
+    return
+  end
+
+  local output = path .. "c"
+  local called, result = pcall(function() return this.dumpFile(path, output) end)
+  if called and result and result.ok then
+    MainActivity.RecyclerView.update()
+    showCompileResult(res.string.compile_success, res.string.compile_output:format(output))
+    return
+  end
+
+  local message = called and result and tostring(result.error or "") or ""
+  if message == "" then message = res.string.compile_failed end
+  local line = called and result and tonumber(result.line)
+  if line and line > 0 then
+    pcall(function() mLuaEditor.gotoLine(line) end)
+    message = res.string.compile_error_line:format(line, message)
+  end
+  showCompileResult(res.string.compile_failed, message)
 end
 
 function Actions.showSearchBar()
@@ -177,7 +212,41 @@ function Actions.openJavaAnalysis()
 end
 
 function Actions.openBuild()
-  if not this.startPackage("com.nekolaska.Builder") then
+  if Bean.Project.this_project == "" then
+    snack(res.string.noProject)
+    return
+  end
+
+  local projectDir = Bean.Path.app_root_pro_dir .. "/" .. Bean.Project.this_project
+  local project = File(projectDir)
+  if not project.isDirectory() then
+    snack(res.string.noProject)
+    return
+  end
+  if not File(projectDir .. "/init.lua").isFile() then
+    snack(res.string.project_no_init)
+    return
+  end
+
+  if Bean.Path.this_file ~= "" then
+    local saveCalled, saved = pcall(EditorUtil.save)
+    if not saveCalled or (saved ~= true and saved ~= "same") then
+      snack(res.string.save_fail)
+      return
+    end
+  end
+  local projectPath = projectDir
+  pcall(function() projectPath = tostring(project.getCanonicalPath()) end)
+
+  local intent = Intent()
+  intent.setComponent(ComponentName(BUILDER_PACKAGE, BUILDER_ACTIVITY))
+  intent.setAction(BUILDER_OPEN_PROJECT)
+  intent.putExtra(BUILDER_PROJECT_PATH, projectPath)
+  intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+  intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+
+  local launched = pcall(function() this.startActivity(intent) end)
+  if not launched then
     snack(res.string.no_builder)
   end
 end

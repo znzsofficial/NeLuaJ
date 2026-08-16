@@ -69,7 +69,7 @@ return {
       layout_marginRight = "8dp",
       {
         MaterialTextView,
-        id = "modelLabel", text = "gpt-4o-mini",
+        id = "modelLabel", text = res.string.ai_add_model,
         textSize = "11sp", textColor = ColorPrimary,
         padding = "6dp", paddingLeft = "10dp", paddingRight = "10dp",
         maxLines = 1, ellipsize = "end", maxWidth = "112dp",
