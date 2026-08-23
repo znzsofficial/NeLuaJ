@@ -458,6 +458,7 @@ function _M.init()
                 mCodeMinimap.syncVisibleRangeFromEditor(true)
             end
         end
+        return false
     end)
 
     thread(function(mLuaEditor, bindClass)

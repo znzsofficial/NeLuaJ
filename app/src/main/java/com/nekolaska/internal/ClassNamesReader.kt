@@ -20,20 +20,20 @@ class ClassNamesReader(private val context: Context) {
      */
     val preloadedClasses: List<String> by lazy {
         val preloadedClassesFile = File("/system/etc/preloaded-classes")
-        if (!preloadedClassesFile.exists() || !preloadedClassesFile.canRead()) {
-            supplements.toList() // 如果文件不存在，只返回补充列表
-        }
-
-        try {
-            val classNames = preloadedClassesFile.useLines { lines ->
-                lines.map { it.trim() }
-                    .filter { it.isNotEmpty() && !it.startsWith("#") }
-                    .toSet() // 先转为 Set 去重
+        if (!preloadedClassesFile.canRead()) {
+            supplements.toList()
+        } else {
+            try {
+                val classNames = preloadedClassesFile.useLines { lines ->
+                    lines.map { it.trim() }
+                        .filter { it.isNotEmpty() && !it.startsWith("#") }
+                        .toSet()
+                }
+                (classNames + supplements).toList()
+            } catch (e: IOException) {
+                e.printStackTrace()
+                supplements.toList()
             }
-            (classNames + supplements).toList() // 合并并转为 List
-        } catch (e: IOException) {
-            e.printStackTrace()
-            supplements.toList() // 出现异常时，同样只返回补充列表
         }
     }
 

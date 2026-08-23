@@ -7,6 +7,7 @@
 | [LuaLayout.md](./LuaLayout.md) | 表驱动布局 `loadlayout`：解析、专用键、拆分结构、性能与后续 |
 | [LuaActivity.md](./LuaActivity.md) | Lua 宿主 Activity：Globals 注入、生命周期、日志、辅助类、后续 |
 | [AIAgent.md](./AIAgent.md) | 内置 AI 助手：入口、配置键、自动重试、MCP、工具确认、i18n |
+| [BuilderHandoff.md](./BuilderHandoff.md) | 打开 NeLuaJ-Builder 的跨应用协议、发送前检查和同步约束 |
 | [LuaJRuntime.md](./LuaJRuntime.md) | LuaJ JSE：桥接缓存、动态 ClassLoader、Globals、沙盒与 IO 维护约束 |
 
 相关代码入口：

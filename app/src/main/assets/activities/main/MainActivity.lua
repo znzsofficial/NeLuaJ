@@ -246,6 +246,10 @@ end
 
 function onDestroy()
   Init.stopCheck()
+  pcall(function()
+    local MagnifierManager = require "mods.utils.MagnifierManager"
+    MagnifierManager.destroy()
+  end)
 end
 
 function onOptionsItemSelected(item)

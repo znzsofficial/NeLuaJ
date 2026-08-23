@@ -50,7 +50,7 @@ Based on code analysis, NeLuaJ+ offers these core capabilities:
 - Android SDK 33+
 
 ### Building the Project
-If you want to package releases with the builder, visit: [NeLuaJ-Builder](https://github.com/znzsofficial/NeLuaJ-Builder)
+If you want to package releases with the builder, visit: [NeLuaJ-Builder](https://github.com/znzsofficial/NeLuaJ-Builder). The IDE handoff protocol is documented in [docs/BuilderHandoff.md](./docs/BuilderHandoff.md).
 
 1.  **Clone Repository**
     ```bash

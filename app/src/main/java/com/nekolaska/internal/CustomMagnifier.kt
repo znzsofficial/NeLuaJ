@@ -1,82 +1,82 @@
 package com.nekolaska.internal
 
-import android.app.Activity
 import android.graphics.Bitmap
-import android.graphics.Rect
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.PorterDuff
 import android.os.Handler
 import android.os.Looper
-import android.view.PixelCopy
 import android.view.View
 import android.view.ViewGroup
-import android.view.Window
 import android.widget.FrameLayout
 import android.widget.ImageView
 import androidx.appcompat.widget.AppCompatImageView
 import androidx.cardview.widget.CardView
-import androidx.core.util.TypedValueCompat
 import androidx.core.graphics.createBitmap
+import androidx.core.util.TypedValueCompat
 
 class CustomMagnifier(private val sourceView: View) {
     private val context = sourceView.context
     private val displayMetrics = context.resources.displayMetrics
     private val mainHandler = Handler(Looper.getMainLooper())
-
-    // The window is required for PixelCopy
-    private val window: Window? = (context as Activity).window
-    // UI Elements
-    private val magnifierCard: CardView
-    private val magnifierImage: AppCompatImageView
-
-    // The root view to which the magnifier will be added as an overlay.
     private val parentView = sourceView.rootView as? ViewGroup
+        ?: throw IllegalStateException("The source view is not attached to a window.")
 
-    // Properties
-    private var lastBitmap: Bitmap? = null
+    private val magnifierImage = AppCompatImageView(context).apply {
+        scaleType = ImageView.ScaleType.FIT_XY
+        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+    }
+    private val magnifierCard: CardView
+    private val copyRunnable = Runnable {
+        copyScheduled = false
+        if (!destroyed && magnifierCard.visibility == View.VISIBLE) copyContent()
+    }
+
+    private var copyBitmap: Bitmap? = null
     private var lastSourceCenterX = 0f
     private var lastSourceCenterY = 0f
+    private var copyScheduled = false
+    private var destroyed = false
 
-    // Configurable dimensions and style
     var zoom: Float = 1.25f
+        set(value) {
+            field = value.coerceAtLeast(1f)
+        }
     var cornerRadius: Float
         get() = magnifierCard.radius
         set(value) {
             magnifierCard.radius = value
         }
+
+    fun setCornerRadius(radius: Float): CustomMagnifier {
+        magnifierCard.radius = radius
+        return this
+    }
+
     var elevationInDp: Float = 4.0f
         set(value) {
             field = value
-            magnifierCard.cardElevation = TypedValueCompat.dpToPx(value,displayMetrics)
+            magnifierCard.cardElevation = TypedValueCompat.dpToPx(value, displayMetrics)
         }
 
-    private var magnifierWidth = TypedValueCompat.dpToPx(100.0f,displayMetrics)
-    private var magnifierHeight = TypedValueCompat.dpToPx(48.0f,displayMetrics)
-    private var verticalOffset = TypedValueCompat.dpToPx(-42.0f,displayMetrics)
+    private var magnifierWidth = TypedValueCompat.dpToPx(130.0f, displayMetrics)
+    private var magnifierHeight = TypedValueCompat.dpToPx(56.0f, displayMetrics)
+    private var verticalOffset = TypedValueCompat.dpToPx(-52.0f, displayMetrics)
 
     init {
-        // Fail fast if the magnifier cannot be created.
-        if (window == null) {
-            throw IllegalStateException("The source view's context is not an Activity or it has no window.")
-        }
-        if (parentView == null) {
-            throw IllegalStateException("The source view is not attached to a window, or its root view is not a ViewGroup.")
-        }
-
-        magnifierImage = AppCompatImageView(context).apply {
-            scaleType = ImageView.ScaleType.FIT_XY
-        }
-
         magnifierCard = CardView(context).apply {
             layoutParams = FrameLayout.LayoutParams(
                 magnifierWidth.toInt(),
                 magnifierHeight.toInt()
             )
-            radius = TypedValueCompat.dpToPx(16f,displayMetrics) // Default corner radius
-            cardElevation = TypedValueCompat.dpToPx(elevationInDp,displayMetrics)
+            radius = TypedValueCompat.dpToPx(16f, displayMetrics)
+            cardElevation = TypedValueCompat.dpToPx(elevationInDp, displayMetrics)
             visibility = View.GONE
+            isClickable = false
+            isFocusable = false
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             addView(magnifierImage)
         }
-
-        // Add the magnifier to the top-level container
         parentView.addView(magnifierCard)
     }
 
@@ -87,78 +87,115 @@ class CustomMagnifier(private val sourceView: View) {
         destinationX: Float = sourceX,
         destinationY: Float = sourceY + verticalOffset
     ) {
-        if (parentView == null) return
+        if (destroyed) return
 
         lastSourceCenterX = sourceX
         lastSourceCenterY = sourceY
 
         val location = IntArray(2)
         sourceView.getLocationInWindow(location)
+        val parentLocation = IntArray(2)
+        parentView.getLocationInWindow(parentLocation)
+        val relX = location[0] - parentLocation[0]
+        val relY = location[1] - parentLocation[1]
 
-        val cardX = (location[0] + destinationX - magnifierWidth / 2.0f).coerceIn(0f, (parentView.width - magnifierWidth))
-        val cardY = (location[1] + destinationY - magnifierHeight / 2.0f).coerceIn(0f, (parentView.height - magnifierHeight))
+        val maxX = (parentView.width - magnifierWidth).coerceAtLeast(0f)
+        val maxY = (parentView.height - magnifierHeight).coerceAtLeast(0f)
+        magnifierCard.x = (relX + destinationX - magnifierWidth / 2.0f).coerceIn(0f, maxX)
+        magnifierCard.y = (relY + destinationY - magnifierHeight / 2.0f).coerceIn(0f, maxY)
 
-        magnifierCard.x = cardX
-        magnifierCard.y = cardY
-
-        if (magnifierCard.visibility != View.VISIBLE) {
+        val isFirstShow = magnifierCard.visibility != View.VISIBLE
+        if (isFirstShow) {
             magnifierCard.visibility = View.VISIBLE
+            copyContent()
+        } else {
+            scheduleCopy()
         }
-        update()
     }
 
     fun dismiss() {
+        if (destroyed) return
         magnifierCard.visibility = View.GONE
-        lastBitmap?.recycle()
-        lastBitmap = null
+        mainHandler.removeCallbacks(copyRunnable)
+        copyScheduled = false
     }
 
-    fun setDimensions(width: Float, height: Float) {
-        magnifierWidth = width
-        magnifierHeight = height
-        magnifierCard.layoutParams.width = width.toInt()
-        magnifierCard.layoutParams.height = height.toInt()
+    fun setDimensions(width: Float, height: Float): CustomMagnifier {
+        magnifierWidth = width.coerceAtLeast(1f)
+        magnifierHeight = height.coerceAtLeast(1f)
+        magnifierCard.layoutParams.width = magnifierWidth.toInt()
+        magnifierCard.layoutParams.height = magnifierHeight.toInt()
         magnifierCard.requestLayout()
+        recycleBitmap()
+        if (magnifierCard.visibility == View.VISIBLE) copyContent()
+        return this
     }
 
-    private fun update() {
-        // If window is null, we cannot perform the copy.
-        // The init block should prevent this, but it's good practice to check.
-        val window = this.window ?: return
+    fun destroy() {
+        if (destroyed) return
+        destroyed = true
+        dismiss()
+        magnifierImage.setImageDrawable(null)
+        recycleBitmap()
+        (magnifierCard.parent as? ViewGroup)?.removeView(magnifierCard)
+    }
 
-        val srcWidth = (magnifierWidth / zoom)
-        val srcHeight = (magnifierHeight / zoom)
+    private fun scheduleCopy() {
+        if (copyScheduled) return
+        copyScheduled = true
+        mainHandler.postDelayed(copyRunnable, COPY_INTERVAL_MS)
+    }
 
-        val srcLeft = lastSourceCenterX - srcWidth / 2f
-        val srcTop = lastSourceCenterY - srcHeight / 2f
+    private fun copyContent() {
+        val viewWidth = sourceView.width
+        val viewHeight = sourceView.height
+        val outWidth = magnifierWidth.toInt().coerceAtLeast(1)
+        val outHeight = magnifierHeight.toInt().coerceAtLeast(1)
+        if (viewWidth <= 0 || viewHeight <= 0) return
 
-        val viewLocation = IntArray(2)
-        sourceView.getLocationInWindow(viewLocation)
+        val srcWidth = (magnifierWidth / zoom).coerceIn(1f, viewWidth.toFloat())
+        val srcHeight = (magnifierHeight / zoom).coerceIn(1f, viewHeight.toFloat())
+        val left = (lastSourceCenterX - srcWidth / 2f)
+            .coerceIn(0f, (viewWidth - srcWidth).coerceAtLeast(0f))
+        val top = (lastSourceCenterY - srcHeight / 2f)
+            .coerceIn(0f, (viewHeight - srcHeight).coerceAtLeast(0f))
 
-        val srcRect = Rect(
-            (viewLocation[0] + srcLeft).toInt(),
-            (viewLocation[1] + srcTop).toInt(),
-            (viewLocation[0] + srcLeft + srcWidth).toInt(),
-            (viewLocation[1] + srcTop + srcHeight).toInt()
-        )
+        val bitmap = obtainBitmap(outWidth, outHeight)
+        val canvas = Canvas(bitmap)
+        canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
+        canvas.save()
+        canvas.scale(outWidth / srcWidth, outHeight / srcHeight)
+        canvas.translate(-left, -top)
+        sourceView.draw(canvas)
+        canvas.restore()
 
-        // Ensure source rectangle has a non-zero size
-        if (srcRect.width() <= 0 || srcRect.height() <= 0) {
-            return
+        if (magnifierImage.drawable == null) {
+            magnifierImage.setImageBitmap(bitmap)
+        } else {
+            magnifierImage.invalidate()
         }
+    }
 
-        val bitmap = createBitmap(srcRect.width(), srcRect.height())
+    private fun obtainBitmap(width: Int, height: Int): Bitmap {
+        val current = copyBitmap
+        if (current != null &&
+            !current.isRecycled &&
+            current.width == width &&
+            current.height == height
+        ) {
+            return current
+        }
+        recycleBitmap()
+        return createBitmap(width, height).also { copyBitmap = it }
+    }
 
-        PixelCopy.request(window, srcRect, bitmap, { result ->
-            if (result == PixelCopy.SUCCESS) {
-                mainHandler.post {
-                    lastBitmap?.recycle()
-                    lastBitmap = bitmap
-                    magnifierImage.setImageBitmap(lastBitmap)
-                }
-            } else {
-                bitmap.recycle()
-            }
-        }, mainHandler)
+    private fun recycleBitmap() {
+        magnifierImage.setImageDrawable(null)
+        copyBitmap?.recycle()
+        copyBitmap = null
+    }
+
+    companion object {
+        private const val COPY_INTERVAL_MS = 16L
     }
 }

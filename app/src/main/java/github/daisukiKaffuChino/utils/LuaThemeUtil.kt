@@ -3,7 +3,6 @@ package github.daisukiKaffuChino.utils
 import android.content.Context
 import android.util.TypedValue
 import androidx.annotation.AttrRes
-import androidx.appcompat.view.ContextThemeWrapper
 import com.google.android.material.color.MaterialColors
 
 /**
@@ -31,10 +30,7 @@ class LuaThemeUtil(private val context: Context) {
 
     //region Helper Methods
     private fun getMaterialColor(@AttrRes attrResId: Int): Int {
-        // The last parameter is a "tag" used for error logging by the Material library.
-        return MaterialColors.getColor(
-            ContextThemeWrapper(context, context.theme), attrResId, "LuaThemeUtil"
-        )
+        return MaterialColors.getColor(context, attrResId, "LuaThemeUtil")
     }
 
     private fun resolveSystemColor(@AttrRes attrResId: Int): Int {

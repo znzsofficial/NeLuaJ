@@ -45,6 +45,7 @@ import org.luaj.Varargs
 import org.luaj.lib.VarArgFunction
 import org.luaj.lib.jse.CoerceLuaToJava
 import java.util.Locale
+import androidx.core.graphics.drawable.toDrawable
 
 fun LuaValue.toView(): View = this.touserdata(View::class.java)
 
@@ -57,7 +58,6 @@ fun LuaValue.toView(): View = this.touserdata(View::class.java)
  */
 class LuaLayout(private val initialContext: Context) {
     private val dm = initialContext.resources.displayMetrics
-    private val views = HashMap<String, LuaValue>()
     private val ids = HashMap<String, Int>()
     private val luaValueContext: LuaValue = initialContext.toLuaInstance()
     private val luaContext = luaValueContext.touserdata(LuaContext::class.java)
@@ -69,14 +69,13 @@ class LuaLayout(private val initialContext: Context) {
     private val srcLoader = LayoutSrcLoader(initialContext, luaContext)
 
     val id: Map<String, Int> get() = ids
-    val view: Map<String, LuaValue> get() = views
+    val view: Map<String, LuaValue>
+        field = HashMap<String, LuaValue>()
 
     fun type(): Int = LuaValue.TUSERDATA
     fun typename(): String = "LuaLayout"
-    fun get(key: LuaValue): LuaValue? = views[key.asString()]
-    fun get(key: String): LuaValue? = views[key]
-
-    fun parseColor(colorString: String): Int = values.parseColor(colorString)
+    fun get(key: LuaValue): LuaValue? = view[key.asString()]
+    fun get(key: String): LuaValue? = view[key]
 
     private fun getOrGenerateId(idString: String): Int =
         ids.getOrPut(idString) { View.generateViewId() }
@@ -140,7 +139,7 @@ class LuaLayout(private val initialContext: Context) {
                         val value = next.secondArg()
                         box.accept(keyString, value)
                         applyAttribute(
-                            keyString, value, view, viewClass, env, lp, key
+                            keyString, value, view, env, lp, key
                         )
                     }
                 } catch (e: LuaError) {
@@ -291,7 +290,6 @@ class LuaLayout(private val initialContext: Context) {
         keyString: String,
         rawValue: LuaValue,
         view: LuaValue,
-        viewClass: LuaValue,
         env: LuaTable,
         params: LuaValue,
         key: LuaValue
@@ -313,7 +311,7 @@ class LuaLayout(private val initialContext: Context) {
                 } catch (_: Exception) {
                     view["id"] = viewId
                 }
-                views[name] = view
+                this.view[name] = view
                 env[tValue] = view
                 return
             }
@@ -640,9 +638,7 @@ class LuaLayout(private val initialContext: Context) {
                         val bmp = tValue.touserdata(Bitmap::class.java) as Bitmap
                         view.jset(
                             "background",
-                            android.graphics.drawable.BitmapDrawable(
-                                initialContext.resources, bmp
-                            )
+                            bmp.toDrawable(initialContext.resources)
                         )
                     }
                     tValue.isnumber() ->
@@ -849,32 +845,11 @@ class LuaLayout(private val initialContext: Context) {
             if (inner != null && inner !== viewObj) {
                 if (tryApplyJavaProperty(inner, keyString, tValue, rawValue)) return
                 if (LayoutReflection.canSetJavaProperty(inner.javaClass, keyString)) {
-                    try {
-                        if (tValue.type() == LuaValue.TSTRING) {
-                            tValue = values.toValue(tValue.asString(), keyString).toLuaValue()
-                        }
-                        view[key] = tValue
-                        return
-                    } catch (_: Exception) {
-                        when (keyString) {
-                            "enabled" -> {
-                                inner.isEnabled = values.toBoolean(rawValue)
-                                return
-                            }
-                            "selected" -> {
-                                inner.isSelected = values.toBoolean(rawValue)
-                                return
-                            }
-                            "clickable" -> {
-                                inner.isClickable = values.toBoolean(rawValue)
-                                return
-                            }
-                            "focusable" -> {
-                                inner.isFocusable = values.toBoolean(rawValue)
-                                return
-                            }
-                        }
+                    if (tValue.type() == LuaValue.TSTRING) {
+                        tValue = values.toValue(tValue.asString(), keyString).toLuaValue()
                     }
+                    view[key] = tValue
+                    return
                 }
             }
             val setterHint = LayoutReflection.setterName(keyString)
@@ -915,25 +890,6 @@ class LuaLayout(private val initialContext: Context) {
                 return LayoutReflection.trySetJavaValue(host, keyString, d.toFloat())
             }
             tValue.isstring() -> {
-                // 常见 View 布尔字符串（canSet 已通过）
-                when (keyString) {
-                    "enabled" -> {
-                        host.isEnabled = values.toBoolean(rawValue)
-                        return true
-                    }
-                    "selected" -> {
-                        host.isSelected = values.toBoolean(rawValue)
-                        return true
-                    }
-                    "clickable" -> {
-                        host.isClickable = values.toBoolean(rawValue)
-                        return true
-                    }
-                    "focusable" -> {
-                        host.isFocusable = values.toBoolean(rawValue)
-                        return true
-                    }
-                }
                 val javaVal = values.toValue(tValue.asString(), keyString) ?: return false
                 return LayoutReflection.trySetJavaValue(host, keyString, javaVal)
             }

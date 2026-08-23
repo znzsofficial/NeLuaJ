@@ -133,9 +133,9 @@ class AsyncOkHttp(
 
     private fun Call.enqueueWithCallback(callback: LuaFunction) =
         enqueue(object : okhttp3.Callback {
-            override fun onFailure(call: Call, error: java.io.IOException) {
+            override fun onFailure(call: Call, e: java.io.IOException) {
                 context.runOnUiThread {
-                    runCatching { callback.call(error.message) }
+                    runCatching { callback.call(e.message) }
                         .onFailure { context.sendMsg("网络请求失败，回调发生异常：${it.message}") }
                 }
             }
