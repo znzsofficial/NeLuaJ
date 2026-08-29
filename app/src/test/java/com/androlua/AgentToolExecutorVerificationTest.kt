@@ -47,6 +47,7 @@ class AgentToolExecutorVerificationTest {
         globals.load(
             """
             local networkAutoApprove = "1"
+            local sandboxAutoRun = nil
             ToolExecutor.configure({
               canonicalPath = function(path)
                 if path:sub(1, 1) == "/" then return path end
@@ -63,6 +64,9 @@ class AgentToolExecutorVerificationTest {
               end,
               getSharedData = function(key, defaultValue)
                 if key == "ai_auto_approve_network" then return networkAutoApprove end
+                if key == "ai_auto_run_sandbox" and sandboxAutoRun ~= nil then
+                  return sandboxAutoRun
+                end
                 return defaultValue or "0"
               end,
             })
@@ -121,14 +125,14 @@ class AgentToolExecutorVerificationTest {
             assert(not ToolExecutor.requiresConfirmation("fetch_url", fetch))
             assert(ToolExecutor.shouldAutoApprove("run_lua", networkedLua))
             assert(not ToolExecutor.requiresConfirmation("run_lua", networkedLua))
-            assert(not ToolExecutor.shouldAutoApprove("run_lua", localLua))
-            assert(ToolExecutor.requiresConfirmation("run_lua", localLua))
-            assert(not ToolExecutor.shouldAutoApprove("run_lua", malformedNetworkedLua))
-            assert(ToolExecutor.requiresConfirmation("run_lua", malformedNetworkedLua))
-            assert(not ToolExecutor.shouldAutoApprove("run_lua", sparseNetworkedLua))
-            assert(ToolExecutor.requiresConfirmation("run_lua", sparseNetworkedLua))
-            assert(not ToolExecutor.shouldAutoApprove("run_lua", blankNetworkedLua))
-            assert(ToolExecutor.requiresConfirmation("run_lua", blankNetworkedLua))
+            assert(ToolExecutor.shouldAutoApprove("run_lua", localLua))
+            assert(not ToolExecutor.requiresConfirmation("run_lua", localLua))
+            assert(ToolExecutor.shouldAutoApprove("run_lua", malformedNetworkedLua))
+            assert(not ToolExecutor.requiresConfirmation("run_lua", malformedNetworkedLua))
+            assert(ToolExecutor.shouldAutoApprove("run_lua", sparseNetworkedLua))
+            assert(not ToolExecutor.requiresConfirmation("run_lua", sparseNetworkedLua))
+            assert(ToolExecutor.shouldAutoApprove("run_lua", blankNetworkedLua))
+            assert(not ToolExecutor.requiresConfirmation("run_lua", blankNetworkedLua))
             assert(ToolExecutor.shouldAutoApprove(mcp, {}))
             assert(not ToolExecutor.requiresConfirmation(mcp, {}))
 
@@ -137,8 +141,17 @@ class AgentToolExecutorVerificationTest {
             assert(ToolExecutor.requiresConfirmation("fetch_url", fetch))
             assert(not ToolExecutor.shouldAutoApprove("run_lua", networkedLua))
             assert(ToolExecutor.requiresConfirmation("run_lua", networkedLua))
+            assert(ToolExecutor.shouldAutoApprove("run_lua", localLua))
+            assert(not ToolExecutor.requiresConfirmation("run_lua", localLua))
             assert(not ToolExecutor.shouldAutoApprove(mcp, {}))
             assert(ToolExecutor.requiresConfirmation(mcp, {}))
+
+            sandboxAutoRun = "0"
+            networkAutoApprove = "1"
+            assert(not ToolExecutor.shouldAutoApprove("run_lua", localLua))
+            assert(ToolExecutor.requiresConfirmation("run_lua", localLua))
+            assert(not ToolExecutor.shouldAutoApprove("run_lua", networkedLua))
+            assert(ToolExecutor.requiresConfirmation("run_lua", networkedLua))
             """.trimIndent(),
             "@trusted_doc_policy_test"
         ).call()

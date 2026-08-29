@@ -87,7 +87,7 @@ public class LuaMultiAdapter extends BaseAdapter {
     public int getItemViewType(int position) {
         try {
             int t = mData.get(position + 1).get("__type").toint() - 1;
-            return t < 0 ? 0 : t;
+            return Math.max(t, 0);
         } catch (Exception e) {
             e.printStackTrace();
             return 0;
@@ -186,7 +186,7 @@ public class LuaMultiAdapter extends BaseAdapter {
         View view = null;
         LuaTable holder = null;
         int t = mData.get(position + 1).get("__type").toint();
-        t = t < 1 ? 1 : t;
+        t = Math.max(t, 1);
         if (convertView == null) {
             try {
                 LuaValue layout = mLayout.get(t);

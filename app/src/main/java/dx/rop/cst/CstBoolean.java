@@ -88,7 +88,7 @@ public final class CstBoolean
 
     /** {@inheritDoc} */
     public String toHuman() {
-        return getValue() ? "true" : "false";
+        return Boolean.toString(getValue());
     }
 
     /**

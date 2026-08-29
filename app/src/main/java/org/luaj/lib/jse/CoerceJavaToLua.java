@@ -6,7 +6,6 @@
 
 package org.luaj.lib.jse;
 
-import org.luaj.LuaBoolean;
 import org.luaj.LuaDouble;
 import org.luaj.LuaInteger;
 import org.luaj.LuaString;

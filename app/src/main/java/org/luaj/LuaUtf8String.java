@@ -85,7 +85,7 @@ public class LuaUtf8String extends LuaValue {
             }
             value = (value * i) + digit;
         }
-        return Long.valueOf(negative ? -value : value);
+        return negative ? -value : value;
     }
 
     private double b(int i, int i2) {
@@ -114,11 +114,9 @@ public class LuaUtf8String extends LuaValue {
             }
         }
         int[] iArr = new int[i2 - i];
-        for (int i6 = i; i6 < i2; i6++) {
-            iArr[i6 - i] = this.c[i6];
-        }
+        System.arraycopy(this.c, i, iArr, 0, iArr.length);
         try {
-            return Double.parseDouble(new String(iArr, i, i2));
+            return Double.parseDouble(new String(iArr, 0, iArr.length));
         } catch (Exception unused) {
             return Double.NaN;
         }
@@ -162,7 +160,7 @@ public class LuaUtf8String extends LuaValue {
             if (digit < 0 || digit >= base) return null;
             value = value * base + digit;
         }
-        return Long.valueOf(negative ? -value : value);
+        return negative ? -value : value;
     }
 
     public static boolean equals(LuaUtf8String luaUtf8String, int i, LuaUtf8String luaUtf8String2, int i2, int i3) {
@@ -823,12 +821,12 @@ public class LuaUtf8String extends LuaValue {
 
     public LuaValue tointeger() {
         Long e = e();
-        return e == null ? LuaValue.NIL : LuaValue.valueOf(e.longValue());
+        return e == null ? LuaValue.NIL : LuaValue.valueOf(e);
     }
 
     public LuaValue tointeger(int i) {
         Long a = a(i);
-        return a == null ? LuaValue.NIL : LuaValue.valueOf(a.longValue());
+        return a == null ? LuaValue.NIL : LuaValue.valueOf(a);
     }
 
     public String tojstring() {

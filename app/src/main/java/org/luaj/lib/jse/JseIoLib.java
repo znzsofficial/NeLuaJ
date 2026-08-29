@@ -1,6 +1,5 @@
 package org.luaj.lib.jse;
 
-import org.luaj.Globals;
 import org.luaj.LuaError;
 import org.luaj.LuaString;
 import org.luaj.lib.IoLib;

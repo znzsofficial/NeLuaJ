@@ -9,7 +9,7 @@ internal data class ResponsesToolCall(
 )
 
 internal fun keepExistingWhenBlank(existing: String, incoming: String): String =
-    if (incoming.isEmpty()) existing else incoming
+    incoming.ifEmpty { existing }
 
 /**
  * Correlates Responses SSE fragments without depending on Android's org.json

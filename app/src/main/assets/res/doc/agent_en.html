@@ -39,11 +39,11 @@ Explain the changes and check related call sites.</code></pre>
         <li>Deleting files</li>
         <li>Applying patches, replacements, and appends</li>
         <li>Renaming files</li>
-        <li>Running Lua code without network hosts</li>
+        <li>Running Lua sandbox code (when “Auto-run sandbox code” is disabled)</li>
         <li>Fetching public HTTPS pages or APIs (when “Auto-approve network requests” is disabled)</li>
       </ul>
-      <p>Reading files, listing directories, searching the project, and compile-only Lua syntax checks do not require confirmation. Auto-approve applies only to file operations inside the current project. Purely local Lua execution still requires confirmation.</p>
-      <p>“Auto-approve network requests” is on by default. When enabled, fetches outside the sandbox, sandbox code with <code>network_hosts</code>, and MCP tool calls run directly. When disabled, each of these network calls displays a confirmation dialog. This setting does not affect model API requests, connection tests started by the user, or MCP tool-list refreshes.</p>
+      <p>Reading files, listing directories, searching the project, and compile-only Lua syntax checks do not require confirmation. Auto-approve applies only to file operations inside the current project. “Auto-run sandbox code” is on by default; when disabled, every Lua sandbox run requires confirmation.</p>
+      <p>“Auto-approve network requests” is on by default. Sandbox code with <code>network_hosts</code> runs directly only when both “Auto-run sandbox code” and “Auto-approve network requests” are enabled. Disabling network auto-approval makes out-of-sandbox fetches, sandbox network access, and MCP tool calls display confirmation dialogs. This setting does not affect model API requests, connection tests started by the user, or MCP tool-list refreshes.</p>
 
       <h2>Running Lua Code</h2>
       <p>The assistant can compile code with the built-in LuaJ++ parser to check syntax without executing it or requiring confirmation. Runtime validation uses a restricted sandbox instead of the current project's normal Lua environment. The sandbox can validate pure Lua algorithms and explicitly approved public HTTPS APIs, but cannot access <code>activity</code>, Java/Android APIs, files, private networks, <code>require</code>, or <code>luajava</code>. See <a href="sandbox_en.html">AI Lua Sandbox</a> for available libraries, network authorization, output handling, and timeout limits.</p>

@@ -155,7 +155,7 @@ internal object SandboxExecution {
             val httpSession = SandboxHttp.install(globals, allowedHosts)
             globals.standardOutput = stream
             globals.standardError = stream
-            try {
+            httpSession.use { httpSession ->
                 val returned = globals.load(code, "@agent_sandbox").invoke()
                 if (returned.narg() > 0) {
                     if (!output.isEmpty()) stream.println()
@@ -164,8 +164,6 @@ internal object SandboxExecution {
                     stream.println("[return] ${values.joinToString(", ")}")
                 }
                 ok = true
-            } finally {
-                httpSession.close()
             }
         } catch (failure: Throwable) {
             error = SandboxResult.boundError(failure.message ?: "runtime error")
@@ -248,8 +246,8 @@ internal data class SandboxResult(
             if (error.length <= MAX_ERROR_CHARS) return error
 
             var end = MAX_ERROR_CHARS - ERROR_TRUNCATION_SUFFIX.length
-            if (end > 0 && Character.isHighSurrogate(error[end - 1]) &&
-                end < error.length && Character.isLowSurrogate(error[end])
+            if (Character.isHighSurrogate(error[end - 1]) &&
+                Character.isLowSurrogate(error[end])
             ) {
                 end--
             }

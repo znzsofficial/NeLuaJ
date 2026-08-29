@@ -31,7 +31,7 @@ class LuaSandboxService : Service() {
         val deadline = intent?.getLongExtra(
             KEY_DEADLINE_ELAPSED_MS,
             SystemClock.elapsedRealtime() + timeout
-        ) ?: SystemClock.elapsedRealtime() + timeout
+        ) ?: (SystemClock.elapsedRealtime() + timeout)
         val allowedHosts = intent?.getStringExtra(KEY_ALLOWED_HOSTS).orEmpty()
         @Suppress("DEPRECATION")
         val receiver = intent?.getParcelableExtra<ResultReceiver>(KEY_RECEIVER)

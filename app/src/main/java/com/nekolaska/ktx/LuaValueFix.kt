@@ -4,7 +4,6 @@ package com.nekolaska.ktx
 
 import org.luaj.Globals
 import org.luaj.LuaString
-import org.luaj.LuaValue
 import org.luaj.lib.BaseLib
 import org.luaj.lib.DebugLib
 import org.luaj.lib.PackageLib

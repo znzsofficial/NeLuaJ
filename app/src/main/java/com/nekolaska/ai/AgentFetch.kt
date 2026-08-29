@@ -144,7 +144,7 @@ object AgentFetch {
             val remaining = options.maxChars + 1 - body.length
             val count = reader.read(buffer, 0, minOf(buffer.size, remaining))
             if (count < 0) break
-            body.append(buffer, 0, count)
+            body.appendRange(buffer, 0, count)
         }
         if (body.length > options.maxChars) {
             body.setLength(options.maxChars)

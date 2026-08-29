@@ -187,8 +187,7 @@ public class JavaInstance extends LuaUserdata {
         if (b instanceof Map) {
             return nextMap((Map<?, ?>) b, index);
         }
-        if (b instanceof List) {
-            List<?> list = (List<?>) b;
+        if (b instanceof List<?> list) {
             int nextIndex = index.isnil() ? 0 : index.toint() + 1;
             return nextIndex < list.size()
                 ? LuaValue.varargsOf(
@@ -198,8 +197,7 @@ public class JavaInstance extends LuaUserdata {
                 )
                 : NIL;
         }
-        if (b instanceof Collection) {
-            Collection<?> collection = (Collection<?>) b;
+        if (b instanceof Collection<?> collection) {
             int nextIndex = index.isnil() ? 0 : index.toint() + 1;
             if (nextIndex >= collection.size()) {
                 return NIL;
@@ -429,10 +427,9 @@ public class JavaInstance extends LuaUserdata {
 
     private boolean setJavaListener(String name, LuaValue value) {
         LuaValue method = f.getMethod(LuaValue.valueOf("setOn" + name.substring(2) + "Listener"));
-        if (!(method instanceof JavaMethod)) {
+        if (!(method instanceof JavaMethod listenerSetter)) {
             return false;
         }
-        JavaMethod listenerSetter = (JavaMethod) method;
         LuaTable implementation = new LuaTable();
         implementation.set(name, value);
         listenerSetter.invokeJavaMethod(

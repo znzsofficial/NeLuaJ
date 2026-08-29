@@ -10,10 +10,10 @@ import android.graphics.RectF;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.AttributeSet;
-import android.util.TypedValue;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.view.View;
+import android.view.ViewParent;
 import android.view.ViewTreeObserver;
 import android.widget.FrameLayout;
 
@@ -97,9 +97,13 @@ public class LuaCodeMinimapView extends FrameLayout {
 
     private int lastScrollY = Integer.MIN_VALUE;
     private int lastEditorHeight;
-    private boolean draggingMask;
+    private boolean draggingMinimap;
+    private boolean touchStartedOnMask;
+    private boolean touchMoved;
+    private boolean multiTouchGesture;
     private boolean scaling;
     private float lastTouchY;
+    private int lastJumpedLine = -1;
     private int activePointerId = MotionEvent.INVALID_POINTER_ID;
 
     private final Runnable deferredCodeRefresh = new Runnable() {
@@ -135,8 +139,8 @@ public class LuaCodeMinimapView extends FrameLayout {
             @Override
             public boolean onScaleBegin(ScaleGestureDetector detector) {
                 scaling = true;
-                draggingMask = false;
-                getParent().requestDisallowInterceptTouchEvent(true);
+                draggingMinimap = false;
+                requestParentDisallowIntercept(true);
                 return true;
             }
 
@@ -219,6 +223,9 @@ public class LuaCodeMinimapView extends FrameLayout {
             mainHandler.post(() -> {
                 if (gen != parseGeneration.get() || !configured) return;
                 contentView.applyParsed(parsed);
+                if (!draggingMinimap && !scaling) {
+                    syncVisibleRangeFromEditor(false);
+                }
             });
         });
     }
@@ -226,7 +233,7 @@ public class LuaCodeMinimapView extends FrameLayout {
     public void setVisibleRange(int startLine, int endLine) {
         if (!configured) return;
         contentView.updateMaskRange(startLine, endLine);
-        if (!draggingMask && !scaling) {
+        if (!draggingMinimap && !scaling) {
             autoScrollToCenter(startLine, endLine);
         }
     }
@@ -290,23 +297,38 @@ public class LuaCodeMinimapView extends FrameLayout {
 
         int scrollY = boundEditor.getScrollY();
         int viewH = Math.max(1, boundEditor.getHeight());
+        DocumentProvider doc = null;
         int rowCount = 0;
         try {
-            DocumentProvider doc = boundEditor.createDocumentProvider();
+            doc = boundEditor.createDocumentProvider();
             if (doc != null) rowCount = Math.max(1, doc.getRowCount());
         } catch (Throwable ignored) {
         }
-        if (rowCount <= 0) rowCount = Math.max(1, contentView.getLineCount());
+        if (rowCount == 0) rowCount = Math.max(1, contentView.getLineCount());
 
-        int start = (int) Math.floor(scrollY / editorRowH);
-        int end = (int) Math.ceil((scrollY + viewH) / editorRowH) - 1;
-        start = clamp(start, 0, rowCount - 1);
-        end = clamp(end, start, rowCount - 1);
+        int logicalLineCount = Math.max(1, contentView.getLineCount());
+        int visualStart = clamp((int) Math.floor(scrollY / editorRowH), 0, rowCount - 1);
+        int visualEnd = clamp(
+            (int) Math.ceil((scrollY + viewH) / editorRowH) - 1,
+            visualStart,
+            rowCount - 1
+        );
+        int start = logicalLineForVisualRow(doc, visualStart, logicalLineCount);
+        int end = Math.max(start,
+            logicalLineForVisualRow(doc, visualEnd, logicalLineCount));
 
-        contentView.updateMaskRange(start, end);
-        if (!draggingMask && !scaling) {
-            if (smooth) autoScrollToCenter(start, end);
-            else jumpScrollToCenter(start, end);
+        float visibleRows = Math.max(1f, end - start + 1f);
+        contentView.updateMaskRange(start, end, visibleRows);
+        if (!draggingMinimap && !scaling) {
+            float visibleCenterLine =
+                logicalLineCenterForVisualRow(
+                    doc,
+                    clamp((int) Math.floor((scrollY + viewH * 0.5f) / editorRowH),
+                        0, rowCount - 1),
+                    logicalLineCount
+                );
+            if (smooth) autoScrollToCenter(visibleCenterLine);
+            else jumpScrollToCenter(visibleCenterLine);
         }
     }
 
@@ -335,84 +357,248 @@ public class LuaCodeMinimapView extends FrameLayout {
     }
 
     private void autoScrollToCenter(int startLine, int endLine) {
+        autoScrollToCenter((startLine + endLine + 1) * 0.5f);
+    }
+
+    private void autoScrollToCenter(float centerLine) {
         float totalLineH = contentView.getTotalLineHeight();
         if (totalLineH <= 0f || getHeight() <= 0) return;
-        float maskCenterY = ((startLine + endLine + 1) * 0.5f) * totalLineH;
-        int targetY = (int) (maskCenterY - getHeight() / 2f);
-        contentView.scrollToY(Math.max(0, targetY));
+        contentView.scrollToKeepLineCentered(centerLine);
     }
 
     private void jumpScrollToCenter(int startLine, int endLine) {
         autoScrollToCenter(startLine, endLine);
     }
 
-    private void jumpEditorToMinimapY(float localY) {
-        if (!configured) return;
-        int line = contentView.lineAtY(localY + contentView.getScrollOffsetY());
-        if (jumpListener != null) {
-            jumpListener.onJumpToLine(line);
-        } else if (boundEditor instanceof LuaEditor) {
-            ((LuaEditor) boundEditor).gotoLine(line + 1);
-        } else if (boundEditor != null) {
-            try {
+    private void jumpScrollToCenter(float centerLine) {
+        autoScrollToCenter(centerLine);
+    }
+
+    private void jumpEditorToLine(int line) {
+        if (!configured || contentView.getLineCount() <= 0) return;
+        line = contentView.clampLine(line);
+        if (line == lastJumpedLine) return;
+        lastJumpedLine = line;
+        try {
+            if (jumpListener != null) {
+                jumpListener.onJumpToLine(line);
+            } else if (boundEditor instanceof LuaEditor) {
+                ((LuaEditor) boundEditor).gotoLine(line + 1);
+            } else if (boundEditor != null) {
                 DocumentProvider doc = boundEditor.createDocumentProvider();
                 if (doc != null) {
-                    int offset = doc.getRowOffset(clamp(line, 0, Math.max(0, doc.getRowCount() - 1)));
-                    boundEditor.moveCaret(offset);
-                    boundEditor.focusCaret();
+                    int offset = doc.getLineOffset(line);
+                    if (offset >= 0) {
+                        boundEditor.moveCaret(offset);
+                        boundEditor.focusCaret();
+                    }
                 }
-            } catch (Throwable ignored) {
             }
+        } catch (Throwable ignored) {
         }
-        mainHandler.post(() -> syncVisibleRangeFromEditor(false));
+    }
+
+    private void scrollEditorToMinimapCenter() {
+        if (boundEditor == null || boundEditor.getHeight() <= 0 || contentView.getHeight() <= 0) return;
+        float mapLineHeight = contentView.getTotalLineHeight();
+        float rowHeight = estimateEditorRowHeight(boundEditor);
+        if (mapLineHeight <= 0f || rowHeight <= 0f) return;
+        int logicalLineCount = contentView.getLineCount();
+        if (logicalLineCount <= 0) return;
+        float mapCenterLine =
+            (contentView.getScrollOffsetY() + contentView.getMaskHeight() * 0.5f)
+                / mapLineHeight;
+        DocumentProvider doc = null;
+        int rowCount = 0;
+        try {
+            doc = boundEditor.createDocumentProvider();
+            if (doc != null) rowCount = doc.getRowCount();
+        } catch (Throwable ignored) {
+        }
+        if (rowCount <= 0) return;
+        float visualCenterRow = visualRowCenterForLogicalLine(
+            doc, mapCenterLine, logicalLineCount, rowCount);
+        int targetY = Math.round(visualCenterRow * rowHeight - boundEditor.getHeight() / 2f);
+        int maxY = Math.max(0, Math.round(rowCount * rowHeight - boundEditor.getHeight()));
+        targetY = clamp(targetY, 0, maxY);
+        boundEditor.scrollTo(boundEditor.getScrollX(), targetY);
+    }
+
+    private void moveEditorWithMinimap() {
+        moveEditorWithMinimap(contentView.lineAtY(getHeight() * 0.5f));
+    }
+
+    private void moveEditorWithMinimap(int line) {
+        jumpEditorToLine(line);
+        scrollEditorToMinimapCenter();
+        syncVisibleRangeFromEditor(false);
+    }
+
+    private void requestParentDisallowIntercept(boolean disallow) {
+        ViewParent parent = getParent();
+        if (parent != null) parent.requestDisallowInterceptTouchEvent(disallow);
+    }
+
+    /** Maps a TextWarrior visual row to its source line. */
+    private static int logicalLineForVisualRow(
+        DocumentProvider doc, int visualRow, int logicalLineCount
+    ) {
+        if (logicalLineCount <= 0) return 0;
+        if (doc == null) return clamp(visualRow, 0, logicalLineCount - 1);
+        try {
+            int offset = doc.getRowOffset(visualRow);
+            if (offset >= 0) {
+                return clamp(doc.findLineNumber(offset), 0, logicalLineCount - 1);
+            }
+        } catch (Throwable ignored) {
+        }
+        return clamp(visualRow, 0, logicalLineCount - 1);
+    }
+
+    private static float logicalLineCenterForVisualRow(
+        DocumentProvider doc, int visualRow, int logicalLineCount
+    ) {
+        return logicalLineForVisualRow(doc, visualRow, logicalLineCount) + 0.5f;
+    }
+
+    /** Returns the visual-row center occupied by a fractional source-line position. */
+    private static float visualRowCenterForLogicalLine(
+        DocumentProvider doc, float lineCenter, int logicalLineCount, int visualRowCount
+    ) {
+        if (visualRowCount <= 0) return 0f;
+        float linePosition = clampFloat(
+            lineCenter - 0.5f, 0f, Math.max(0, logicalLineCount - 1)
+        );
+        int lowerLine = (int) Math.floor(linePosition);
+        int upperLine = Math.min(logicalLineCount - 1, lowerLine + 1);
+        float lowerRow = visualRowCenterForLogicalLine(
+            doc, lowerLine, logicalLineCount, visualRowCount
+        );
+        float upperRow = visualRowCenterForLogicalLine(
+            doc, upperLine, logicalLineCount, visualRowCount
+        );
+        return lowerRow + (linePosition - lowerLine) * (upperRow - lowerRow);
+    }
+
+    private static float visualRowCenterForLogicalLine(
+        DocumentProvider doc, int line, int logicalLineCount, int visualRowCount
+    ) {
+        if (doc == null || visualRowCount <= 0) {
+            return clampFloat(line + 0.5f, 0f, visualRowCount);
+        }
+        try {
+            int startOffset = doc.getLineOffset(line);
+            int startRow = startOffset >= 0 ? doc.findRowNumber(startOffset) : -1;
+            if (startRow >= 0) {
+                int endRow = visualRowCount;
+                if (line + 1 < logicalLineCount) {
+                    int nextOffset = doc.getLineOffset(line + 1);
+                    int nextRow = nextOffset >= 0 ? doc.findRowNumber(nextOffset) : -1;
+                    if (nextRow > startRow) endRow = nextRow;
+                }
+                endRow = clamp(endRow, startRow + 1, visualRowCount);
+                return (startRow + endRow) * 0.5f;
+            }
+        } catch (Throwable ignored) {
+        }
+        return clampFloat(line + 0.5f, 0f, visualRowCount);
+    }
+
+    @Override
+    public boolean performClick() {
+        super.performClick();
+        return true;
     }
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         if (!configured || !isEnabled()) return super.onTouchEvent(event);
 
+        int action = event.getActionMasked();
         scaleDetector.onTouchEvent(event);
-        if (scaling || event.getPointerCount() > 1) {
-            draggingMask = false;
+
+        if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+            boolean shouldPerformClick =
+                action == MotionEvent.ACTION_UP && !touchMoved && !multiTouchGesture && !scaling;
+            if (action == MotionEvent.ACTION_UP && !scaling) {
+                // Keep the final position selected by the gesture before releasing the lock.
+                syncVisibleRangeFromEditor(false);
+                mainHandler.removeCallbacks(deferredScrollSync);
+                if (boundEditor != null) {
+                    lastScrollY = boundEditor.getScrollY();
+                    lastEditorHeight = boundEditor.getHeight();
+                }
+            }
+            draggingMinimap = false;
+            touchStartedOnMask = false;
+            scaling = false;
+            activePointerId = MotionEvent.INVALID_POINTER_ID;
+            lastJumpedLine = -1;
+            requestParentDisallowIntercept(false);
+            if (shouldPerformClick) performClick();
             return true;
         }
 
-        int action = event.getActionMasked();
+        if (action == MotionEvent.ACTION_POINTER_UP) {
+            touchMoved = true;
+            multiTouchGesture = true;
+            int actionIndex = event.getActionIndex();
+            int pid = event.getPointerId(actionIndex);
+            if (pid == activePointerId && !scaling) {
+                for (int i = 0; i < event.getPointerCount(); i++) {
+                    if (i != actionIndex) {
+                        activePointerId = event.getPointerId(i);
+                        lastTouchY = event.getY(i);
+                        break;
+                    }
+                }
+            }
+            // A two-finger gesture must start a new drag after it ends.
+            draggingMinimap = false;
+            touchStartedOnMask = false;
+            return true;
+        }
+
+        if (scaling || event.getPointerCount() > 1) {
+            if (event.getPointerCount() > 1) {
+                touchMoved = true;
+                multiTouchGesture = true;
+            }
+            draggingMinimap = false;
+            touchStartedOnMask = false;
+            return true;
+        }
+
         switch (action) {
             case MotionEvent.ACTION_DOWN:
                 activePointerId = event.getPointerId(0);
-                draggingMask = true;
+                draggingMinimap = true;
+                touchStartedOnMask = contentView.isMaskAtY(event.getY());
+                touchMoved = false;
+                multiTouchGesture = false;
                 lastTouchY = event.getY();
-                jumpEditorToMinimapY(lastTouchY);
-                getParent().requestDisallowInterceptTouchEvent(true);
+                lastJumpedLine = -1;
+                if (!touchStartedOnMask) {
+                    int line = contentView.lineAtY(event.getY());
+                    contentView.scrollToKeepLineCentered(line + 0.5f);
+                    moveEditorWithMinimap(line);
+                }
+                requestParentDisallowIntercept(true);
                 return true;
             case MotionEvent.ACTION_MOVE:
-                if (!draggingMask) return true;
+                if (!draggingMinimap) return true;
                 int idx = event.findPointerIndex(activePointerId);
                 if (idx < 0) return true;
                 float y = event.getY(idx);
                 if (Math.abs(y - lastTouchY) >= 1f) {
+                    float delta = y - lastTouchY;
                     lastTouchY = y;
-                    jumpEditorToMinimapY(y);
+                    touchMoved = true;
+                    // Move the map under the fixed viewport instead of moving the mask.
+                    // A downward finger movement reveals later lines.
+                    contentView.scrollToY(contentView.getScrollOffsetY() + delta);
+                    moveEditorWithMinimap();
                 }
-                return true;
-            case MotionEvent.ACTION_POINTER_UP: {
-                int pid = event.getPointerId(event.getActionIndex());
-                if (pid == activePointerId) {
-                    int newIndex = event.getActionIndex() == 0 ? 1 : 0;
-                    if (newIndex < event.getPointerCount()) {
-                        activePointerId = event.getPointerId(newIndex);
-                        lastTouchY = event.getY(newIndex);
-                    }
-                }
-                return true;
-            }
-            case MotionEvent.ACTION_UP:
-            case MotionEvent.ACTION_CANCEL:
-                draggingMask = false;
-                scaling = false;
-                activePointerId = MotionEvent.INVALID_POINTER_ID;
-                getParent().requestDisallowInterceptTouchEvent(false);
                 return true;
             default:
                 return true;
@@ -484,6 +670,7 @@ public class LuaCodeMinimapView extends FrameLayout {
 
         int currentBlockLen = 0;
         int lastColorIdx = -1;
+        boolean endedWithNewline = false;
 
         try {
             LuaLexer lexer = new LuaLexer(code);
@@ -497,6 +684,7 @@ public class LuaCodeMinimapView extends FrameLayout {
                 int crIndex = text.indexOf('\n');
 
                 if (crIndex == -1) {
+                    endedWithNewline = false;
                     if (colorIdx == lastColorIdx) {
                         currentBlockLen = addLen(currentBlockLen, textLen);
                     } else {
@@ -532,12 +720,14 @@ public class LuaCodeMinimapView extends FrameLayout {
                         if (lineCount >= lineEnds.length) lineEnds = grow(lineEnds);
                         lineEnds[lineCount++] = dataSize;
                         start = crIndex + 1;
+                        endedWithNewline = (start == textLen);
                         crIndex = text.indexOf('\n', start);
                     }
                     int remaining = textLen - start;
                     if (remaining > 0) {
                         lastColorIdx = colorIdx;
                         currentBlockLen = remaining;
+                        endedWithNewline = false;
                     }
                 }
             }
@@ -545,7 +735,7 @@ public class LuaCodeMinimapView extends FrameLayout {
                 if (dataSize >= data.length) data = grow(data);
                 data[dataSize++] = packBlock(currentBlockLen, lastColorIdx);
             }
-            if (lineCount == 0 || lineEnds[lineCount - 1] != dataSize) {
+            if (lineCount == 0 || lineEnds[lineCount - 1] != dataSize || endedWithNewline) {
                 if (lineCount >= lineEnds.length) lineEnds = grow(lineEnds);
                 lineEnds[lineCount++] = dataSize;
             }
@@ -614,6 +804,7 @@ public class LuaCodeMinimapView extends FrameLayout {
 
         private int currentStartLine = 0;
         private int currentEndLine = 0;
+        private float maskVisibleRows = 1f;
 
         MinimapContent(Context context) {
             super(context);
@@ -660,6 +851,8 @@ public class LuaCodeMinimapView extends FrameLayout {
 
             clearTileCache();
             requestLayout();
+            updateMaskRect();
+            scrollToY(scrollOffsetY);
             invalidate();
         }
 
@@ -760,20 +953,43 @@ public class LuaCodeMinimapView extends FrameLayout {
             return scrollOffsetY;
         }
 
+        float getMaskHeight() {
+            float viewHeight = Math.max(0f, getHeight());
+            if (viewHeight <= 0f || mLineCount <= 0 || pTotalLineHeight <= 0f) return 0f;
+            float documentHeight = contentHeight();
+            float visibleHeight = Math.max(1f, maskVisibleRows * pTotalLineHeight);
+            if (visibleHeight >= documentHeight) return viewHeight;
+            return Math.min(viewHeight, visibleHeight);
+        }
+
+        private float viewportPadding() {
+            return Math.max(0f, (getHeight() - getMaskHeight()) * 0.5f);
+        }
+
+        int clampLine(int line) {
+            return clamp(line, 0, Math.max(0, mLineCount - 1));
+        }
+
+        boolean isMaskAtY(float localY) {
+            float top = maskRect.top;
+            float bottom = maskRect.bottom;
+            return localY >= top && localY < bottom;
+        }
+
         float getMaskCenterLine() {
             return (currentStartLine + currentEndLine + 1) * 0.5f;
         }
 
         void scrollToKeepLineCentered(float line) {
             if (pTotalLineHeight <= 0f || getHeight() <= 0) return;
-            float y = line * pTotalLineHeight;
-            int targetY = (int) (y - getHeight() / 2f);
-            scrollToY(Math.max(0, targetY));
+            float y = line * pTotalLineHeight - getMaskHeight() * 0.5f;
+            scrollToY(y);
         }
 
         int lineAtY(float contentY) {
             if (pTotalLineHeight <= 0f || mLineCount <= 0) return 0;
-            int line = (int) (contentY / pTotalLineHeight);
+            float documentY = contentY + scrollOffsetY - viewportPadding();
+            int line = (int) Math.floor(documentY / pTotalLineHeight);
             return clamp(line, 0, mLineCount - 1);
         }
 
@@ -783,23 +999,55 @@ public class LuaCodeMinimapView extends FrameLayout {
             mDataSize = parsed.dataSize;
             mLineEnds = parsed.lineEnds;
             mLineCount = parsed.lineCount;
+            if (mLineCount <= 0) {
+                currentStartLine = 0;
+                currentEndLine = 0;
+            } else {
+                int lastLine = mLineCount - 1;
+                currentStartLine = clamp(currentStartLine, 0, lastLine);
+                currentEndLine = clamp(Math.max(currentStartLine, currentEndLine), currentStartLine, lastLine);
+            }
+            scrollToY(scrollOffsetY);
             clearTileCache();
             requestLayout();
+            updateMaskRect();
             invalidate();
         }
 
         void updateMaskRange(int startLine, int endLine) {
+            updateMaskRange(startLine, endLine, Math.max(1f, endLine - startLine + 1f));
+        }
+
+        void updateMaskRange(int startLine, int endLine, float visibleRows) {
             currentStartLine = Math.max(0, startLine);
             currentEndLine = Math.max(currentStartLine, endLine);
-            float top = currentStartLine * pTotalLineHeight;
-            float bottom = (currentEndLine + 1) * pTotalLineHeight;
-            maskRect.set(0, top, getWidth(), bottom);
+            if (mLineCount > 0) {
+                int lastLine = mLineCount - 1;
+                currentStartLine = clamp(currentStartLine, 0, lastLine);
+                currentEndLine = clamp(currentEndLine, currentStartLine, lastLine);
+            }
+            maskVisibleRows = Float.isFinite(visibleRows) ? Math.max(1f, visibleRows) : 1f;
+            updateMaskRect();
+            scrollToY(scrollOffsetY);
             invalidate();
         }
 
-        void scrollToY(int y) {
-            int max = Math.max(0, contentHeight() - getHeight());
-            int target = clamp(y, 0, max);
+        private void updateMaskRect() {
+            float height = getMaskHeight();
+            float center = getHeight() * 0.5f;
+            maskRect.set(0, center - height * 0.5f, getWidth(), center + height * 0.5f);
+        }
+
+        @Override
+        protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+            super.onSizeChanged(w, h, oldw, oldh);
+            updateMaskRect();
+            scrollToY(scrollOffsetY);
+        }
+
+        void scrollToY(float y) {
+            int max = Math.max(0, contentHeightWithViewportPadding() - getHeight());
+            int target = clamp(Math.round(y), 0, max);
             if (target != scrollOffsetY) {
                 scrollOffsetY = target;
                 invalidate();
@@ -808,6 +1056,14 @@ public class LuaCodeMinimapView extends FrameLayout {
 
         private int contentHeight() {
             return (int) Math.min(Integer.MAX_VALUE, Math.ceil(mLineCount * (double) pTotalLineHeight));
+        }
+
+        private int contentHeightWithViewportPadding() {
+            float padding = viewportPadding();
+            return (int) Math.min(
+                Integer.MAX_VALUE,
+                Math.ceil(contentHeight() + padding * 2f)
+            );
         }
 
         @Override
@@ -831,8 +1087,8 @@ public class LuaCodeMinimapView extends FrameLayout {
             maskRect.right = getWidth();
             c.getClipBounds(clipRect);
 
-            float maskTop = maskRect.top - scrollOffsetY;
-            float maskBottom = maskRect.bottom - scrollOffsetY;
+            float maskTop = maskRect.top;
+            float maskBottom = maskRect.bottom;
             int w = getWidth();
             int h = getHeight();
 
@@ -850,8 +1106,8 @@ public class LuaCodeMinimapView extends FrameLayout {
             }
 
             // 3) Code bars on top (always fully visible)
-            int contentTop = scrollOffsetY + clipRect.top;
-            int contentBottom = scrollOffsetY + clipRect.bottom;
+            int contentTop = (int) (scrollOffsetY + clipRect.top - viewportPadding());
+            int contentBottom = (int) (scrollOffsetY + clipRect.bottom - viewportPadding());
             int tH = tileHeightPx;
             int tileTopIndex = Math.max(0, contentTop / tH);
             int tileBottomIndex = Math.max(0, (Math.max(contentBottom, contentTop + 1) - 1) / tH);
@@ -863,7 +1119,8 @@ public class LuaCodeMinimapView extends FrameLayout {
                     if (tile != null) tileCache.put(ti, tile);
                 }
                 if (tile != null && !tile.isRecycled()) {
-                    c.drawBitmap(tile, 0, ti * tH - scrollOffsetY, null);
+                    c.drawBitmap(tile, 0,
+                        ti * tH - scrollOffsetY + viewportPadding(), null);
                 }
             }
         }

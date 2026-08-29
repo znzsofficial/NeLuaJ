@@ -27,15 +27,15 @@ class LuaActivityUI(private val activity: LuaActivity) {
     private var toastTextView: TextView? = null
     
     fun setContentView(view: LuaTable) {
-        activity.setContentView(LuaLayout(activity).load(view, activity.globals).touserdata(android.view.View::class.java))
+        activity.setContentView(LuaLayout(activity).load(view, activity.globals).touserdata(View::class.java))
     }
     
     fun setContentView(view: LuaTable, env: LuaTable) {
-        activity.setContentView(LuaLayout(activity).load(view, env).touserdata(android.view.View::class.java))
+        activity.setContentView(LuaLayout(activity).load(view, env).touserdata(View::class.java))
     }
     
     fun setFragment(fragment: Fragment) {
-        activity.setContentView(android.view.View(activity))
+        activity.setContentView(View(activity))
         activity.supportFragmentManager.beginTransaction().replace(android.R.id.content, fragment)
             .commit()
     }

@@ -213,9 +213,9 @@ class LuaApplication : Application(), LuaContext, SingletonImageLoader.Factory {
 
     private fun isMainProcess(): Boolean {
         if (SDK_INT >= 28) {
-            return Application.getProcessName() == packageName
+            return getProcessName() == packageName
         }
-        val processes = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        val processes = getSystemService(ACTIVITY_SERVICE) as ActivityManager
         return processes.runningAppProcesses
             ?.firstOrNull { it.pid == Process.myPid() }
             ?.processName == packageName

@@ -3,12 +3,12 @@ package com.androlua
 import okhttp3.Dns
 import okhttp3.Headers
 import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
-import okhttp3.RequestBody.Companion.toRequestBody
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okio.BufferedSink
 import org.luaj.Globals
 import org.luaj.LuaError
 import org.luaj.LuaString
@@ -28,7 +28,6 @@ import java.nio.charset.StandardCharsets
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
-import okio.BufferedSink
 
 /** Restricted HTTPS client for AI-generated Lua. It never exposes OkHttp or Java objects. */
 internal object SandboxHttp {
@@ -303,13 +302,13 @@ internal object SandboxHttp {
                 val globallyReachableIetfAssignment = if (!ietfAssignments) true else {
                     val secondGroup = bytes[2] shl 8 or bytes[3]
                     val thirdGroup = bytes[4] shl 8 or bytes[5]
-                    when {
-                        secondGroup == 0x0001 -> bytes.slice(4..13).all { it == 0 } &&
-                            bytes[14] == 0 && bytes[15] in 1..3
-                        secondGroup == 0x0003 -> true
-                        secondGroup == 0x0004 && thirdGroup == 0x0112 -> true
-                        secondGroup in 0x0020..0x002f -> true
-                        secondGroup in 0x0030..0x003f -> true
+                    when (secondGroup) {
+                        0x0001 -> bytes.slice(4..13).all { it == 0 } &&
+                                bytes[14] == 0 && bytes[15] in 1..3
+                        0x0003 -> true
+                        0x0004 if thirdGroup == 0x0112 -> true
+                        in 0x0020..0x002f -> true
+                        in 0x0030..0x003f -> true
                         else -> false
                     }
                 }

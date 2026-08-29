@@ -265,8 +265,16 @@ local function autoApprovesNetworkRequests()
   return requireConfig().getSharedData("ai_auto_approve_network", "1") == "1"
 end
 
+local function autoRunsSandbox()
+  return requireConfig().getSharedData("ai_auto_run_sandbox", "1") == "1"
+end
+
 function _M.requiresConfirmation(name, args)
   name = _M.normalizeToolName(name, args)
+  if name == "run_lua" then
+    if not autoRunsSandbox() then return true end
+    return isNetworkRequest(name, args) and not autoApprovesNetworkRequests()
+  end
   if isNetworkRequest(name, args) and autoApprovesNetworkRequests() then return false end
   if name:match("^mcp::") or name:match("^mcp__") then return true end
   if _M.isDestructiveTool(name) then return true end
@@ -279,13 +287,17 @@ end
 
 function _M.shouldAutoApprove(name, args)
   name = _M.normalizeToolName(name, args)
+  if name == "run_lua" then
+    return autoRunsSandbox()
+      and (not isNetworkRequest(name, args) or autoApprovesNetworkRequests())
+  end
   if isNetworkRequest(name, args) and autoApprovesNetworkRequests() then return true end
   if name:match("^mcp::") or name:match("^mcp__") then return false end
   if name == "get_env_info" or name == "check_lua_syntax" then return true end
   if name == "read_file" or name == "read_files" or name == "list_dir" or name == "search_in_files" then
     return allPathsInProject(name, args)
   end
-  if name == "run_lua" or not _M.isDestructiveTool(name) then return false end
+  if not _M.isDestructiveTool(name) then return false end
   if requireConfig().getSharedData("ai_auto_approve", "0") ~= "1" then return false end
   local path = args and args.path or ""
   if name == "rename_file" then

@@ -67,7 +67,7 @@ class SplashWelcome : ComponentActivity() {
     private fun startActivity() {
         val intent = Intent(this@SplashWelcome, LuaActivity::class.java)
         if (isVersionChanged) {
-            intent.putExtra("isVersionChanged", isVersionChanged)
+            intent.putExtra("isVersionChanged", true)
             intent.putExtra("newVersionName", mVersionName)
             intent.putExtra("oldVersionName", mOldVersionName)
         }

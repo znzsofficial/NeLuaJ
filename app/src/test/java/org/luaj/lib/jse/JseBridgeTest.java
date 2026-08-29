@@ -119,6 +119,14 @@ public class JseBridgeTest {
     }
 
     @Test
+    public void utf8StringDecimalParsingHonorsBackingArrayOffset() {
+        int[] backing = new int[]{'x', '1', '.', '2', '5', 'x'};
+        LuaUtf8String value = LuaUtf8String.valueUsing(backing, 1, 4);
+
+        assertEquals(1.25, value.scannumber(), 0.0);
+    }
+
+    @Test
     public void overriddenStringClassesKeepCoreLuaStringSemantics() {
         LuaString string = LuaValue.valueOf("abcdef");
         LuaUtf8String utf8 = LuaUtf8String.valueOfString("LuaJ++");

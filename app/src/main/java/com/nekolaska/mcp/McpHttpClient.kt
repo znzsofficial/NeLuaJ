@@ -42,7 +42,7 @@ class McpSseConnection(
             .build()
         call = client.newCall(request)
         call?.enqueue(object : okhttp3.Callback {
-            override fun onFailure(call: Call, e: java.io.IOException) {
+            override fun onFailure(call: Call, e: IOException) {
                 fail(e.message ?: "SSE connection failed")
             }
 

@@ -113,6 +113,7 @@ name, url, key, model, responses, contextLength, maxTokens
 | `ai_retry_count` | `2` | 自动重试次数，限制为 0–5 |
 | `ai_system_prompt` | `""` | 追加到内置提示词后的用户附加指令，不会替换内置规则 |
 | `ai_auto_approve` | `"0"` | 文件操作自动批准，默认关闭 |
+| `ai_auto_run_sandbox` | `"1"` | 自动运行受限 Lua 沙盒，默认开启 |
 | `ai_auto_approve_network` | `"1"` | 网络工具自动批准，默认开启 |
 | `ai_allow_selfsigned` | `"0"` | 仅模型 API 流量允许自签名证书并关闭主机名校验 |
 | `ai_mcp_servers` | 首次写入预设 | MCP 服务器 JSON；默认预设 `context7` 和 `deepwiki` |
@@ -158,12 +159,13 @@ name, url, key, model, responses, contextLength, maxTokens
 | `get_env_info`、`check_lua_syntax` | 自动批准 |
 | 工程外读取、列目录或搜索 | 请求确认 |
 | 文件创建、修改、删除、移动 | 请求确认 |
-| 不带 `network_hosts` 的 `run_lua` | 始终请求确认 |
-| `fetch_url`、MCP、带有效 `network_hosts` 的 `run_lua` | 由 `ai_auto_approve_network` 控制；默认自动批准 |
+| 不带 `network_hosts` 的 `run_lua` | 由 `ai_auto_run_sandbox` 控制；默认自动运行 |
+| 带有效 `network_hosts` 的 `run_lua` | 需同时开启 `ai_auto_run_sandbox` 和 `ai_auto_approve_network` 才自动运行 |
+| `fetch_url`、MCP | 由 `ai_auto_approve_network` 控制；默认自动批准 |
 
 开启 `ai_auto_approve` 后，执行器判定为当前工程内的文件变更可以免确认；`rename_file` 要求源路径和目标路径都通过工程检查。当前实现对不存在的相对目标无法通过 `getPathType` 判定，因此新建相对路径即使开启文件自动批准也可能继续显示确认框。
 
-关闭 `ai_auto_approve_network` 后，`fetch_url`、MCP 调用和带联网主机的沙盒代码都会逐次确认。该设置不影响模型 API 请求、用户主动连接测试或 MCP 工具列表刷新。
+关闭 `ai_auto_run_sandbox` 后，所有 `run_lua` 调用都会逐次确认。关闭 `ai_auto_approve_network` 后，`fetch_url`、MCP 调用和带联网主机的沙盒代码都会逐次确认。两个设置都不会放宽沙盒自身的隔离和网络校验；网络设置也不影响模型 API 请求、用户主动连接测试或 MCP 工具列表刷新。
 
 拒绝确认会生成普通 `tool` 结果并持久化，后续同批工具仍可继续执行。系统提示词禁止模型通过别名、拆分调用或重复请求绕过拒绝。
 
@@ -212,7 +214,7 @@ json, codec, hash.sha256, inspect, assert_equal, http.request
 - 联网前必须在 `run_lua.network_hosts` 中声明精确主机；最多 8 个主机、每次运行最多 4 个请求。
 - 沙盒 HTTP 只允许公网 DNS 解析后的 HTTPS 443，禁止 IP 字面量、localhost、私网、代理、重定向和 URL 凭据。
 - 支持 GET、HEAD、POST、PUT、PATCH、DELETE；请求体最大 256 KiB，响应体最大 512 KiB，单次 HTTP 超时 1–6 秒。
-- `network_hosts` 是否跳过确认由 `ai_auto_approve_network` 决定，但主机和请求校验始终执行。
+- `run_lua` 是否跳过确认由 `ai_auto_run_sandbox` 控制；带 `network_hosts` 时还必须开启 `ai_auto_approve_network`，但主机和请求校验始终执行。
 
 完整 API 以 `res/doc/sandbox_zh.html` 和 `res/doc/sandbox_en.html` 为准。
 

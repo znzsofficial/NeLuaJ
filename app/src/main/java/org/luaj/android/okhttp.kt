@@ -22,14 +22,13 @@ import org.luaj.Globals
 import org.luaj.LuaFunction
 import org.luaj.LuaTable
 import org.luaj.LuaValue
-import org.luaj.LuaValue.NIL
 import org.luaj.Varargs
 import org.luaj.lib.TwoArgFunction
 import org.luaj.lib.VarArgFunction
+import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
-import java.util.concurrent.TimeUnit
 
 private fun OkHttpClient.Builder.setTimeout(timeout: Long) =
     callTimeout(timeout, TimeUnit.SECONDS)

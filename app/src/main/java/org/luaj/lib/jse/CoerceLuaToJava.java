@@ -150,45 +150,29 @@ public class CoerceLuaToJava {
         @Override
         public Object coerce(LuaValue value) {
             if (value.type() == LuaValue.TUSERDATA) {
-                Number number = (Number) value.touserdata(Number.class);
-                switch (b) {
-                    case BYTE:
-                        return Byte.valueOf(number.byteValue());
-                    case CHAR:
-                        return Character.valueOf((char) number.intValue());
-                    case SHORT:
-                        return Short.valueOf(number.shortValue());
-                    case INT:
-                        return Integer.valueOf(number.intValue());
-                    case LONG:
-                        return Long.valueOf(number.longValue());
-                    case FLOAT:
-                        return Float.valueOf(number.floatValue());
-                    case DOUBLE:
-                        return Double.valueOf(number.doubleValue());
-                    default:
-                        return null;
-                }
+                Number number = value.touserdata(Number.class);
+                return switch (b) {
+                    case BYTE -> number.byteValue();
+                    case CHAR -> (char) number.intValue();
+                    case SHORT -> number.shortValue();
+                    case INT -> number.intValue();
+                    case LONG -> number.longValue();
+                    case FLOAT -> number.floatValue();
+                    case DOUBLE -> number.doubleValue();
+                    default -> null;
+                };
             }
 
-            switch (b) {
-                case BYTE:
-                    return Byte.valueOf((byte) value.toint());
-                case CHAR:
-                    return Character.valueOf((char) value.toint());
-                case SHORT:
-                    return Short.valueOf((short) value.toint());
-                case INT:
-                    return Integer.valueOf(value.toint());
-                case LONG:
-                    return Long.valueOf(value.tolong());
-                case FLOAT:
-                    return Float.valueOf((float) value.todouble());
-                case DOUBLE:
-                    return Double.valueOf(value.todouble());
-                default:
-                    return null;
-            }
+            return switch (b) {
+                case BYTE -> (byte) value.toint();
+                case CHAR -> (char) value.toint();
+                case SHORT -> (short) value.toint();
+                case INT -> value.toint();
+                case LONG -> value.tolong();
+                case FLOAT -> (float) value.todouble();
+                case DOUBLE -> value.todouble();
+                default -> null;
+            };
         }
 
         @Override
@@ -239,16 +223,13 @@ public class CoerceLuaToJava {
 
             if (value.type() == LuaValue.TNUMBER) {
                 double number = value.todouble();
-                switch (b) {
-                    case LONG:
-                        return number == (long) number ? stringPenalty + b : d;
-                    case FLOAT:
-                        return number == (float) number ? stringPenalty : d;
-                    case DOUBLE:
-                        return stringPenalty + ((number == (long) number || number == (float) number) ? 1 : 0);
-                    default:
-                        return d;
-                }
+                return switch (b) {
+                    case LONG -> number == (long) number ? stringPenalty + b : d;
+                    case FLOAT -> number == (float) number ? stringPenalty : d;
+                    case DOUBLE ->
+                            stringPenalty + ((number == (long) number || number == (float) number) ? 1 : 0);
+                    default -> d;
+                };
             }
 
             if (value.type() == LuaValue.TUSERDATA) {
@@ -260,24 +241,16 @@ public class CoerceLuaToJava {
         }
 
         private static Class<?> numericClass(int targetType) {
-            switch (targetType) {
-                case BYTE:
-                    return Byte.class;
-                case CHAR:
-                    return Character.class;
-                case SHORT:
-                    return Short.class;
-                case INT:
-                    return Integer.class;
-                case LONG:
-                    return Long.class;
-                case FLOAT:
-                    return Float.class;
-                case DOUBLE:
-                    return Double.class;
-                default:
-                    return Object.class;
-            }
+            return switch (targetType) {
+                case BYTE -> Byte.class;
+                case CHAR -> Character.class;
+                case SHORT -> Short.class;
+                case INT -> Integer.class;
+                case LONG -> Long.class;
+                case FLOAT -> Float.class;
+                case DOUBLE -> Double.class;
+                default -> Object.class;
+            };
         }
 
         @Override
@@ -534,27 +507,22 @@ public class CoerceLuaToJava {
             if (LuaValue.class.isAssignableFrom(a)) {
                 return value;
             }
-            switch (value.type()) {
-                case LuaValue.TNIL:
-                    return null;
-                case LuaValue.TUSERDATA:
-                    return value.optuserdata(a, null);
-                case LuaValue.TSTRING:
-                    return value.tojstring();
-                case LuaValue.TNUMBER:
-                    return value.isint() ? Long.valueOf(value.tolong()) : Double.valueOf(value.todouble());
-                case LuaValue.TBOOLEAN:
-                    return value.toboolean() ? Boolean.TRUE : Boolean.FALSE;
-                case LuaValue.TTABLE:
-                case LuaValue.TFUNCTION:
+            return switch (value.type()) {
+                case LuaValue.TNIL -> null;
+                case LuaValue.TUSERDATA -> value.optuserdata(a, null);
+                case LuaValue.TSTRING -> value.tojstring();
+                case LuaValue.TNUMBER ->
+                        value.isint() ? Long.valueOf(value.tolong()) : Double.valueOf(value.todouble());
+                case LuaValue.TBOOLEAN -> value.toboolean() ? Boolean.TRUE : Boolean.FALSE;
+                case LuaValue.TTABLE, LuaValue.TFUNCTION -> {
                     if (a.isInterface()) {
                         LuaUserdata proxy = LuajavaLib.createProxy(a, value);
-                        return proxy.touserdata();
+                        yield proxy.touserdata();
                     }
-                    return value;
-                default:
-                    return value;
-            }
+                    yield value;
+                }
+                default -> value;
+            };
         }
 
         @Override
@@ -562,26 +530,21 @@ public class CoerceLuaToJava {
             if (LuaValue.class.isAssignableFrom(a)) {
                 return CoerceLuaToJava.a(a, value.getClass());
             }
-            switch (value.type()) {
-                case LuaValue.TNIL:
-                    return CoerceLuaToJava.a;
-                case LuaValue.TUSERDATA: {
+            return switch (value.type()) {
+                case LuaValue.TNIL -> CoerceLuaToJava.a;
+                case LuaValue.TUSERDATA -> {
                     Object userdata = value.touserdata();
-                    return userdata == null ? e : CoerceLuaToJava.a(a, userdata.getClass());
+                    yield userdata == null ? e : CoerceLuaToJava.a(a, userdata.getClass());
                 }
-                case LuaValue.TNUMBER:
-                    return CoerceLuaToJava.a(a, value.isint() ? Integer.class : Double.class);
-                case LuaValue.TBOOLEAN:
-                    return CoerceLuaToJava.a(a, Boolean.class);
-                case LuaValue.TSTRING:
-                    return CoerceLuaToJava.a(a, String.class);
-                case LuaValue.TTABLE:
-                    return a.isInterface() ? d : CoerceLuaToJava.a(a, LuaTable.class);
-                case LuaValue.TFUNCTION:
-                    return a.isInterface() ? d : CoerceLuaToJava.a(a, org.luaj.LuaFunction.class);
-                default:
-                    return CoerceLuaToJava.a(a, value.getClass());
-            }
+                case LuaValue.TNUMBER ->
+                        CoerceLuaToJava.a(a, value.isint() ? Integer.class : Double.class);
+                case LuaValue.TBOOLEAN -> CoerceLuaToJava.a(a, Boolean.class);
+                case LuaValue.TSTRING -> CoerceLuaToJava.a(a, String.class);
+                case LuaValue.TTABLE -> a.isInterface() ? d : CoerceLuaToJava.a(a, LuaTable.class);
+                case LuaValue.TFUNCTION ->
+                        a.isInterface() ? d : CoerceLuaToJava.a(a, org.luaj.LuaFunction.class);
+                default -> CoerceLuaToJava.a(a, value.getClass());
+            };
         }
 
         @Override

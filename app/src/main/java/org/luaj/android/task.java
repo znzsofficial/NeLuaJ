@@ -21,7 +21,7 @@ public class task extends VarArgFunction implements LuaGcable {
     public Varargs invoke(Varargs args) {
         int n = args.narg();
         int i = n - 2;
-        i = i >= 0 ? i : 0;
+        i = Math.max(i, 0);
         LuaValue[] as = new LuaValue[i];
         LuaValue func = args.arg1();
         for (int i1 = 0; i1 < n - 2; i1++) {

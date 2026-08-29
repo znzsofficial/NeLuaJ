@@ -1759,6 +1759,7 @@ end
 showSettings = function()
   local autoApprove = this.getSharedData("ai_auto_approve", "0") == "1"
   local autoApproveNetwork = this.getSharedData("ai_auto_approve_network", "1") == "1"
+  local autoRunSandbox = this.getSharedData("ai_auto_run_sandbox", "1") == "1"
   local allowSelfSigned = this.getSharedData("ai_allow_selfsigned", "0") == "1"
   local temp = this.getSharedData("ai_temperature", "0.7")
   local retryCount = this.getSharedData("ai_retry_count", "2")
@@ -1854,6 +1855,36 @@ showSettings = function()
           gravity = "center_vertical",
           layout_width = "match",
           layout_height = "wrap",
+          {
+            LinearLayout,
+            orientation = "vertical",
+            layout_width = "0dp",
+            layout_weight = 1,
+            {
+              MaterialTextView,
+              text = S.ai_auto_run_sandbox,
+              textSize = "14sp", textColor = ColorOnSurface,
+            },
+            {
+              MaterialTextView,
+              text = S.ai_auto_run_sandbox_desc,
+              textSize = "12sp", textColor = ColorText,
+              layout_marginTop = "2dp",
+            },
+          },
+          {
+            Switch,
+            id = "autoRunSandboxSwitch",
+            checked = autoRunSandbox,
+            layout_marginLeft = "12dp",
+          },
+        },
+        {
+          LinearLayout,
+          orientation = "horizontal",
+          gravity = "center_vertical",
+          layout_width = "match",
+          layout_height = "wrap",
           layout_marginTop = "12dp",
           {
             LinearLayout,
@@ -1885,6 +1916,7 @@ showSettings = function()
           gravity = "center_vertical",
           layout_width = "match",
           layout_height = "wrap",
+          layout_marginTop = "12dp",
           {
             LinearLayout,
             orientation = "vertical",
@@ -2288,6 +2320,7 @@ showSettings = function()
     .setPositiveButton(S.ai_ok, function()
       this.setSharedData("ai_auto_approve", dlgViews.autoApproveSwitch.isChecked() and "1" or "0")
       this.setSharedData("ai_auto_approve_network", dlgViews.autoApproveNetworkSwitch.isChecked() and "1" or "0")
+      this.setSharedData("ai_auto_run_sandbox", dlgViews.autoRunSandboxSwitch.isChecked() and "1" or "0")
       this.setSharedData("ai_allow_selfsigned", dlgViews.selfSignedSwitch.isChecked() and "1" or "0")
       local tempVal = tostring(dlgViews.tempInput.getText() or ""):gsub("^%s*(.-)%s*$", "%1")
       local retryVal = tostring(dlgViews.retryInput.getText() or ""):gsub("^%s*(.-)%s*$", "%1")
@@ -2471,19 +2504,20 @@ local function buildManagerRow(conv, index, render)
   col.setOrientation(1)
   col.setLayoutParams(LinearLayout.LayoutParams(0, -2, 1))
   col.setPadding(dp(10), 0, dp(4), 0)
+
   local nameTv = MaterialTextView(activity)
   nameTv.setText(name)
   nameTv.setTextSize(15)
   nameTv.setTextColor(ColorOnSurface)
   nameTv.setSingleLine(true)
   col.addView(nameTv)
+
   local metaTv = MaterialTextView(activity)
   metaTv.setText(convMetaText(conv))
   metaTv.setTextSize(12)
   metaTv.setTextColor(ColorText)
   metaTv.setSingleLine(true)
   col.addView(metaTv)
-  row.addView(col)
 
   local function smallButton(text, bgColor, textColor)
     local btn = MaterialButton(activity)
@@ -2499,11 +2533,21 @@ local function buildManagerRow(conv, index, render)
     return btn
   end
 
+  local btnRow = LinearLayout(activity)
+  btnRow.setOrientation(0)
+  btnRow.setGravity(android.view.Gravity.END)
+  local btnRowParams = LinearLayout.LayoutParams(-1, -2)
+  btnRowParams.topMargin = dp(6)
+  btnRow.setLayoutParams(btnRowParams)
+
   local renBtn = smallButton(S.ai_rename_btn, ColorSecondaryContainer, ColorOnSecondaryContainer)
   renBtn.setOnClickListener(function() showRenameDialog(index, name) end)
-  row.addView(renBtn)
+  btnRow.addView(renBtn)
 
   local delBtn = smallButton(S.ai_delete, ColorErrorContainer, ColorOnErrorContainer)
+  local delBtnParams = LinearLayout.LayoutParams(-2, -2)
+  delBtnParams.leftMargin = dp(8)
+  delBtn.setLayoutParams(delBtnParams)
   delBtn.setOnClickListener(function()
     MaterialAlertDialogBuilder(activity)
       .setTitle(S.ai_delete_conv)
@@ -2531,7 +2575,10 @@ local function buildManagerRow(conv, index, render)
       .setNegativeButton(S.ai_cancel, nil)
       .show()
   end)
-  row.addView(delBtn)
+  btnRow.addView(delBtn)
+
+  col.addView(btnRow)
+  row.addView(col)
 
   return row
 end

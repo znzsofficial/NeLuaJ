@@ -130,7 +130,6 @@ dependencies {
     androidTestImplementation(libs.espresso.core)
 
     //AndroidX
-    implementation(libs.core.ktx)
     implementation(libs.appcompat)
     implementation(libs.androidx.activity)
     implementation(libs.androidx.annotation)

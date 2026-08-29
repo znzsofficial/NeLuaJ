@@ -30,6 +30,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * LuaJava桥接库主类。
@@ -48,7 +49,7 @@ public class LuajavaLib extends VarArgFunction {
     // 自定义类加载器列表
     public ArrayList<ClassLoader> e = new ArrayList<>();
     private volatile ClassLoader[] classLoaders = new ClassLoader[0];
-    private volatile long classLoaderGeneration;
+    private final AtomicLong classLoaderGeneration = new AtomicLong();
 
     /**
      * Retained for binary compatibility with the bundled Luaj++ API. Runtime lookups deliberately
@@ -260,11 +261,11 @@ public class LuajavaLib extends VarArgFunction {
 
     private void publishClassLoaders(ArrayList<ClassLoader> classLoaders) {
         this.classLoaders = new ArrayList<>(classLoaders).toArray(new ClassLoader[0]);
-        classLoaderGeneration++;
+        classLoaderGeneration.incrementAndGet();
     }
 
     long classLoaderGeneration() {
-        return classLoaderGeneration;
+        return classLoaderGeneration.get();
     }
 
     /**
@@ -286,7 +287,7 @@ public class LuajavaLib extends VarArgFunction {
                 case 6, 10 -> toTable(args);
                 case 7 -> // instanceof
                         LuaValue.valueOf(
-                                ((Class) args.arg(2).touserdata(Class.class)).isInstance(args.checkuserdata(1))
+                                args.arg(2).touserdata(Class.class).isInstance(args.checkuserdata(1))
                         );
                 case 8 -> kotlinMember(args, INSTANCE, "Kotlin object");
                 case 9 -> kotlinMember(args, COMPANION, "Kotlin companion object");
@@ -817,7 +818,7 @@ public class LuajavaLib extends VarArgFunction {
         private final Class targetClass;
 
         public override(JavaClass javaClass) {
-            this.targetClass = (Class) ((LuaUserdata) javaClass).touserdata(Class.class);
+            this.targetClass = javaClass.touserdata(Class.class);
         }
 
         public LuaValue call(LuaValue value) {

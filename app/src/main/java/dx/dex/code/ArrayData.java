@@ -74,7 +74,7 @@ public final class ArrayData extends VariableSizeInsn {
 
         int sz = values.size();
 
-        if (sz <= 0) {
+        if (sz == 0) {
             throw new IllegalArgumentException("Illegal number of init values");
         }
 

@@ -35,7 +35,7 @@ internal object SandboxLibraries {
         globals.set("json", LuaTable().apply {
             set("null", jsonNull)
             set("encode", object : OneArgFunction() {
-                override fun call(arg: LuaValue): LuaValue = LuaValue.valueOf(encodeJson(arg))
+                override fun call(arg: LuaValue): LuaValue = valueOf(encodeJson(arg))
             })
             set("decode", object : OneArgFunction() {
                 override fun call(arg: LuaValue): LuaValue = decodeJson(arg.checkjstring())
@@ -65,7 +65,7 @@ internal object SandboxLibraries {
             })
         })
         globals.set("inspect", object : OneArgFunction() {
-            override fun call(arg: LuaValue): LuaValue = LuaValue.valueOf(inspect(arg))
+            override fun call(arg: LuaValue): LuaValue = valueOf(inspect(arg))
         })
         globals.set("assert_equal", object : VarArgFunction() {
             override fun invoke(args: Varargs): Varargs {
@@ -101,7 +101,7 @@ internal object SandboxLibraries {
             if (text.toByteArray(StandardCharsets.UTF_8).size > MAX_UTILITY_BYTES) {
                 throw LuaError("utility input exceeds 1 MiB")
             }
-            boundUtilityResult(LuaValue.valueOf(transform(text)))
+            boundUtilityResult(valueOf(transform(text)))
         } catch (error: Exception) {
             throw LuaError(error.message ?: "codec operation failed")
         }
