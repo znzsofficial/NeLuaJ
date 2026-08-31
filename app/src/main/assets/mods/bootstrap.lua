@@ -7,11 +7,16 @@ local classNamesReader = luajava.newInstance("com.nekolaska.internal.ClassNamesR
 ClassesNames = ClassesNames or {}
 local classNamesLoaded = false
 local function ensureClassNames()
-  if classNamesLoaded then return end
-  ClassesNames.classes = classNamesReader.getAllNames()
-  ClassesNames.top_classes = classNamesReader.getAllTopNames()
-  ClassesNames.simple_top_classes = classNamesReader.getAllTopSimpleNames()
-  classNamesLoaded = true
+  if classNamesLoaded and ClassesNames.classes and ClassesNames.simple_top_classes then return end
+  local classes = classNamesReader.getAllNames()
+  local top_classes = classNamesReader.getAllTopNames()
+  local simple_top_classes = classNamesReader.getAllTopSimpleNames()
+  if classes and top_classes and simple_top_classes then
+    ClassesNames.classes = classes
+    ClassesNames.top_classes = top_classes
+    ClassesNames.simple_top_classes = simple_top_classes
+    classNamesLoaded = true
+  end
 end
 
 xTask(function()

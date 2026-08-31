@@ -57,12 +57,18 @@ local activeToolStop = nil
 local editingMessageIndex = nil
 local undoTurns = {}
 local redoTurns = {}
-local activeConversationIndex = 0
+local activeConversationId = nil
 local activeStream = nil
 local requestRetryPayloads = setmetatable({}, { __mode = "k" })
 
 -- 前向声明
 local saveHistory, loadHistory, showModelManager, showModelPicker, showConvManager, showConvList, showSettings, addMessageBubble, addToolBubble, updateProjectLabel, sendMessage, sendToApi, sendWithCompressedContext, addRequestErrorBubble
+
+local function convName(conv)
+  local n = conv and conv.name or ""
+  if n == "" then return S.ai_unnamed_conv end
+  return n
+end
 
 -- ─── UI 辅助 ──
 
@@ -1080,11 +1086,17 @@ end
 
 -- ─── 会话持久化 ──
 
-saveHistory = function()
-  if activeConversationIndex > 0 and AgentChat.saveConversation then
-    AgentChat.saveConversation(activeConversationIndex, messages)
+saveHistory = function(updates)
+  if activeConversationId and activeConversationId ~= "" then
+    AgentChat.saveConversation(activeConversationId, messages, updates)
   else
-    AgentChat.saveCurrentConv(messages)
+    local conv = AgentChat.getCurrentConv()
+    if conv then
+      activeConversationId = conv.id
+      AgentChat.saveConversation(conv.id, messages, updates)
+    else
+      AgentChat.saveCurrentConv(messages, updates)
+    end
   end
 end
 
@@ -1094,18 +1106,15 @@ loadHistory = function(resetTurnHistory)
     redoTurns = {}
     if AgentChat.clearActiveSkill then AgentChat.clearActiveSkill() end
   end
-  local conv, idx = AgentChat.getCurrentConv()
-  if not conv or not conv.messages or #conv.messages == 0 then
-    -- 自动创建新会话
-    local created
-    created, activeConversationIndex = AgentChat.createConversation()
-    messages = created and created.messages or {}
-    if updateProjectLabel then updateProjectLabel() end
-    return 0
+  local conv = AgentChat.getCurrentConv()
+  if not conv then
+    local created = AgentChat.createConversation()
+    conv = created or AgentChat.getCurrentConv()
   end
-  activeConversationIndex = idx
-  messages = conv.messages
+  activeConversationId = conv and conv.id or nil
+  messages = conv and conv.messages or {}
   if updateProjectLabel then updateProjectLabel() end
+  if views.aiTitle and conv then views.aiTitle.setText(convName(conv)) end
   -- 重建气泡
   local container = views.msgContainer
   if container then
@@ -1514,12 +1523,13 @@ sendMessage = function()
   end
   if skill then
     local conv = AgentChat.getCurrentConv()
-    conv.skills = conv.skills or {}
-    conv.skills[skill.name] = true
+    local skills = conv and conv.skills or {}
+    skills[skill.name] = true
+    saveHistory({ skills = skills })
+  else
     saveHistory()
   end
   redoTurns = {}
-  saveHistory()
 
   if not AgentChat.hasApiKey() then
     addMessageBubble("assistant", S.ai_need_config)
@@ -2352,12 +2362,6 @@ local function convColor(name)
   return CONV_COLORS[(h % #CONV_COLORS) + 1]
 end
 
-local function convName(conv)
-  local n = conv and conv.name or ""
-  if n == "" then return S.ai_unnamed_conv end
-  return n
-end
-
 local function makeAvatar(name, sizeDp)
   local size = dp(sizeDp)
   local tv = MaterialTextView(activity)
@@ -2391,7 +2395,7 @@ updateProjectLabel = function()
   views.aiProject.setText(S.ai_project:format(project))
 end
 
-local function showRenameDialog(index, oldName)
+local function showRenameDialog(convId, oldName)
   local dlgViews = {}
   local inputLayout = {
     LinearLayout,
@@ -2414,11 +2418,11 @@ local function showRenameDialog(index, oldName)
     .setView(content)
     .setPositiveButton(S.ai_ok, function()
       local name = tostring(dlgViews.nameInput.getText() or ""):gsub("^%s*(.-)%s*$", "%1")
-      if name ~= "" then
-        AgentChat.renameConversation(index, name)
-        if views.aiTitle and index == AgentChat.getCurrentConvIndex() then
-          local c = AgentChat.getCurrentConv()
-          if c then views.aiTitle.setText(convName(c)) end
+      if name ~= "" and convId then
+        AgentChat.renameConversation(convId, name)
+        local c = AgentChat.getCurrentConv()
+        if views.aiTitle and c and c.id == convId then
+          views.aiTitle.setText(convName(c))
         end
       end
     end)
@@ -2484,8 +2488,9 @@ local function buildConvRow(conv, isCurrent, onClick)
   return row
 end
 
-local function buildManagerRow(conv, index, render)
+local function buildManagerRow(conv, render)
   local name = convName(conv)
+  local convId = conv and conv.id
   local row = LinearLayout(activity)
   row.setOrientation(0)
   row.setGravity(16)
@@ -2541,7 +2546,7 @@ local function buildManagerRow(conv, index, render)
   btnRow.setLayoutParams(btnRowParams)
 
   local renBtn = smallButton(S.ai_rename_btn, ColorSecondaryContainer, ColorOnSecondaryContainer)
-  renBtn.setOnClickListener(function() showRenameDialog(index, name) end)
+  renBtn.setOnClickListener(function() showRenameDialog(convId, name) end)
   btnRow.addView(renBtn)
 
   local delBtn = smallButton(S.ai_delete, ColorErrorContainer, ColorOnErrorContainer)
@@ -2554,13 +2559,13 @@ local function buildManagerRow(conv, index, render)
       .setMessage(S.ai_confirm_delete_conv:format(name))
       .setPositiveButton(S.ai_delete, function()
         invalidateRequest()
-        if not AgentChat.deleteConversation(index) then
+        if not AgentChat.deleteConversation(convId) then
           print(S.ai_delete_failed)
           return
         end
-        if AgentChat.getCurrentConvIndex() == 0 then
-          local _
-          _, activeConversationIndex = AgentChat.createConversation()
+        local current = AgentChat.getCurrentConv()
+        if not current then
+          AgentChat.createConversation()
         end
         messages = {}
         if views.msgContainer then views.msgContainer.removeAllViews() end
@@ -2584,17 +2589,15 @@ local function buildManagerRow(conv, index, render)
 end
 
 local function showConvList()
-  local convs = AgentChat.loadConversations()
-  local current = AgentChat.getCurrentConvIndex()
+  local list = AgentChat.listConversations()
+  local currentConv = AgentChat.getCurrentConv()
+  local currentId = currentConv and currentConv.id or nil
 
-  local projectPath = AgentChat.getCurrentProjectPath()
-  local visible = {}
-  for index, conv in ipairs(convs) do
-    if conv.projectPath == projectPath then visible[#visible + 1] = { index = index, conv = conv } end
-  end
-  if #visible == 0 then
-    local _
-    _, activeConversationIndex = AgentChat.createConversation()
+  if #list == 0 then
+    local created = AgentChat.createConversation()
+    activeConversationId = created and created.id or nil
+    messages = created and created.messages or {}
+    if views.msgContainer then views.msgContainer.removeAllViews() end
     if views.aiTitle then views.aiTitle.setText(S.ai_new_conv) end
     if updateProjectLabel then updateProjectLabel() end
     return
@@ -2630,7 +2633,7 @@ local function showConvList()
         {
           MaterialTextView,
           id = "convCount",
-           text = S.ai_conv_count:format(#visible),
+          text = S.ai_conv_count:format(#list),
           textSize = "13sp", textColor = ColorText,
         },
       },
@@ -2674,14 +2677,13 @@ local function showConvList()
 
   local container = dlgViews.convList
   container.removeAllViews()
-  for _, item in ipairs(visible) do
-    local idx, conv = item.index, item.conv
-    local row = buildConvRow(conv, idx == current, function()
+  for _, item in ipairs(list) do
+    local conv = item.conversation
+    local row = buildConvRow(conv, conv.id == currentId, function()
       saveHistory()
       invalidateRequest()
-      AgentChat.setCurrentConv(idx)
-      activeConversationIndex = idx
-      if AgentChat.syncAgentProjectScope then AgentChat.syncAgentProjectScope() end
+      AgentChat.setCurrentConv(conv.id)
+      activeConversationId = conv.id
       messages = {}
       if views.msgContainer then views.msgContainer.removeAllViews() end
       loadHistory()
@@ -2699,8 +2701,8 @@ local function showConvList()
   dlgViews.btnNew.onClick = function()
     saveHistory()
     invalidateRequest()
-    local _
-    _, activeConversationIndex = AgentChat.createConversation()
+    local created = AgentChat.createConversation()
+    activeConversationId = created and created.id or nil
     messages = {}
     if views.msgContainer then views.msgContainer.removeAllViews() end
     if views.aiTitle then views.aiTitle.setText(S.ai_new_conv) end
@@ -2715,8 +2717,8 @@ local function showConvList()
 end
 
 showConvManager = function()
-  local convs = AgentChat.loadConversations()
-  if #convs == 0 then return end
+  local list = AgentChat.listConversations()
+  if #list == 0 then return end
 
   local dlgViews = {}
   local content = loadlayout({
@@ -2747,7 +2749,7 @@ showConvManager = function()
         {
           MaterialTextView,
           id = "convCount",
-          text = S.ai_conv_count:format(#convs),
+          text = S.ai_conv_count:format(#list),
           textSize = "13sp", textColor = ColorText,
         },
       },
@@ -2774,24 +2776,19 @@ showConvManager = function()
 
   local container = dlgViews.convList
   local function render()
-    local convs2 = AgentChat.loadConversations()
-    local projectPath = AgentChat.getCurrentProjectPath()
+    local currentList = AgentChat.listConversations()
     container.removeAllViews()
-    for i, conv in ipairs(convs2) do
-      if conv.projectPath == projectPath then
-        container.addView(buildManagerRow(conv, i, render))
-      end
+    for _, item in ipairs(currentList) do
+      container.addView(buildManagerRow(item.conversation, render))
     end
-    local count = 0
-    for _, conv in ipairs(convs2) do if conv.projectPath == projectPath then count = count + 1 end end
-    if dlgViews.convCount then dlgViews.convCount.setText(S.ai_conv_count:format(count)) end
+    if dlgViews.convCount then dlgViews.convCount.setText(S.ai_conv_count:format(#currentList)) end
   end
 
   dlgViews.btnNew.onClick = function()
     saveHistory()
     invalidateRequest()
-    local _
-    _, activeConversationIndex = AgentChat.createConversation()
+    local created = AgentChat.createConversation()
+    activeConversationId = created and created.id or nil
     messages = {}
     if views.msgContainer then views.msgContainer.removeAllViews() end
     if views.aiTitle then views.aiTitle.setText(S.ai_new_conv) end
@@ -3011,8 +3008,8 @@ function _M.show()
     views.btnClear.onClick = function()
       invalidateRequest()
       saveHistory()
-      local _
-      _, activeConversationIndex = AgentChat.createConversation()
+      local created = AgentChat.createConversation()
+      activeConversationId = created and created.id or nil
       messages = {}
       if views.msgContainer then views.msgContainer.removeAllViews() end
       if views.aiTitle then views.aiTitle.setText(S.ai_new_conv) end
@@ -3072,11 +3069,16 @@ function _M.show()
   return dialog
 end
 
+function _M.onBeforeProjectChange()
+  saveHistory()
+  invalidateRequest()
+end
+
 function _M.refreshProjectContext()
   saveHistory()
   invalidateRequest()
   messages = {}
-  activeConversationIndex = 0
+  activeConversationId = nil
   if not dialog or not dialog.isShowing() then return end
   if views.msgContainer then views.msgContainer.removeAllViews() end
   loadHistory()

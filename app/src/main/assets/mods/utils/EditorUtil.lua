@@ -490,8 +490,10 @@ function _M.init()
             "onItemClick", "onItemLongClick", "onVersionChanged", "this", "android"
         }
         local l = #ms
-        for k, v in classes do
-            ms[l + k + 1] = v
+        if classes then
+            for k = 0, #classes - 1 do
+                ms[l + k + 1] = classes[k]
+            end
         end
         mLuaEditor.addNames(ms)
                   .addNames({ "byte", "boolean", "short", "int", "long", "float", "double", "char" })

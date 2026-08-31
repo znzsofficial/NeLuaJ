@@ -5,6 +5,7 @@ local _M = {}
 local MCPClient = require("mods.agent.MCPClient")
 local ChangeSet = require("mods.agent.ChangeSet")
 local AgentStorage = require("mods.agent.AgentStorage")
+local ConversationStore = require("mods.agent.ConversationStore")
 local ContextManager = require("mods.agent.ContextManager")
 local OpenAIClient = require("mods.agent.OpenAIClient")
 local ToolExecutor = require("mods.agent.ToolExecutor")
@@ -1269,6 +1270,7 @@ AgentStorage.configure(
 function _M.syncAgentProjectScope()
   local path = Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir()
   AgentStorage.configureCurrent(path, Bean and Bean.Path and Bean.Path.agent_root_dir)
+  ConversationStore.invalidate()
   _M.configureSkills()
   ChangeSet.configure({
     resolve = resolvePath,
@@ -1562,160 +1564,80 @@ function _M.removeModel(index)
 end
 
 -- ─── 多会话管理 ──
-
-local CONV_KEY = "ai_conversations"
-local CONV_IDX_KEY = "ai_current_conv"
-local convsCache = nil
-local convSeq = 0
-
-function _M.loadConversations()
-  if convsCache then return convsCache end
-  local raw = this.getSharedData(CONV_KEY, "")
-  if raw == "" then
-    convsCache = {}
-    return convsCache
-  end
-  local ok, decoded = pcall(json.decode, raw)
-  if ok and type(decoded) == "table" then
-    local projectPath = normalizePath(Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir())
-    local migrated = false
-    for _, conv in ipairs(decoded) do
-      if type(conv) == "table" and not conv.projectPath then
-        conv.projectPath = projectPath
-        migrated = true
-      end
-      -- Native Responses output is only meaningful at the endpoint that
-      -- created it. Old conversations lack this field and keep portable
-      -- tool-call history automatically.
-      if type(conv) == "table" and type(conv.messages) == "table" then
-        for _, message in ipairs(conv.messages) do
-          if type(message) == "table" and message.response_output ~= nil
-              and type(message.response_output) ~= "table" then
-            message.response_output = nil
-            message.response_origin = nil
-            migrated = true
-          end
-        end
-      end
-    end
-    convsCache = decoded
-    if migrated then
-      local encodedOk, encoded = pcall(json.encode, convsCache)
-      if encodedOk then this.setSharedData(CONV_KEY, encoded) end
-    end
-    return convsCache
-  end
-  convsCache = {}
-  return convsCache
-end
-
-function _M.saveConversations(convs)
-  local ok, encoded = pcall(json.encode, convs)
-  if not ok or not encoded then return false end
-  local saved = this.setSharedData(CONV_KEY, encoded) == true
-  if saved then convsCache = convs end
-  return saved
-end
-
-function _M.getCurrentConvIndex()
-  local convs = _M.loadConversations()
-  if #convs == 0 then return 0 end
-  local projectPath = normalizePath(Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir())
-  local stored = tonumber(this.getSharedData(CONV_IDX_KEY, "0")) or 0
-  if stored >= 1 and stored <= #convs and convs[stored].projectPath == projectPath then
-    return stored
-  end
-  for index = #convs, 1, -1 do
-    if convs[index].projectPath == projectPath then
-      this.setSharedData(CONV_IDX_KEY, tostring(index))
-      return index
-    end
-  end
-  return 0
-end
-
-function _M.setCurrentConv(index)
-  this.setSharedData(CONV_IDX_KEY, tostring(index))
-end
-
-function _M.getCurrentConv()
-  local convs = _M.loadConversations()
-  local idx = _M.getCurrentConvIndex()
-  if idx >= 1 and idx <= #convs then
-    return convs[idx], idx
-  end
-  return nil, 0
-end
-
-function _M.getCurrentProjectPath()
+local function currentProjectPath()
   return normalizePath(Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir())
 end
 
+ConversationStore.configure({
+  getData = function(key, defaultValue)
+    return this.getSharedData(key, defaultValue)
+  end,
+  setData = function(key, value)
+    return this.setSharedData(key, value)
+  end,
+  encode = function(value)
+    return json.encode(value)
+  end,
+  decode = function(value)
+    return json.decode(value)
+  end,
+  getProjectPath = currentProjectPath,
+  normalizeProjectPath = normalizePath,
+})
+
+function _M.loadConversations(force)
+  return ConversationStore.load(force)
+end
+
+function _M.listConversations(path, force)
+  return ConversationStore.list(path or currentProjectPath(), force)
+end
+
+function _M.saveConversations(conversations)
+  -- Kept for callers that still need to rewrite the complete legacy array.
+  local encoded = json.encode(conversations or {})
+  return this.setSharedData("ai_conversations", encoded) == true
+end
+
+function _M.getCurrentProjectPath()
+  return currentProjectPath()
+end
+
+function _M.getCurrentConv()
+  return ConversationStore.current(currentProjectPath())
+end
+
+function _M.getCurrentConvIndex()
+  local _, index = _M.getCurrentConv()
+  return index or 0
+end
+
+function _M.setCurrentConv(id)
+  local _, index = ConversationStore.setCurrent(id, currentProjectPath())
+  return index and index > 0 or false
+end
+
 function _M.createConversation(name)
-  local convs = _M.loadConversations()
-  convSeq = convSeq + 1
-  local id = "conv_" .. tostring(os.time()) .. "_" .. tostring(convSeq)
-  local conv = {
-    id = id,
-    name = name or "",
-    projectPath = normalizePath(Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir()),
-    messages = {},
-    createdAt = os.date("%m-%d %H:%M"),
-  }
-  convs[#convs + 1] = conv
-  _M.saveConversations(convs)
-  _M.setCurrentConv(#convs)
-  return conv, #convs
+  local conversation = ConversationStore.create(name, currentProjectPath())
+  return conversation, conversation and conversation.id or nil
 end
 
-function _M.saveCurrentConv(messages)
-  local convs = _M.loadConversations()
-  local idx = _M.getCurrentConvIndex()
-  if idx >= 1 and idx <= #convs then
-    -- 持久化全量历史，发送时才按 token 预算裁剪
-    convs[idx].messages = messages
-    convs[idx].projectPath = convs[idx].projectPath or normalizePath(Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir())
-    if convs[idx].name == "" or convs[idx].name == "新对话" then
-      for _, m in ipairs(messages) do
-        if m.role == "user" and m.content and m.content ~= "" then
-          convs[idx].name = m.content:gsub("\n", " "):sub(1, 30)
-          break
-        end
-      end
-    end
-    _M.saveConversations(convs)
-  end
+function _M.saveConversation(id, messages, updates)
+  return ConversationStore.save(id, messages, currentProjectPath(), updates)
 end
 
-function _M.deleteConversation(index)
-  local convs = _M.loadConversations()
-  if index >= 1 and index <= #convs then
-    local current = _M.getCurrentConvIndex()
-    local removed = table.remove(convs, index)
-    if not _M.saveConversations(convs) then
-      table.insert(convs, index, removed)
-      return false
-    end
-    if #convs == 0 then
-      _M.setCurrentConv(0)
-    elseif current == index then
-      _M.setCurrentConv(math.min(index, #convs))
-    elseif current > index then
-      _M.setCurrentConv(current - 1)
-    end
-    return true
-  end
-  return false
+function _M.saveCurrentConv(messages, updates)
+  local conversation = _M.getCurrentConv()
+  if not conversation then return false end
+  return _M.saveConversation(conversation.id, messages, updates)
 end
 
-function _M.renameConversation(index, name)
-  local convs = _M.loadConversations()
-  if index >= 1 and index <= #convs and name ~= "" then
-    convs[index].name = name
-    _M.saveConversations(convs)
-    return true
-  end
-  return false
+function _M.deleteConversation(id)
+  return ConversationStore.delete(id, currentProjectPath())
+end
+
+function _M.renameConversation(id, name)
+  return ConversationStore.rename(id, name, currentProjectPath())
 end
 
 -- ─── 构建编辑器上下文 ──

@@ -67,23 +67,26 @@ end
 -- 返回{"c"= {"a.b.c","a.c.b.c"},"d" = {"a.d.c.d"}}
 function _M.init_Calendar(tab)
   local allClasses = {}
+  if not tab then return allClasses end
   local insertedClasses = {}
   local pattern2 = "^[%w]*[^%$]$"
   local pattern1 = "^[%w]*[%$]?[%w]*[^%d]*[%w]*[^%$]$"
-  for i = 0, #tab - 1 do
-    local className = match(tab[i], ".*%.(.*)$")
-    if className and (match(className, pattern2) or match(className, pattern1)) then
-      local fastReadClassesSelf = allClasses[className]
-      if not (fastReadClassesSelf) then
-        fastReadClassesSelf = {}
-        allClasses[className] = fastReadClassesSelf
+  local size = #tab
+  for i = 0, size - 1 do
+    local item = tab[i]
+    if item then
+      local className = match(item, ".*%.(.*)$")
+      if className and (match(className, pattern2) or match(className, pattern1)) then
+        local fastReadClassesSelf = allClasses[className]
+        if not (fastReadClassesSelf) then
+          fastReadClassesSelf = {}
+          allClasses[className] = fastReadClassesSelf
+        end
+        if not (insertedClasses[item]) then
+          insertedClasses[item] = true
+          table_insert(fastReadClassesSelf, item)
+        end
       end
-      local class = tab[i]
-      if not (insertedClasses[class]) then
-        insertedClasses[class] = true
-        table_insert(fastReadClassesSelf, class)
-      end
-      fastReadClassesSelf = nil
     end
   end
 
