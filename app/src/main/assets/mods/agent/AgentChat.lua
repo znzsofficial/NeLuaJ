@@ -33,6 +33,7 @@ local SYSTEM_PROMPT = [[
 - 路径默认相对于当前项目。先用 list_dir / search_in_files 定位，再用 read_file / read_files 阅读相关实现、调用方和配置。多个独立文件可以一起读取时使用 read_files；大文件根据返回的行号继续分段读取。
 - 修改现有文件优先使用 apply_patch；create_file 只用于创建新文件或用户明确要求整体覆盖。只改完成任务所需的代码。
 - 每次工具调用后检查结果。失败、结果截断或状态不明时，先重新读取相关位置，再决定如何继续；不要在未知状态下重复修改。
+- 工具返回失败时，先根据错误修正参数、路径或前置条件；不得以完全相同的工具名和参数重复调用。若无法得到新信息或无法修正，应向用户说明阻塞原因。
 - 是否需要确认由应用的工具策略决定。需要工具时直接发出 tool call，不要先在聊天中重复询问是否允许，也不要只说“准备调用工具”后停止。
 - 用户拒绝工具后，不得通过别名、拆分调用、其他工具或重复请求绕过确认。
 - 修改后执行与改动相关的验证。Lua/LuaJ++ 语法优先使用 check_lua_syntax，纯逻辑可使用 run_lua；有构建、测试或明确复现步骤时应执行并根据结果修复。无法验证时说明原因，不得把计划写成已完成。
@@ -389,6 +390,32 @@ local function splitLines(text)
   return lines
 end
 
+local function lineNumberAt(text, byteIndex)
+  if not byteIndex or byteIndex < 1 then return 1 end
+  local line = 1
+  local pos = 1
+  while true do
+    local nl = text:find("\n", pos, true)
+    if not nl or nl >= byteIndex then break end
+    line = line + 1
+    pos = nl + 1
+  end
+  return line
+end
+
+local function formatPatchLocations(locations)
+  if type(locations) ~= "table" or #locations == 0 then return "" end
+  local parts = {}
+  for _, loc in ipairs(locations) do
+    if loc.startLine == loc.endLine then
+      parts[#parts + 1] = "L" .. tostring(loc.startLine)
+    else
+      parts[#parts + 1] = "L" .. tostring(loc.startLine) .. "-" .. tostring(loc.endLine)
+    end
+  end
+  return table.concat(parts, ", ")
+end
+
 --- 应用 SEARCH/REPLACE 块
 --- 格式: <<<<<<< SEARCH\nold\n=======\nnew\n>>>>>>> REPLACE
 
@@ -502,6 +529,7 @@ local function applySearchReplace(original, patch)
   -- 统一行尾为 \n，避免 \r\n 差异导致匹配失败
   local result = original:gsub("\r\n", "\n"):gsub("\r", "\n")
   local applied = 0
+  local locations = {}
 
   -- 逐个查找 SEARCH/REPLACE 块
   local pos = 1
@@ -554,6 +582,13 @@ local function applySearchReplace(original, patch)
       return nil, "SEARCH 块未在文件中找到匹配:\n" .. searchContent:sub(1, 200) .. extra
     end
 
+    local startLine = lineNumberAt(result, foundStart)
+    local replaceLines = #splitLines(replaceContent)
+    if replaceContent == "" then replaceLines = 0 end
+    locations[#locations + 1] = {
+      startLine = startLine,
+      endLine = replaceLines == 0 and startLine or (startLine + replaceLines - 1),
+    }
     result = result:sub(1, foundStart - 1) .. replaceContent .. result:sub(foundEnd + 1)
     applied = applied + 1
     pos = replaceEnd + 20
@@ -563,7 +598,7 @@ local function applySearchReplace(original, patch)
     return nil, "未找到有效的 SEARCH/REPLACE 块"
   end
 
-  return result, applied
+  return result, applied, locations
 end
 
 --- 应用 Unified Diff
@@ -573,6 +608,7 @@ local function applyUnifiedDiff(original, patch)
   local patchLines = splitLines(patch)
   local result = {}
   local origIdx = 1
+  local locations = {}
 
   local i = 1
   while i <= #patchLines do
@@ -585,6 +621,7 @@ local function applyUnifiedDiff(original, patch)
     -- hunk 头: @@ -old_start,old_len +new_start,new_len @@
     elseif line:match("^@@") then
       local oldStart = tonumber(line:match("@@ %-(%d+)")) or 1
+      local newStart = tonumber(line:match("%+(%d+)")) or #result + 1
       -- 输出到 hunk 开始位置
       while origIdx < oldStart and origIdx <= #origLines do
         result[#result + 1] = origLines[origIdx]
@@ -592,6 +629,8 @@ local function applyUnifiedDiff(original, patch)
       end
       i = i + 1
 
+      local hunkStart = newStart
+      local hunkEnd = newStart - 1
       -- 处理 hunk body
       while i <= #patchLines do
         local hline = patchLines[i]
@@ -600,6 +639,7 @@ local function applyUnifiedDiff(original, patch)
         end
         if hline:match("^%+") then
           result[#result + 1] = hline:sub(2)
+          hunkEnd = hunkEnd + 1
           i = i + 1
         elseif hline:match("^%-") then
           origIdx = origIdx + 1
@@ -607,6 +647,7 @@ local function applyUnifiedDiff(original, patch)
         elseif hline:match("^ ") then
           result[#result + 1] = origLines[origIdx] or ""
           origIdx = origIdx + 1
+          hunkEnd = hunkEnd + 1
           i = i + 1
         elseif hline == "" then
           -- 空行可能是 context
@@ -615,6 +656,10 @@ local function applyUnifiedDiff(original, patch)
           i = i + 1
         end
       end
+      locations[#locations + 1] = {
+        startLine = hunkStart,
+        endLine = hunkEnd < hunkStart and hunkStart or hunkEnd,
+      }
     else
       i = i + 1
     end
@@ -626,7 +671,7 @@ local function applyUnifiedDiff(original, patch)
     origIdx = origIdx + 1
   end
 
-  return table.concat(result, "\n"), 1
+  return table.concat(result, "\n"), math.max(1, #locations), locations
 end
 
 --- 主入口：自动判断格式并应用补丁
@@ -1031,7 +1076,7 @@ local function legacyExecuteTool(name, args)
     end)
     if not okSyntax then return "语法检查异常: " .. tostring(syntaxErr) end
     if syntaxErr then return "Lua 语法错误:\n" .. tostring(syntaxErr) end
-    return "Lua 语法检查通过（代码未执行）"
+    return "Lua 语法检查通过"
 
   elseif name == "run_lua" then
     local code = args.code or ""
@@ -1114,7 +1159,7 @@ local function legacyExecuteTool(name, args)
     end
     original = readResult
 
-    local newContent, countOrErr = _M.applyPatch(original, patch)
+    local newContent, countOrErr, locations = _M.applyPatch(original, patch)
     if not newContent then
       return "补丁应用失败\n文件: " .. path .. "\n原因: " .. tostring(countOrErr)
     end
@@ -1124,7 +1169,11 @@ local function legacyExecuteTool(name, args)
       return "补丁写入失败\n文件: " .. path .. "\n原因: " .. tostring(writeResult)
     end
     local count = type(countOrErr) == "number" and countOrErr or 1
-    return "补丁已应用（" .. count .. " 处修改）: " .. path
+    local locText = formatPatchLocations(locations)
+    if locText ~= "" then
+      return "补丁已应用（" .. count .. " 处修改）\n位置: " .. locText
+    end
+    return "补丁已应用（" .. count .. " 处修改）"
 
   elseif name == "replace_in_file" then
     local path = resolvePath(args.path)
@@ -1626,6 +1675,10 @@ function _M.saveConversation(id, messages, updates)
   return ConversationStore.save(id, messages, currentProjectPath(), updates)
 end
 
+function _M.clearConversation(id)
+  return ConversationStore.clear(id, currentProjectPath())
+end
+
 function _M.saveCurrentConv(messages, updates)
   local conversation = _M.getCurrentConv()
   if not conversation then return false end
@@ -1735,6 +1788,9 @@ OpenAIClient.configure({
       used = used + ContextManager.estimateTokens(json.encode(item))
     end
     for _, item in ipairs(body.tools or {}) do
+      used = used + ContextManager.estimateTokens(json.encode(item))
+    end
+    for _, item in ipairs(body.functions or {}) do
       used = used + ContextManager.estimateTokens(json.encode(item))
     end
     return {

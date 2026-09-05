@@ -354,10 +354,18 @@ function _M.save(id, messages, path, updates)
 
   local candidate = clone(current)
   local target = candidate[index]
-  target.messages = clone(type(messages) == "table" and messages or {})
+  local nextMessages = type(messages) == "table" and messages or {}
+  local allowEmpty = type(updates) == "table" and updates.__allow_empty == true
+  -- A stale lifecycle callback can reach the store with the module's initial
+  -- empty table. Never let that erase a previously persisted conversation.
+  if #nextMessages == 0 and type(target.messages) == "table"
+      and #target.messages > 0 and not allowEmpty then
+    return false
+  end
+  target.messages = clone(nextMessages)
   if type(updates) == "table" then
     for key, value in pairs(updates) do
-      if key ~= "id" and key ~= "projectPath" and key ~= "messages" then
+      if key ~= "id" and key ~= "projectPath" and key ~= "messages" and key ~= "__allow_empty" then
         target[key] = clone(value)
       end
     end
@@ -373,6 +381,10 @@ function _M.save(id, messages, path, updates)
     end
   end
   return persistConversations(candidate)
+end
+
+function _M.clear(id, path)
+  return _M.save(id, {}, path, { __allow_empty = true })
 end
 
 function _M.rename(id, name, path)

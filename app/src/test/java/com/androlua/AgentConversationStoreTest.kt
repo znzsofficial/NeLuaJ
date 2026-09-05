@@ -159,4 +159,37 @@ class AgentConversationStoreTest {
             "@test_legacy_migration.lua"
         ).call()
     }
+
+    @Test
+    fun accidentalEmptySaveDoesNotEraseMessages() {
+        val assets = sequenceOf(File("src/main/assets"), File("app/src/main/assets"))
+            .first { it.isDirectory }
+        val globals = JsePlatform.standardGlobals()
+        loadStore(globals, assets)
+
+        globals.load(
+            """
+            local store = {}
+            ConversationStore.configure({
+                getData = function(key, def) return store[key] or def end,
+                setData = function(key, value) store[key] = value; return true end,
+                encode = function(value) return value end,
+                decode = function(value) return value end,
+                getProjectPath = function() return "/project" end,
+                normalizeProjectPath = function(path) return path end,
+            })
+
+            local conversation = ConversationStore.create("Persistent")
+            local messages = { { role = "user", content = "must survive" } }
+            assert(ConversationStore.save(conversation.id, messages, "/project") == true)
+            assert(ConversationStore.save(conversation.id, {}, "/project") == false)
+            assert(#ConversationStore.get(conversation.id, "/project").messages == 1)
+            ConversationStore.invalidate()
+            assert(#ConversationStore.get(conversation.id, "/project").messages == 1)
+            assert(ConversationStore.clear(conversation.id, "/project") == true)
+            assert(#ConversationStore.get(conversation.id, "/project").messages == 0)
+            """.trimIndent(),
+            "@empty_save_guard_test"
+        ).call()
+    }
 }

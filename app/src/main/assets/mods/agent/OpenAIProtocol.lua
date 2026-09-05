@@ -187,6 +187,50 @@ local function repairToolHistory(messages)
   return repaired
 end
 
+local function encodeLegacyFunctionHistory(messages)
+  local encoded = {}
+  local index = 1
+  while index <= #messages do
+    local message = messages[index]
+    if message.role == "assistant" and message.legacy_function_call then
+      local calls = message.tool_calls or {}
+      local call = calls[1]
+      local fn = call and (call["function"] or call)
+      local name = fn and tostring(fn.name or "") or ""
+      if #calls == 1 and name ~= "" then
+        encoded[#encoded + 1] = {
+          role = "assistant",
+          content = tostring(message.content or ""),
+          function_call = {
+            name = name,
+            arguments = tostring(fn.arguments or "{}"),
+          },
+        }
+        local result = messages[index + 1]
+        if result and result.role == "tool" and tostring(result.tool_call_id or "") == tostring(call.id or "") then
+          encoded[#encoded + 1] = {
+            role = "function",
+            name = name,
+            content = tostring(result.content or ""),
+          }
+          index = index + 2
+        else
+          index = index + 1
+        end
+      else
+        message.legacy_function_call = nil
+        encoded[#encoded + 1] = message
+        index = index + 1
+      end
+    else
+      message.legacy_function_call = nil
+      encoded[#encoded + 1] = message
+      index = index + 1
+    end
+  end
+  return encoded
+end
+
 local function prepareMessages(messages, toolsEnabled, retainReasoning, stripItemIds)
   local prepared = cloneValue(messages)
   if stripItemIds then
@@ -209,7 +253,10 @@ local function prepareMessages(messages, toolsEnabled, retainReasoning, stripIte
     -- Ordinary Chat Completions turns must not send provider reasoning.
     for _, message in ipairs(prepared) do message.reasoning_content = nil end
   end
-  if toolsEnabled then return repairToolHistory(prepared) end
+  if toolsEnabled then
+    prepared = repairToolHistory(prepared)
+    return stripItemIds and encodeLegacyFunctionHistory(prepared) or prepared
+  end
   local filtered = {}
   for _, message in ipairs(prepared) do
     if message.role ~= "tool" then
@@ -321,11 +368,34 @@ local function responsesTools(tools)
   return out
 end
 
+local function legacyFunctions(tools)
+  local out = {}
+  for _, tool in ipairs(tools) do
+    local fn = tool["function"] or tool
+    if tool.type == "function" and fn.name then
+      out[#out + 1] = {
+        name = fn.name,
+        description = fn.description,
+        parameters = fn.parameters,
+      }
+    end
+  end
+  return out
+end
+
+local function hasLegacyFunctionHistory(messages)
+  for _, message in ipairs(messages or {}) do
+    if message.role == "assistant" and message.legacy_function_call then return true end
+  end
+  return false
+end
+
 function _M.buildRequest(cfg, messages, callbacks)
   local model, apiUrl = cfg.getModel(), cfg.getApiUrl()
   local toolsEnabled = not callbacks.disableTools
   local useResponses = cfg.useResponses and cfg.useResponses() == true
   local nativeHistory = useResponses and _M.usesNativeResponsesHistory(apiUrl)
+  local legacyFunctionMode = not useResponses and hasLegacyFunctionHistory(messages)
   local responseOrigin = _M.responsesOrigin(apiUrl)
   local retainReasoning = useResponses and retainsResponsesReasoning(apiUrl, model) or retainsChatReasoning(apiUrl, model)
   local prepared = prepareMessages(messages, toolsEnabled, retainReasoning, not useResponses)
@@ -347,10 +417,15 @@ function _M.buildRequest(cfg, messages, callbacks)
   end
   if toolsEnabled then
     local tools = collectTools(cfg)
-    body.tools = useResponses and responsesTools(tools) or tools
-    if #body.tools > 0 then
-      body.tool_choice = "auto"
-      if not useResponses and usesGlmToolStream(apiUrl, model) then body.tool_stream = true end
+    if legacyFunctionMode then
+      body.functions = legacyFunctions(tools)
+      if #body.functions > 0 then body.function_call = "auto" end
+    else
+      body.tools = useResponses and responsesTools(tools) or tools
+      if #body.tools > 0 then
+        body.tool_choice = "auto"
+        if not useResponses and usesGlmToolStream(apiUrl, model) then body.tool_stream = true end
+      end
     end
   end
   return body, useResponses, prepared[#prepared], {
@@ -369,7 +444,13 @@ function _M.parseToolCalls(encoded, normalizeToolName)
     local args = call.arguments or (type(fn) == "table" and fn.arguments)
     if name ~= "" then
       if not reasoningContent and call.reasoning_content then reasoningContent = tostring(call.reasoning_content) end
-      parsed[#parsed + 1] = { id = call.id and call.id ~= "" and call.id or "call_" .. tostring(index), item_id = call.item_id, name = name, arguments = type(args) == "table" and json.encode(args) or (args or "{}") }
+      parsed[#parsed + 1] = {
+        id = call.id and call.id ~= "" and call.id or "call_" .. tostring(index),
+        item_id = call.item_id,
+        name = name,
+        arguments = type(args) == "table" and json.encode(args) or (args or "{}"),
+        legacy_function_call = call.legacy_function_call == true,
+      }
     end
   end
   return parsed, reasoningContent

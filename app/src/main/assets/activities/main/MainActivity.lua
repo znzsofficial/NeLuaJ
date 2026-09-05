@@ -245,6 +245,9 @@ function onConfigurationChanged(config)
 end
 
 function onDestroy()
+  pcall(function()
+    require("mods.agent.ChatUI").saveCurrentConversation()
+  end)
   Init.stopCheck()
   pcall(function()
     local MagnifierManager = require "mods.utils.MagnifierManager"
@@ -353,6 +356,9 @@ function onPause()
   if Bean.Path.this_file ~= "" then
     EditorUtil.save()
   end
+  pcall(function()
+    require("mods.agent.ChatUI").saveCurrentConversation()
+  end)
 end
 
 this.addOnBackPressedCallback(function()

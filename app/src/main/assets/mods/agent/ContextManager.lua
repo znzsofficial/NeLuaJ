@@ -83,6 +83,7 @@ local function copyMessage(src)
   if src.content ~= nil then copy.content = src.content end
   if src.tool_calls ~= nil then copy.tool_calls = src.tool_calls end
   if src.tool_call_id ~= nil then copy.tool_call_id = src.tool_call_id end
+  if src.legacy_function_call ~= nil then copy.legacy_function_call = src.legacy_function_call end
   if src.reasoning_content ~= nil then copy.reasoning_content = src.reasoning_content end
   if src.response_output ~= nil then copy.response_output = src.response_output end
   if src.response_origin ~= nil then copy.response_origin = src.response_origin end

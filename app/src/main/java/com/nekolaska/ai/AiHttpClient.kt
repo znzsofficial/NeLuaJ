@@ -317,6 +317,10 @@ class AiHttpClient @JvmOverloads constructor(
                     deltaCandidate != null -> deltaCandidate
                     else -> messageCandidate
                 } ?: continue
+                if (delta.optJSONObject("function_call") != null) {
+                    val accumulator = chatCalls[0] ?: JSONObject().also { chatCalls[0] = it }
+                    accumulator.put("legacy_function_call", true)
+                }
                 if (delta.has("name") || delta.has("arguments")) {
                     val accumulator = chatCalls[0] ?: JSONObject().also { chatCalls[0] = it }
                     if (delta.has("name") && !delta.isNull("name")) putNonEmpty(accumulator, "name", delta.opt("name"))
@@ -339,6 +343,7 @@ class AiHttpClient @JvmOverloads constructor(
                 delta.optJSONObject("tool_call")?.let { appendChatCall(it, it.optInt("index", 0)) }
                 delta.optJSONObject("function_call")?.let { legacy ->
                     val accumulator = chatCalls[0] ?: JSONObject().also { chatCalls[0] = it }
+                    accumulator.put("legacy_function_call", true)
                     if (legacy.has("name") && !legacy.isNull("name")) putNonEmpty(accumulator, "name", legacy.opt("name"))
                     if (legacy.has("arguments") && !legacy.isNull("arguments")) {
                         accumulator.put("arguments", accumulator.optString("arguments", "") + valueOfJson(legacy.opt("arguments")))
@@ -359,6 +364,7 @@ class AiHttpClient @JvmOverloads constructor(
                 put("id", accumulator.optString("id", "").ifEmpty { "call_$index" })
                 put("name", name)
                 put("arguments", accumulator.optString("arguments", ""))
+                if (accumulator.optBoolean("legacy_function_call", false)) put("legacy_function_call", true)
                 if (toolCalls.length() == 0 && reasoningText.isNotEmpty()) put("reasoning_content", reasoningText.toString())
             })
         }

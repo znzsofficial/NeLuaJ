@@ -59,7 +59,11 @@ local undoTurns = {}
 local redoTurns = {}
 local activeConversationId = nil
 local activeStream = nil
+local conversationLoaded = false
+local activeConversationProjectPath = nil
+local activeConversationHadMessages = false
 local requestRetryPayloads = setmetatable({}, { __mode = "k" })
+local failedToolCalls = {}
 
 -- 前向声明
 local saveHistory, loadHistory, showModelManager, showModelPicker, showConvManager, showConvList, showSettings, addMessageBubble, addToolBubble, updateProjectLabel, sendMessage, sendToApi, sendWithCompressedContext, addRequestErrorBubble
@@ -90,6 +94,10 @@ local function isToolError(toolName, result)
     return result:find("读取文件失败", 1, true)
       or result:find("读取目录失败", 1, true)
       or result:find("搜索失败", 1, true)
+      or result:find("文件不存在", 1, true)
+      or result:find("目录不存在", 1, true)
+      or result:find("offset 超出", 1, true)
+      or result:find("工具参数 JSON 无效", 1, true)
       or r:match("^error[:：]") ~= nil
       or r:match("^exception[:：]") ~= nil
   end
@@ -501,7 +509,9 @@ addToolBubble = function(toolName, args, result)
   local summary = icon .. " " .. toolDisplayName(toolName) .. "  ·  " .. status
   local resultPreview = ""
   local detailParts = {}
-  if args.path then detailParts[#detailParts + 1] = tostring(args.path) end
+  if toolName ~= "apply_patch" and args.path then
+    detailParts[#detailParts + 1] = tostring(args.path)
+  end
   if args.url then detailParts[#detailParts + 1] = tostring(args.url) end
   if toolName == "read_files" and result == nil then
     local files = args.paths
@@ -526,7 +536,44 @@ addToolBubble = function(toolName, args, result)
   end
   if result then
     local display = result
-    if toolName == "read_files" and not isError then
+    local firstLine, rest = tostring(result):match("^([^\r\n]*)[\r\n]+(.*)$")
+    if not firstLine then
+      firstLine = tostring(result)
+      rest = ""
+    end
+    firstLine = firstLine:gsub("%s+$", "")
+    rest = rest:gsub("^[\r\n]+", ""):gsub("%s+$", "")
+    local function isOutcomeLine(line)
+      return line:find("成功", 1, true)
+        or line:find("失败", 1, true)
+        or line:find("通过", 1, true)
+        or line:find("语法错误", 1, true)
+        or line:find("异常", 1, true)
+        or line:find("已创建", 1, true)
+        or line:find("已删除", 1, true)
+        or line:find("已追加", 1, true)
+        or line:find("已替换", 1, true)
+        or line:find("已重命名", 1, true)
+        or line:find("已应用", 1, true)
+        or line:find("补丁", 1, true)
+        or line:find("递归列表", 1, true)
+        or line:find("搜索「", 1, true)
+        or line:find("目录为空", 1, true)
+        or line:find("未找到", 1, true)
+        or line:find("需要 ", 1, true)
+    end
+    if toolName == "apply_patch" and not isError then
+      local locText = tostring(result):match("位置:%s*(.+)$")
+        or tostring(result):match("[Aa]t%s+([Ll%d%-%s,]+)$")
+      if locText then
+        locText = locText:gsub("%s+$", "")
+        display = S.ai_patch_locations:format(locText)
+        resultPreview = locText
+      else
+        display = ""
+        resultPreview = firstLine:match("（(.+)）") or ""
+      end
+    elseif toolName == "read_files" and not isError then
       local files = args.paths
       local n = type(files) == "table" and #files or (type(files) == "string" and 1 or 0)
       display = S.ai_read_files_summary:format(n)
@@ -540,15 +587,25 @@ addToolBubble = function(toolName, args, result)
         display = display .. "\n" .. table.concat(fileLines, "\n")
         resultPreview = table.concat(fileLines, " · ")
       end
+    elseif not denied and isOutcomeLine(firstLine) then
+      local elapsed = firstLine:match("耗时%s*([^）%)]+)")
+      if elapsed then resultPreview = elapsed end
+      display = rest
+      if display == "" and resultPreview == "" then
+        local extra = firstLine:match("（(.+)）") or firstLine:match(": (.+)$")
+        if extra and extra ~= tostring(args.path or "") and extra ~= tostring(args.url or "") then
+          resultPreview = extra
+        end
+      end
     end
     if #display > 12000 then
       display = display:sub(1, 12000) .. "\n\n" .. S.ai_tool_output_truncated
     end
-    if not denied and display ~= "" and resultPreview == "" then
+    if not denied and display ~= "" and resultPreview == "" and not isOutcomeLine(firstLine) then
       resultPreview = tostring(display):gsub("[\r\n].*", "")
     end
     if #resultPreview > 240 then resultPreview = resultPreview:sub(1, 240) .. "…" end
-    detailParts[#detailParts + 1] = tostring(display)
+    if display ~= "" then detailParts[#detailParts + 1] = tostring(display) end
   end
 
   local detail = table.concat(detailParts, "\n")
@@ -699,7 +756,7 @@ local function undoLastTurn()
   for i = #messages, start, -1 do table.remove(messages, i) end
   undoTurns[#undoTurns + 1] = removed
   table.insert(redoTurns, 1, removed)
-  saveHistory()
+  saveHistory(#messages == 0 and { __allow_empty = true } or nil)
   refreshMessageList()
   return true
 end
@@ -989,13 +1046,18 @@ local function executeToolCalls(toolCalls, index, results, onAllDone, generation
 
   local tc = toolCalls[index]
   local args = {}
-  pcall(function() args = json.decode(tc.arguments) end)
-  if type(args) ~= "table" then args = {} end
+  local argsOk, argsError = pcall(function() args = json.decode(tc.arguments) end)
+  if not argsOk or type(args) ~= "table" then
+    args = {}
+    argsError = argsOk and "工具参数必须是 JSON 对象" or tostring(argsError)
+  end
   tc.name = AgentChat.normalizeToolName(tc.name, args)
   if tc.name == "run_lua" and (not args.code or args.code == "") and args.content then
     args.code = args.content
     args.content = nil
   end
+  local argsEncoded, encodedArgs = pcall(json.encode, args)
+  local toolCallKey = tc.name .. "\n" .. (argsEncoded and tostring(encodedArgs) or tostring(tc.arguments or ""))
 
   setLoadingStatus(S.ai_tool_pending .. " · " .. toolDisplayName(tc.name))
   local stopped = false
@@ -1033,7 +1095,7 @@ local function executeToolCalls(toolCalls, index, results, onAllDone, generation
     end)
   end
 
-  local function proceedWithResult(resultStr)
+  local function proceedWithResult(resultStr, stopAfterResult)
     if activeToolStop == stopHandle then activeToolStop = nil end
     if generation and generation ~= requestGeneration then return end
     results[#results + 1] = {
@@ -1047,8 +1109,24 @@ local function executeToolCalls(toolCalls, index, results, onAllDone, generation
       tool_call_id = tc.id,
       content = resultStr,
     }
+    if isToolError(tc.name, resultStr) then
+      failedToolCalls[toolCallKey] = tostring(resultStr):sub(1, 1000)
+    else
+      failedToolCalls[toolCallKey] = nil
+    end
     saveHistory()
     refreshMessageList()
+    if stopAfterResult then
+      hideLoading()
+      activeStream = nil
+      messages[#messages + 1] = {
+        role = "assistant",
+        content = "工具调用已停止：相同的工具名和参数已失败，未继续重复执行。请检查上一次错误并修改请求。",
+      }
+      saveHistory()
+      refreshMessageList()
+      return
+    end
     if stopRequested then
       finishStopped(index + 1)
       return
@@ -1060,6 +1138,19 @@ local function executeToolCalls(toolCalls, index, results, onAllDone, generation
     stopHandle = function() finishStopped() end
     activeToolStop = stopHandle
     AgentChat.executeToolAsync(tc.name, args, proceedWithResult)
+  end
+
+  if argsError then
+    local errorText = "工具参数 JSON 无效，未执行 " .. tostring(tc.name) .. ": " .. tostring(argsError)
+    failedToolCalls[toolCallKey] = errorText
+    proceedWithResult(errorText)
+    return
+  end
+
+  local previousFailure = failedToolCalls[toolCallKey]
+  if previousFailure then
+    proceedWithResult("为防止重复失败，未再次执行相同工具调用。\n前一次错误: " .. previousFailure, true)
+    return
   end
 
   if AgentChat.shouldAutoApprove(tc.name, args) then
@@ -1087,17 +1178,18 @@ end
 -- ─── 会话持久化 ──
 
 saveHistory = function(updates)
-  if activeConversationId and activeConversationId ~= "" then
-    AgentChat.saveConversation(activeConversationId, messages, updates)
-  else
-    local conv = AgentChat.getCurrentConv()
-    if conv then
-      activeConversationId = conv.id
-      AgentChat.saveConversation(conv.id, messages, updates)
-    else
-      AgentChat.saveCurrentConv(messages, updates)
-    end
+  if not conversationLoaded or not activeConversationId or activeConversationId == "" then
+    return false
   end
+  local projectPath = AgentChat.getCurrentProjectPath()
+  if activeConversationProjectPath ~= projectPath then return false end
+  local allowEmpty = type(updates) == "table" and updates.__allow_empty == true
+  if #messages == 0 and activeConversationHadMessages and not allowEmpty then
+    return false
+  end
+  local saved = AgentChat.saveConversation(activeConversationId, messages, updates)
+  if saved then activeConversationHadMessages = #messages > 0 end
+  return saved
 end
 
 loadHistory = function(resetTurnHistory)
@@ -1112,7 +1204,10 @@ loadHistory = function(resetTurnHistory)
     conv = created or AgentChat.getCurrentConv()
   end
   activeConversationId = conv and conv.id or nil
+  activeConversationProjectPath = conv and AgentChat.getCurrentProjectPath() or nil
   messages = conv and conv.messages or {}
+  conversationLoaded = conv ~= nil
+  activeConversationHadMessages = #messages > 0
   if updateProjectLabel then updateProjectLabel() end
   if views.aiTitle and conv then views.aiTitle.setText(convName(conv)) end
   -- 重建气泡
@@ -1182,8 +1277,6 @@ end
 
 -- ─── 发送消息核心 ──
 
-local toolRoundCount = 0
-local MAX_TOOL_ROUNDS = 30
 sendToApi = function(apiMessages, isContinue)
   local generation = requestGeneration
   local requestUserIndex
@@ -1195,7 +1288,7 @@ sendToApi = function(apiMessages, isContinue)
     return generation == requestGeneration
   end
   if not isContinue then
-    toolRoundCount = 0
+    failedToolCalls = {}
   end
   showLoading()
 
@@ -1295,6 +1388,7 @@ sendToApi = function(apiMessages, isContinue)
             arguments = tc.arguments,
           },
         }
+        if tc.legacy_function_call then assistantMsg.legacy_function_call = true end
       end
       messages[#messages + 1] = assistantMsg
       saveHistory()
@@ -1304,18 +1398,6 @@ sendToApi = function(apiMessages, isContinue)
       -- 执行工具调用
       executeToolCalls(toolCalls, 1, {}, function(results)
         if not isCurrent() or stopRequested then return end
-        -- 防止无限循环
-        toolRoundCount = toolRoundCount + 1
-        if toolRoundCount >= MAX_TOOL_ROUNDS then
-          hideLoading()
-          messages[#messages + 1] = { role = "assistant", content = S.ai_max_tool_rounds:format(MAX_TOOL_ROUNDS) }
-          saveHistory()
-          activeStream = nil
-          refreshMessageList()
-          return
-        end
-
-        -- 继续对话（可能还有更多工具调用或最终文本）
         sendWithCompressedContext(true)
       end, generation)
     end,
@@ -2596,6 +2678,9 @@ local function showConvList()
   if #list == 0 then
     local created = AgentChat.createConversation()
     activeConversationId = created and created.id or nil
+    activeConversationProjectPath = created and AgentChat.getCurrentProjectPath() or nil
+    conversationLoaded = created ~= nil
+    activeConversationHadMessages = false
     messages = created and created.messages or {}
     if views.msgContainer then views.msgContainer.removeAllViews() end
     if views.aiTitle then views.aiTitle.setText(S.ai_new_conv) end
@@ -2684,6 +2769,9 @@ local function showConvList()
       invalidateRequest()
       AgentChat.setCurrentConv(conv.id)
       activeConversationId = conv.id
+      activeConversationProjectPath = AgentChat.getCurrentProjectPath()
+      conversationLoaded = true
+      activeConversationHadMessages = false
       messages = {}
       if views.msgContainer then views.msgContainer.removeAllViews() end
       loadHistory()
@@ -2703,6 +2791,9 @@ local function showConvList()
     invalidateRequest()
     local created = AgentChat.createConversation()
     activeConversationId = created and created.id or nil
+    activeConversationProjectPath = created and AgentChat.getCurrentProjectPath() or nil
+    conversationLoaded = created ~= nil
+    activeConversationHadMessages = false
     messages = {}
     if views.msgContainer then views.msgContainer.removeAllViews() end
     if views.aiTitle then views.aiTitle.setText(S.ai_new_conv) end
@@ -2789,6 +2880,9 @@ showConvManager = function()
     invalidateRequest()
     local created = AgentChat.createConversation()
     activeConversationId = created and created.id or nil
+    activeConversationProjectPath = created and AgentChat.getCurrentProjectPath() or nil
+    conversationLoaded = created ~= nil
+    activeConversationHadMessages = false
     messages = {}
     if views.msgContainer then views.msgContainer.removeAllViews() end
     if views.aiTitle then views.aiTitle.setText(S.ai_new_conv) end
@@ -2879,7 +2973,12 @@ end
 local function clearChat()
   invalidateRequest()
   messages = {}
-  saveHistory()
+  activeConversationHadMessages = false
+  if conversationLoaded and activeConversationId and activeConversationId ~= ""
+      and activeConversationProjectPath == AgentChat.getCurrentProjectPath()
+      and AgentChat.clearConversation then
+    AgentChat.clearConversation(activeConversationId)
+  end
   if views.msgContainer then
     views.msgContainer.removeAllViews()
     addWelcomeCard(S.ai_welcome_title, S.ai_welcome_body)
@@ -3010,6 +3109,9 @@ function _M.show()
       saveHistory()
       local created = AgentChat.createConversation()
       activeConversationId = created and created.id or nil
+      activeConversationProjectPath = created and AgentChat.getCurrentProjectPath() or nil
+      conversationLoaded = created ~= nil
+      activeConversationHadMessages = false
       messages = {}
       if views.msgContainer then views.msgContainer.removeAllViews() end
       if views.aiTitle then views.aiTitle.setText(S.ai_new_conv) end
@@ -3072,19 +3174,29 @@ end
 function _M.onBeforeProjectChange()
   saveHistory()
   invalidateRequest()
+  conversationLoaded = false
+  activeConversationId = nil
+  activeConversationProjectPath = nil
+  activeConversationHadMessages = false
 end
 
 function _M.refreshProjectContext()
-  saveHistory()
   invalidateRequest()
   messages = {}
   activeConversationId = nil
+  activeConversationProjectPath = nil
+  activeConversationHadMessages = false
+  conversationLoaded = false
   if not dialog or not dialog.isShowing() then return end
   if views.msgContainer then views.msgContainer.removeAllViews() end
   loadHistory()
   local conv = AgentChat.getCurrentConv()
   if views.aiTitle then views.aiTitle.setText(conv and convName(conv) or S.ai_new_conv) end
   updateProjectLabel()
+end
+
+function _M.saveCurrentConversation()
+  return saveHistory()
 end
 
 -- ─── 插入代码到编辑器 ──
