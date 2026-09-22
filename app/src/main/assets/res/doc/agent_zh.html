@@ -16,8 +16,8 @@
       <ol>
         <li>打开一个工程。</li>
         <li>打开“AI 助手”。</li>
-        <li>点击标题栏中的模型名称，添加模型配置。</li>
-        <li>填写 API Key、API 地址、模型名称、上下文窗口和最大输出，然后选择模型。</li>
+        <li>点击标题栏中的模型名称，先添加供应商，再添加模型。</li>
+        <li>供应商保存 API Key 和 API 地址，并可拉取模型列表、查询余额。模型单独填写名称、上下文窗口和最大输出。</li>
         <li>在输入框中输入任务并发送。</li>
       </ol>
       <p>API 地址填写服务商的 OpenAI 兼容根地址，例如 <code>https://api.deepseek.com/v1</code>。默认使用 <code>/chat/completions</code>；服务商明确支持 Responses API 时，可在模型配置中开启“使用 Responses API”，请求将改用 <code>/responses</code>。API Key 不应写入工程文件或 Skill 文件。</p>

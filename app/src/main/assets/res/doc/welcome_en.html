@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="doc.css" />
+    <script src="doc.js" defer></script>
+    <title>welcome.lua splash screen</title>
+  </head>
+  <body>
+    <main class="markdown-export">
+      <h1><code>welcome.lua</code> splash screen</h1>
+      <p>While building an APK, the packager reads <code>welcome.lua</code> from the project root and generates the splash window background, <code>welcome.xml</code>. Without this file, the splash stays the base package's plain background and centered <code>icon.png</code>.</p>
+      <p>The splash is shown before assets are extracted, so it cannot be a Lua layout and cannot change at runtime. It affects only the packaged app, not the IDE's own launch screen.</p>
+      <p>The packager runs the file in a Lua environment without files, processes, or a Java bridge, then uses the returned table. <code>string</code>, <code>table</code>, and <code>math</code> may compute fields. <code>io</code>, <code>os</code>, <code>require</code>, and <code>loadfile</code> are not available.</p>
+      <h2>Fields</h2>
+      <ul>
+        <li><code>background</code>: <code>#RRGGBB</code> or <code>#AARRGGBB</code>. Defaults to <code>?colorSurface</code>.</li>
+        <li><code>icon</code>: image file name in the project root. Defaults to <code>icon.png</code>. If that file is absent, the packaged app keeps the base icon. <code>false</code> hides the icon.</li>
+        <li><code>icon_size</code>: icon edge length in <code>dp</code> only, such as <code>160dp</code>.</li>
+        <li><code>gravity</code>: icon position, such as <code>center</code> or <code>center|bottom</code>.</li>
+        <li><code>image</code>: full-page image. When set, it fills the splash and <code>icon</code> is ignored.</li>
+        <li><code>text</code>: up to 80 characters and 6 lines. The packager draws it with the system font into an image, because a window background cannot contain a text view. The size is fixed at 4x density and does not follow the packager phone's font scale.</li>
+        <li><code>text_size</code>: for example <code>24sp</code>. Defaults to <code>24sp</code>.</li>
+        <li><code>text_color</code>: <code>#RRGGBB</code> or <code>#AARRGGBB</code>. Defaults to white.</li>
+        <li><code>text_gravity</code>: text position. Defaults to <code>center|bottom</code> when an icon or full-page image is also present.</li>
+      </ul>
+      <p>Images must be in the project root, with a <code>png</code>, <code>webp</code>, <code>jpg</code>, or <code>jpeg</code> extension. The name without its extension must be a lowercase resource name, such as <code>welcome.png</code>. Paths are not accepted. At most 4 custom images and 4 text layers are supported. Install the NeLuaJ+ build that contains these reserved drawables before packaging.</p>
+      <h2>Examples</h2>
+      <pre><code class="language-lua">return {
+  background = "#121212",
+  icon = "icon.png",
+  icon_size = "160dp",
+  gravity = "center",
+}
+</code></pre>
+      <pre><code class="language-lua">return {
+  background = "#FF101418",
+  image = "welcome.png",
+}
+</code></pre>
+      <h2>Layers</h2>
+      <p>For a gradient, a circle, or several images, use a <code>layers</code> array instead of the fields above. Each layer has one kind of content: a solid color, a gradient, an icon, or an image.</p>
+      <pre><code class="language-lua">local color = string.format("#%06X", 0x112233)
+return {
+  layers = {
+    { color = color },
+    {
+      shape = "oval",
+      gradient_start = "#00112233",
+      gradient_end = "#FF112233",
+      gradient_angle = "90",
+      size = "240dp",
+    },
+    { icon = "icon.png", size = "72dp", gravity = "center|bottom", inset = "24dp" },
+  },
+}
+</code></pre>
+      <p>A layer may also set <code>corners</code>, <code>text</code>, <code>text_size</code>, and <code>text_color</code>. Text layers are drawn into images too. A gradient angle must be a multiple of 45. <code>layers</code> cannot be combined with the top-level <code>background</code>, <code>icon</code>, <code>image</code>, or <code>text</code> fields.</p>
+      <h2>Limits</h2>
+      <ul>
+        <li>The generated drawable contains only <code>layer-list</code>, <code>item</code>, <code>bitmap</code>, <code>shape</code>, <code>solid</code>, and <code>color</code>.</li>
+        <li>Text, buttons, and arbitrary layouts are not available.</li>
+        <li>An unknown field, bad color, pixel unit, or missing image fails that build.</li>
+      </ul>
+    </main>
+  </body>
+</html>

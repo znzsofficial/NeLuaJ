@@ -76,32 +76,28 @@ class AiHttpClient @JvmOverloads constructor(
         currentStreamCall?.cancel()
     }
 
+    fun get(
+        url: String,
+        headers: Map<String, String>? = null,
+        callback: LuaFunction
+    ) {
+        val call = client.newCall(
+            Request.Builder()
+                .url(url)
+                .get()
+                .headers(headerList(headers))
+                .build()
+        )
+        deliver(call, callback)
+    }
+
     fun postJson(
         url: String,
         body: String,
         headers: Map<String, String>? = null,
         callback: LuaFunction
     ) {
-        val call = client.newCall(request(url, body, headers))
-        call.enqueue(object : okhttp3.Callback {
-            override fun onFailure(call: Call, e: java.io.IOException) {
-                activity.runOnUiThread {
-                    runCatching { callback.call(LuaString.valueOf("ERROR: ${e.message ?: "Network error"}")) }
-                        .onFailure { activity.sendMsg("AI network callback: ${it.message}") }
-                }
-            }
-
-            override fun onResponse(call: Call, response: Response) {
-                response.use {
-                    val code = response.code
-                    val text = response.body.string()
-                    activity.runOnUiThread {
-                        runCatching { callback.call(code.toLuaValue(), text.toLuaValue()) }
-                            .onFailure { activity.sendMsg("AI network callback: ${it.message}") }
-                    }
-                }
-            }
-        })
+        deliver(client.newCall(request(url, body, headers)), callback)
     }
 
     fun postJsonStream(
@@ -138,13 +134,38 @@ class AiHttpClient @JvmOverloads constructor(
         })
     }
 
+    private fun headerList(headers: Map<String, String>?) =
+        Headers.Builder().apply {
+            headers?.forEach { (name, value) -> add(name, value) }
+        }.build()
+
+    private fun deliver(call: Call, callback: LuaFunction) {
+        call.enqueue(object : okhttp3.Callback {
+            override fun onFailure(call: Call, e: java.io.IOException) {
+                activity.runOnUiThread {
+                    runCatching { callback.call(LuaString.valueOf("ERROR: ${e.message ?: "Network error"}")) }
+                        .onFailure { activity.sendMsg("AI network callback: ${it.message}") }
+                }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                response.use {
+                    val code = response.code
+                    val text = response.body.string()
+                    activity.runOnUiThread {
+                        runCatching { callback.call(code.toLuaValue(), text.toLuaValue()) }
+                            .onFailure { activity.sendMsg("AI network callback: ${it.message}") }
+                    }
+                }
+            }
+        })
+    }
+
     private fun request(url: String, body: String, headers: Map<String, String>?): Request =
         Request.Builder()
             .url(url)
             .post(body.toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull()))
-            .headers(Headers.Builder().apply {
-                headers?.forEach { (name, value) -> add(name, value) }
-            }.build())
+            .headers(headerList(headers))
             .build()
 
     private fun finishError(onDone: LuaFunction, text: String, detail: String? = null) {
@@ -262,7 +283,8 @@ class AiHttpClient @JvmOverloads constructor(
                     if (event == "response.incomplete") incomplete = true
                     when (event) {
                         "response.output_text.delta" -> appendText(json.optString("delta", ""))
-                        "response.reasoning_text.delta" -> reasoningText.append(json.optString("delta", ""))
+                        "response.reasoning_text.delta",
+                        "response.reasoning_summary_text.delta" -> reasoningText.append(json.optString("delta", ""))
                         "response.function_call_arguments.delta" -> responsesState.appendArguments(
                             json.optString("call_id", ""), json.optString("item_id", ""), outputIndex(json), json.optString("delta", "")
                         )

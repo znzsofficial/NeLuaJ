@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="doc.css" />
+    <script src="doc.js" defer></script>
+    <title>welcome.lua 启动页</title>
+  </head>
+  <body>
+    <main class="markdown-export">
+      <h1><code>welcome.lua</code> 启动页</h1>
+      <p>打包器在生成 APK 时读取工程根目录的 <code>welcome.lua</code>，生成启动页窗口背景 <code>welcome.xml</code>。没有这个文件时，启动页保持基础包里的纯色背景和居中 <code>icon.png</code>。</p>
+      <p>启动页在解压资源之前显示，所以它不能是 Lua 布局，也不能在运行时改。它只在打包结果里生效，不会改变 IDE 自己的启动页。</p>
+      <p>打包器会在一个去掉文件、进程和 Java 桥的 Lua 环境里执行它，并使用返回的表。可以用 <code>string</code>、<code>table</code> 和 <code>math</code> 计算字段，但不能使用 <code>io</code>、<code>os</code>、<code>require</code> 或 <code>loadfile</code>。</p>
+      <h2>字段</h2>
+      <ul>
+        <li><code>background</code>：<code>#RRGGBB</code> 或 <code>#AARRGGBB</code>。缺省是 <code>?colorSurface</code>。</li>
+        <li><code>icon</code>：工程根目录里的图片文件名，缺省 <code>icon.png</code>。工程里没有 <code>icon.png</code> 时，继续使用基础包里的图标。<code>false</code> 表示不显示图标。</li>
+        <li><code>icon_size</code>：图标边长，只能是 <code>dp</code>，例如 <code>160dp</code>。</li>
+        <li><code>gravity</code>：图标位置，例如 <code>center</code> 或 <code>center|bottom</code>。</li>
+        <li><code>image</code>：整页图片。设置后铺满启动页，并忽略 <code>icon</code>。</li>
+        <li><code>text</code>：最多 80 个字符、6 行。打包时用系统字体画成图片，因为窗口背景不能放文字控件。尺寸按 4 倍密度固定，不跟随打包手机的字体缩放。</li>
+        <li><code>text_size</code>：例如 <code>24sp</code>，缺省 <code>24sp</code>。</li>
+        <li><code>text_color</code>：<code>#RRGGBB</code> 或 <code>#AARRGGBB</code>，缺省白色。</li>
+        <li><code>text_gravity</code>：文字位置。旁边还有图标或整页图时，缺省是 <code>center|bottom</code>。</li>
+      </ul>
+      <p>图片必须位于工程根目录，扩展名是 <code>png</code>、<code>webp</code>、<code>jpg</code> 或 <code>jpeg</code>。文件名去掉扩展名后必须是小写资源名，例如 <code>welcome.png</code>。不能写路径。自定义图片最多 4 张，文字层最多 4 层。打包前要先安装包含这些改动的 NeLuaJ+，因为基础包里要有预留的图片资源。</p>
+      <h2>示例</h2>
+      <pre><code class="language-lua">return {
+  background = "#121212",
+  icon = "icon.png",
+  icon_size = "160dp",
+  gravity = "center",
+}
+</code></pre>
+      <pre><code class="language-lua">return {
+  background = "#FF101418",
+  image = "welcome.png",
+}
+</code></pre>
+      <h2>多层</h2>
+      <p>需要渐变、圆形或几张图叠在一起时，用 <code>layers</code> 数组代替上面的字段。每一层只能有一种内容：纯色、渐变、图标或图片。</p>
+      <pre><code class="language-lua">local color = string.format("#%06X", 0x112233)
+return {
+  layers = {
+    { color = color },
+    {
+      shape = "oval",
+      gradient_start = "#00112233",
+      gradient_end = "#FF112233",
+      gradient_angle = "90",
+      size = "240dp",
+    },
+    { icon = "icon.png", size = "72dp", gravity = "center|bottom", inset = "24dp" },
+  },
+}
+</code></pre>
+      <p>层字段还有 <code>corners</code>、<code>text</code>、<code>text_size</code> 和 <code>text_color</code>。文字层同样会画成图片。渐变角度只能是 45 的倍数。<code>layers</code> 不能和顶层的 <code>background</code>、<code>icon</code>、<code>image</code>、<code>text</code> 同时写。</p>
+      <h2>限制</h2>
+      <ul>
+        <li>生成结果只有 <code>layer-list</code>、<code>item</code>、<code>bitmap</code>、<code>shape</code>、<code>solid</code> 和 <code>color</code>。</li>
+        <li>不能放文字、按钮或任意布局。</li>
+        <li>未知字段、错误颜色、像素单位或缺失图片会让这次打包失败。</li>
+      </ul>
+    </main>
+  </body>
+</html>

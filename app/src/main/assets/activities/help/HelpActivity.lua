@@ -61,6 +61,7 @@ local catalog = {
     items = {
       { title = res.string.migration_guide, desc = "从旧版 AndroLua / NeLuaJ 迁移", file = "migration_" .. docLanguage .. ".html", tags = "迁移 升级 兼容" },
       { title = "init.lua", desc = "包名、SDK、主题名与权限", file = "init_lua_" .. docLanguage .. ".html", tags = "配置 权限 SDK 主题" },
+      { title = "welcome.lua", desc = "打包时的启动页背景、图标或整页图", file = "welcome_" .. docLanguage .. ".html", tags = "启动页 welcome 打包 splash" },
       { title = res.string.md3_design, desc = "MD3 组件与间距圆角约定（取色见 Color）", file = "md3_design.html", tags = "MD3 组件 设计" },
       { title = "颜色与主题", desc = "dynamicColor、?attr/、themeUtil 怎么选", file = "color_api.html", tags = "颜色 动态取色 attr 主题" },
       { title = res.string.layout_reference, desc = "布局属性、单位与控件示例", file = "layout_reference.html", tags = "布局 控件 单位 dp" },

@@ -1631,10 +1631,142 @@ sendMessage = function()
   sendWithCompressedContext(false, userMsg)
 end
 
--- ─── 模型管理 ──
+-- ─── 供应商与模型 ──
 
-local function showModelEditor(existingIndex, existingName, existingUrl, existingKey, existingModel,
-    existingResponses, existingContextLength, existingMaxTokens)
+local showProviderEditor, showModelEditor, showFetchedModels, showProviderManager
+
+local function fieldText(view)
+  return tostring(view and view.getText() or ""):gsub("^%s*(.-)%s*$", "%1")
+end
+
+local function fetchError(kind, detail)
+  if kind == "need_key" then return S.ai_need_api_key end
+  if kind == "need_url" then return S.ai_need_url end
+  if kind == "empty" then return S.ai_fetch_models_empty end
+  if kind == "unsupported" then return S.ai_balance_unsupported end
+  return tostring(detail or kind or "")
+end
+
+local function formatBalance(parsed)
+  if type(parsed) ~= "table" then return nil end
+  if parsed.kind == "deepseek" then
+    local lines = {}
+    for _, info in ipairs(parsed.infos or {}) do
+      lines[#lines + 1] = S.ai_balance_deepseek:format(info.currency, info.total, info.topped_up, info.granted)
+    end
+    if parsed.available == false then lines[#lines + 1] = S.ai_balance_unavailable end
+    return #lines > 0 and table.concat(lines, "\n") or nil
+  end
+  if parsed.kind == "siliconflow" then
+    return S.ai_balance_siliconflow:format(parsed.total, parsed.charge, parsed.gift)
+  end
+  if parsed.kind == "moonshot" then
+    return S.ai_balance_moonshot:format(parsed.available, parsed.cash, parsed.voucher)
+  end
+  if parsed.kind == "openrouter" then
+    return S.ai_balance_openrouter:format(parsed.remaining, parsed.total, parsed.used)
+  end
+  if parsed.kind == "subscription" then
+    return S.ai_balance_subscription:format(parsed.amount)
+  end
+end
+
+local function queryBalance(url, key, onDone)
+  AgentChat.fetchBalance(url, key, function(ok, payload, detail)
+    if onDone then onDone() end
+    if not ok then
+      print(fetchError(payload, detail))
+      return
+    end
+    local text = formatBalance(payload)
+    if not text then
+      print(S.ai_balance_unsupported)
+      return
+    end
+    MaterialAlertDialogBuilder(activity)
+      .setTitle(S.ai_balance_title)
+      .setMessage(text)
+      .setPositiveButton(S.ai_ok, nil)
+      .show()
+  end)
+end
+
+local function fetchModels(url, key, onDone, onIds)
+  AgentChat.fetchProviderModels(url, key, function(ok, payload, detail)
+    if onDone then onDone() end
+    if not ok then
+      print(fetchError(payload, detail))
+      return
+    end
+    onIds(payload)
+  end)
+end
+
+local function providerLabel(provider)
+  if not provider then return S.ai_missing_provider end
+  local name = provider.name ~= "" and provider.name or provider.url
+  return name
+end
+
+showFetchedModels = function(ids, ensureProvider)
+  local rows = {
+    LinearLayout,
+    orientation = "vertical",
+    layout_width = "match",
+    layout_height = "wrap",
+    padding = "8dp",
+  }
+  for index, modelId in ipairs(ids) do
+    rows[#rows + 1] = {
+      MaterialCheckBox,
+      id = "pick" .. index,
+      text = modelId,
+      layout_width = "match",
+      layout_height = "wrap",
+    }
+  end
+  local dialogViews = {}
+  local content = loadlayout({
+    ScrollView,
+    layout_width = "match",
+    layout_height = "360dp",
+    rows,
+  }, dialogViews)
+  MaterialAlertDialogBuilder(activity)
+    .setTitle(S.ai_pick_models)
+    .setView(content)
+    .setPositiveButton(S.ai_add, function()
+      local provider = ensureProvider and ensureProvider() or nil
+      if not provider then return end
+      local selected = {}
+      for index, modelId in ipairs(ids) do
+        local box = dialogViews["pick" .. index]
+        if box and box.isChecked() and not AgentChat.findModel(provider.id, modelId) then
+          selected[#selected + 1] = modelId
+        end
+      end
+      if #selected == 0 then
+        print(S.ai_select_one)
+        return
+      end
+      local indexes = AgentChat.addModels(provider.id, selected)
+      if #indexes == 0 then
+        print(S.ai_fetch_models_empty)
+        return
+      end
+      if AgentChat.getCurrentModelIndex() == 0 then
+        AgentChat.setCurrentModel(indexes[1])
+      end
+      updateModelLabel()
+      print(S.ai_fetch_models_ok:format(#indexes))
+      showModelPicker()
+    end)
+    .setNegativeButton(S.ai_cancel, nil)
+    .show()
+end
+
+showProviderEditor = function(existing, onSaved)
+  local providerId = existing and existing.id or nil
   local inputLayout = {
     LinearLayout,
     orientation = "vertical",
@@ -1649,7 +1781,7 @@ local function showModelEditor(existingIndex, existingName, existingUrl, existin
     {
       EditText, id = "nameInput",
       layout_width = "match", layout_height = "wrap", minHeight = "48dp",
-      textSize = "14sp", singleLine = true, hint = "DeepSeek V4 Flash",
+      textSize = "14sp", singleLine = true, hint = "DeepSeek",
       layout_marginTop = "8dp",
     },
     {
@@ -1678,6 +1810,183 @@ local function showModelEditor(existingIndex, existingName, existingUrl, existin
       layout_marginTop = "8dp",
     },
     {
+      MaterialButton, id = "fetchButton",
+      text = S.ai_fetch_models,
+      textSize = "13sp",
+      layout_width = "match", layout_marginTop = "12dp",
+      includeFontPadding = false,
+      BackgroundTintList = ColorStateList.valueOf(ColorPrimary),
+      textColor = ColorOnPrimary,
+    },
+    {
+      MaterialButton, id = "balanceButton",
+      text = S.ai_fetch_balance,
+      textSize = "13sp",
+      layout_width = "match", layout_marginTop = "8dp",
+      includeFontPadding = false,
+      BackgroundTintList = ColorStateList.valueOf(ColorSecondaryContainer),
+      textColor = ColorOnSecondaryContainer,
+    },
+  }
+  local dialogViews = {}
+  local content = loadlayout({
+    ScrollView,
+    layout_width = "match",
+    layout_height = "wrap",
+    fillViewport = true,
+    inputLayout,
+  }, dialogViews)
+  local function ensureProvider()
+    local name = fieldText(dialogViews.nameInput)
+    local key = fieldText(dialogViews.keyInput)
+    local url = fieldText(dialogViews.urlInput)
+    if key == "" then print(S.ai_need_api_key) return nil end
+    if url == "" then print(S.ai_need_url) return nil end
+    if providerId then AgentChat.updateProvider(providerId, name, url, key)
+    else
+      local provider = AgentChat.addProvider(name, url, key)
+      providerId = provider.id
+    end
+    return AgentChat.findProvider(providerId)
+  end
+  MaterialAlertDialogBuilder(activity)
+    .setTitle(existing and S.ai_edit_provider or S.ai_add_provider)
+    .setView(content)
+    .setPositiveButton(S.ai_save, function()
+      local provider = ensureProvider()
+      if not provider then return end
+      print(S.ai_saved)
+      if onSaved then onSaved(provider) else showProviderManager() end
+    end)
+    .setNegativeButton(S.ai_cancel, nil)
+    .show()
+  dialogViews.nameInput.setText(existing and existing.name or "")
+  dialogViews.keyInput.setText(existing and existing.key or "")
+  dialogViews.urlInput.setText(existing and existing.url or "")
+  dialogViews.fetchButton.onClick = function()
+    local url = fieldText(dialogViews.urlInput)
+    local key = fieldText(dialogViews.keyInput)
+    local button = dialogViews.fetchButton
+    local previous = tostring(button.getText())
+    button.setEnabled(false)
+    button.setText(S.ai_fetching)
+    fetchModels(url, key, function()
+      pcall(function()
+        button.setEnabled(true)
+        button.setText(previous)
+      end)
+    end, function(ids)
+      showFetchedModels(ids, ensureProvider)
+    end)
+  end
+  dialogViews.balanceButton.onClick = function()
+    local url = fieldText(dialogViews.urlInput)
+    local key = fieldText(dialogViews.keyInput)
+    local button = dialogViews.balanceButton
+    local previous = tostring(button.getText())
+    button.setEnabled(false)
+    button.setText(S.ai_fetching)
+    queryBalance(url, key, function()
+      pcall(function()
+        button.setEnabled(true)
+        button.setText(previous)
+      end)
+    end)
+  end
+end
+
+showProviderManager = function()
+  local providers = AgentChat.loadProviders()
+  if #providers == 0 then
+    showProviderEditor()
+    return
+  end
+  local labels = {}
+  for index, provider in ipairs(providers) do
+    labels[index] = providerLabel(provider) .. "  (" .. S.ai_model_count:format(AgentChat.countModels(provider.id)) .. ")"
+  end
+  MaterialAlertDialogBuilder(activity)
+    .setTitle(S.ai_providers)
+    .setItems(labels, function(_, which)
+      local provider = providers[which + 1]
+      local extra = AgentChat.countModels(provider.id) > 0
+        and ("\n" .. S.ai_provider_models:format(AgentChat.countModels(provider.id)))
+        or ""
+      MaterialAlertDialogBuilder(activity)
+        .setTitle(providerLabel(provider))
+        .setMessage(S.ai_api_url .. ": " .. provider.url .. extra)
+        .setPositiveButton(S.ai_edit, function()
+          showProviderEditor(provider)
+        end)
+        .setNegativeButton(S.ai_delete, function()
+          MaterialAlertDialogBuilder(activity)
+            .setTitle(S.ai_delete)
+            .setMessage(S.ai_confirm_delete_provider:format(providerLabel(provider))
+              .. (AgentChat.countModels(provider.id) > 0
+                and ("\n" .. S.ai_provider_models:format(AgentChat.countModels(provider.id)))
+                or ""))
+            .setPositiveButton(S.ai_delete, function()
+              AgentChat.removeProvider(provider.id)
+              print(S.ai_deleted_name:format(providerLabel(provider)))
+              updateModelLabel()
+              showProviderManager()
+            end)
+            .setNegativeButton(S.ai_cancel, nil)
+            .show()
+        end)
+        .setNeutralButton(S.ai_fetch_balance, function()
+          queryBalance(provider.url, provider.key)
+        end)
+        .show()
+    end)
+    .setPositiveButton(S.ai_add, function()
+      showProviderEditor()
+    end)
+    .setNegativeButton(S.ai_close, nil)
+    .show()
+end
+
+showModelEditor = function(existingIndex)
+  local existing = existingIndex and AgentChat.loadModels()[existingIndex] or nil
+  local providers = AgentChat.loadProviders()
+  if #providers == 0 then
+    showProviderEditor(nil, function() showModelEditor(existingIndex) end)
+    return
+  end
+  local selectedId = existing and existing.providerId or providers[1].id
+  if not AgentChat.findProvider(selectedId) then selectedId = providers[1].id end
+  local inputLayout = {
+    LinearLayout,
+    orientation = "vertical",
+    layout_width = "match",
+    layout_height = "wrap",
+    padding = "16dp",
+    {
+      MaterialTextView,
+      text = S.ai_name,
+      textSize = "14sp", textStyle = "bold", textColor = ColorOnSurface,
+    },
+    {
+      EditText, id = "nameInput",
+      layout_width = "match", layout_height = "wrap", minHeight = "48dp",
+      textSize = "14sp", singleLine = true, hint = "DeepSeek V4 Flash",
+      layout_marginTop = "8dp",
+    },
+    {
+      MaterialTextView,
+      text = S.ai_provider,
+      textSize = "14sp", textStyle = "bold", textColor = ColorOnSurface,
+      layout_marginTop = "12dp",
+    },
+    {
+      MaterialButton, id = "providerButton",
+      textSize = "13sp",
+      layout_width = "match", layout_marginTop = "8dp",
+      includeFontPadding = false,
+      BackgroundTintList = ColorStateList.valueOf(ColorSecondaryContainer),
+      textColor = ColorOnSecondaryContainer,
+    },
+    {
       MaterialTextView,
       text = S.ai_model_params,
       textSize = "14sp", textStyle = "bold", textColor = ColorOnSurface,
@@ -1688,6 +1997,15 @@ local function showModelEditor(existingIndex, existingName, existingUrl, existin
       layout_width = "match", layout_height = "wrap", minHeight = "48dp",
       textSize = "14sp", singleLine = true, hint = "deepseek-v4-flash",
       layout_marginTop = "8dp",
+    },
+    {
+      MaterialButton, id = "fetchButton",
+      text = S.ai_fetch_models,
+      textSize = "13sp",
+      layout_width = "match", layout_marginTop = "8dp",
+      includeFontPadding = false,
+      BackgroundTintList = ColorStateList.valueOf(ColorPrimary),
+      textColor = ColorOnPrimary,
     },
     {
       MaterialTextView,
@@ -1733,39 +2051,88 @@ local function showModelEditor(existingIndex, existingName, existingUrl, existin
     .setTitle(existingIndex and S.ai_edit_model or S.ai_add_model)
     .setView(content)
     .setPositiveButton(S.ai_save, function()
-      local name = tostring(dialogViews.nameInput.getText() or ""):gsub("^%s*(.-)%s*$", "%1")
-      local key = tostring(dialogViews.keyInput.getText() or ""):gsub("^%s*(.-)%s*$", "%1")
-      local url = tostring(dialogViews.urlInput.getText() or ""):gsub("^%s*(.-)%s*$", "%1")
-      local model = tostring(dialogViews.modelInput.getText() or ""):gsub("^%s*(.-)%s*$", "%1")
-      local contextLength = tostring(dialogViews.contextInput.getText() or ""):gsub("^%s*(.-)%s*$", "%1")
-      local maxTokens = tostring(dialogViews.maxTokensInput.getText() or ""):gsub("^%s*(.-)%s*$", "%1")
+      local name = fieldText(dialogViews.nameInput)
+      local model = fieldText(dialogViews.modelInput)
+      local contextLength = fieldText(dialogViews.contextInput)
+      local maxTokens = fieldText(dialogViews.maxTokensInput)
       local responses = dialogViews.responsesSwitch.isChecked()
-      if name == "" then name = model end
-      if key == "" then
-        print(S.ai_need_api_key)
+      if model == "" then
+        print(S.ai_need_model)
         return
       end
+      if not AgentChat.findProvider(selectedId) then
+        print(S.ai_need_provider)
+        return
+      end
+      if name == "" then name = model end
       if existingIndex then
-        AgentChat.updateModel(existingIndex, name, url, key, model, responses, contextLength, maxTokens)
+        AgentChat.updateModel(existingIndex, name, selectedId, model, responses, contextLength, maxTokens)
         AgentChat.setCurrentModel(existingIndex)
       else
-        local newIndex = AgentChat.addModel(name, url, key, model, responses, contextLength, maxTokens)
+        local newIndex = AgentChat.addModel(name, selectedId, model, responses, contextLength, maxTokens)
         AgentChat.setCurrentModel(newIndex)
       end
       updateModelLabel()
       print(S.ai_saved)
-      showModelPicker()  -- 刷新列表
+      showModelPicker()
     end)
     .setNegativeButton(S.ai_cancel, nil)
     .show()
 
-  dialogViews.nameInput.setText(existingName or "")
-  dialogViews.keyInput.setText(existingKey or "")
-  dialogViews.urlInput.setText(existingUrl or "")
-  dialogViews.modelInput.setText(existingModel or "")
-  dialogViews.contextInput.setText(tostring(existingContextLength or 30000))
-  dialogViews.maxTokensInput.setText(tostring(existingMaxTokens or 4096))
-  dialogViews.responsesSwitch.setChecked(existingResponses == true)
+  local function refreshProviderButton()
+    dialogViews.providerButton.setText(providerLabel(AgentChat.findProvider(selectedId)))
+  end
+  dialogViews.providerButton.onClick = function()
+    local labels = {}
+    for index, provider in ipairs(providers) do
+      labels[index] = providerLabel(provider)
+    end
+    MaterialAlertDialogBuilder(activity)
+      .setTitle(S.ai_provider)
+      .setItems(labels, function(_, which)
+        selectedId = providers[which + 1].id
+        refreshProviderButton()
+      end)
+      .setNeutralButton(S.ai_providers, function()
+        showProviderManager()
+      end)
+      .setNegativeButton(S.ai_cancel, nil)
+      .show()
+  end
+  dialogViews.fetchButton.onClick = function()
+    local provider = AgentChat.findProvider(selectedId)
+    if not provider then
+      print(S.ai_need_provider)
+      return
+    end
+    local button = dialogViews.fetchButton
+    local previous = tostring(button.getText())
+    button.setEnabled(false)
+    button.setText(S.ai_fetching)
+    fetchModels(provider.url, provider.key, function()
+      pcall(function()
+        button.setEnabled(true)
+        button.setText(previous)
+      end)
+    end, function(ids)
+      MaterialAlertDialogBuilder(activity)
+        .setTitle(S.ai_pick_model)
+        .setItems(ids, function(_, which)
+          dialogViews.modelInput.setText(ids[which + 1])
+          if fieldText(dialogViews.nameInput) == "" then
+            dialogViews.nameInput.setText(ids[which + 1])
+          end
+        end)
+        .setNegativeButton(S.ai_cancel, nil)
+        .show()
+    end)
+  end
+  dialogViews.nameInput.setText(existing and existing.name or "")
+  dialogViews.modelInput.setText(existing and existing.model or "")
+  dialogViews.contextInput.setText(tostring(existing and existing.contextLength or 30000))
+  dialogViews.maxTokensInput.setText(tostring(existing and existing.maxTokens or 4096))
+  dialogViews.responsesSwitch.setChecked(existing and existing.responses == true)
+  refreshProviderButton()
 end
 
 showModelManager = function()
@@ -1777,23 +2144,22 @@ showModelManager = function()
 
   local labels = {}
   for i, m in ipairs(models) do
-    labels[i] = m.name .. "  (" .. m.model .. ")"
+    labels[i] = m.name .. "  (" .. m.model .. ") · " .. providerLabel(AgentChat.findProvider(m.providerId))
   end
 
   MaterialAlertDialogBuilder(activity)
     .setTitle(S.ai_manage_model)
     .setItems(labels, function(_, which)
       local m = models[which + 1]
+      local provider = AgentChat.findProvider(m.providerId)
       MaterialAlertDialogBuilder(activity)
         .setTitle(m.name)
-        .setMessage(S.ai_api_key .. ": " .. m.key:sub(1, 12) .. "…\n"
-          .. S.ai_api_url .. ": " .. m.url .. "\n"
+        .setMessage(S.ai_provider .. ": " .. providerLabel(provider) .. "\n"
           .. S.ai_model .. ": " .. m.model .. "\n"
           .. S.ai_context_len .. ": " .. tostring(m.contextLength or 30000) .. "\n"
           .. S.ai_max_tokens .. ": " .. tostring(m.maxTokens or 4096))
         .setPositiveButton(S.ai_edit, function()
-          showModelEditor(which + 1, m.name, m.url, m.key, m.model, m.responses,
-            m.contextLength, m.maxTokens)
+          showModelEditor(which + 1)
         end)
         .setNegativeButton(S.ai_delete, function()
           AgentChat.removeModel(which + 1)
@@ -1801,11 +2167,16 @@ showModelManager = function()
           updateModelLabel()
           showModelManager()
         end)
-        .setNeutralButton(S.ai_cancel, nil)
+        .setNeutralButton(provider and S.ai_fetch_balance or S.ai_cancel, function()
+          if provider then queryBalance(provider.url, provider.key) end
+        end)
         .show()
     end)
     .setPositiveButton(S.ai_add, function()
       showModelEditor()
+    end)
+    .setNeutralButton(S.ai_providers, function()
+      showProviderManager()
     end)
     .setNegativeButton(S.ai_close, nil)
     .show()
@@ -1823,7 +2194,7 @@ showModelPicker = function()
   local labels = {}
   for i, m in ipairs(models) do
     local marker = (i == current) and " ✓ " or "    "
-    labels[i] = marker .. m.name .. "  (" .. m.model .. ")"
+    labels[i] = marker .. m.name .. "  (" .. m.model .. ") · " .. providerLabel(AgentChat.findProvider(m.providerId))
   end
   labels[#labels + 1] = S.ai_add_model_item
 
@@ -1841,8 +2212,8 @@ showModelPicker = function()
     .setNegativeButton(S.ai_manage, function()
       showModelManager()
     end)
-    .setNeutralButton(S.ai_settings, function()
-      showSettings()
+    .setNeutralButton(S.ai_providers, function()
+      showProviderManager()
     end)
     .setPositiveButton(S.ai_close, nil)
     .show()

@@ -31,3 +31,5 @@ Builder 接收端：
 6. 启动失败时提示未安装 Builder。
 
 Builder 只接受 canonical `LuaJ/Projects` 下含 `init.lua` 的工程。完整 Builder 侧约定见 Builder 仓库的 `docs/BuilderMaintenance.md`。
+
+工程根目录可选的 `welcome.lua` 只在打包时生效，用来生成启动页窗口背景。字段和限制见应用内文档 `res/doc/welcome_zh.html`。

@@ -17,6 +17,8 @@ Files under `res/doc` are trusted read-only application documentation. Their con
 - `res/doc/migration_en.html`: English migration guide.
 - `res/doc/init_lua_zh.html`: `init.lua` package name, SDK, theme, permissions, and project settings in Chinese.
 - `res/doc/init_lua_en.html`: English `init.lua` guide.
+- `res/doc/welcome_zh.html`: Optional `welcome.lua` splash screen used by the packager, in Chinese.
+- `res/doc/welcome_en.html`: English `welcome.lua` splash screen guide.
 - `res/doc/md3_design.html`: Material Design 3 components, spacing, shapes, and interface conventions.
 - `res/doc/color_api.html`: Colors, dynamic color, theme attributes, and choosing the correct color API.
 - `res/doc/backup_crash.html`: Crash logs, code backup, and recovery behavior.

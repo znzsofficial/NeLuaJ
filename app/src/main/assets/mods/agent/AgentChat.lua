@@ -8,6 +8,7 @@ local AgentStorage = require("mods.agent.AgentStorage")
 local ConversationStore = require("mods.agent.ConversationStore")
 local ContextManager = require("mods.agent.ContextManager")
 local OpenAIClient = require("mods.agent.OpenAIClient")
+local OpenAIProtocol = require("mods.agent.OpenAIProtocol")
 local ToolExecutor = require("mods.agent.ToolExecutor")
 local SkillManager = require("mods.agent.SkillManager")
 local AiHttpClient = luajava.bindClass("com.nekolaska.ai.AiHttpClient")
@@ -1454,17 +1455,144 @@ function _M.getApiKey() return getApiKey() end
 function _M.getApiUrl() return getApiUrl() end
 function _M.getModel() return getModel() end
 
--- ─── 多模型管理 ──
+-- ─── 供应商与模型 ──
 
+local PROVIDERS_KEY = "ai_providers"
 local MODELS_KEY = "ai_models"
 local MODEL_INDEX_KEY = "ai_model_index"
+local providersCache = nil
 local modelsCache = nil
+local idSerial = 0
+
+local function trim(value)
+  return tostring(value or ""):gsub("^%s*(.-)%s*$", "%1")
+end
+
+local function newId(prefix)
+  idSerial = idSerial + 1
+  return prefix .. tostring(os.time()) .. tostring(idSerial)
+end
+
+local function resolvedModel(model)
+  if type(model) ~= "table" then return nil end
+  local copy = {
+    name = model.name,
+    providerId = model.providerId,
+    model = model.model,
+    responses = model.responses == true,
+    contextLength = model.contextLength,
+    maxTokens = model.maxTokens,
+    url = model.url,
+    key = model.key,
+  }
+  local provider = _M.findProvider(model.providerId)
+  if provider then
+    copy.url = provider.url
+    copy.key = provider.key
+    copy.providerName = provider.name
+  end
+  return copy
+end
+
+function _M.loadProviders()
+  if providersCache then return providersCache end
+  local raw = this.getSharedData(PROVIDERS_KEY, "")
+  if raw == "" then
+    providersCache = {}
+    return providersCache
+  end
+  local ok, decoded = pcall(json.decode, raw)
+  providersCache = ok and type(decoded) == "table" and decoded or {}
+  return providersCache
+end
+
+function _M.saveProviders(providers)
+  providersCache = providers
+  local ok, encoded = pcall(json.encode, providers)
+  if ok then this.setSharedData(PROVIDERS_KEY, encoded) end
+end
+
+function _M.findProvider(id)
+  if id == nil or id == "" then return nil end
+  for _, provider in ipairs(_M.loadProviders()) do
+    if provider.id == id then return provider end
+  end
+end
+
+function _M.addProvider(name, url, key)
+  local providers = _M.loadProviders()
+  name, url, key = trim(name), trim(url), trim(key)
+  local provider = {
+    id = newId("p"),
+    name = name ~= "" and name or url,
+    url = url,
+    key = key,
+  }
+  providers[#providers + 1] = provider
+  _M.saveProviders(providers)
+  return provider
+end
+
+function _M.updateProvider(id, name, url, key)
+  local providers = _M.loadProviders()
+  name, url, key = trim(name), trim(url), trim(key)
+  for index, provider in ipairs(providers) do
+    if provider.id == id then
+      providers[index] = {
+        id = id,
+        name = name ~= "" and name or url,
+        url = url,
+        key = key,
+      }
+      _M.saveProviders(providers)
+      return true
+    end
+  end
+  return false
+end
+
+local function attachProviders(models)
+  local providers = _M.loadProviders()
+  local changedProviders, changedModels = false, false
+  local function findOrCreate(url, key, name)
+    url, key, name = trim(url), trim(key), trim(name)
+    for _, provider in ipairs(providers) do
+      if provider.url == url and provider.key == key then return provider.id end
+    end
+    local provider = {
+      id = newId("p"),
+      name = name ~= "" and name or (url ~= "" and url or "Provider"),
+      url = url,
+      key = key,
+    }
+    providers[#providers + 1] = provider
+    changedProviders = true
+    return provider.id
+  end
+  for _, model in ipairs(models) do
+    if type(model) == "table" then
+      if _M.findProvider(model.providerId) then
+        if model.url ~= nil or model.key ~= nil then
+          model.url = nil
+          model.key = nil
+          changedModels = true
+        end
+      elseif trim(model.url) ~= "" or trim(model.key) ~= "" then
+        model.providerId = findOrCreate(model.url, model.key, model.name)
+        model.url = nil
+        model.key = nil
+        changedModels = true
+      end
+    end
+  end
+  if changedProviders then _M.saveProviders(providers) end
+  return changedModels
+end
 
 function _M.loadModels()
   if modelsCache then return modelsCache end
   local raw = this.getSharedData(MODELS_KEY, "")
   if raw == "" then
-    -- 迁移旧版单模型到多模型列表
     local key = getLegacyApiKey()
     if key ~= "" then
       local model = getLegacyModel()
@@ -1479,6 +1607,7 @@ function _M.loadModels()
         contextLength = contextLength,
         maxTokens = maxTokens,
       } }
+      attachProviders(modelsCache)
       _M.saveModels(modelsCache)
       return modelsCache
     end
@@ -1510,7 +1639,7 @@ function _M.loadModels()
       end
     end
     modelsCache = decoded
-    if migrated then _M.saveModels(modelsCache) end
+    if attachProviders(modelsCache) or migrated then _M.saveModels(modelsCache) end
     return modelsCache
   end
   modelsCache = {}
@@ -1550,37 +1679,72 @@ end
 function _M.getCurrentModelConfig()
   local models = _M.loadModels()
   local index = _M.getCurrentModelIndex()
-  return index >= 1 and models[index] or nil
+  return index >= 1 and resolvedModel(models[index]) or nil
 end
 
-function _M.addModel(name, url, key, model, responses, contextLength, maxTokens)
-  local models = _M.loadModels()
+function _M.findModel(providerId, modelId)
+  modelId = trim(modelId)
+  for index, model in ipairs(_M.loadModels()) do
+    if model.providerId == providerId and model.model == modelId then
+      return model, index
+    end
+  end
+end
+
+function _M.countModels(providerId)
+  local count = 0
+  for _, model in ipairs(_M.loadModels()) do
+    if model.providerId == providerId then count = count + 1 end
+  end
+  return count
+end
+
+local function appendModel(models, name, providerId, modelId, responses, contextLength, maxTokens)
   contextLength, maxTokens = normalizeModelLimits(
     contextLength, maxTokens, DEFAULT_CONTEXT_LENGTH, DEFAULT_MAX_TOKENS
   )
+  name, modelId = trim(name), trim(modelId)
   models[#models + 1] = {
-    name = name,
-    url = url,
-    key = key,
-    model = model,
+    name = name ~= "" and name or modelId,
+    providerId = providerId,
+    model = modelId,
     responses = responses == true,
     contextLength = contextLength,
     maxTokens = maxTokens,
   }
-  _M.saveModels(models)
   return #models
 end
 
-function _M.updateModel(index, name, url, key, model, responses, contextLength, maxTokens)
+function _M.addModel(name, providerId, model, responses, contextLength, maxTokens)
+  local models = _M.loadModels()
+  local index = appendModel(models, name, providerId, model, responses, contextLength, maxTokens)
+  _M.saveModels(models)
+  return index
+end
+
+function _M.addModels(providerId, ids, responses, contextLength, maxTokens)
+  local models = _M.loadModels()
+  local indexes = {}
+  for _, modelId in ipairs(ids or {}) do
+    modelId = trim(modelId)
+    if modelId ~= "" and not _M.findModel(providerId, modelId) then
+      indexes[#indexes + 1] = appendModel(models, modelId, providerId, modelId, responses, contextLength, maxTokens)
+    end
+  end
+  if #indexes > 0 then _M.saveModels(models) end
+  return indexes
+end
+
+function _M.updateModel(index, name, providerId, model, responses, contextLength, maxTokens)
   local models = _M.loadModels()
   if index >= 1 and index <= #models then
     contextLength, maxTokens = normalizeModelLimits(
       contextLength, maxTokens, DEFAULT_CONTEXT_LENGTH, DEFAULT_MAX_TOKENS
     )
+    name, model = trim(name), trim(model)
     models[index] = {
-      name = name,
-      url = url,
-      key = key,
+      name = name ~= "" and name or model,
+      providerId = providerId,
       model = model,
       responses = responses == true,
       contextLength = contextLength,
@@ -1610,6 +1774,84 @@ function _M.removeModel(index)
     return true
   end
   return false
+end
+
+function _M.removeProvider(id)
+  local providers = _M.loadProviders()
+  local removed = false
+  for index, provider in ipairs(providers) do
+    if provider.id == id then
+      table.remove(providers, index)
+      removed = true
+      break
+    end
+  end
+  if not removed then return false end
+  _M.saveProviders(providers)
+  local models = _M.loadModels()
+  local current = _M.getCurrentModelIndex()
+  local kept, removedBefore, removedCurrent = {}, 0, false
+  for index, model in ipairs(models) do
+    if model.providerId == id then
+      if index < current then removedBefore = removedBefore + 1
+      elseif index == current then removedCurrent = true end
+    else
+      kept[#kept + 1] = model
+    end
+  end
+  _M.saveModels(kept)
+  if #kept == 0 then _M.setCurrentModel(0)
+  elseif removedCurrent then _M.setCurrentModel(math.max(1, math.min(current - removedBefore, #kept)))
+  else _M.setCurrentModel(math.max(1, current - removedBefore)) end
+  return true
+end
+
+local function readHttp(code, body, onResult, accept)
+  local lead = tostring(code or "")
+  if lead:match("^ERROR:") then onResult(false, "network", lead) return end
+  if tonumber(lead) ~= 200 then
+    local detail = tostring(body or "")
+    if #detail > 300 then detail = detail:sub(1, 300) end
+    onResult(false, "http", "HTTP " .. lead .. (detail ~= "" and "\n" .. detail or ""))
+    return
+  end
+  local parsed = accept(body)
+  if not parsed or (type(parsed) == "table" and parsed[1] == nil and parsed.kind == nil) then
+    onResult(false, "empty")
+    return
+  end
+  onResult(true, parsed)
+end
+
+function _M.fetchProviderModels(url, key, onResult)
+  url, key = trim(url), trim(key)
+  if key == "" then onResult(false, "need_key") return end
+  if url == "" then onResult(false, "need_url") return end
+  local endpoint = OpenAIProtocol.modelsEndpoint(url)
+  getHttpClient().get(endpoint, OpenAIProtocol.authHeaders(url, key), function(code, body)
+    readHttp(code, body, onResult, function(payload)
+      local ids = OpenAIProtocol.parseModelIds(payload)
+      if not ids or #ids == 0 then return nil end
+      return ids
+    end)
+  end)
+end
+
+function _M.fetchBalance(url, key, onResult)
+  url, key = trim(url), trim(key)
+  if key == "" then onResult(false, "need_key") return end
+  if url == "" then onResult(false, "need_url") return end
+  local endpoint, kind = OpenAIProtocol.balanceRequest(url)
+  if not endpoint then onResult(false, "unsupported") return end
+  getHttpClient().get(endpoint, OpenAIProtocol.authHeaders(url, key), function(code, body)
+    readHttp(code, body, function(ok, payload, detail)
+      if ok then onResult(true, payload)
+      elseif payload == "empty" then onResult(false, "unsupported")
+      else onResult(false, payload, detail) end
+    end, function(payload)
+      return OpenAIProtocol.parseBalance(kind, payload)
+    end)
+  end)
 end
 
 -- ─── 多会话管理 ──

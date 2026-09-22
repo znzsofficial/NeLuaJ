@@ -88,8 +88,9 @@ name, url, key, model, responses, contextLength, maxTokens
 - `responses = false` 使用流式 `/chat/completions`。
 - `responses = true` 使用流式 `/responses`。
 - API 地址可以填写根地址或完整终端地址；端点归一化会保留 query string，并处理普通 OpenAI 兼容地址、Azure OpenAI 和 DeepSeek Responses 地址差异。
-- Azure OpenAI 使用 `api-key` 请求头，其他端点使用 Bearer token。
-- 官方 OpenAI 的 GPT-5、o1、o3 和 o4 系列请求会省略不支持的 `temperature`。
+- Azure OpenAI 和 Xiaomi MiMo（按量付费与 Token Plan）使用 `api-key` 请求头，其他端点使用 Bearer token。MiMo 的 Chat Completions 请求使用 `max_completion_tokens`，并在后续轮次保留 `reasoning_content`。Token Plan 地址包括 `token-plan-cn`、`token-plan-sgp` 和 `token-plan-ams`。MiMo 没有公开的余额接口。
+- 官方 OpenAI 的 GPT-5、o1、o3 和 o4 系列，以及 xAI 的 Grok 4、Grok 3 Mini、Grok Code，请求会省略不支持的 `temperature`。
+- Grok Responses 使用 `https://api.x.ai/v1/responses`。请求带 `include: ["reasoning.encrypted_content"]`，并把完整 output 回放给同一 origin。流式解析同时接收 `response.reasoning_text.delta` 和 `response.reasoning_summary_text.delta`。
 - Chat 模式兼容 `tool_calls`、单个 `tool_call`、旧 `function_call`、部分中转服务的 completed message，以及 `reasoning` / `reasoning_content`。
 - Responses 模式处理 `response.*` 事件、输出文本、reasoning、function call 参数增量、不完整响应和完整 output 序列。
 - 原生 Responses output 只对已知严格端点保存，并且只回放给产生它的同一规范化 origin；切换协议或服务商时使用可移植的 function call 历史。
@@ -102,10 +103,11 @@ name, url, key, model, responses, contextLength, maxTokens
 
 | 键 | 默认 | 当前用途 |
 |----|------|----------|
-| `ai_models` | `""` | 多模型 JSON 列表；为空时尝试迁移旧单模型配置 |
+| `ai_providers` | `""` | 供应商 JSON 列表。每项含 `id`、`name`、`url`、`key`。旧模型上的地址和 Key 会按二者相同合并迁移到这里 |
+| `ai_models` | `""` | 模型 JSON 列表。每项含 `name`、`providerId`、`model`、`responses`、`contextLength`、`maxTokens`；为空时尝试迁移旧单模型配置 |
 | `ai_model_index` | `"0"` | 当前模型索引；有模型时会归一化到有效的 1 起索引 |
-| `ai_api_key` | `""` | 旧版单模型凭据迁移源；正常请求直接读取当前 `ai_models` 项 |
-| `ai_api_url` | `https://api.deepseek.com/v1` | 旧版单模型地址迁移源；正常请求直接读取当前 `ai_models` 项 |
+| `ai_api_key` | `""` | 旧版单模型凭据迁移源；正常请求从当前模型所属供应商读取 Key |
+| `ai_api_url` | `https://api.deepseek.com/v1` | 旧版单模型地址迁移源；正常请求从当前模型所属供应商读取地址 |
 | `ai_model` | `deepseek-v4-flash` | 旧版单模型 ID 迁移源；正常请求直接读取当前 `ai_models` 项 |
 | `ai_context_length` | `30000` | 旧配置迁移和缺省回退；当前值保存在模型对象中 |
 | `ai_max_tokens` | `4096` | 旧配置迁移和缺省回退；当前值保存在模型对象中 |
