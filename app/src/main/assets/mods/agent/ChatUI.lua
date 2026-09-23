@@ -21,6 +21,7 @@ local DialogInterface = luajava.bindClass("android.content.DialogInterface")
 import "androidx.core.graphics.ColorUtils"
 
 local AgentChat = require("mods.agent.AgentChat")
+local AgentTurn = require("mods.agent.AgentTurn")
 local MCPClient = require("mods.agent.MCPClient")
 local ActivityUtil = require("mods.utils.ActivityUtil")
 import "mods.utils.EditorUtil"
@@ -49,24 +50,20 @@ local GONE = 8
 local messages = {}
 local dialog = nil
 local views = {}
-local isLoading = false
-local requestGeneration = 0
-local stopRequested = false
 local activeToolConfirm = nil
-local activeToolStop = nil
 local editingMessageIndex = nil
 local undoTurns = {}
 local redoTurns = {}
 local activeConversationId = nil
-local activeStream = nil
 local conversationLoaded = false
 local activeConversationProjectPath = nil
 local activeConversationHadMessages = false
-local requestRetryPayloads = setmetatable({}, { __mode = "k" })
-local failedToolCalls = {}
+
+-- 回合状态（loading/generation/stopRequested/activeStream/failedToolCalls/
+-- retryPayloads/activeToolStop）已迁至 AgentTurn；此处仅保留会话与视图状态。
 
 -- 前向声明
-local saveHistory, loadHistory, showModelManager, showModelPicker, showConvManager, showConvList, showSettings, addMessageBubble, addToolBubble, updateProjectLabel, sendMessage, sendToApi, sendWithCompressedContext, addRequestErrorBubble
+local saveHistory, loadHistory, showModelManager, showModelPicker, showConvManager, showConvList, showSettings, addMessageBubble, addToolBubble, updateProjectLabel, sendMessage, addRequestErrorBubble
 
 local function convName(conv)
   local n = conv and conv.name or ""
@@ -432,13 +429,12 @@ addMessageBubble = function(role, content, stateMessage)
     inner.addView(marker)
     local continueBtn = createContinueButton()
     continueBtn.setOnClickListener(function()
-      if isLoading then return end
+      if AgentTurn.isActive() then return end
       clearContinuationState(stateMessage)
       local parent = continueBtn.getParent()
       if parent then parent.removeView(marker); parent.removeView(continueBtn) end
-      stopRequested = false
-      requestGeneration = requestGeneration + 1
-      sendWithCompressedContext(true)
+      AgentTurn.bumpGeneration()
+      AgentTurn.send(true)
     end)
     inner.addView(continueBtn)
   end
@@ -683,9 +679,9 @@ addToolBubble = function(toolName, args, result)
 end
 
 -- ─── 加载状态 ──
+-- 状态归 AgentTurn 所有；这里只负责控件更新（经钩子回调）。
 
-local function showLoading()
-  isLoading = true
+local function showLoadingViews()
   if views.loadingText then views.loadingText.setText(S.ai_generating) end
   if views.loadingBar then views.loadingBar.setVisibility(VISIBLE) end
   if views.btnSend then views.btnSend.setEnabled(false) end
@@ -694,9 +690,21 @@ local function showLoading()
   if views.btnStop then views.btnStop.setEnabled(true) end
 end
 
-local function setLoadingStatus(text)
-  if views.loadingText and isLoading then views.loadingText.setText(tostring(text or S.ai_generating)) end
+local function setLoadingStatusView(text, active)
+  if views.loadingText and active then views.loadingText.setText(tostring(text or S.ai_generating)) end
 end
+
+local function hideLoadingViews()
+  if views.loadingBar then views.loadingBar.setVisibility(GONE) end
+  if views.btnSend then views.btnSend.setEnabled(true) end
+  if views.btnSend then views.btnSend.setVisibility(VISIBLE) end
+  if views.btnStop then views.btnStop.setVisibility(GONE) end
+  if views.btnStop then views.btnStop.setEnabled(true) end
+end
+
+local function showLoading() AgentTurn.showLoading() end
+
+local function hideLoading() AgentTurn.hideLoading() end
 
 local function updateContextUsage(usage)
   if type(usage) ~= "table" or not views.ctxUsage then return end
@@ -713,46 +721,6 @@ local function updateContextUsage(usage)
   views.ctxUsage.setText(label .. " · " .. used .. "/" .. budget)
 end
 
--- 前台保活服务：回合进行中提升进程优先级并持有唤醒锁，息屏也能继续。
--- pcall 兜底：旧安装或类缺失时静默降级，绝不影响对话本身。
-local function keepAliveAcquire()
-  pcall(function()
-    luajava.bindClass("com.nekolaska.ai.AgentKeepAliveService").acquire(activity)
-  end)
-end
-
-local function keepAliveRelease()
-  pcall(function()
-    luajava.bindClass("com.nekolaska.ai.AgentKeepAliveService").release(activity)
-  end)
-end
-
-local function hideLoading()
-  isLoading = false
-  keepAliveRelease()
-  if views.loadingBar then views.loadingBar.setVisibility(GONE) end
-  if views.btnSend then views.btnSend.setEnabled(true) end
-  if views.btnSend then views.btnSend.setVisibility(VISIBLE) end
-  if views.btnStop then views.btnStop.setVisibility(GONE) end
-  if views.btnStop then views.btnStop.setEnabled(true) end
-end
-
-local function invalidateRequest()
-  stopRequested = true
-  if activeToolConfirm then activeToolConfirm.cancel() end
-  requestGeneration = requestGeneration + 1
-  stopRequested = false
-  isLoading = false
-  activeStream = nil
-  AgentChat.cancelPendingRequest()
-  if AgentChat.cancelPendingTools then AgentChat.cancelPendingTools() end
-  local stopTool = activeToolStop
-  activeToolStop = nil
-  if stopTool then pcall(stopTool) end
-  hideLoading()
-  return requestGeneration
-end
-
 local function refreshMessageList()
   if not isPanelVisible() then return end
   if views.msgContainer then views.msgContainer.removeAllViews() end
@@ -760,7 +728,7 @@ local function refreshMessageList()
 end
 
 local function undoLastTurn()
-  if isLoading then return false end
+  if AgentTurn.isActive() then return false end
   local start
   for i = #messages, 1, -1 do
     if messages[i].role == "user" then start = i break end
@@ -777,7 +745,7 @@ local function undoLastTurn()
 end
 
 local function redoLastTurn()
-  if isLoading or #redoTurns == 0 then return false end
+  if AgentTurn.isActive() or #redoTurns == 0 then return false end
   local restored = table.remove(redoTurns, 1)
   for _, message in ipairs(restored) do messages[#messages + 1] = message end
   undoTurns[#undoTurns + 1] = restored
@@ -787,16 +755,15 @@ local function redoLastTurn()
 end
 
 local function applyFileChange(action)
-  if isLoading then return false end
-  requestGeneration = requestGeneration + 1
-  local generation = requestGeneration
+  if AgentTurn.isActive() then return false end
+  local generation = AgentTurn.bumpGeneration()
   showLoading()
   local okLaunch = pcall(function()
     xTask(function()
       local ok, result, err = pcall(action)
       return { ok = ok and result == true, error = ok and err or result }
     end, function(result)
-      if generation ~= requestGeneration then return end
+      if generation ~= AgentTurn.generation() then return end
       hideLoading()
       if type(result) ~= "table" or not result.ok then
         print(tostring(result and result.error or "文件变更恢复失败"))
@@ -823,29 +790,7 @@ local function redoFileChange()
 end
 
 local function compressCurrentContext(onDone)
-  if isLoading then return false end
-  requestGeneration = requestGeneration + 1
-  local generation = requestGeneration
-  showLoading()
-  keepAliveAcquire()
-  AgentChat.buildCompressedApiMessages(messages, function(apiMessages, compressed)
-    if generation ~= requestGeneration then return end
-    hideLoading()
-    if not compressed then
-      print(S.ai_compress_unavailable)
-      return
-    end
-    local compacted = {}
-    for i = 2, #apiMessages do compacted[#compacted + 1] = apiMessages[i] end
-    messages = compacted
-    undoTurns = {}
-    redoTurns = {}
-    saveHistory()
-    refreshMessageList()
-    print(S.ai_compress_done:format(#messages))
-    if onDone then pcall(onDone) end
-  end, true)
-  return true
+  return AgentTurn.compress(onDone)
 end
 
 local function showCommandMenu()
@@ -889,12 +834,12 @@ local function showCommandMenu()
     if message.role == "user" then hasTurn = true break end
   end
   addSection(S.ai_command_conversation)
-  addAction(S.ai_compress_context, not isLoading and #messages > 0, compressCurrentContext)
-  addAction(S.ai_undo_turn, not isLoading and hasTurn, undoLastTurn)
-  addAction(S.ai_redo_turn, not isLoading and #redoTurns > 0, redoLastTurn)
+  addAction(S.ai_compress_context, not AgentTurn.isActive() and #messages > 0, compressCurrentContext)
+  addAction(S.ai_undo_turn, not AgentTurn.isActive() and hasTurn, undoLastTurn)
+  addAction(S.ai_redo_turn, not AgentTurn.isActive() and #redoTurns > 0, redoLastTurn)
   addSection(S.ai_command_files)
-  addAction(S.ai_undo_file, not isLoading and AgentChat.hasFileUndo(), undoFileChange)
-  addAction(S.ai_redo_file, not isLoading and AgentChat.hasFileRedo(), redoFileChange)
+  addAction(S.ai_undo_file, not AgentTurn.isActive() and AgentChat.hasFileUndo(), undoFileChange)
+  addAction(S.ai_redo_file, not AgentTurn.isActive() and AgentChat.hasFileRedo(), redoFileChange)
   addSection(S.ai_command_workspace)
   addAction(S.ai_switch_conv, true, showConvList)
   addAction(S.ai_settings, true, showSettings)
@@ -1022,182 +967,6 @@ local function showToolConfirm(toolName, args, onAllow, onDeny)
   confirm.setOnCancelListener(function() denyOnce() end)
 end
 
--- ─── 执行工具调用链 ──
-
-local function executeToolCalls(toolCalls, index, results, onAllDone, generation)
-  if generation and generation ~= requestGeneration then return end
-  if stopRequested then return end
-  if index > #toolCalls then
-    -- 文件操作后刷新编辑器
-    pcall(function()
-      if MainActivity and MainActivity.RecyclerView then
-        MainActivity.RecyclerView.update()
-      end
-      -- 如果修改了当前打开的文件，刷新编辑器
-      for _, r in ipairs(results) do
-        if r.tool_call_id then
-          for _, tc in ipairs(toolCalls) do
-            if tc.id == r.tool_call_id and (tc.name == "create_file" or tc.name == "apply_patch" or tc.name == "append_file") then
-              local args = {}
-              pcall(function() args = json.decode(tc.arguments) end)
-              if args.path then
-                local thisFile = Bean and Bean.Path and Bean.Path.this_file
-                local resolvedPath = args.path
-                if resolvedPath:sub(1, 1) ~= "/" then
-                  local base = Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir()
-                  resolvedPath = base .. "/" .. resolvedPath
-                end
-                if thisFile and thisFile == resolvedPath then
-                  EditorUtil.load(resolvedPath)
-                end
-              end
-            end
-          end
-        end
-      end
-    end)
-    onAllDone(results)
-    return
-  end
-
-  local tc = toolCalls[index]
-  local args = {}
-  local argsOk, argsError = pcall(function() args = json.decode(tc.arguments) end)
-  if not argsOk or type(args) ~= "table" then
-    args = {}
-    argsError = argsOk and "工具参数必须是 JSON 对象" or tostring(argsError)
-  end
-  tc.name = AgentChat.normalizeToolName(tc.name, args)
-  if tc.name == "run_lua" and (not args.code or args.code == "") and args.content then
-    args.code = args.content
-    args.content = nil
-  end
-  local argsEncoded, encodedArgs = pcall(json.encode, args)
-  local toolCallKey = tc.name .. "\n" .. (argsEncoded and tostring(encodedArgs) or tostring(tc.arguments or ""))
-
-  setLoadingStatus(S.ai_tool_pending .. " · " .. toolDisplayName(tc.name))
-  local stopped = false
-  local stopHandle
-
-  local function finishStopped(firstRemaining)
-    if stopped then return end
-    stopped = true
-    if activeToolStop == stopHandle then activeToolStop = nil end
-    -- Return an output for this and all remaining calls. Responses APIs require
-    -- every function_call to be paired with function_call_output, even on stop.
-    for remaining = firstRemaining or index, #toolCalls do
-      local call = toolCalls[remaining]
-      local callArgs = args
-      if remaining ~= index then
-        callArgs = {}
-        pcall(function() callArgs = json.decode(call.arguments) end)
-        if type(callArgs) ~= "table" then callArgs = {} end
-      end
-      addToolBubble(call.name, callArgs, S.ai_stopped)
-      messages[#messages + 1] = {
-        role = "tool",
-        tool_call_id = call.id,
-        content = S.ai_stopped,
-      }
-    end
-    local stateMessage = messages[#messages]
-    if stateMessage and stateMessage.role == "tool" then
-      stateMessage.continuation_state = "stopped"
-    end
-    saveHistory()
-    refreshMessageList()
-    pcall(function()
-      if MainActivity and MainActivity.RecyclerView then MainActivity.RecyclerView.update() end
-    end)
-  end
-
-  local function proceedWithResult(resultStr, stopAfterResult, toolOk)
-    if activeToolStop == stopHandle then activeToolStop = nil end
-    if generation and generation ~= requestGeneration then return end
-    results[#results + 1] = {
-      tool_call_id = tc.id,
-      content = resultStr,
-    }
-    -- Persist each completed tool before proceeding. A later stop must not
-    -- lose evidence of already-executed operations from the conversation.
-    messages[#messages + 1] = {
-      role = "tool",
-      tool_call_id = tc.id,
-      content = resultStr,
-    }
-    -- 执行器的结构化标志优先；旧式工具（nil）回退到文本嗅探
-    local failed = toolOk
-    if failed == nil then failed = isToolError(tc.name, resultStr) end
-    if failed then
-      failedToolCalls[toolCallKey] = tostring(resultStr):sub(1, 1000)
-    else
-      failedToolCalls[toolCallKey] = nil
-    end
-    saveHistory()
-    refreshMessageList()
-    if stopAfterResult then
-      hideLoading()
-      activeStream = nil
-      messages[#messages + 1] = {
-        role = "assistant",
-        content = "工具调用已停止：相同的工具名和参数已失败，未继续重复执行。请检查上一次错误并修改请求。",
-      }
-      saveHistory()
-      refreshMessageList()
-      return
-    end
-    if stopRequested then
-      finishStopped(index + 1)
-      return
-    end
-    executeToolCalls(toolCalls, index + 1, results, onAllDone, generation)
-  end
-
-  local function executeCurrentTool()
-    stopHandle = function() finishStopped() end
-    activeToolStop = stopHandle
-    -- executeToolAsync 的第二参数是结构化结果标志，适配到 proceedWithResult 的
-    -- 第三参数，避免与 stopAfterResult 错位
-    AgentChat.executeToolAsync(tc.name, args, function(resultStr, toolOk)
-      proceedWithResult(resultStr, nil, toolOk)
-    end)
-  end
-
-  if argsError then
-    local errorText = "工具参数 JSON 无效，未执行 " .. tostring(tc.name) .. ": " .. tostring(argsError)
-    failedToolCalls[toolCallKey] = errorText
-    proceedWithResult(errorText)
-    return
-  end
-
-  local previousFailure = failedToolCalls[toolCallKey]
-  if previousFailure then
-    proceedWithResult("为防止重复失败，未再次执行相同工具调用。\n前一次错误: " .. previousFailure, true)
-    return
-  end
-
-  if AgentChat.shouldAutoApprove(tc.name, args) then
-    executeCurrentTool()
-  elseif (AgentChat.requiresConfirmation and AgentChat.requiresConfirmation(tc.name, args))
-      or AgentChat.isDestructiveTool(tc.name) then
-    showToolConfirm(tc.name, args, function()
-      if (generation and generation ~= requestGeneration) or stopRequested then
-        finishStopped()
-        return
-      end
-      executeCurrentTool()
-    end, function()
-      if (generation and generation ~= requestGeneration) or stopRequested then
-        finishStopped()
-        return
-      end
-      proceedWithResult(S.ai_user_denied)
-    end)
-  else
-    executeCurrentTool()
-  end
-end
-
 -- ─── 会话持久化 ──
 
 saveHistory = function(updates)
@@ -1292,198 +1061,11 @@ loadHistory = function(resetTurnHistory)
       end
     end
   end
-  if activeStream and activeStream.generation == requestGeneration and activeStream.render then
-    activeStream.render()
-  end
+  AgentTurn.rerenderStream()
   return #messages
 end
 
 -- ─── 发送消息核心 ──
-
-sendToApi = function(apiMessages, isContinue)
-  local generation = requestGeneration
-  local requestUserIndex
-  -- 跳过压缩摘要合成的 user 消息，错误与重试要挂到真实的用户消息上
-  for index = #messages, 1, -1 do
-    local candidate = messages[index]
-    if candidate.role == "user" and not candidate.compressed_summary then
-      requestUserIndex = index
-      break
-    end
-  end
-  stopRequested = false
-  local function isCurrent()
-    return generation == requestGeneration
-  end
-  if not isContinue then
-    failedToolCalls = {}
-  end
-  showLoading()
-  keepAliveAcquire()
-
-  -- 上下文用量显示：估算本次将发送的 token 数
-  updateContextUsage(AgentChat.estimateApiMessagesUsage(apiMessages))
-
-  local fullResponse = ""
-  local streamState = { generation = generation, text = "" }
-  activeStream = streamState
-  streamState.render = function()
-    if activeStream ~= streamState or not isPanelVisible() or not views.msgContainer then return end
-    if streamState.container ~= views.msgContainer or not streamState.bubble
-        or not streamState.bubble.getParent() then
-      local streamViews = {}
-      local bubble = loadlayout({
-        MaterialCardView,
-        radius = "12dp",
-        CardElevation = 0,
-        strokeWidth = "1dp",
-        strokeColor = ColorOutline,
-        CardBackgroundColor = ColorSurface,
-        layout_width = "match",
-        layout_height = "wrap",
-        layout_marginBottom = "8dp",
-        layout_marginRight = "32dp",
-        {
-          LinearLayout,
-          orientation = "vertical",
-          padding = "12dp",
-          {
-            MaterialTextView,
-            id = "aiStreamText",
-            textSize = "13sp",
-            textColor = ColorOnSurface,
-            lineSpacingMultiplier = 1.35,
-          },
-        },
-      }, streamViews)
-      streamState.container = views.msgContainer
-      streamState.bubble = bubble
-      streamState.textView = streamViews.aiStreamText
-      streamState.container.addView(bubble)
-    end
-    if streamState.textView then streamState.textView.setText(streamState.text) end
-    scrollDown()
-  end
-  streamState.render()
-
-  AgentChat.sendStream(apiMessages, {
-    onPrepared = function(usage)
-      if not isCurrent() or type(usage) ~= "table" then return end
-      updateContextUsage(usage)
-    end,
-    onChunk = function(chunk)
-      if not isCurrent() then return end
-      setLoadingStatus(S.ai_generating)
-      fullResponse = fullResponse .. chunk
-      streamState.text = fullResponse
-      streamState.render()
-    end,
-    -- 自动重试前清空已流出的内容，避免失败段落重复拼接
-    onRetry = function()
-      if not isCurrent() then return end
-      fullResponse = ""
-      streamState.text = ""
-      setLoadingStatus(S.ai_retrying)
-      streamState.render()
-    end,
-    onToolCalls = function(toolCalls, text, reasoningContent, responseOutput, responseOrigin)
-      if not isCurrent() or stopRequested then return end
-      -- 不调用 hideLoading，保持加载状态直到续请求完成
-      if text and text ~= "" and text ~= fullResponse then
-        fullResponse = text
-        streamState.text = text
-      end
-
-      -- 保存 assistant 消息（含 tool_calls）
-      local assistantMsg = { role = "assistant" }
-      if text and text ~= "" then
-        assistantMsg.content = text
-      end
-      if reasoningContent and tostring(reasoningContent) ~= "" then
-        assistantMsg.reasoning_content = tostring(reasoningContent)
-      end
-      if type(responseOutput) == "table" and #responseOutput > 0 and responseOrigin and responseOrigin ~= "" then
-        assistantMsg.response_output = responseOutput
-        assistantMsg.response_origin = responseOrigin
-      end
-      assistantMsg.tool_calls = {}
-      for _, tc in ipairs(toolCalls) do
-        assistantMsg.tool_calls[#assistantMsg.tool_calls + 1] = {
-          id = tc.id,
-          item_id = tc.item_id,
-          type = "function",
-          ["function"] = {
-            name = tc.name,
-            arguments = tc.arguments,
-          },
-        }
-        if tc.legacy_function_call then assistantMsg.legacy_function_call = true end
-      end
-      messages[#messages + 1] = assistantMsg
-      saveHistory()
-      activeStream = nil
-      refreshMessageList()
-
-      -- 执行工具调用
-      executeToolCalls(toolCalls, 1, {}, function(results)
-        if not isCurrent() or stopRequested then return end
-        sendWithCompressedContext(true)
-      end, generation)
-    end,
-    onEmptyAfterTools = function()
-      if not isCurrent() then return end
-      hideLoading()
-      activeStream = nil
-      -- The tool result is already in history. Do not add a blank assistant
-      -- message, otherwise the next continuation may lose the tool context.
-      local stateMessage = messages[#messages]
-      if stateMessage and stateMessage.role == "tool" then
-        stateMessage.continuation_state = "empty_after_tools"
-        saveHistory()
-      end
-      refreshMessageList()
-    end,
-    onDone = function(text, incomplete, responseOutput, responseOrigin, reasoningContent)
-      if not isCurrent() then return end
-      hideLoading()
-      activeStream = nil
-      local assistantMsg = { role = "assistant", content = text }
-      if type(responseOutput) == "table" and #responseOutput > 0 and responseOrigin and responseOrigin ~= "" then
-        assistantMsg.response_output = responseOutput
-        assistantMsg.response_origin = responseOrigin
-      end
-      if reasoningContent and tostring(reasoningContent) ~= "" then
-        assistantMsg.reasoning_content = tostring(reasoningContent)
-      end
-      if incomplete == true then assistantMsg.continuation_state = "incomplete" end
-      messages[#messages + 1] = assistantMsg
-      saveHistory()
-      refreshMessageList()
-    end,
-    onError = function(err)
-      if not isCurrent() then return end
-      hideLoading()
-      activeStream = nil
-      -- 用户主动停止：保留已生成部分，不显示错误
-      if tostring(err):lower():match("cancel") then
-        local stateMessage = { role = "assistant", content = fullResponse, continuation_state = "stopped" }
-        messages[#messages + 1] = stateMessage
-        saveHistory()
-        refreshMessageList()
-        requestGeneration = requestGeneration + 1
-        stopRequested = false
-        return
-      end
-      local requestMessage = requestUserIndex and messages[requestUserIndex]
-      if requestMessage and requestMessage.role == "user" then
-        requestMessage.request_error = tostring(err)
-        requestRetryPayloads[requestMessage] = apiMessages
-      end
-      saveHistory()
-      refreshMessageList()
-    end,
-  })
-end
 
 addRequestErrorBubble = function(err, messageIndex)
   if not views.msgContainer then return end
@@ -1542,7 +1124,7 @@ addRequestErrorBubble = function(err, messageIndex)
   }, errorViews))
 
   errorViews.recoverButton.onClick = function()
-    if isLoading then return end
+    if AgentTurn.isActive() then return end
     local message = messages[messageIndex]
     if not message or message.role ~= "user" or not message.request_error then
       print(S.ai_request_expired)
@@ -1552,21 +1134,21 @@ addRequestErrorBubble = function(err, messageIndex)
       showSettings()
       return
     end
-    local retryPayload = requestRetryPayloads[message]
+    local retryPayload = AgentTurn.retryPayloadFor(message)
     message.request_error = nil
     saveHistory()
     refreshMessageList()
     if compresses then
-      compressCurrentContext(function() sendWithCompressedContext(false) end)
+      AgentTurn.compress(function() AgentTurn.send(false) end)
     else
-      requestGeneration = requestGeneration + 1
-      if retryPayload then sendToApi(retryPayload, false)
-      else sendWithCompressedContext(false) end
+      AgentTurn.bumpGeneration()
+      if retryPayload then AgentTurn.sendRaw(retryPayload, false)
+      else AgentTurn.send(false) end
     end
   end
 
   errorViews.editButton.onClick = function()
-    if isLoading then return end
+    if AgentTurn.isActive() then return end
     local message = messages[messageIndex]
     if not message or message.role ~= "user" or not views.msgInput then
       print(S.ai_request_expired)
@@ -1578,52 +1160,10 @@ addRequestErrorBubble = function(err, messageIndex)
   end
 end
 
-sendWithCompressedContext = function(isContinue, userMsg)
-  local generation = requestGeneration
-  showLoading()
-  -- 摘要请求本身也是一次模型调用，先保活再压缩，避免息屏时被 Doze 挂起
-  keepAliveAcquire()
-  local requestHistory = messages
-  if userMsg and userMsg ~= "" then
-    requestHistory = {}
-    for i, message in ipairs(messages) do
-      requestHistory[i] = message
-    end
-    local last = requestHistory[#requestHistory]
-    if last and last.role == "user" then
-      requestHistory[#requestHistory] = {}
-      for key, value in pairs(last) do
-        requestHistory[#requestHistory][key] = value
-      end
-      requestHistory[#requestHistory].content = userMsg
-    end
-  end
-  AgentChat.buildCompressedApiMessages(requestHistory, function(apiMessages, compressed, compressedHistory)
-    if generation ~= requestGeneration or stopRequested then return end
-    -- 自动压缩结果持久化到会话：后续发送不再重复摘要，直到再次超出预算。
-    -- 带 userMsg 的重发基于请求副本压缩，副本里含编辑器上下文，不能落盘；
-    -- 仅当压缩确实让历史变小或首条被摘要替换时才替换，避免无意义的重复落盘。
-    if compressed and compressedHistory and #compressedHistory > 0 and not userMsg then
-      local changed = #compressedHistory ~= #messages
-        or not messages[1]
-        or tostring(compressedHistory[1].content) ~= tostring(messages[1].content)
-      if changed then
-        messages = compressedHistory
-        undoTurns = {}
-        redoTurns = {}
-        saveHistory()
-        refreshMessageList()
-        print(S.ai_compress_auto_done:format(#messages))
-      end
-    end
-    sendToApi(apiMessages, isContinue)
-  end)
-end
-
 -- ─── 发送消息 ──
 
 sendMessage = function()
-  if isLoading then return end
+  if AgentTurn.isActive() then return end
 
   local input = views.msgInput
   if not input then return end
@@ -1674,9 +1214,8 @@ sendMessage = function()
   end
 
   -- 编辑器上下文只加入请求副本，不写入持久化会话；超预算时先压缩历史。
-  stopRequested = false
-  requestGeneration = requestGeneration + 1
-  sendWithCompressedContext(false, userMsg)
+  AgentTurn.bumpGeneration()
+  AgentTurn.send(false, userMsg)
 end
 
 -- ─── 供应商与模型 ──
@@ -3059,7 +2598,7 @@ local function buildManagerRow(conv, render)
       .setTitle(S.ai_delete_conv)
       .setMessage(S.ai_confirm_delete_conv:format(name))
       .setPositiveButton(S.ai_delete, function()
-        invalidateRequest()
+        AgentTurn.invalidate()
         if not AgentChat.deleteConversation(convId) then
           print(S.ai_delete_failed)
           return
@@ -3089,7 +2628,9 @@ local function buildManagerRow(conv, render)
   return row
 end
 
-local function showConvList()
+-- 赋值给前向声明的局部量：命令菜单捕获的是声明处的变量，
+-- 若在此重新 local 声明，菜单入口会调用到 nil（历史 bug）
+showConvList = function()
   local list = AgentChat.listConversations()
   local currentConv = AgentChat.getCurrentConv()
   local currentId = currentConv and currentConv.id or nil
@@ -3185,7 +2726,7 @@ local function showConvList()
     local conv = item.conversation
     local row = buildConvRow(conv, conv.id == currentId, function()
       saveHistory()
-      invalidateRequest()
+      AgentTurn.invalidate()
       AgentChat.setCurrentConv(conv.id)
       activeConversationId = conv.id
       activeConversationProjectPath = AgentChat.getCurrentProjectPath()
@@ -3207,7 +2748,7 @@ local function showConvList()
   end
   dlgViews.btnNew.onClick = function()
     saveHistory()
-    invalidateRequest()
+    AgentTurn.invalidate()
     local created = AgentChat.createConversation()
     activeConversationId = created and created.id or nil
     activeConversationProjectPath = created and AgentChat.getCurrentProjectPath() or nil
@@ -3296,7 +2837,7 @@ showConvManager = function()
 
   dlgViews.btnNew.onClick = function()
     saveHistory()
-    invalidateRequest()
+    AgentTurn.invalidate()
     local created = AgentChat.createConversation()
     activeConversationId = created and created.id or nil
     activeConversationProjectPath = created and AgentChat.getCurrentProjectPath() or nil
@@ -3390,7 +2931,7 @@ local function addWelcomeCard(title, body)
 end
 
 local function clearChat()
-  invalidateRequest()
+  AgentTurn.invalidate()
   messages = {}
   activeConversationHadMessages = false
   if conversationLoaded and activeConversationId and activeConversationId ~= ""
@@ -3500,15 +3041,7 @@ function _M.show()
     views.btnStop.onClick = function()
       views.btnStop.setEnabled(false)
       -- Keep this generation alive until the cancel callback stores partial text.
-      stopRequested = true
-      if activeToolConfirm then activeToolConfirm.cancel() end
-      AgentChat.cancelPendingRequest()
-      if AgentChat.cancelPendingTools then AgentChat.cancelPendingTools() end
-      local stopTool = activeToolStop
-      activeToolStop = nil
-      if stopTool then pcall(stopTool) end
-      isLoading = false
-      hideLoading()
+      AgentTurn.requestStop()
     end
   end
 
@@ -3524,7 +3057,7 @@ function _M.show()
 
   if views.btnClear then
     views.btnClear.onClick = function()
-      invalidateRequest()
+      AgentTurn.invalidate()
       saveHistory()
       local created = AgentChat.createConversation()
       activeConversationId = created and created.id or nil
@@ -3567,7 +3100,7 @@ function _M.show()
   -- 恢复上次会话
   if views.msgContainer then
     views.msgContainer.removeAllViews()  -- 先移除默认欢迎消息
-    local historyCount = loadHistory(not isLoading)
+    local historyCount = loadHistory(not AgentTurn.isActive())
     if historyCount == 0 then
       addWelcomeCard(S.ai_welcome_title, S.ai_welcome_body)
     end
@@ -3578,8 +3111,8 @@ function _M.show()
   end)
   dialog.show()
   expandSheet(dialog, content)
-  if isLoading then showLoading() end
-  if activeStream and activeStream.render then activeStream.render() end
+  if AgentTurn.isActive() then showLoading() end
+  AgentTurn.rerenderStream()
 
   if not AgentChat.hasApiKey() then
     content.post(function()
@@ -3592,7 +3125,7 @@ end
 
 function _M.onBeforeProjectChange()
   saveHistory()
-  invalidateRequest()
+  AgentTurn.invalidate()
   conversationLoaded = false
   activeConversationId = nil
   activeConversationProjectPath = nil
@@ -3600,7 +3133,7 @@ function _M.onBeforeProjectChange()
 end
 
 function _M.refreshProjectContext()
-  invalidateRequest()
+  AgentTurn.invalidate()
   messages = {}
   activeConversationId = nil
   activeConversationProjectPath = nil
@@ -3634,5 +3167,71 @@ function _M.insertCode(code)
 
   print(S.ai_inserted)
 end
+
+-- ─── 回合状态机装配 ──
+-- 编排逻辑全部位于 AgentTurn；此处注入视图钩子。
+
+AgentTurn.configure({
+  getMessages = function() return messages end,
+  setMessages = function(nextMessages) messages = nextMessages end,
+  resetTurnHistory = function()
+    undoTurns = {}
+    redoTurns = {}
+  end,
+  showViews = showLoadingViews,
+  hideViews = hideLoadingViews,
+  setLoadingStatusView = setLoadingStatusView,
+  isPanelVisible = isPanelVisible,
+  scrollDown = scrollDown,
+  updateContextUsage = updateContextUsage,
+  saveHistory = function(updates) saveHistory(updates) end,
+  refreshMessageList = function() refreshMessageList() end,
+  addToolBubble = function(name, args, result) addToolBubble(name, args, result) end,
+  showToolConfirm = function(name, args, onAllow, onDeny) showToolConfirm(name, args, onAllow, onDeny) end,
+  cancelToolConfirm = function()
+    if activeToolConfirm then activeToolConfirm.cancel() end
+  end,
+  isToolError = function(name, result) return isToolError(name, result) end,
+  toolDisplayName = function(name) return toolDisplayName(name) end,
+  makeStreamRender = function(streamState)
+    return function()
+      if AgentTurn.activeStream() ~= streamState or not isPanelVisible() or not views.msgContainer then return end
+      if streamState.container ~= views.msgContainer or not streamState.bubble
+          or not streamState.bubble.getParent() then
+        local streamViews = {}
+        local bubble = loadlayout({
+          MaterialCardView,
+          radius = "12dp",
+          CardElevation = 0,
+          strokeWidth = "1dp",
+          strokeColor = ColorOutline,
+          CardBackgroundColor = ColorSurface,
+          layout_width = "match",
+          layout_height = "wrap",
+          layout_marginBottom = "8dp",
+          layout_marginRight = "32dp",
+          {
+            LinearLayout,
+            orientation = "vertical",
+            padding = "12dp",
+            {
+              MaterialTextView,
+              id = "aiStreamText",
+              textSize = "13sp",
+              textColor = ColorOnSurface,
+              lineSpacingMultiplier = 1.35,
+            },
+          },
+        }, streamViews)
+        streamState.container = views.msgContainer
+        streamState.bubble = bubble
+        streamState.textView = streamViews.aiStreamText
+        streamState.container.addView(bubble)
+      end
+      if streamState.textView then streamState.textView.setText(streamState.text) end
+      scrollDown()
+    end
+  end,
+})
 
 return _M
