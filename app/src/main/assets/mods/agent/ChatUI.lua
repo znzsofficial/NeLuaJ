@@ -131,6 +131,7 @@ local function toolDisplayName(name)
     get_env_info = S.ai_tool_env,
     check_lua_syntax = S.ai_tool_check_syntax,
     fetch_url = S.ai_tool_fetch_url,
+    run_project = S.run_project,
   }
   return labels[name] or tostring(name or "")
 end
@@ -493,7 +494,8 @@ addToolBubble = function(toolName, args, result)
   elseif toolName == "append_file" then icon = "＋"
   elseif toolName == "rename_file" then icon = "⇄"
   elseif toolName == "get_env_info" then icon = "ℹ"
-  elseif toolName == "fetch_url" then icon = "↗" end
+  elseif toolName == "fetch_url" then icon = "↗"
+  elseif toolName == "run_project" then icon = "▶" end
 
   local resultText = tostring(result or "")
   local resultLower = resultText:lower()
@@ -999,6 +1001,13 @@ loadHistory = function(resetTurnHistory)
   activeConversationProjectPath = conv and AgentChat.getCurrentProjectPath() or nil
   messages = conv and conv.messages or {}
   conversationLoaded = conv ~= nil
+  -- 上次会话的任务可能被应用退出打断：注入提示并清除标记
+  -- （必须在 conversationLoaded 置位之后，saveHistory 才会真正落盘）
+  if conv and conv.running and not AgentTurn.isActive() then
+    conv.running = false
+    messages[#messages + 1] = { role = "assistant", content = S.ai_task_interrupted }
+    saveHistory({ running = false })
+  end
   activeConversationHadMessages = #messages > 0
   if updateProjectLabel then updateProjectLabel() end
   if views.aiTitle and conv then views.aiTitle.setText(convName(conv)) end
@@ -3193,6 +3202,9 @@ AgentTurn.configure({
   end,
   isToolError = function(name, result) return isToolError(name, result) end,
   toolDisplayName = function(name) return toolDisplayName(name) end,
+  setConversationRunning = function(running)
+    if conversationLoaded then saveHistory({ running = running == true }) end
+  end,
   makeStreamRender = function(streamState)
     return function()
       if AgentTurn.activeStream() ~= streamState or not isPanelVisible() or not views.msgContainer then return end

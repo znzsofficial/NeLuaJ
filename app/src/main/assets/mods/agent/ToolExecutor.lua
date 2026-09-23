@@ -278,6 +278,7 @@ end
 
 function _M.requiresConfirmation(name, args)
   name = _M.normalizeToolName(name, args)
+  if name == "run_project" then return true end
   if name == "run_lua" then
     if not autoRunsSandbox() then return true end
     return isNetworkRequest(name, args) and not autoApprovesNetworkRequests()
@@ -300,6 +301,7 @@ function _M.shouldAutoApprove(name, args)
   end
   if isNetworkRequest(name, args) and autoApprovesNetworkRequests() then return true end
   if name:match("^mcp::") or name:match("^mcp__") then return false end
+  if name == "run_project" then return false end
   if name == "get_env_info" or name == "check_lua_syntax" then return true end
   if name == "read_file" or name == "read_files" or name == "list_dir" or name == "search_in_files" then
     return allPathsInProject(name, args)

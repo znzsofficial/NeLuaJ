@@ -49,7 +49,10 @@ end
 -- ─── 加载状态 ──
 
 function _M.showLoading()
+  local was = state.loading
   state.loading = true
+  -- 会话级“任务进行中”标记：进程被杀后用于中断提示；仅在状态翻转时落盘
+  if not was and hooks.setConversationRunning then pcall(hooks.setConversationRunning, true) end
   if hooks.showViews then hooks.showViews() end
 end
 
@@ -58,8 +61,10 @@ function _M.setLoadingStatus(text)
 end
 
 function _M.hideLoading()
+  local was = state.loading
   state.loading = false
   keepAliveRelease()
+  if was and hooks.setConversationRunning then pcall(hooks.setConversationRunning, false) end
   if hooks.hideViews then hooks.hideViews() end
 end
 
@@ -225,9 +230,9 @@ executeToolCalls = function(toolCalls, index, results, onAllDone, generation)
       tool_call_id = tc.id,
       content = resultStr,
     }
-    -- 执行器的结构化标志优先；旧式工具（nil）回退到文本嗅探
-    local failed = toolOk
-    if failed == nil then failed = hooks.isToolError(tc.name, resultStr) end
+    -- 执行器的结构化标志优先（true=成功，false=失败）；旧式工具（nil）回退到文本嗅探
+    local failed = toolOk == false
+    if toolOk == nil then failed = hooks.isToolError(tc.name, resultStr) end
     if failed then
       state.failedToolCalls[toolCallKey] = tostring(resultStr):sub(1, 1000)
     else

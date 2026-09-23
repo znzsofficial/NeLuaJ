@@ -38,7 +38,7 @@ local SYSTEM_PROMPT = [[
 - 是否需要确认由应用的工具策略决定。需要工具时直接发出 tool call，不要先在聊天中重复询问是否允许，也不要只说“准备调用工具”后停止。
 - 用户拒绝工具后，不得通过别名、拆分调用、其他工具或重复请求绕过确认。
 - 写入类工具（create_file / apply_patch / replace_in_file / append_file）对 .lua 文件自动做语法预检：失败时不落盘并把语法错误返回给你，此时根据错误修正后重试即可，不要改用其他工具绕过，也不要重复提交完全相同的补丁。
-- 修改后执行与改动相关的验证。语法已在写入时预检通过则无需重复 check_lua_syntax；纯逻辑可使用 run_lua；有构建、测试或明确复现步骤时应执行并根据结果修复。无法验证时说明原因，不得把计划写成已完成。
+- 修改后执行与改动相关的验证。语法已在写入时预检通过则无需重复 check_lua_syntax；纯逻辑可使用 run_lua；需要验证真实运行行为（界面、生命周期、Android API）时使用 run_project 启动工程入口并根据返回的崩溃日志修复；有构建、测试或明确复现步骤时应执行并根据结果修复。无法验证时说明原因，不得把计划写成已完成。
 
 # 评审
 
@@ -261,6 +261,20 @@ _M.TOOLS = {
           },
         },
         required = { "code" },
+      },
+    },
+  },
+  {
+    type = "function",
+    ["function"] = {
+      name = "run_project",
+      description = "运行当前工程的 Lua 入口脚本（真实 Android 环境，非沙盒），并在等待窗口内捕获未捕获异常（读取崩溃日志目录的新增记录）。用于修改代码后验证运行时行为。脚本自身的 onError 捕获或正常运行的界面效果不会写入日志；启动的是独立界面，不会阻塞本会话。每次调用都需要用户确认。",
+      parameters = {
+        type = "object",
+        properties = {
+          path = { type = "string", description = "入口脚本路径（可选；默认依次取当前打开文件、工程 init.lua、main.lua 中第一个存在的）" },
+          wait_ms = { type = "integer", description = "等待崩溃记录的时长毫秒数（可选，默认 4000，范围 1000-10000）" },
+        },
       },
     },
   },
@@ -1188,7 +1202,98 @@ local function legacyExecuteTool(name, args)
     if output ~= "" then
       err = err .. "\n--- 部分输出 ---\n" .. output
     end
-    return "运行失败（耗时 " .. elapsed .. "）:\n" .. err
+    return "运行失败（耗时 " .. elapsed .. "）:\n" .. err, false
+
+  elseif name == "run_project" then
+    -- 定位入口脚本
+    local entry = tostring(args.path or "")
+    if entry ~= "" then entry = resolvePath(entry) end
+    if entry == "" or not file.exists(entry) then
+      local base = Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir()
+      local candidates = {}
+      local thisFile = Bean and Bean.Path and Bean.Path.this_file
+      if thisFile and thisFile ~= "" then candidates[#candidates + 1] = thisFile end
+      candidates[#candidates + 1] = base .. "/init.lua"
+      candidates[#candidates + 1] = base .. "/main.lua"
+      entry = ""
+      for _, candidate in ipairs(candidates) do
+        if file.exists(candidate) then entry = candidate break end
+      end
+    end
+    if entry == "" or not file.exists(entry) then
+      return "run_project 未找到可运行的入口脚本，请用 path 参数明确指定", false
+    end
+
+    -- 崩溃日志目录：<externalMedia>/<pkg>/crash/
+    local crashDir
+    pcall(function()
+      local dirs = activity.getApplicationContext().getExternalMediaDirs()
+      if not dirs then return end
+      local mediaDir
+      -- CrashHandler 写入 externalMediaDirs[0]/crash/；必须以 0 优先探测
+      for _, index in ipairs({ 0, 1 }) do
+        local okDir, dir = pcall(function() return dirs[index] end)
+        if okDir and dir then mediaDir = dir break end
+      end
+      if mediaDir then crashDir = mediaDir.getAbsolutePath() .. "/crash" end
+    end)
+
+    local File = luajava.bindClass("java.io.File")
+    local System = luajava.bindClass("java.lang.System")
+    local Thread = luajava.bindClass("java.lang.Thread")
+    local before = 0
+    if crashDir then
+      pcall(function()
+        local names = file.list(crashDir)
+        if not names then return end
+        for _, name in ipairs(names) do
+          local okM, m = pcall(function() return File(crashDir, tostring(name)).lastModified() end)
+          if okM and type(m) == "number" and m > before then before = m end
+        end
+      end)
+    end
+
+    local okLaunch, launched
+    pcall(function()
+      local RunLauncher = require("mods.project.RunLauncher")
+      launched = RunLauncher.launchScript(this, entry)
+    end)
+    if launched ~= true then
+      return "启动失败: " .. tostring(launched or "无法创建运行界面"), false
+    end
+
+    local waitMs = math.max(1000, math.min(10000, tonumber(args.wait_ms or args.waitMs) or 4000))
+    if crashDir then
+      local found = nil
+      local deadline = System.currentTimeMillis() + waitMs
+      while System.currentTimeMillis() < deadline do
+        pcall(function() Thread.sleep(250) end)
+        local hit = nil
+        pcall(function()
+          local names = file.list(crashDir)
+          if not names then return end
+          for _, name in ipairs(names) do
+            local path = crashDir .. "/" .. tostring(name)
+            local okM, m = pcall(function() return File(crashDir, tostring(name)).lastModified() end)
+            if okM and type(m) == "number" and m > before then
+              if not hit or m > hit.m then hit = { path = path, m = m } end
+            end
+          end
+        end)
+        if hit then found = hit.path break end
+      end
+      if found then
+        local content = ""
+        pcall(function()
+          local read = file.readall(found)
+          if type(read) == "string" then content = read end
+        end)
+        if #content > 4000 then content = content:sub(1, 4000) .. "\n...(崩溃日志已截断)" end
+        return "运行已启动，但捕获到未捕获异常:\n日志: " .. found .. "\n\n" .. content, false
+      end
+    end
+    return "运行已启动（" .. waitMs .. "ms 内无新增崩溃记录）\n入口: " .. entry
+      .. "\n注意：只有未捕获的运行时错误会写入崩溃日志；脚本内 onError 捕获的处理与界面表现不会记录，需要时用 read_file 检查相关代码或再次运行。", true
 
   elseif name == "fetch_url" then
     local url = tostring(args.url or "")
