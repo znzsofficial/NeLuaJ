@@ -2620,6 +2620,20 @@ local function buildConvRow(conv, isCurrent, onClick)
     badge.setBackground(bbg)
     badge.setLayoutParams(LinearLayout.LayoutParams(dp(42), dp(24)))
     row.addView(badge)
+  elseif conv.running then
+    -- 该会话有任务进行中（进程被杀后标记可能残留，仅作提示）
+    local badge = MaterialTextView(activity)
+    badge.setText(S.ai_conv_running)
+    badge.setTextSize(11)
+    badge.setGravity(17)
+    badge.setTextColor(ColorOnSecondaryContainer)
+    local rbg = GradientDrawable()
+    rbg.setCornerRadius(dp(12))
+    rbg.setColor(ColorSecondaryContainer)
+    badge.setBackground(rbg)
+    badge.setPadding(dp(8), 0, dp(8), 0)
+    badge.setLayoutParams(LinearLayout.LayoutParams(-2, dp(24)))
+    row.addView(badge)
   end
   return row
 end
@@ -2746,6 +2760,10 @@ showConvList = function()
   local list = AgentChat.listConversations()
   local currentConv = AgentChat.getCurrentConv()
   local currentId = currentConv and currentConv.id or nil
+  -- 会话中心按最近更新排序，进行中的任务自然靠前
+  table.sort(list, function(a, b)
+    return tostring(a.conversation.updatedAt or "") > tostring(b.conversation.updatedAt or "")
+  end)
 
   if #list == 0 then
     local created = AgentChat.createConversation()

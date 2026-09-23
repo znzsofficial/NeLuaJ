@@ -8,4 +8,5 @@
     <string name="agent_keepalive_channel">AI 助手</string>
     <string name="agent_keepalive_title">AI 助手正在运行</string>
     <string name="agent_keepalive_text">任务进行中，可息屏等待完成</string>
+    <string name="shortcut_agent_long">打开 AI 助手</string>
 </resources>

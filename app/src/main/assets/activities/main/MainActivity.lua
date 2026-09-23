@@ -180,6 +180,14 @@ function onCreate()
       .setCancelable(false)
       .show()
   end
+
+  -- 桌面快捷方式（shortcuts.xml）：open_agent 直接唤起 AI 助手面板
+  pcall(function()
+    local intent = activity.getIntent()
+    if intent and intent.getBooleanExtra("open_agent", false) then
+      require("mods.agent.ChatUI").show()
+    end
+  end)
 end
 
 function onStorageRequestResult(isGranted)
