@@ -866,16 +866,16 @@ local function legacyExecuteTool(name, args)
     if syntaxErr then
       return "文件未创建（写入被 Lua 语法检查拦截）\n路径: " .. path
         .. "\n语法错误:\n" .. syntaxErr
-        .. "\n请修复语法后重新调用。"
+        .. "\n请修复语法后重新调用。", false
     end
     local ok, result = pcall(function() return file.save(path, content) end)
     if ok and result == true then
       if syntaxChecked then
-        return "文件已创建: " .. path .. "\nLua 语法检查通过"
+        return "文件已创建: " .. path .. "\nLua 语法检查通过", true
       end
-      return "文件已创建: " .. path
+      return "文件已创建: " .. path, true
     else
-      return "创建文件失败\n路径: " .. path .. "\n原因: " .. tostring(result)
+      return "创建文件失败\n路径: " .. path .. "\n原因: " .. tostring(result), false
     end
 
   elseif name == "create_folder" then
@@ -883,9 +883,9 @@ local function legacyExecuteTool(name, args)
     local ok, result = pcall(function() return file.mkdir(path) end)
     local dirOk, isDir = pcall(function() return luajava.bindClass("java.io.File")(path).isDirectory() end)
     if ok and (result == true or (dirOk and isDir)) then
-      return "文件夹已创建: " .. path
+      return "文件夹已创建: " .. path, true
     else
-      return "创建文件夹失败\n路径: " .. path .. "\n原因: " .. tostring(result)
+      return "创建文件夹失败\n路径: " .. path .. "\n原因: " .. tostring(result), false
     end
 
   elseif name == "delete_file" then
@@ -898,9 +898,9 @@ local function legacyExecuteTool(name, args)
       return LuaFileUtil.remove(path)
     end)
     if ok and result == true then
-      return "文件已删除: " .. path
+      return "文件已删除: " .. path, true
     else
-      return "删除文件失败\n路径: " .. path .. "\n原因: " .. tostring(result)
+      return "删除文件失败\n路径: " .. path .. "\n原因: " .. tostring(result), false
     end
 
   elseif name == "delete_folder" then
@@ -914,9 +914,9 @@ local function legacyExecuteTool(name, args)
       return LuaUtil.rmDir(File(path))
     end)
     if ok and result == true then
-      return "文件夹已删除: " .. path
+      return "文件夹已删除: " .. path, true
     else
-      return "删除文件夹失败\n路径: " .. path .. "\n原因: " .. tostring(result)
+      return "删除文件夹失败\n路径: " .. path .. "\n原因: " .. tostring(result), false
     end
 
   elseif name == "read_file" then
@@ -1212,36 +1212,36 @@ local function legacyExecuteTool(name, args)
     local original = ""
     local readOk, readResult = pcall(function() return file.readall(path) end)
     if not readOk then
-      return "读取文件失败\n路径: " .. path .. "\n原因: " .. tostring(readResult)
+      return "读取文件失败\n路径: " .. path .. "\n原因: " .. tostring(readResult), false
     end
     if not readResult then
-      return "文件不存在或为空: " .. path
+      return "文件不存在或为空: " .. path, false
     end
     original = readResult
 
     local newContent, countOrErr, locations = _M.applyPatch(original, patch)
     if not newContent then
-      return "补丁应用失败\n文件: " .. path .. "\n原因: " .. tostring(countOrErr)
+      return "补丁应用失败\n文件: " .. path .. "\n原因: " .. tostring(countOrErr), false
     end
 
     local syntaxErr, syntaxChecked = luaSyntaxGuard(path, newContent)
     if syntaxErr then
       return "补丁未应用（写入被 Lua 语法检查拦截，文件保持原样）\n文件: " .. path
         .. "\n语法错误:\n" .. syntaxErr
-        .. "\n请修正补丁后重试。"
+        .. "\n请修正补丁后重试。", false
     end
 
     local writeOk, writeResult = pcall(function() return file.save(path, newContent) end)
     if not writeOk or writeResult ~= true then
-      return "补丁写入失败\n文件: " .. path .. "\n原因: " .. tostring(writeResult)
+      return "补丁写入失败\n文件: " .. path .. "\n原因: " .. tostring(writeResult), false
     end
     local count = type(countOrErr) == "number" and countOrErr or 1
     local locText = formatPatchLocations(locations)
     local syntaxNote = syntaxChecked and "\nLua 语法检查通过" or ""
     if locText ~= "" then
-      return "补丁已应用（" .. count .. " 处修改）\n位置: " .. locText .. syntaxNote
+      return "补丁已应用（" .. count .. " 处修改）\n位置: " .. locText .. syntaxNote, true
     end
-    return "补丁已应用（" .. count .. " 处修改）" .. syntaxNote
+    return "补丁已应用（" .. count .. " 处修改）" .. syntaxNote, true
 
   elseif name == "replace_in_file" then
     local path = resolvePath(args.path)
@@ -1252,10 +1252,10 @@ local function legacyExecuteTool(name, args)
     end
     local readOk, original = pcall(function() return file.readall(path) end)
     if not readOk then
-      return "读取文件失败\n路径: " .. path .. "\n原因: " .. tostring(original)
+      return "读取文件失败\n路径: " .. path .. "\n原因: " .. tostring(original), false
     end
     if not original then
-      return "文件不存在或为空: " .. path
+      return "文件不存在或为空: " .. path, false
     end
     local maxCount = tonumber(args.count) or 0
     local newContent, replaced = plainReplace(original, old, new, maxCount)
@@ -1265,22 +1265,22 @@ local function legacyExecuteTool(name, args)
       if okFuzzy then newContent, replaced = okFuzzy, cnt end
     end
     if replaced == 0 then
-      return "未找到要替换的文本: " .. old
+      return "未找到要替换的文本: " .. old, false
     end
     local syntaxErr, syntaxChecked = luaSyntaxGuard(path, newContent)
     if syntaxErr then
       return "替换未应用（写入被 Lua 语法检查拦截，文件保持原样）\n文件: " .. path
         .. "\n语法错误:\n" .. syntaxErr
-        .. "\n请修正替换内容后重试。"
+        .. "\n请修正替换内容后重试。", false
     end
     local writeOk, writeResult = pcall(function() return file.save(path, newContent) end)
     if not writeOk or writeResult ~= true then
-      return "替换写入失败\n文件: " .. path .. "\n原因: " .. tostring(writeResult)
+      return "替换写入失败\n文件: " .. path .. "\n原因: " .. tostring(writeResult), false
     end
     if syntaxChecked then
-      return "已替换 " .. replaced .. " 处: " .. path .. "\nLua 语法检查通过"
+      return "已替换 " .. replaced .. " 处: " .. path .. "\nLua 语法检查通过", true
     end
-    return "已替换 " .. replaced .. " 处: " .. path
+    return "已替换 " .. replaced .. " 处: " .. path, true
 
   elseif name == "append_file" then
     local path = resolvePath(args.path)
@@ -1298,7 +1298,7 @@ local function legacyExecuteTool(name, args)
     if syntaxErr then
       return "追加未执行（写入被 Lua 语法检查拦截，文件保持原样）\n路径: " .. path
         .. "\n语法错误:\n" .. syntaxErr
-        .. "\n请修正追加内容后重试。"
+        .. "\n请修正追加内容后重试。", false
     end
     local ok, err = pcall(function()
       local File = luajava.bindClass("java.io.File")
@@ -1310,11 +1310,11 @@ local function legacyExecuteTool(name, args)
     end)
     if ok then
       if syntaxChecked then
-        return "已追加到文件: " .. path .. "\nLua 语法检查通过"
+        return "已追加到文件: " .. path .. "\nLua 语法检查通过", true
       end
-      return "已追加到文件: " .. path
+      return "已追加到文件: " .. path, true
     else
-      return "追加失败\n路径: " .. path .. "\n原因: " .. tostring(err)
+      return "追加失败\n路径: " .. path .. "\n原因: " .. tostring(err), false
     end
 
   elseif name == "rename_file" then
@@ -1339,7 +1339,7 @@ local function legacyExecuteTool(name, args)
           return "重命名未执行（目标为 .lua 且存在语法错误）\n原路径: " .. src
             .. "\n目标: " .. dst
             .. "\n语法错误:\n" .. syntaxErr
-            .. "\n请先修正内容或改用其他扩展名。"
+            .. "\n请先修正内容或改用其他扩展名。", false
         end
       end
     end
@@ -1354,9 +1354,9 @@ local function legacyExecuteTool(name, args)
       end
     end)
     if ok then
-      return "已重命名/移动: " .. src .. " → " .. dst
+      return "已重命名/移动: " .. src .. " → " .. dst, true
     else
-      return "重命名失败\n原路径: " .. src .. "\n目标: " .. dst .. "\n原因: " .. tostring(err)
+      return "重命名失败\n原路径: " .. src .. "\n目标: " .. dst .. "\n原因: " .. tostring(err), false
     end
 
   elseif name == "get_env_info" then

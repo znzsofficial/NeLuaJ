@@ -155,7 +155,9 @@ function _M.begin(name, args)
     before = before, args = resolvedArgs }
 end
 
-function _M.finish(transaction, result)
+--- explicitOk 是执行器的结构化结果标志（true/false/nil）。nil 表示旧式工具
+--- 未提供状态，此时回退到 resultSucceeded 文本前缀嗅探。
+function _M.finish(transaction, result, explicitOk)
   loadState()
   if not transaction then return true end
   local currentScope = cfg().scope and cfg().scope()
@@ -190,7 +192,9 @@ function _M.finish(transaction, result)
   redoStack = {}
   local persisted, persistErr = persist()
   if not persisted then return true, persistErr end
-  if not cfg().resultSucceeded(result) then
+  local succeeded = explicitOk
+  if succeeded == nil then succeeded = cfg().resultSucceeded(result) end
+  if not succeeded then
     return false, "操作报告失败，但检测到文件变化，已保留撤销记录"
   end
   return true

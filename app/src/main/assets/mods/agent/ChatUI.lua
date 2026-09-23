@@ -1111,7 +1111,7 @@ local function executeToolCalls(toolCalls, index, results, onAllDone, generation
     end)
   end
 
-  local function proceedWithResult(resultStr, stopAfterResult)
+  local function proceedWithResult(resultStr, stopAfterResult, toolOk)
     if activeToolStop == stopHandle then activeToolStop = nil end
     if generation and generation ~= requestGeneration then return end
     results[#results + 1] = {
@@ -1125,7 +1125,10 @@ local function executeToolCalls(toolCalls, index, results, onAllDone, generation
       tool_call_id = tc.id,
       content = resultStr,
     }
-    if isToolError(tc.name, resultStr) then
+    -- 执行器的结构化标志优先；旧式工具（nil）回退到文本嗅探
+    local failed = toolOk
+    if failed == nil then failed = isToolError(tc.name, resultStr) end
+    if failed then
       failedToolCalls[toolCallKey] = tostring(resultStr):sub(1, 1000)
     else
       failedToolCalls[toolCallKey] = nil
@@ -1153,7 +1156,11 @@ local function executeToolCalls(toolCalls, index, results, onAllDone, generation
   local function executeCurrentTool()
     stopHandle = function() finishStopped() end
     activeToolStop = stopHandle
-    AgentChat.executeToolAsync(tc.name, args, proceedWithResult)
+    -- executeToolAsync 的第二参数是结构化结果标志，适配到 proceedWithResult 的
+    -- 第三参数，避免与 stopAfterResult 错位
+    AgentChat.executeToolAsync(tc.name, args, function(resultStr, toolOk)
+      proceedWithResult(resultStr, nil, toolOk)
+    end)
   end
 
   if argsError then

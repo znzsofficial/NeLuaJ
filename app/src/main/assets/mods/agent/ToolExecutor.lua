@@ -90,29 +90,32 @@ function _M.executeTool(name, args)
     local route = requireConfig().resolveMcpTool and requireConfig().resolveMcpTool(name)
     local ns, tool = name:sub(6):match("^([^:]+)::(.+)$")
     if route then tool = route.tool end
-    if not tool or (not route and not ns) then return "MCP 工具名格式错误: " .. name end
+    if not tool or (not route and not ns) then return "MCP 工具名格式错误: " .. name, false end
     local server = route and route.server or requireConfig().findMcpServer(ns)
-    if not server then return "找不到 MCP 服务器: " .. ns end
+    if not server then return "找不到 MCP 服务器: " .. ns, false end
     local text, err = requireConfig().callMcpTool(server, tool, args)
-    return text or ("MCP 工具调用失败: " .. tostring(err or "未知错误"))
+    if text then return text, true end
+    return "MCP 工具调用失败: " .. tostring(err or "未知错误"), false
   end
   local platformExecute = requireConfig().platformExecute
-  if not platformExecute then return "工具平台执行器未配置: " .. tostring(name) end
+  if not platformExecute then return "工具平台执行器未配置: " .. tostring(name), false end
   local changes = _M.isDestructiveTool(name) and requireConfig().changeSet or nil
   if args and args.__agent_scope and requireConfig().getProjectScope
       and args.__agent_scope ~= requireConfig().getProjectScope() then
-    return "项目已切换，文件操作未执行"
+    return "项目已切换，文件操作未执行", false
   end
   local transaction, snapshotErr
   if changes then transaction, snapshotErr = changes.begin(name, args or {}) end
-  if snapshotErr then return "变更快照失败，操作未执行: " .. tostring(snapshotErr) end
+  if snapshotErr then return "变更快照失败，操作未执行: " .. tostring(snapshotErr), false end
   local executeArgs = transaction and transaction.args or (args or {})
-  local result = platformExecute(name, executeArgs)
+  -- 平台执行器约定：第二个返回值 ok ∈ {true, false, nil}，nil 表示旧式工具未提供结构化状态，
+  -- 此时调用方回退到文本嗅探。
+  local result, ok = platformExecute(name, executeArgs)
   if changes then
-    local recorded, recordErr = changes.finish(transaction, result)
+    local recorded, recordErr = changes.finish(transaction, result, ok)
     if recorded == false or recordErr then result = tostring(result) .. "\n警告: " .. tostring(recordErr) end
   end
-  return result
+  return result, ok
 end
 
 function _M.executeToolAsync(name, args, onResult)
@@ -122,20 +125,20 @@ function _M.executeToolAsync(name, args, onResult)
     local ns, tool = name:sub(6):match("^([^:]+)::(.+)$")
     if route then tool = route.tool end
     if not tool or (not route and not ns) then
-      if onResult then onResult("MCP 工具名格式错误: " .. name) end
+      if onResult then onResult("MCP 工具名格式错误: " .. name, false) end
       return
     end
     local server = route and route.server or requireConfig().findMcpServer(ns)
     if not server then
-      if onResult then onResult("找不到 MCP 服务器: " .. ns) end
+      if onResult then onResult("找不到 MCP 服务器: " .. ns, false) end
       return
     end
     local job
     job = requireConfig().callMcpToolAsync(server, tool, args, function(ok, text)
       if activeJob == job then activeJob = nil; activeToolName = nil end
       if not onResult then return end
-      if ok then onResult(text)
-      else onResult("MCP 工具调用失败: " .. tostring(text or "未知错误")) end
+      if ok then onResult(text, true)
+      else onResult("MCP 工具调用失败: " .. tostring(text or "未知错误"), false) end
     end)
     activeJob = job
     activeToolName = job and name or nil
@@ -148,16 +151,20 @@ function _M.executeToolAsync(name, args, onResult)
   local okLaunch = pcall(function()
     job = xTask(
       function()
-        local ok, result = pcall(_M.executeTool, name, args)
-        if ok then return { ok = true, result = result } end
-        return { ok = false, result = tostring(result) }
+        local okCall, result, okFlag = pcall(_M.executeTool, name, args)
+        if okCall then return { ok = true, result = result, toolOk = okFlag } end
+        return { ok = false, result = tostring(result), toolOk = false }
       end,
       function(result)
         if activeJob == job then activeJob = nil; activeToolName = nil end
         if type(result) == "table" then
-          onResult(result.ok and result.result or "工具执行异常: " .. tostring(result.result))
+          if result.ok then
+            onResult(result.result, result.toolOk)
+          else
+            onResult("工具执行异常: " .. tostring(result.result), false)
+          end
         else
-          onResult("后台任务异常: " .. tostring(result))
+          onResult("后台任务异常: " .. tostring(result), false)
         end
       end
       , "io"
