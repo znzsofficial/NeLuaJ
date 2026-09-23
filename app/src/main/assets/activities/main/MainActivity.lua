@@ -237,6 +237,41 @@ local function handleNavAction(action, path)
       return true
     end
   end
+  -- 会话中心回传：打开指定会话（必要时先切换工程）
+  if action == "open_agent_conv" then
+    pcall(function()
+      require("mods.agent.ChatUI").openConversation(path)
+    end)
+    return true
+  end
+  if action == "open_agent_conv_switch" then
+    local project, convId = tostring(path):match("^(.-)\n(.*)$")
+    if project and project ~= "" and convId and convId ~= "" then
+      pcall(function()
+        local PathManager = require "mods.utils.PathManager"
+        if tostring(Bean.Path.this_dir) ~= project then
+          PathManager.updateDir(project)
+          filetab.setPath(project)
+          MainActivity.RecyclerView.update()
+        end
+        require("mods.agent.ChatUI").openConversation(convId)
+      end)
+      return true
+    end
+  end
+  if action == "open_agent_new" then
+    pcall(function()
+      local PathManager = require "mods.utils.PathManager"
+      if path ~= "" and tostring(Bean.Path.this_dir) ~= path then
+        PathManager.updateDir(path)
+        filetab.setPath(path)
+        MainActivity.RecyclerView.update()
+      end
+      require("mods.agent.AgentChat").createConversation()
+      require("mods.agent.ChatUI").show()
+    end)
+    return true
+  end
   return false
 end
 
@@ -381,6 +416,10 @@ function onCreateOptionsMenu(menu)
   if not tablet then
     addItem(moreMenu, "NeLuaJ+ " .. res.string.help, Actions.openHelp, nil, icon("help"))
   end
+  addItem(moreMenu, res.string.ai_center_title, function()
+    local ActivityUtil = require "mods.utils.ActivityUtil"
+    ActivityUtil.open("agent_center", Bean.Path.this_dir)
+  end, nil, icon("ic_command"))
   addItem(moreMenu, res.string.about, showAbout, nil, icon("info"))
   if not tablet then
     addItem(moreMenu, res.string.setting, Actions.openSetting, nil, icon("settings"))

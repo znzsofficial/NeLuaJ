@@ -20,6 +20,7 @@ local routes = {
   resource         = "resource/ResourceBrowserActivity.lua",
   project_settings = "projectsettings/ProjectSettingsActivity.lua",
   media            = "media/MediaBrowserActivity.lua",
+  agent_center     = "agent/AgentCenterActivity.lua",
 }
 
 local PENDING_KEY = "_nav_pending_v1"
