@@ -181,7 +181,38 @@ function onCreate()
       .show()
   end
 
-  -- 桌面快捷方式（shortcuts.xml）：open_agent 直接唤起 AI 助手面板
+  -- 桌面动态快捷方式：AI 助手。纯 Lua 创建（ShortcutManager），只存在于 IDE 本体，
+  -- 不会进入用户打包的应用；每次冷启动刷新一次，保持目标路径与标签最新。
+  pcall(function()
+    local Intent = luajava.bindClass("android.content.Intent")
+    local Uri = luajava.bindClass("android.net.Uri")
+    local ShortcutInfo = luajava.bindClass("android.content.pm.ShortcutInfo")
+    local ShortcutManager = luajava.bindClass("android.content.pm.ShortcutManager")
+    local ArrayList = luajava.bindClass("java.util.ArrayList")
+    local Icon = luajava.bindClass("android.graphics.drawable.Icon")
+    local sm = activity.getSystemService("shortcut")
+    if not sm then return end
+    local mainPath = activity.getLuaDir() .. "/main.lua"
+    local intent = Intent(Intent.ACTION_VIEW)
+    intent.setClassName(activity, "com.androlua.LuaActivity")
+    intent.setData(Uri.parse("file://" .. mainPath))
+    intent.putExtra("name", mainPath)
+    intent.putExtra("open_agent", true)
+    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    local builder = ShortcutInfo.Builder(activity, "agent")
+      .setShortLabel(res.string.shortcut_agent_short)
+      .setLongLabel(res.string.shortcut_agent_long)
+      .setIntent(intent)
+    pcall(function()
+      local iconId = activity.getResources().getIdentifier("icon", "drawable", activity.getPackageName())
+      if iconId ~= 0 then builder.setIcon(Icon.createWithResource(activity, iconId)) end
+    end)
+    local list = ArrayList()
+    list.add(builder.build())
+    sm.setDynamicShortcuts(list)
+  end)
+
+  -- 从快捷方式进入时直接唤起 AI 助手面板
   pcall(function()
     local intent = activity.getIntent()
     if intent and intent.getBooleanExtra("open_agent", false) then

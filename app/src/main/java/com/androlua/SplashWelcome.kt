@@ -38,7 +38,6 @@ class SplashWelcome : ComponentActivity() {
         super.onCreate(savedInstanceState)
         app = application as LuaApplication
         localDir = app.luaDir
-        val openAgent = intent.getBooleanExtra("open_agent", false)
         if (checkInfo()) {
             LuaApplication.instance.setSharedData("UnZiped", false)
             lifecycleScope.launch {
@@ -50,30 +49,28 @@ class SplashWelcome : ComponentActivity() {
                 if (ok) {
                     commitUpdateMarker()
                     LuaApplication.instance.setSharedData("UnZiped", true)
-                    startActivity(openAgent)
+                    startActivity()
                 } else {
                     // 不写 lastUpdateTime，下次冷启动会再解
                     LuaApplication.instance.setSharedData("UnZiped", false)
                     Log.e(TAG, "assets extract failed; will retry next launch")
                     // 仍尝试进入，避免永久卡在欢迎页；资源可能不完整
-                    startActivity(openAgent)
+                    startActivity()
                 }
             }
         } else {
             LuaApplication.instance.setSharedData("UnZiped", true)
-            startActivity(openAgent)
+            startActivity()
         }
     }
 
-    private fun startActivity(forwardOpenAgent: Boolean = false) {
+    private fun startActivity() {
         val intent = Intent(this@SplashWelcome, LuaActivity::class.java)
         if (isVersionChanged) {
             intent.putExtra("isVersionChanged", true)
             intent.putExtra("newVersionName", mVersionName)
             intent.putExtra("oldVersionName", mOldVersionName)
         }
-        // 桌面快捷方式等入口请求直接打开 AI 助手
-        if (forwardOpenAgent) intent.putExtra("open_agent", true)
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         startActivity(intent)
         finish()
