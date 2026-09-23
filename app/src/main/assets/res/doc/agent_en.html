@@ -30,6 +30,7 @@ Fix the help-page title refresh while preserving the existing style.
 Explain the changes and check related call sites.</code></pre>
       <p>The assistant follows a read-before-edit workflow. It can read the relevant NeLuaJ+ help documents when an API is unfamiliar.</p>
       <p>Closing the AI Assistant panel does not stop an active generation or tool chain; reopening it restores the current progress. Use the stop button beside the input area to terminate the task. Switching projects, creating a new conversation, or clearing the conversation cancels the active task.</p>
+      <p>While a task is running, the app shows an ongoing “AI agent is working” notification through a foreground service that keeps network and CPU activity from being suspended when the screen turns off. The notification is removed automatically when the turn finishes, stops, or is cancelled. If a task is interrupted abnormally, the notification disappears by itself after at most 15 minutes.</p>
 
       <h2>File Operations</h2>
       <p>These operations show a confirmation dialog before execution:</p>

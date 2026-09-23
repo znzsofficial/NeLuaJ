@@ -39,6 +39,7 @@
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
@@ -91,6 +92,10 @@
             android:configChanges="orientation|screenSize|keyboardHidden"
             android:enabled="true"
             android:foregroundServiceType="shortService" />
+        <service
+            android:name="com.nekolaska.ai.AgentKeepAliveService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
         <service
             android:name="com.androlua.LuaSandboxService"
             android:exported="false"

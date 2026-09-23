@@ -713,8 +713,23 @@ local function updateContextUsage(usage)
   views.ctxUsage.setText(label .. " · " .. used .. "/" .. budget)
 end
 
+-- 前台保活服务：回合进行中提升进程优先级并持有唤醒锁，息屏也能继续。
+-- pcall 兜底：旧安装或类缺失时静默降级，绝不影响对话本身。
+local function keepAliveAcquire()
+  pcall(function()
+    luajava.bindClass("com.nekolaska.ai.AgentKeepAliveService").acquire(activity)
+  end)
+end
+
+local function keepAliveRelease()
+  pcall(function()
+    luajava.bindClass("com.nekolaska.ai.AgentKeepAliveService").release(activity)
+  end)
+end
+
 local function hideLoading()
   isLoading = false
+  keepAliveRelease()
   if views.loadingBar then views.loadingBar.setVisibility(GONE) end
   if views.btnSend then views.btnSend.setEnabled(true) end
   if views.btnSend then views.btnSend.setVisibility(VISIBLE) end
@@ -1291,6 +1306,7 @@ sendToApi = function(apiMessages, isContinue)
     failedToolCalls = {}
   end
   showLoading()
+  keepAliveAcquire()
 
   -- 上下文用量显示：估算本次将发送的 token 数
   updateContextUsage(AgentChat.estimateApiMessagesUsage(apiMessages))
