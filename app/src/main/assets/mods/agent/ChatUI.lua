@@ -11,6 +11,7 @@ local MaterialCardView = luajava.bindClass("com.google.android.material.card.Mat
 local LinearLayout = luajava.bindClass("android.widget.LinearLayout")
 local EditText = luajava.bindClass("android.widget.EditText")
 local ScrollView = luajava.bindClass("android.widget.ScrollView")
+local HorizontalScrollView = luajava.bindClass("android.widget.HorizontalScrollView")
 local Switch = luajava.bindClass("com.google.android.material.materialswitch.MaterialSwitch")
 local HtmlCompat = luajava.bindClass("androidx.core.text.HtmlCompat")
 local LinkMovementMethod = luajava.bindClass("android.text.method.LinkMovementMethod")
@@ -26,20 +27,23 @@ local MCPClient = require("mods.agent.MCPClient")
 local ActivityUtil = require("mods.utils.ActivityUtil")
 import "mods.utils.EditorUtil"
 local ColorUtil = this.themeUtil
-local ColorPrimary = ColorUtil.getColorPrimary()
-local ColorOnPrimary = ColorUtil.getColorOnPrimary()
-local ColorSecondaryContainer = ColorUtil.getColorSecondaryContainer()
-local ColorOnSecondaryContainer = ColorUtil.getColorOnSecondaryContainer()
-local ColorSurface = ColorUtil.getColorSurfaceContainer()
-local ColorSurfaceContainerHigh = ColorUtil.getColorSurfaceContainerHigh()
-local ColorOnSurface = ColorUtil.getColorOnSurface()
-local ColorText = ColorUtil.getColorOnSurfaceVariant()
-local ColorOutline = ColorUtil.getColorOutlineVariant()
-local ColorError = ColorUtil.getColorError()
-local ColorErrorContainer = ColorUtil.getColorErrorContainer()
-local ColorOnErrorContainer = ColorUtil.getColorOnErrorContainer()
+local ColorPrimary = ColorUtil.primary.main
+local ColorOnPrimary = ColorUtil.primary.on
+local ColorPrimaryContainer = ColorUtil.primary.container
+local ColorOnPrimaryContainer = ColorUtil.primary.onContainer
+local ColorSecondaryContainer = ColorUtil.secondary.container
+local ColorOnSecondaryContainer = ColorUtil.secondary.onContainer
+local ColorSurface = ColorUtil.surface.container
+local ColorSurfaceContainerLow = ColorUtil.surface.containerLow
+local ColorSurfaceContainerHigh = ColorUtil.surface.containerHigh
+local ColorOnSurface = ColorUtil.surface.on
+local ColorText = ColorUtil.surface.onVariant
+local ColorOutline = ColorUtil.outline.variant
+local ColorError = ColorUtil.error.main
+local ColorErrorContainer = ColorUtil.error.container
+local ColorOnErrorContainer = ColorUtil.error.onContainer
 local ColorRipple = ColorUtils.blendARGB(ColorPrimary, 0x00ffffff, 0.4)
-local ColorCodeBg = ColorUtils.blendARGB(ColorSurface, 0xff000000, 0.07)
+local ColorCodeBg = ColorUtils.blendARGB(ColorSurfaceContainerLow, 0xff000000, 0.08)
 local S = res.string
 local GradientDrawable = luajava.bindClass("android.graphics.drawable.GradientDrawable")
 local function dp(n) return this.dpToPx(n) end
@@ -308,8 +312,8 @@ addMessageBubble = function(role, content, stateMessage)
   if not container then return end
 
   local isUser = (role == "user")
-  local bgColor = isUser and ColorPrimary or ColorSurface
-  local textColor = isUser and ColorOnPrimary or ColorOnSurface
+  local bgColor = isUser and ColorPrimaryContainer or ColorSurfaceContainerLow
+  local textColor = isUser and ColorOnPrimaryContainer or ColorOnSurface
 
   -- 头像
   local avatar = MaterialTextView(activity)
@@ -320,11 +324,11 @@ addMessageBubble = function(role, content, stateMessage)
   local ag = GradientDrawable()
   ag.setShape(GradientDrawable.OVAL)
   if isUser then
-    ag.setColor(ColorUtils.blendARGB(ColorPrimary, 0xffffffff, 0.15))
+    ag.setColor(ColorPrimary)
     avatar.setTextColor(ColorOnPrimary)
   else
-    ag.setColor(ColorCodeBg)
-    avatar.setTextColor(ColorText)
+    ag.setColor(ColorSecondaryContainer)
+    avatar.setTextColor(ColorOnSecondaryContainer)
   end
   avatar.setBackground(ag)
   local avatarLp = LinearLayout.LayoutParams(dp(28), dp(28))
@@ -369,7 +373,8 @@ addMessageBubble = function(role, content, stateMessage)
         MaterialCardView,
         radius = "8dp",
         CardElevation = 0,
-        CardBackgroundColor = ColorCodeBg,
+        CardBackgroundColor = isUser and ColorUtils.blendARGB(ColorPrimaryContainer, ColorOnPrimaryContainer, 0.08) or ColorCodeBg,
+        strokeWidth = "0dp",
         layout_width = "match",
         layout_height = "wrap",
         layout_marginTop = "4dp",
@@ -384,7 +389,7 @@ addMessageBubble = function(role, content, stateMessage)
             text = part.code,
             typeface = Typeface.MONOSPACE,
             textSize = "12sp",
-            textColor = ColorOnSurface,
+            textColor = isUser and ColorOnPrimaryContainer or ColorOnSurface,
           },
           {
             LinearLayout,
@@ -397,7 +402,7 @@ addMessageBubble = function(role, content, stateMessage)
               layout_width = "wrap",
               layout_height = "30dp",
               BackgroundTintList = ColorStateList.valueOf(0),
-              textColor = ColorPrimary,
+              textColor = isUser and ColorOnPrimaryContainer or ColorPrimary,
               RippleColor = ColorStateList.valueOf(ColorRipple),
               layout_marginRight = "6dp",
               onClick = function(v) copyText(part.code, v) end,
@@ -409,7 +414,7 @@ addMessageBubble = function(role, content, stateMessage)
               layout_width = "wrap",
               layout_height = "30dp",
               BackgroundTintList = ColorStateList.valueOf(0),
-              textColor = ColorPrimary,
+              textColor = isUser and ColorOnPrimaryContainer or ColorPrimary,
               RippleColor = ColorStateList.valueOf(ColorRipple),
               onClick = function() _M.insertCode(part.code) end,
             },
@@ -454,17 +459,14 @@ addMessageBubble = function(role, content, stateMessage)
 
   local card = {
     MaterialCardView,
-    radius = "12dp",
+    radius = "16dp",
     CardElevation = 0,
     CardBackgroundColor = bgColor,
+    strokeWidth = "0dp",
     layout_width = "match",
     layout_height = "wrap",
     inner,
   }
-  if not isUser then
-    card.strokeWidth = "1dp"
-    card.strokeColor = ColorOutline
-  end
 
   if isUser then
     avatarLp.leftMargin = dp(8)
@@ -610,16 +612,16 @@ addToolBubble = function(toolName, args, result)
   local bubbleViews = {}
   local card = {
     MaterialCardView,
-    radius = "8dp",
+    radius = "12dp",
     CardElevation = 0,
-    strokeWidth = "1dp",
-    strokeColor = isError and ColorError or ColorOutline,
-    CardBackgroundColor = ColorSurface,
+    strokeWidth = isError and "1dp" or "0dp",
+    strokeColor = isError and ColorError or 0,
+    CardBackgroundColor = isError and ColorErrorContainer or ColorSurfaceContainerLow,
     layout_width = "match",
     layout_height = "wrap",
     layout_marginBottom = "8dp",
-    layout_marginLeft = "48dp",
-    layout_marginRight = "48dp",
+    layout_marginLeft = "36dp",
+    layout_marginRight = "4dp",
     {
       LinearLayout,
       orientation = "vertical",
@@ -632,7 +634,7 @@ addToolBubble = function(toolName, args, result)
         contentDescription = summary .. (detail ~= "" and (". " .. S.ai_tool_tap_expand) or ""),
         textSize = "12sp",
         textStyle = "bold",
-        textColor = isError and ColorError or ColorOnSurface,
+        textColor = isError and ColorOnErrorContainer or ColorOnSurface,
         padding = "10dp",
         clickable = detail ~= "",
         focusable = detail ~= "",
@@ -641,7 +643,7 @@ addToolBubble = function(toolName, args, result)
         MaterialTextView,
         text = resultPreview,
         textSize = "11sp",
-        textColor = ColorText,
+        textColor = isError and ColorOnErrorContainer or ColorText,
         paddingLeft = "10dp",
         paddingRight = "10dp",
         paddingBottom = resultPreview ~= "" and "8dp" or "0dp",
@@ -654,7 +656,7 @@ addToolBubble = function(toolName, args, result)
         id = "toolDetail",
         text = detail,
         textSize = "12sp",
-        textColor = isError and ColorError or ColorText,
+        textColor = isError and ColorOnErrorContainer or ColorOnSurface,
         paddingLeft = "10dp",
         paddingRight = "10dp",
         paddingBottom = "10dp",
@@ -1090,16 +1092,15 @@ addRequestErrorBubble = function(err, messageIndex)
   local errorViews = {}
   views.msgContainer.addView(loadlayout({
     MaterialCardView,
-    radius = "8dp",
+    radius = "14dp",
     CardElevation = 0,
-    strokeWidth = "1dp",
-    strokeColor = ColorError,
-    CardBackgroundColor = ColorSurface,
+    strokeWidth = "0dp",
+    CardBackgroundColor = ColorErrorContainer,
     layout_width = "match",
     layout_height = "wrap",
     layout_marginBottom = "8dp",
-    layout_marginLeft = "48dp",
-    layout_marginRight = "48dp",
+    layout_marginLeft = "36dp",
+    layout_marginRight = "4dp",
     {
       LinearLayout,
       orientation = "vertical",
@@ -1108,25 +1109,32 @@ addRequestErrorBubble = function(err, messageIndex)
         MaterialTextView,
         text = tostring(err),
         textSize = "13sp",
-        textColor = ColorError,
+        textColor = ColorOnErrorContainer,
         lineSpacingMultiplier = 1.3,
         textIsSelectable = true,
       },
       {
         LinearLayout,
         orientation = "horizontal",
-        layout_marginTop = "6dp",
+        layout_marginTop = "8dp",
         {
           MaterialButton,
           id = "recoverButton",
           text = action,
           layout_width = "wrap",
+          textSize = "12sp",
+          BackgroundTintList = ColorStateList.valueOf(ColorError),
+          textColor = ColorOnError,
         },
         {
           MaterialButton,
           id = "editButton",
           text = S.ai_edit_request,
           layout_width = "wrap",
+          layout_marginLeft = "8dp",
+          textSize = "12sp",
+          BackgroundTintList = ColorStateList.valueOf(0),
+          textColor = ColorOnErrorContainer,
         },
       },
     },
@@ -2571,19 +2579,18 @@ local function buildConvRow(conv, isCurrent, onClick)
   local row = LinearLayout(activity)
   row.setOrientation(0)
   row.setGravity(16)
-  row.setPadding(dp(12), dp(10), dp(12), dp(10))
+  row.setPadding(dp(14), dp(10), dp(14), dp(10))
   local lp = LinearLayout.LayoutParams(-1, -2)
   lp.bottomMargin = dp(8)
   row.setLayoutParams(lp)
   row.setClickable(true)
   local bg = GradientDrawable()
   if isCurrent then
-    bg.setColor(ColorUtils.blendARGB(ColorPrimary, ColorSurface, 0.82))
+    bg.setColor(ColorPrimaryContainer)
   else
-    bg.setColor(ColorSurface)
+    bg.setColor(ColorSurfaceContainerLow)
   end
-  bg.setCornerRadius(dp(14))
-  if isCurrent then bg.setStroke(math.floor(dp(1)), ColorPrimary) end
+  bg.setCornerRadius(dp(16))
   row.setBackground(bg)
   row.setOnClickListener(function() if onClick then onClick() end end)
 
@@ -2592,18 +2599,18 @@ local function buildConvRow(conv, isCurrent, onClick)
   local col = LinearLayout(activity)
   col.setOrientation(1)
   col.setLayoutParams(LinearLayout.LayoutParams(0, -2, 1))
-  col.setPadding(dp(10), 0, dp(4), 0)
+  col.setPadding(dp(12), 0, dp(6), 0)
   local nameTv = MaterialTextView(activity)
   nameTv.setText(name)
   nameTv.setTextSize(15)
   nameTv.setTypeface(Typeface.DEFAULT, 1)
-  nameTv.setTextColor(ColorOnSurface)
+  nameTv.setTextColor(isCurrent and ColorOnPrimaryContainer or ColorOnSurface)
   nameTv.setSingleLine(true)
   col.addView(nameTv)
   local metaTv = MaterialTextView(activity)
   metaTv.setText(convMetaText(conv))
   metaTv.setTextSize(12)
-  metaTv.setTextColor(ColorText)
+  metaTv.setTextColor(isCurrent and ColorOnPrimaryContainer or ColorText)
   metaTv.setSingleLine(true)
   col.addView(metaTv)
   row.addView(col)
@@ -2626,10 +2633,10 @@ local function buildConvRow(conv, isCurrent, onClick)
     badge.setText(S.ai_conv_running)
     badge.setTextSize(11)
     badge.setGravity(17)
-    badge.setTextColor(ColorOnSecondaryContainer)
+    badge.setTextColor(ColorOnErrorContainer)
     local rbg = GradientDrawable()
-    rbg.setCornerRadius(dp(12))
-    rbg.setColor(ColorSecondaryContainer)
+    rbg.setCornerRadius(dp(8))
+    rbg.setColor(ColorErrorContainer)
     badge.setBackground(rbg)
     badge.setPadding(dp(8), 0, dp(8), 0)
     badge.setLayoutParams(LinearLayout.LayoutParams(-2, dp(24)))
@@ -2649,8 +2656,8 @@ local function buildManagerRow(conv, render)
   lp.bottomMargin = dp(8)
   row.setLayoutParams(lp)
   local bg = GradientDrawable()
-  bg.setColor(ColorSurface)
-  bg.setCornerRadius(dp(14))
+  bg.setColor(ColorSurfaceContainerLow)
+  bg.setCornerRadius(dp(16))
   row.setBackground(bg)
 
   row.addView(makeAvatar(name, 36))
@@ -2684,7 +2691,9 @@ local function buildManagerRow(conv, render)
     btn.setPadding(dp(12), 0, dp(12), 0)
     btn.setBackgroundTintList(ColorStateList.valueOf(bgColor))
     btn.setTextColor(textColor)
-    btn.setLayoutParams(LinearLayout.LayoutParams(-2, -2))
+    btn.setCornerRadius(dp(8))
+    local lp = LinearLayout.LayoutParams(-2, dp(32))
+    btn.setLayoutParams(lp)
     return btn
   end
 
@@ -2980,13 +2989,15 @@ local function addWelcomeCard(title, body)
   local welcomeViews = {}
   local welcome = {
     MaterialCardView,
-    radius = "12dp", CardElevation = 0,
-    CardBackgroundColor = ColorSurface,
-    layout_marginBottom = "8dp",
+    radius = "16dp",
+    CardElevation = 0,
+    strokeWidth = "0dp",
+    CardBackgroundColor = ColorSurfaceContainerLow,
+    layout_marginBottom = "12dp",
     {
       LinearLayout,
       orientation = "vertical",
-      padding = "14dp",
+      padding = "16dp",
       {
         MaterialTextView,
         text = title,
@@ -3235,35 +3246,46 @@ function _M.show()
       if #others > 0 then
         local TextUtils = luajava.bindClass("android.text.TextUtils")
         local TruncateAt = TextUtils and TextUtils.TruncateAt or nil
+        local hScroll = HorizontalScrollView(activity)
+        hScroll.setHorizontalScrollBarEnabled(false)
+        local hLp = LinearLayout.LayoutParams(-1, -2)
+        hLp.bottomMargin = dp(8)
+        hScroll.setLayoutParams(hLp)
+
         local strip = LinearLayout(activity)
         strip.setOrientation(LinearLayout.HORIZONTAL)
         strip.setGravity(16)
-        strip.setPadding(dp(8), 0, dp(8), dp(10))
+        strip.setPadding(dp(4), dp(2), dp(4), dp(4))
+
         local caption = MaterialTextView(activity)
         caption.setText(S.ai_recent_convs)
-        caption.setTextSize(12)
+        caption.setTextSize(11)
+        caption.setTypeface(Typeface.DEFAULT, 1)
         caption.setTextColor(ColorText)
-        caption.setPadding(0, 0, dp(10), 0)
+        caption.setPadding(dp(4), 0, dp(8), 0)
         strip.addView(caption)
-        for i = 1, math.min(3, #others) do
+
+        for i = 1, math.min(5, #others) do
           local conv = others[i]
           local chip = MaterialButton(activity)
+          local prefix = conv.running and "● " or ""
           local label = conv.name ~= "" and conv.name or S.ai_unnamed_conv
-          chip.setText(label)
+          chip.setText(prefix .. label)
           chip.setTextSize(12)
           chip.setMaxLines(1)
           if TruncateAt ~= nil then pcall(function() chip.setEllipsize(TruncateAt.END) end) end
           chip.setMinimumWidth(0)
-          chip.setMaxWidth(dp(150))
-          chip.setBackgroundTintList(ColorStateList.valueOf(ColorSecondaryContainer))
-          chip.setTextColor(ColorOnSecondaryContainer)
-          local lp = LinearLayout.LayoutParams(dp(0) + LinearLayout.LayoutParams.WRAP_CONTENT, dp(0) + LinearLayout.LayoutParams.WRAP_CONTENT)
+          chip.setMaxWidth(dp(160))
+          chip.setBackgroundTintList(ColorStateList.valueOf(conv.running and ColorErrorContainer or ColorSecondaryContainer))
+          chip.setTextColor(conv.running and ColorOnErrorContainer or ColorOnSecondaryContainer)
+          local lp = LinearLayout.LayoutParams(-2, dp(32))
           lp.rightMargin = dp(8)
           chip.setLayoutParams(lp)
           chip.setOnClickListener(function() switchToConversation(conv) end)
           strip.addView(chip)
         end
-        views.msgContainer.addView(strip, 0)
+        hScroll.addView(strip)
+        views.msgContainer.addView(hScroll, 0)
       end
     end
   end
@@ -3390,15 +3412,14 @@ AgentTurn.configure({
         local streamViews = {}
         local bubble = loadlayout({
           MaterialCardView,
-          radius = "12dp",
+          radius = "16dp",
           CardElevation = 0,
-          strokeWidth = "1dp",
-          strokeColor = ColorOutline,
-          CardBackgroundColor = ColorSurface,
+          strokeWidth = "0dp",
+          CardBackgroundColor = ColorSurfaceContainerLow,
           layout_width = "match",
           layout_height = "wrap",
           layout_marginBottom = "8dp",
-          layout_marginRight = "32dp",
+          layout_marginRight = "16dp",
           {
             LinearLayout,
             orientation = "vertical",

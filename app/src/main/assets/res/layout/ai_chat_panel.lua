@@ -10,14 +10,20 @@ local FrameLayout = bindClass "android.widget.FrameLayout"
 local ProgressBar = bindClass "android.widget.ProgressBar"
 
 local ColorUtil = this.themeUtil
-local ColorPrimary = ColorUtil.getColorPrimary()
-local ColorOnPrimary = ColorUtil.getColorOnPrimary()
-local ColorSurface = ColorUtil.getColorSurfaceContainer()
-local ColorOnSurface = ColorUtil.getColorOnSurface()
-local ColorText = ColorUtil.getColorOnSurfaceVariant()
-local ColorOutline = ColorUtil.getColorOutlineVariant()
-local ColorBg = ColorUtil.getColorBackground()
-local ColorError = ColorUtil.getColorError()
+local ColorPrimary = ColorUtil.primary.main
+local ColorOnPrimary = ColorUtil.primary.on
+local ColorPrimaryContainer = ColorUtil.primary.container
+local ColorOnPrimaryContainer = ColorUtil.primary.onContainer
+local ColorSurface = ColorUtil.surface.container
+local ColorSurfaceContainerLow = ColorUtil.surface.containerLow
+local ColorSurfaceContainerHigh = ColorUtil.surface.containerHigh
+local ColorOnSurface = ColorUtil.surface.on
+local ColorText = ColorUtil.surface.onVariant
+local ColorOutline = ColorUtil.outline.variant
+local ColorBg = ColorUtil.surface.main
+local ColorError = ColorUtil.error.main
+local ColorErrorContainer = ColorUtil.error.container
+local ColorOnErrorContainer = ColorUtil.error.onContainer
 
 import "androidx.core.graphics.ColorUtils"
 local ColorRipple = ColorUtils.blendARGB(ColorPrimary, 0x00ffffff, 0.4)
@@ -35,7 +41,7 @@ return {
     layout_height = "wrap",
     orientation = "horizontal",
     gravity = "center_vertical",
-    padding = "12dp",
+    padding = "10dp",
     paddingLeft = "16dp",
     paddingRight = "8dp",
     {
@@ -44,12 +50,25 @@ return {
       layout_width = "0dp",
       layout_weight = 1,
       layout_height = "wrap",
+      layout_marginRight = "6dp",
       {
-        MaterialTextView,
-        id = "aiTitle",
-        text = res.string.ai_chat,
-        textSize = "18sp", textStyle = "bold", textColor = ColorOnSurface,
-        maxLines = 1, ellipsize = "end",
+        LinearLayout,
+        orientation = "horizontal",
+        gravity = "center_vertical",
+        layout_width = "wrap",
+        layout_height = "wrap",
+        {
+          MaterialTextView,
+          id = "aiTitle",
+          text = res.string.ai_chat,
+          textSize = "17sp", textStyle = "bold", textColor = ColorOnSurface,
+          maxLines = 1, ellipsize = "end",
+        },
+        {
+          MaterialTextView,
+          text = "  ⌄",
+          textSize = "13sp", textStyle = "bold", textColor = ColorText,
+        },
       },
       {
         MaterialTextView,
@@ -57,22 +76,23 @@ return {
         text = res.string.ai_project_unknown,
         textSize = "11sp", textColor = ColorText,
         maxLines = 1, ellipsize = "end",
+        layout_marginTop = "1dp",
       },
     },
     {
       MaterialCardView,
       id = "modelChip",
       contentDescription = res.string.ai_cd_switch_model,
-      radius = "16dp", CardElevation = 0,
+      radius = "8dp", CardElevation = 0,
       strokeWidth = "1dp", strokeColor = ColorOutline,
-      CardBackgroundColor = ColorSurface,
-      layout_marginRight = "8dp",
+      CardBackgroundColor = ColorSurfaceContainerLow,
+      layout_marginRight = "6dp",
       {
         MaterialTextView,
         id = "modelLabel", text = res.string.ai_add_model,
         textSize = "11sp", textColor = ColorPrimary,
         padding = "6dp", paddingLeft = "10dp", paddingRight = "10dp",
-        maxLines = 1, ellipsize = "end", maxWidth = "112dp",
+        maxLines = 1, ellipsize = "end", maxWidth = "104dp",
       },
     },
     {
@@ -135,11 +155,10 @@ return {
       gravity = "center_vertical",
       {
         MaterialCardView,
-        radius = "22dp",
+        radius = "24dp",
         CardElevation = 0,
-        strokeWidth = "1dp",
-        strokeColor = ColorOutline,
-        CardBackgroundColor = ColorSurface,
+        strokeWidth = "0dp",
+        CardBackgroundColor = ColorSurfaceContainerHigh,
         layout_width = "0dp",
         layout_weight = 1,
         layout_height = "wrap",
@@ -148,13 +167,15 @@ return {
           id = "msgInput",
           layout_width = "match",
           layout_height = "wrap",
-          minHeight = "40dp",
+          minHeight = "46dp",
           hint = res.string.ai_input_hint,
           textSize = "14sp",
           textColor = ColorOnSurface,
           hintTextColor = ColorText,
           background = 0,
           padding = "12dp",
+          paddingLeft = "16dp",
+          paddingRight = "16dp",
           singleLine = false,
           maxLines = 4,
           inputType = 0x00002001,
@@ -165,9 +186,9 @@ return {
         id = "btnCommands",
         contentDescription = res.string.ai_cd_commands,
         styleAttr = "?attr/materialIconButtonStyle",
-        layout_width = "44dp",
-        layout_height = "44dp",
-        layout_marginLeft = "8dp",
+        layout_width = "46dp",
+        layout_height = "46dp",
+        layout_marginLeft = "6dp",
         BackgroundTintList = ColorStateList.valueOf(0),
         icon = res.drawable("ic_command"),
         iconTint = ColorStateList.valueOf(ColorText),
@@ -178,30 +199,29 @@ return {
         id = "btnSend",
         contentDescription = res.string.ai_cd_send,
         styleAttr = "?attr/materialIconButtonStyle",
-        layout_width = "44dp",
-        layout_height = "44dp",
-        layout_marginLeft = "8dp",
+        layout_width = "46dp",
+        layout_height = "46dp",
+        layout_marginLeft = "6dp",
         BackgroundTintList = ColorStateList.valueOf(ColorPrimary),
         icon = res.drawable("ic_send"),
         iconTint = ColorStateList.valueOf(ColorOnPrimary),
         RippleColor = ColorStateList.valueOf(ColorRipple),
-        cornerRadius = "22dp",
+        cornerRadius = "23dp",
       },
       {
         MaterialButton,
         id = "btnStop",
         contentDescription = res.string.ai_cd_stop,
         styleAttr = "?attr/materialIconButtonStyle",
-        layout_width = "44dp",
-        layout_height = "44dp",
-        layout_marginLeft = "8dp",
+        layout_width = "46dp",
+        layout_height = "46dp",
+        layout_marginLeft = "6dp",
         visibility = 8,
-        BackgroundTintList = ColorStateList.valueOf(ColorSurface),
+        BackgroundTintList = ColorStateList.valueOf(ColorErrorContainer),
         icon = res.drawable("ic_stop"),
-        iconTint = ColorStateList.valueOf(ColorError),
-        strokeWidth = "1dp",
-        strokeColor = ColorOutline,
-        cornerRadius = "22dp",
+        iconTint = ColorStateList.valueOf(ColorOnErrorContainer),
+        strokeWidth = "0dp",
+        cornerRadius = "23dp",
       },
     },
     {
@@ -211,7 +231,7 @@ return {
       layout_height = "wrap",
       orientation = "horizontal",
       gravity = "center_vertical",
-      paddingTop = "4dp",
+      paddingTop = "6dp",
       visibility = 8,
       {
         ProgressBar,
