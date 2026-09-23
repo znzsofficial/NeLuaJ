@@ -369,6 +369,7 @@ addMessageBubble = function(role, content, stateMessage)
       inner.addView(markdownView)
     else
       -- 代码块：等宽 + 深色背景 + 复制/插入按钮
+      local codeViews = {}
       local codeCard = loadlayout({
         MaterialCardView,
         radius = "8dp",
@@ -377,8 +378,6 @@ addMessageBubble = function(role, content, stateMessage)
         strokeWidth = "0dp",
         layout_width = "match",
         layout_height = "wrap",
-        layout_marginTop = "4dp",
-        layout_marginBottom = "4dp",
         {
           LinearLayout,
           orientation = "vertical",
@@ -420,8 +419,11 @@ addMessageBubble = function(role, content, stateMessage)
             },
           },
         },
-      })
-      inner.addView(codeCard)
+      }, codeViews)
+      local codeLp = LinearLayout.LayoutParams(-1, -2)
+      codeLp.topMargin = dp(4)
+      codeLp.bottomMargin = dp(4)
+      inner.addView(codeCard, codeLp)
     end
   end
 
@@ -619,9 +621,6 @@ addToolBubble = function(toolName, args, result)
     CardBackgroundColor = isError and ColorErrorContainer or ColorSurfaceContainerLow,
     layout_width = "match",
     layout_height = "wrap",
-    layout_marginBottom = "8dp",
-    layout_marginLeft = "36dp",
-    layout_marginRight = "4dp",
     {
       LinearLayout,
       orientation = "vertical",
@@ -667,7 +666,11 @@ addToolBubble = function(toolName, args, result)
     },
   }
   local bubble = loadlayout(card, bubbleViews)
-  container.addView(bubble)
+  local bubbleLp = LinearLayout.LayoutParams(-1, -2)
+  bubbleLp.leftMargin = dp(36)
+  bubbleLp.rightMargin = dp(4)
+  bubbleLp.bottomMargin = dp(8)
+  container.addView(bubble, bubbleLp)
   if detail ~= "" then
     local expanded = false
     bubbleViews.toolHeader.onClick = function()
@@ -1090,7 +1093,7 @@ addRequestErrorBubble = function(err, messageIndex)
   elseif compresses then action = S.ai_compress_retry end
 
   local errorViews = {}
-  views.msgContainer.addView(loadlayout({
+  local errorCard = loadlayout({
     MaterialCardView,
     radius = "14dp",
     CardElevation = 0,
@@ -1098,9 +1101,6 @@ addRequestErrorBubble = function(err, messageIndex)
     CardBackgroundColor = ColorErrorContainer,
     layout_width = "match",
     layout_height = "wrap",
-    layout_marginBottom = "8dp",
-    layout_marginLeft = "36dp",
-    layout_marginRight = "4dp",
     {
       LinearLayout,
       orientation = "vertical",
@@ -1138,7 +1138,12 @@ addRequestErrorBubble = function(err, messageIndex)
         },
       },
     },
-  }, errorViews))
+  }, errorViews)
+  local errorLp = LinearLayout.LayoutParams(-1, -2)
+  errorLp.leftMargin = dp(36)
+  errorLp.rightMargin = dp(4)
+  errorLp.bottomMargin = dp(8)
+  views.msgContainer.addView(errorCard, errorLp)
 
   errorViews.recoverButton.onClick = function()
     if AgentTurn.isActive() then return end
@@ -2993,7 +2998,8 @@ local function addWelcomeCard(title, body)
     CardElevation = 0,
     strokeWidth = "0dp",
     CardBackgroundColor = ColorSurfaceContainerLow,
-    layout_marginBottom = "12dp",
+    layout_width = "match",
+    layout_height = "wrap",
     {
       LinearLayout,
       orientation = "vertical",
@@ -3042,7 +3048,10 @@ local function addWelcomeCard(title, body)
       },
     },
   }
-  views.msgContainer.addView(loadlayout(welcome, welcomeViews))
+  local welcomeCard = loadlayout(welcome, welcomeViews)
+  local welcomeLp = LinearLayout.LayoutParams(-1, -2)
+  welcomeLp.bottomMargin = dp(12)
+  views.msgContainer.addView(welcomeCard, welcomeLp)
   welcomeViews.btnWelcomeHelp.onClick = function() showAgentHelp() end
   welcomeViews.btnWelcomeExplain.onClick = function()
     if not (Bean and Bean.Path and Bean.Path.this_file) then
@@ -3418,8 +3427,6 @@ AgentTurn.configure({
           CardBackgroundColor = ColorSurfaceContainerLow,
           layout_width = "match",
           layout_height = "wrap",
-          layout_marginBottom = "8dp",
-          layout_marginRight = "16dp",
           {
             LinearLayout,
             orientation = "vertical",
@@ -3436,7 +3443,10 @@ AgentTurn.configure({
         streamState.container = views.msgContainer
         streamState.bubble = bubble
         streamState.textView = streamViews.aiStreamText
-        streamState.container.addView(bubble)
+        local streamLp = LinearLayout.LayoutParams(-1, -2)
+        streamLp.rightMargin = dp(16)
+        streamLp.bottomMargin = dp(8)
+        streamState.container.addView(bubble, streamLp)
       end
       if streamState.textView then streamState.textView.setText(streamState.text) end
       scrollDown()

@@ -83,6 +83,8 @@ return {
       MaterialCardView,
       id = "modelChip",
       contentDescription = res.string.ai_cd_switch_model,
+      layout_width = "wrap",
+      layout_height = "wrap",
       radius = "8dp", CardElevation = 0,
       strokeWidth = "1dp", strokeColor = ColorOutline,
       CardBackgroundColor = ColorSurfaceContainerLow,
