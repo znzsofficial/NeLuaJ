@@ -2584,172 +2584,209 @@ end
 
 local function buildConvRow(conv, isCurrent, onClick)
   local name = convName(conv)
-  local row = LinearLayout(activity)
-  row.setOrientation(0)
-  row.setGravity(16)
-  row.setPadding(dp(14), dp(10), dp(14), dp(10))
-  local lp = LinearLayout.LayoutParams(-1, -2)
-  lp.bottomMargin = dp(8)
-  row.setLayoutParams(lp)
-  row.setClickable(true)
+  local rowViews = {}
+  local row = loadlayout({
+    LinearLayout,
+    layout_width = "match",
+    layout_height = "wrap",
+    orientation = "horizontal",
+    gravity = "center_vertical",
+    clickable = true,
+    focusable = true,
+    layout_marginBottom = "8dp",
+    paddingLeft = "14dp",
+    paddingRight = "14dp",
+    paddingTop = "10dp",
+    paddingBottom = "10dp",
+    {
+      LinearLayout,
+      id = "avatarSlot",
+      layout_width = "wrap",
+      layout_height = "wrap",
+    },
+    {
+      LinearLayout,
+      orientation = "vertical",
+      layout_width = "0dp",
+      layout_weight = 1,
+      layout_height = "wrap",
+      layout_marginLeft = "12dp",
+      layout_marginRight = "6dp",
+      {
+        MaterialTextView,
+        text = name,
+        textSize = "15sp",
+        textStyle = "bold",
+        textColor = isCurrent and ColorOnPrimaryContainer or ColorOnSurface,
+        singleLine = true,
+        ellipsize = "end",
+      },
+      {
+        MaterialTextView,
+        text = convMetaText(conv),
+        textSize = "12sp",
+        textColor = isCurrent and ColorOnPrimaryContainer or ColorText,
+        singleLine = true,
+        ellipsize = "end",
+        layout_marginTop = "2dp",
+      },
+    },
+    {
+      MaterialTextView,
+      id = "badge",
+      textSize = "11sp",
+      gravity = "center",
+      singleLine = true,
+      visibility = (isCurrent or conv.running) and VISIBLE or GONE,
+      layout_width = "wrap",
+      layout_height = "24dp",
+    },
+  }, rowViews)
+
   local bg = GradientDrawable()
-  if isCurrent then
-    bg.setColor(ColorPrimaryContainer)
-  else
-    bg.setColor(ColorSurfaceContainerLow)
-  end
   bg.setCornerRadius(dp(16))
+  bg.setColor(isCurrent and ColorPrimaryContainer or ColorSurfaceContainerLow)
   row.setBackground(bg)
-  row.setOnClickListener(function() if onClick then onClick() end end)
 
-  row.addView(makeAvatar(name, 40))
+  rowViews.avatarSlot.addView(makeAvatar(name, 40))
 
-  local col = LinearLayout(activity)
-  col.setOrientation(1)
-  col.setLayoutParams(LinearLayout.LayoutParams(0, -2, 1))
-  col.setPadding(dp(12), 0, dp(6), 0)
-  local nameTv = MaterialTextView(activity)
-  nameTv.setText(name)
-  nameTv.setTextSize(15)
-  nameTv.setTypeface(Typeface.DEFAULT, 1)
-  nameTv.setTextColor(isCurrent and ColorOnPrimaryContainer or ColorOnSurface)
-  nameTv.setSingleLine(true)
-  col.addView(nameTv)
-  local metaTv = MaterialTextView(activity)
-  metaTv.setText(convMetaText(conv))
-  metaTv.setTextSize(12)
-  metaTv.setTextColor(isCurrent and ColorOnPrimaryContainer or ColorText)
-  metaTv.setSingleLine(true)
-  col.addView(metaTv)
-  row.addView(col)
-
+  local badge = rowViews.badge
   if isCurrent then
-    local badge = MaterialTextView(activity)
     badge.setText(S.ai_current)
-    badge.setTextSize(11)
-    badge.setGravity(17)
     badge.setTextColor(ColorOnPrimary)
     local bbg = GradientDrawable()
     bbg.setShape(GradientDrawable.OVAL)
     bbg.setColor(ColorPrimary)
     badge.setBackground(bbg)
-    badge.setLayoutParams(LinearLayout.LayoutParams(dp(42), dp(24)))
-    row.addView(badge)
   elseif conv.running then
     -- 该会话有任务进行中（进程被杀后标记可能残留，仅作提示）
-    local badge = MaterialTextView(activity)
     badge.setText(S.ai_conv_running)
-    badge.setTextSize(11)
-    badge.setGravity(17)
     badge.setTextColor(ColorOnErrorContainer)
     local rbg = GradientDrawable()
     rbg.setCornerRadius(dp(8))
     rbg.setColor(ColorErrorContainer)
     badge.setBackground(rbg)
     badge.setPadding(dp(8), 0, dp(8), 0)
-    badge.setLayoutParams(LinearLayout.LayoutParams(-2, dp(24)))
-    row.addView(badge)
   end
+
+  row.setOnClickListener(function() if onClick then onClick() end end)
   return row
 end
 
 local function buildManagerRow(conv, render)
   local name = convName(conv)
   local convId = conv and conv.id
-  local row = LinearLayout(activity)
-  row.setOrientation(0)
-  row.setGravity(16)
-  row.setPadding(dp(12), dp(8), dp(12), dp(8))
-  local lp = LinearLayout.LayoutParams(-1, -2)
-  lp.bottomMargin = dp(8)
-  row.setLayoutParams(lp)
-  local bg = GradientDrawable()
-  bg.setColor(ColorSurfaceContainerLow)
-  bg.setCornerRadius(dp(16))
-  row.setBackground(bg)
+  local rowViews = {}
+  local row = loadlayout({
+    LinearLayout,
+    layout_width = "match",
+    layout_height = "wrap",
+    orientation = "horizontal",
+    gravity = "center_vertical",
+    layout_marginBottom = "8dp",
+    paddingLeft = "12dp",
+    paddingRight = "12dp",
+    paddingTop = "8dp",
+    paddingBottom = "8dp",
+    {
+      LinearLayout,
+      id = "avatarSlot",
+      layout_width = "wrap",
+      layout_height = "wrap",
+    },
+    {
+      LinearLayout,
+      orientation = "vertical",
+      layout_width = "0dp",
+      layout_weight = 1,
+      layout_height = "wrap",
+      layout_marginLeft = "10dp",
+      layout_marginRight = "4dp",
+      {
+        MaterialTextView,
+        text = name,
+        textSize = "15sp",
+        textColor = ColorOnSurface,
+        singleLine = true,
+        ellipsize = "end",
+      },
+      {
+        MaterialTextView,
+        text = convMetaText(conv),
+        textSize = "12sp",
+        textColor = ColorText,
+        singleLine = true,
+        ellipsize = "end",
+        layout_marginTop = "2dp",
+      },
+      {
+        LinearLayout,
+        layout_width = "match",
+        layout_height = "wrap",
+        gravity = "end",
+        layout_marginTop = "6dp",
+        {
+          MaterialButton,
+          text = S.ai_rename_btn,
+          textSize = "12sp",
+          layout_width = "wrap",
+          layout_height = "wrap",
+          allCaps = false,
+          minWidth = 0,
+          minHeight = 0,
+          paddingLeft = "12dp",
+          paddingRight = "12dp",
+          BackgroundTintList = ColorStateList.valueOf(ColorSecondaryContainer),
+          textColor = ColorOnSecondaryContainer,
+          onClick = function() showRenameDialog(convId, name) end,
+        },
+        {
+          MaterialButton,
+          text = S.ai_delete,
+          textSize = "12sp",
+          layout_width = "wrap",
+          layout_height = "wrap",
+          layout_marginLeft = "8dp",
+          allCaps = false,
+          minWidth = 0,
+          minHeight = 0,
+          paddingLeft = "12dp",
+          paddingRight = "12dp",
+          BackgroundTintList = ColorStateList.valueOf(ColorErrorContainer),
+          textColor = ColorOnErrorContainer,
+          onClick = function()
+            MaterialAlertDialogBuilder(activity)
+              .setTitle(S.ai_delete_conv)
+              .setMessage(S.ai_confirm_delete_conv:format(name))
+              .setPositiveButton(S.ai_delete, function()
+                AgentTurn.invalidate()
+                if not AgentChat.deleteConversation(convId) then
+                  print(S.ai_delete_failed)
+                  return
+                end
+                local current = AgentChat.getCurrentConv()
+                if not current then
+                  AgentChat.createConversation()
+                end
+                messages = {}
+                if views.msgContainer then views.msgContainer.removeAllViews() end
+                loadHistory()
+                if views.aiTitle then
+                  local c = AgentChat.getCurrentConv()
+                  if c then views.aiTitle.setText(convName(c)) end
+                end
+                print(S.ai_deleted)
+                render()
+              end)
+              .setNegativeButton(S.ai_cancel, nil)
+              .show()
+          end,
+        },
+      },
+    },
+  }, rowViews)
 
-  row.addView(makeAvatar(name, 36))
-
-  local col = LinearLayout(activity)
-  col.setOrientation(1)
-  col.setLayoutParams(LinearLayout.LayoutParams(0, -2, 1))
-  col.setPadding(dp(10), 0, dp(4), 0)
-
-  local nameTv = MaterialTextView(activity)
-  nameTv.setText(name)
-  nameTv.setTextSize(15)
-  nameTv.setTextColor(ColorOnSurface)
-  nameTv.setSingleLine(true)
-  col.addView(nameTv)
-
-  local metaTv = MaterialTextView(activity)
-  metaTv.setText(convMetaText(conv))
-  metaTv.setTextSize(12)
-  metaTv.setTextColor(ColorText)
-  metaTv.setSingleLine(true)
-  col.addView(metaTv)
-
-  local function smallButton(text, bgColor, textColor)
-    local btn = MaterialButton(activity)
-    btn.setText(text)
-    btn.setTextSize(12)
-    btn.setAllCaps(false)
-    btn.setMinWidth(0)
-    btn.setMinHeight(0)
-    btn.setPadding(dp(12), 0, dp(12), 0)
-    btn.setBackgroundTintList(ColorStateList.valueOf(bgColor))
-    btn.setTextColor(textColor)
-    btn.setLayoutParams(LinearLayout.LayoutParams(-2, -2))
-    return btn
-  end
-
-  local btnRow = LinearLayout(activity)
-  btnRow.setOrientation(0)
-  btnRow.setGravity(android.view.Gravity.END)
-  local btnRowParams = LinearLayout.LayoutParams(-1, -2)
-  btnRowParams.topMargin = dp(6)
-  btnRow.setLayoutParams(btnRowParams)
-
-  local renBtn = smallButton(S.ai_rename_btn, ColorSecondaryContainer, ColorOnSecondaryContainer)
-  renBtn.setOnClickListener(function() showRenameDialog(convId, name) end)
-  btnRow.addView(renBtn)
-
-  local delBtn = smallButton(S.ai_delete, ColorErrorContainer, ColorOnErrorContainer)
-  local delBtnParams = LinearLayout.LayoutParams(-2, -2)
-  delBtnParams.leftMargin = dp(8)
-  delBtn.setLayoutParams(delBtnParams)
-  delBtn.setOnClickListener(function()
-    MaterialAlertDialogBuilder(activity)
-      .setTitle(S.ai_delete_conv)
-      .setMessage(S.ai_confirm_delete_conv:format(name))
-      .setPositiveButton(S.ai_delete, function()
-        AgentTurn.invalidate()
-        if not AgentChat.deleteConversation(convId) then
-          print(S.ai_delete_failed)
-          return
-        end
-        local current = AgentChat.getCurrentConv()
-        if not current then
-          AgentChat.createConversation()
-        end
-        messages = {}
-        if views.msgContainer then views.msgContainer.removeAllViews() end
-        loadHistory()
-        if views.aiTitle then
-          local c = AgentChat.getCurrentConv()
-          if c then views.aiTitle.setText(convName(c)) end
-        end
-        print(S.ai_deleted)
-        render()
-      end)
-      .setNegativeButton(S.ai_cancel, nil)
-      .show()
-  end)
-  btnRow.addView(delBtn)
-
-  col.addView(btnRow)
-  row.addView(col)
-
+  rowViews.avatarSlot.addView(makeAvatar(name, 36))
   return row
 end
 
@@ -3254,47 +3291,52 @@ function _M.show()
         return tostring(a.updatedAt or "") > tostring(b.updatedAt or "")
       end)
       if #others > 0 then
-        local TextUtils = luajava.bindClass("android.text.TextUtils")
-        local TruncateAt = TextUtils and TextUtils.TruncateAt or nil
-        local hScroll = HorizontalScrollView(activity)
-        hScroll.setHorizontalScrollBarEnabled(false)
-        local hLp = LinearLayout.LayoutParams(-1, -2)
-        hLp.bottomMargin = dp(8)
-        hScroll.setLayoutParams(hLp)
-
-        local strip = LinearLayout(activity)
-        strip.setOrientation(LinearLayout.HORIZONTAL)
-        strip.setGravity(16)
-        strip.setPadding(dp(4), dp(2), dp(4), dp(4))
-
-        local caption = MaterialTextView(activity)
-        caption.setText(S.ai_recent_convs)
-        caption.setTextSize(11)
-        caption.setTypeface(Typeface.DEFAULT, 1)
-        caption.setTextColor(ColorText)
-        caption.setPadding(dp(4), 0, dp(8), 0)
-        strip.addView(caption)
-
+        local chipTables = {}
         for i = 1, math.min(5, #others) do
           local conv = others[i]
-          local chip = MaterialButton(activity)
           local prefix = conv.running and "● " or ""
           local label = conv.name ~= "" and conv.name or S.ai_unnamed_conv
-          chip.setText(prefix .. label)
-          chip.setTextSize(12)
-          chip.setMaxLines(1)
-          if TruncateAt ~= nil then pcall(function() chip.setEllipsize(TruncateAt.END) end) end
-          chip.setMinimumWidth(0)
-          chip.setMaxWidth(dp(160))
-          chip.setBackgroundTintList(ColorStateList.valueOf(conv.running and ColorErrorContainer or ColorSecondaryContainer))
-          chip.setTextColor(conv.running and ColorOnErrorContainer or ColorOnSecondaryContainer)
-          local lp = LinearLayout.LayoutParams(-2, dp(32))
-          lp.rightMargin = dp(8)
-          chip.setLayoutParams(lp)
-          chip.setOnClickListener(function() switchToConversation(conv) end)
-          strip.addView(chip)
+          chipTables[#chipTables + 1] = {
+            MaterialButton,
+            text = prefix .. label,
+            textSize = "12sp",
+            layout_width = "wrap",
+            layout_height = "wrap",
+            layout_marginRight = "8dp",
+            allCaps = false,
+            BackgroundTintList = ColorStateList.valueOf(conv.running and ColorErrorContainer or ColorSecondaryContainer),
+            textColor = conv.running and ColorOnErrorContainer or ColorOnSecondaryContainer,
+            onClick = function() switchToConversation(conv) end,
+          }
         end
-        hScroll.addView(strip)
+        local hScroll = loadlayout({
+          HorizontalScrollView,
+          layout_width = "match",
+          layout_height = "wrap",
+          horizontalScrollBarEnabled = false,
+          layout_marginBottom = "8dp",
+          clipToPadding = false,
+          paddingTop = "2dp",
+          paddingBottom = "4dp",
+          {
+            LinearLayout,
+            layout_width = "wrap",
+            layout_height = "wrap",
+            orientation = "horizontal",
+            gravity = "center_vertical",
+            paddingLeft = "4dp",
+            paddingRight = "4dp",
+            {
+              MaterialTextView,
+              text = S.ai_recent_convs,
+              textSize = "11sp",
+              textStyle = "bold",
+              textColor = ColorText,
+              layout_marginRight = "8dp",
+            },
+            unpack(chipTables),
+          },
+        })
         views.msgContainer.addView(hScroll, 0)
       end
     end

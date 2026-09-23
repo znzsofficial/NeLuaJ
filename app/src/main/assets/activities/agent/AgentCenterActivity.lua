@@ -78,15 +78,13 @@ local function dp(n) return this.dpToPx(n) end
 local scope = "all" -- all | current
 
 local function styleChip(btn, selected)
+  btn.setAllCaps(false)
   if selected then
     btn.setBackgroundTintList(ColorStateList.valueOf(ColorPrimaryContainer))
     btn.setTextColor(ColorOnPrimaryContainer)
-    btn.setStrokeWidth(0)
   else
     btn.setBackgroundTintList(ColorStateList.valueOf(ColorSurfaceContainerLow))
     btn.setTextColor(ColorOnSurface)
-    btn.setStrokeWidth(dp(1))
-    btn.setStrokeColor(ColorStateList.valueOf(ColorOutline))
   end
 end
 
@@ -97,51 +95,7 @@ end
 local function buildRow(conv, projectName)
   local name = tostring(conv.name or "")
   if name == "" then name = S.ai_unnamed_conv end
-
-  local card = MaterialCardView(activity)
-  card.setRadius(dp(16))
-  card.setCardElevation(0)
-  card.setStrokeWidth(0)
-  card.setCardBackgroundColor(ColorSurfaceContainerLow)
-  card.setClickable(true)
-  card.setFocusable(true)
-
-  local cardLp = LinearLayout.LayoutParams(-1, -2)
-  cardLp.bottomMargin = dp(8)
-  card.setLayoutParams(cardLp)
-
-  local row = LinearLayout(activity)
-  row.setOrientation(0)
-  row.setGravity(16)
-  row.setPadding(dp(14), dp(12), dp(14), dp(12))
-
-  -- 头像（按 UTF-8 取首字符，避免中文截断成乱码）
   local firstChar = name:match("[\0-\127\192-\255][\128-\191]*") or "?"
-  local avatar = MaterialTextView(activity)
-  avatar.setText(firstChar:upper())
-  avatar.setTextSize(13)
-  avatar.setTypeface(Typeface.DEFAULT, 1)
-  avatar.setGravity(17)
-  local ag = GradientDrawable()
-  ag.setShape(GradientDrawable.OVAL)
-  ag.setColor(ColorPrimaryContainer)
-  avatar.setTextColor(ColorOnPrimaryContainer)
-  avatar.setBackground(ag)
-  avatar.setLayoutParams(LinearLayout.LayoutParams(dp(38), dp(38)))
-  row.addView(avatar)
-
-  local col = LinearLayout(activity)
-  col.setOrientation(1)
-  col.setLayoutParams(LinearLayout.LayoutParams(0, -2, 1))
-  col.setPadding(dp(12), 0, dp(6), 0)
-  local nameTv = MaterialTextView(activity)
-  nameTv.setText(name)
-  nameTv.setTextSize(15)
-  nameTv.setTypeface(Typeface.DEFAULT, 1)
-  nameTv.setTextColor(ColorOnSurface)
-  nameTv.setSingleLine(true)
-  if TruncateAt then nameTv.setEllipsize(TruncateAt.END) end
-  col.addView(nameTv)
 
   local n = type(conv.messages) == "table" and #conv.messages or 0
   local metaParts = { S.ai_center_msg_count:format(n) }
@@ -151,31 +105,93 @@ local function buildRow(conv, projectName)
   if projectName then
     metaParts[#metaParts + 1] = shortProject(projectName)
   end
-  local metaTv = MaterialTextView(activity)
-  metaTv.setText(table.concat(metaParts, " · "))
-  metaTv.setTextSize(12)
-  metaTv.setTextColor(ColorText)
-  metaTv.setSingleLine(true)
-  if TruncateAt then metaTv.setEllipsize(TruncateAt.END) end
-  col.addView(metaTv)
-  row.addView(col)
+
+  local rowViews = {}
+  local card = loadlayout({
+    MaterialCardView,
+    radius = "16dp",
+    cardElevation = 0,
+    strokeWidth = "0dp",
+    CardBackgroundColor = ColorSurfaceContainerLow,
+    clickable = true,
+    focusable = true,
+    layout_width = "match",
+    layout_height = "wrap",
+    {
+      LinearLayout,
+      orientation = "horizontal",
+      gravity = "center_vertical",
+      layout_width = "match",
+      layout_height = "wrap",
+      padding = "14dp",
+      paddingTop = "12dp",
+      paddingBottom = "12dp",
+      {
+        MaterialTextView,
+        id = "avatar",
+        text = firstChar:upper(),
+        textSize = "13sp",
+        textStyle = "bold",
+        textColor = ColorOnPrimaryContainer,
+        gravity = "center",
+        layout_width = "38dp",
+        layout_height = "38dp",
+      },
+      {
+        LinearLayout,
+        orientation = "vertical",
+        layout_width = "0dp",
+        layout_weight = 1,
+        layout_height = "wrap",
+        layout_marginLeft = "12dp",
+        layout_marginRight = "6dp",
+        {
+          MaterialTextView,
+          text = name,
+          textSize = "15sp",
+          textStyle = "bold",
+          textColor = ColorOnSurface,
+          singleLine = true,
+          ellipsize = "end",
+        },
+        {
+          MaterialTextView,
+          text = table.concat(metaParts, " · "),
+          textSize = "12sp",
+          textColor = ColorText,
+          singleLine = true,
+          ellipsize = "end",
+          layout_marginTop = "2dp",
+        },
+      },
+      {
+        MaterialTextView,
+        id = "badge",
+        text = S.ai_conv_running,
+        textSize = "11sp",
+        textColor = ColorOnErrorContainer,
+        gravity = "center",
+        visibility = conv.running and 0 or 8,
+        paddingLeft = "8dp",
+        paddingRight = "8dp",
+        layout_width = "wrap",
+        layout_height = "24dp",
+      },
+    },
+  }, rowViews)
+
+  local ag = GradientDrawable()
+  ag.setShape(GradientDrawable.OVAL)
+  ag.setColor(ColorPrimaryContainer)
+  rowViews.avatar.setBackground(ag)
 
   if conv.running then
-    local badge = MaterialTextView(activity)
-    badge.setText(S.ai_conv_running)
-    badge.setTextSize(11)
-    badge.setGravity(17)
-    badge.setTextColor(ColorOnErrorContainer)
     local rbg = GradientDrawable()
     rbg.setCornerRadius(dp(8))
     rbg.setColor(ColorErrorContainer)
-    badge.setBackground(rbg)
-    badge.setPadding(dp(8), 0, dp(8), 0)
-    badge.setLayoutParams(LinearLayout.LayoutParams(-2, dp(24)))
-    row.addView(badge)
+    rowViews.badge.setBackground(rbg)
   end
 
-  card.addView(row)
   card.setOnClickListener(function()
     if projectName then
       -- 跨工程：确认后回传主界面切换工程并打开
@@ -192,6 +208,9 @@ local function buildRow(conv, projectName)
     end
   end)
 
+  local cardLp = LinearLayout.LayoutParams(-1, -2)
+  cardLp.bottomMargin = dp(8)
+  card.setLayoutParams(cardLp)
   return card
 end
 
