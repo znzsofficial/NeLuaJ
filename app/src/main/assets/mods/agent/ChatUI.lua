@@ -2696,9 +2696,7 @@ local function buildManagerRow(conv, render)
     btn.setPadding(dp(12), 0, dp(12), 0)
     btn.setBackgroundTintList(ColorStateList.valueOf(bgColor))
     btn.setTextColor(textColor)
-    btn.setCornerRadius(dp(8))
-    local lp = LinearLayout.LayoutParams(-2, dp(32))
-    btn.setLayoutParams(lp)
+    btn.setLayoutParams(LinearLayout.LayoutParams(-2, -2))
     return btn
   end
 
