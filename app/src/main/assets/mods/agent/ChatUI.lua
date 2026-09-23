@@ -2637,6 +2637,22 @@ local function buildManagerRow(conv, render)
   return row
 end
 
+-- 统一的会话切换序列（面板内列表、首屏 chips 与对外 openConversation 共用）
+local function switchToConversation(conv)
+  saveHistory()
+  AgentTurn.invalidate()
+  AgentChat.setCurrentConv(conv.id)
+  activeConversationId = conv.id
+  activeConversationProjectPath = AgentChat.getCurrentProjectPath()
+  conversationLoaded = true
+  activeConversationHadMessages = false
+  messages = {}
+  if views.msgContainer then views.msgContainer.removeAllViews() end
+  loadHistory()
+  if views.aiTitle then views.aiTitle.setText(convName(conv)) end
+  if updateProjectLabel then updateProjectLabel() end
+end
+
 -- 赋值给前向声明的局部量：命令菜单捕获的是声明处的变量，
 -- 若在此重新 local 声明，菜单入口会调用到 nil（历史 bug）
 showConvList = function()
@@ -2734,18 +2750,7 @@ showConvList = function()
   for _, item in ipairs(list) do
     local conv = item.conversation
     local row = buildConvRow(conv, conv.id == currentId, function()
-      saveHistory()
-      AgentTurn.invalidate()
-      AgentChat.setCurrentConv(conv.id)
-      activeConversationId = conv.id
-      activeConversationProjectPath = AgentChat.getCurrentProjectPath()
-      conversationLoaded = true
-      activeConversationHadMessages = false
-      messages = {}
-      if views.msgContainer then views.msgContainer.removeAllViews() end
-      loadHistory()
-      if views.aiTitle then views.aiTitle.setText(convName(conv)) end
-      if updateProjectLabel then updateProjectLabel() end
+      switchToConversation(conv)
       if dlg then dlg.dismiss() end
     end)
     container.addView(row)
@@ -3113,6 +3118,49 @@ function _M.show()
     if historyCount == 0 then
       addWelcomeCard(S.ai_welcome_title, S.ai_welcome_body)
     end
+    -- 首屏最近会话快捷切换（不占用当前会话、回合空闲时显示）
+    if not AgentTurn.isActive() then
+      local others = {}
+      for _, item in ipairs(AgentChat.listConversations()) do
+        if item.id ~= activeConversationId then others[#others + 1] = item.conversation end
+      end
+      table.sort(others, function(a, b)
+        return tostring(a.updatedAt or "") > tostring(b.updatedAt or "")
+      end)
+      if #others > 0 then
+        local TextUtils = luajava.bindClass("android.text.TextUtils")
+        local TruncateAt = TextUtils and TextUtils.TruncateAt or nil
+        local strip = LinearLayout(activity)
+        strip.setOrientation(LinearLayout.HORIZONTAL)
+        strip.setGravity(16)
+        strip.setPadding(dp(8), 0, dp(8), dp(10))
+        local caption = MaterialTextView(activity)
+        caption.setText(S.ai_recent_convs)
+        caption.setTextSize(12)
+        caption.setTextColor(ColorText)
+        caption.setPadding(0, 0, dp(10), 0)
+        strip.addView(caption)
+        for i = 1, math.min(3, #others) do
+          local conv = others[i]
+          local chip = MaterialButton(activity)
+          local label = conv.name ~= "" and conv.name or S.ai_unnamed_conv
+          chip.setText(label)
+          chip.setTextSize(12)
+          chip.setMaxLines(1)
+          if TruncateAt ~= nil then pcall(function() chip.setEllipsize(TruncateAt.END) end) end
+          chip.setMinimumWidth(0)
+          chip.setMaxWidth(dp(150))
+          chip.setBackgroundTintList(ColorStateList.valueOf(ColorSecondaryContainer))
+          chip.setTextColor(ColorOnSecondaryContainer)
+          local lp = LinearLayout.LayoutParams(dp(0) + LinearLayout.LayoutParams.WRAP_CONTENT, dp(0) + LinearLayout.LayoutParams.WRAP_CONTENT)
+          lp.rightMargin = dp(8)
+          chip.setLayoutParams(lp)
+          chip.setOnClickListener(function() switchToConversation(conv) end)
+          strip.addView(chip)
+        end
+        views.msgContainer.addView(strip, 0)
+      end
+    end
   end
 
   dialog.setOnShowListener(function()
@@ -3158,6 +3206,30 @@ end
 
 function _M.saveCurrentConversation()
   return saveHistory()
+end
+
+-- 对外入口：按 id 打开当前工程的某个会话（供外部入口/会话中心使用）。
+-- 面板已开时原地切换；未开时先持久化选择再由 show() 加载目标会话。
+-- 与面板内切换一致：进行中的回合会被取消（见文档“切换会话会取消当前任务”）。
+function _M.openConversation(id)
+  if type(id) ~= "string" or id == "" then return false end
+  local target
+  for _, item in ipairs(AgentChat.listConversations()) do
+    if item.id == id then target = item.conversation break end
+  end
+  if not target then return false end
+  if isPanelVisible() then
+    switchToConversation(target)
+  else
+    AgentTurn.invalidate()
+    AgentChat.setCurrentConv(target.id)
+    activeConversationId = target.id
+    activeConversationProjectPath = AgentChat.getCurrentProjectPath()
+    conversationLoaded = true
+    activeConversationHadMessages = false
+    _M.show()
+  end
+  return true
 end
 
 -- ─── 插入代码到编辑器 ──
