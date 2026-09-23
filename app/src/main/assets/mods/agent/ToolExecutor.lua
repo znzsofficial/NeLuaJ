@@ -276,14 +276,59 @@ local function autoRunsSandbox()
   return requireConfig().getSharedData("ai_auto_run_sandbox", "1") == "1"
 end
 
+local function hostAllowedByPolicy(host, allow)
+  host = tostring(host):lower()
+  for _, pattern in ipairs(allow) do
+    pattern = tostring(pattern):lower()
+    if host == pattern then return true end
+    local suffix = "." .. pattern
+    if #host > #suffix and host:sub(-#suffix) == suffix then return true end
+  end
+  return false
+end
+
+-- 项目 allowlist（policy.networkHosts 非空时生效）：fetch_url 的目标主机与
+-- run_lua 声明的每个 network_hosts 都必须命中名单（精确或子域）。
+-- 未配置名单则完全沿用全局开关；项目策略只能收紧，不能放大全局授权。
+local function networkAllowedByPolicy(name, args)
+  local getPolicy = requireConfig().getProjectPolicy
+  if not getPolicy then return true end
+  local ok, policy = pcall(getPolicy)
+  if not ok or type(policy) ~= "table" then return true end
+  if type(policy.networkHosts) ~= "table" or #policy.networkHosts == 0 then return true end
+  if name == "fetch_url" then
+    local host = tostring((args or {}).url or ""):match("^https?://([^/:]+)")
+    if not host then return false end
+    return hostAllowedByPolicy(host, policy.networkHosts)
+  end
+  if name == "run_lua" then
+    local hosts = _M.normalizeNetworkHosts(args and (args.network_hosts or args.networkHosts))
+    if not hosts then return false end
+    for _, host in ipairs(hosts) do
+      if not hostAllowedByPolicy(host, policy.networkHosts) then return false end
+    end
+  end
+  return true
+end
+
+local function projectAutoApproveBlocked()
+  local getPolicy = requireConfig().getProjectPolicy
+  if not getPolicy then return false end
+  local ok, policy = pcall(getPolicy)
+  return ok and type(policy) == "table" and policy.autoApprove == false or false
+end
+
 function _M.requiresConfirmation(name, args)
   name = _M.normalizeToolName(name, args)
   if name == "run_project" then return true end
   if name == "run_lua" then
     if not autoRunsSandbox() then return true end
-    return isNetworkRequest(name, args) and not autoApprovesNetworkRequests()
+    if not isNetworkRequest(name, args) then return false end
+    return not (autoApprovesNetworkRequests() and networkAllowedByPolicy(name, args))
   end
-  if isNetworkRequest(name, args) and autoApprovesNetworkRequests() then return false end
+  if isNetworkRequest(name, args) then
+    return not (autoApprovesNetworkRequests() and networkAllowedByPolicy(name, args))
+  end
   if name:match("^mcp::") or name:match("^mcp__") then return true end
   if _M.isDestructiveTool(name) then return true end
   if name == "fetch_url" then return true end
@@ -296,10 +341,13 @@ end
 function _M.shouldAutoApprove(name, args)
   name = _M.normalizeToolName(name, args)
   if name == "run_lua" then
-    return autoRunsSandbox()
-      and (not isNetworkRequest(name, args) or autoApprovesNetworkRequests())
+    if not autoRunsSandbox() then return false end
+    if not isNetworkRequest(name, args) then return true end
+    return autoApprovesNetworkRequests() and networkAllowedByPolicy(name, args)
   end
-  if isNetworkRequest(name, args) and autoApprovesNetworkRequests() then return true end
+  if isNetworkRequest(name, args) then
+    return autoApprovesNetworkRequests() and networkAllowedByPolicy(name, args)
+  end
   if name:match("^mcp::") or name:match("^mcp__") then return false end
   if name == "run_project" then return false end
   if name == "get_env_info" or name == "check_lua_syntax" then return true end
@@ -308,6 +356,7 @@ function _M.shouldAutoApprove(name, args)
   end
   if not _M.isDestructiveTool(name) then return false end
   if requireConfig().getSharedData("ai_auto_approve", "0") ~= "1" then return false end
+  if projectAutoApproveBlocked() then return false end
   local path = args and args.path or ""
   if name == "rename_file" then
     return _M.isInProjectDir(path) and _M.isInProjectDir(args.new_path or "")

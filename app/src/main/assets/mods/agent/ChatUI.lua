@@ -1817,7 +1817,15 @@ end
 
 showSettings = function()
   local autoApprove = this.getSharedData("ai_auto_approve", "0") == "1"
+
   local autoApproveNetwork = this.getSharedData("ai_auto_approve_network", "1") == "1"
+
+  local projectPolicy = AgentChat.getProjectPolicy and AgentChat.getProjectPolicy() or nil
+  local policyRestricted = type(projectPolicy) == "table" and projectPolicy.autoApprove == false
+  local policyHosts = ""
+  if type(projectPolicy) == "table" and type(projectPolicy.networkHosts) == "table" then
+    policyHosts = table.concat(projectPolicy.networkHosts, " ")
+  end
   local autoRunSandbox = this.getSharedData("ai_auto_run_sandbox", "1") == "1"
   local allowSelfSigned = this.getSharedData("ai_allow_selfsigned", "0") == "1"
   local temp = this.getSharedData("ai_temperature", "0.7")
@@ -2030,6 +2038,74 @@ showSettings = function()
             checked = allowSelfSigned,
             layout_marginLeft = "12dp",
           },
+        },
+      },
+    },
+    -- 当前工程策略（只能收紧全局授权）
+    {
+      MaterialCardView,
+      layout_width = "match",
+      layout_height = "wrap",
+      layout_marginBottom = "12dp",
+      CardBackgroundColor = ColorSurface,
+      CardElevation = 0,
+      {
+        LinearLayout,
+        orientation = "vertical",
+        layout_width = "match",
+        layout_height = "wrap",
+        padding = "16dp",
+        sectionTitle(S.ai_policy_project),
+        {
+          LinearLayout,
+          orientation = "horizontal",
+          gravity = "center_vertical",
+          layout_width = "match",
+          layout_height = "wrap",
+          {
+            LinearLayout,
+            orientation = "vertical",
+            layout_width = "0dp",
+            layout_weight = 1,
+            {
+              MaterialTextView,
+              text = S.ai_policy_restrict,
+              textSize = "14sp", textColor = ColorOnSurface,
+            },
+            {
+              MaterialTextView,
+              text = S.ai_policy_restrict_desc,
+              textSize = "12sp", textColor = ColorText,
+              layout_marginTop = "2dp",
+            },
+          },
+          {
+            Switch,
+            id = "policyRestrictSwitch",
+            checked = policyRestricted,
+            layout_marginLeft = "12dp",
+          },
+        },
+        {
+          MaterialTextView,
+          text = S.ai_policy_hosts,
+          textSize = "14sp", textColor = ColorOnSurface,
+          layout_marginTop = "12dp",
+          layout_marginBottom = "2dp",
+        },
+        {
+          MaterialTextView,
+          text = S.ai_policy_hosts_desc,
+          textSize = "12sp", textColor = ColorText,
+          layout_marginBottom = "4dp",
+        },
+        {
+          EditText,
+          id = "policyHostsInput",
+          text = policyHosts,
+          layout_width = "match", layout_height = "wrap",
+          textSize = "13sp", minLines = 1, maxLines = 4,
+          hint = "api.example.com docs.example.org",
         },
       },
     },
@@ -2387,6 +2463,17 @@ showSettings = function()
       if tempVal ~= "" then this.setSharedData("ai_temperature", tempVal) end
       if retryVal ~= "" then this.setSharedData("ai_retry_count", retryVal) end
       this.setSharedData("ai_system_prompt", promptVal)
+      if dlgViews.policyRestrictSwitch and dlgViews.policyHostsInput then
+        local hosts = {}
+        local hostsRaw = tostring(dlgViews.policyHostsInput.getText() or "")
+        for token in hostsRaw:gmatch("[^,;%s]+") do hosts[#hosts + 1] = token end
+        pcall(function()
+          AgentChat.saveProjectPolicy({
+            autoApprove = not dlgViews.policyRestrictSwitch.isChecked(),
+            networkHosts = hosts,
+          })
+        end)
+      end
       print(S.ai_settings_saved)
     end)
     .setNegativeButton(S.ai_cancel, nil)

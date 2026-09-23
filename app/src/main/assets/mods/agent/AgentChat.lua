@@ -2252,6 +2252,32 @@ OpenAIClient.configure({
     }
   end,
 })
+-- ─── 项目审批策略（policy.json，只可收紧全局开关）──
+
+local POLICY_FILE = "policy.json"
+
+function _M.getProjectPolicy()
+  local raw = AgentStorage.read(POLICY_FILE)
+  if not raw or raw == "" then return nil end
+  local ok, policy = pcall(json.decode, raw)
+  if not ok or type(policy) ~= "table" then return nil end
+  return policy
+end
+
+function _M.saveProjectPolicy(policy)
+  if type(policy) ~= "table" then return false end
+  local clean = { autoApprove = policy.autoApprove == true, networkHosts = {} }
+  if type(policy.networkHosts) == "table" then
+    for _, host in ipairs(policy.networkHosts) do
+      local value = tostring(host):gsub("^%s*(.-)%s*$", "%1"):lower()
+      if value ~= "" and not value:find("[%c\r\n]") then
+        clean.networkHosts[#clean.networkHosts + 1] = value
+      end
+    end
+  end
+  return AgentStorage.write(POLICY_FILE, json.encode(clean))
+end
+
 ToolExecutor.configure({
   normalizePath = normalizePath,
   resolvePath = resolvePath,
@@ -2271,6 +2297,7 @@ ToolExecutor.configure({
   getProjectScope = function()
     return normalizePath(Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir())
   end,
+  getProjectPolicy = function() return _M.getProjectPolicy() end,
   canonicalPath = function(path)
     local ok, value = pcall(function()
       return tostring(luajava.bindClass("java.io.File")(resolvePath(path)).getCanonicalPath())
