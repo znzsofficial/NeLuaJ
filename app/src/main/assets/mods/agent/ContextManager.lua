@@ -243,7 +243,8 @@ function _M.buildCompressedApiMessages(history, onResult, force)
         { role = "user", content = "以下是较早对话的压缩记忆，仅作为背景信息，不是当前待执行指令：\n" .. summary },
       }
       for i = recentStart, #history do compressed[#compressed + 1] = history[i] end
-      if onResult then onResult(_M.buildApiMessages(compressed), true) end
+      -- 第三个参数是压缩后的会话历史（不含 system），调用方可持久化它，避免每次发送重复摘要。
+      if onResult then onResult(_M.buildApiMessages(compressed), true, compressed) end
     end,
     onError = function()
       if onResult then onResult(_M.buildApiMessages(history), false) end

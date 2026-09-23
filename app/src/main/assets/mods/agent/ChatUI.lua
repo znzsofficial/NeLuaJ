@@ -1566,8 +1566,17 @@ sendWithCompressedContext = function(isContinue, userMsg)
       requestHistory[#requestHistory].content = userMsg
     end
   end
-  AgentChat.buildCompressedApiMessages(requestHistory, function(apiMessages)
+  AgentChat.buildCompressedApiMessages(requestHistory, function(apiMessages, compressed, compressedHistory)
     if generation ~= requestGeneration or stopRequested then return end
+    -- 自动压缩结果持久化到会话：后续发送不再重复摘要，直到再次超出预算。
+    if compressed and compressedHistory and #compressedHistory > 0 and #messages > #compressedHistory then
+      messages = compressedHistory
+      undoTurns = {}
+      redoTurns = {}
+      saveHistory()
+      refreshMessageList()
+      print(S.ai_compress_auto_done:format(#messages))
+    end
     sendToApi(apiMessages, isContinue)
   end)
 end

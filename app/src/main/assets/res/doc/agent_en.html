@@ -63,6 +63,7 @@ Explain the changes and check related call sites.</code></pre>
         <li><strong>Settings</strong>: change sampling temperature, retries, safety options, additional instructions, and MCP servers. Additional instructions do not replace built-in safety or tool rules.</li>
       </ul>
       <p>File undo checks the file fingerprint and refuses to overwrite externally modified content.</p>
+      <p>When the context exceeds the budget, sending a message or continuing a tool chain automatically compresses the older conversation and persists the result into the current session; no repeated summarization happens until the budget is exceeded again. Auto-compression shows a notice and behaves like manual compression.</p>
       <p>The context window and maximum output belong to each model configuration. Switching models switches both limits; values from the previous global settings are migrated to existing models.</p>
 
       <h2>Project Memory</h2>
