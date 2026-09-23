@@ -312,47 +312,57 @@ addMessageBubble = function(role, content, stateMessage)
   if not container then return end
 
   local isUser = (role == "user")
-  local bgColor = isUser and ColorPrimaryContainer or ColorSurfaceContainerLow
   local textColor = isUser and ColorOnPrimaryContainer or ColorOnSurface
+  local actionColor = isUser and ColorOnPrimaryContainer or ColorPrimary
 
-  -- 头像
-  local avatar = MaterialTextView(activity)
-  avatar.setText(isUser and S.ai_you or "AI")
-  avatar.setTextSize(10)
-  avatar.setTypeface(Typeface.DEFAULT, 1)
-  avatar.setGravity(17)
-  local ag = GradientDrawable()
-  ag.setShape(GradientDrawable.OVAL)
-  if isUser then
-    ag.setColor(ColorPrimary)
-    avatar.setTextColor(ColorOnPrimary)
-  else
-    ag.setColor(ColorSecondaryContainer)
-    avatar.setTextColor(ColorOnSecondaryContainer)
-  end
-  avatar.setBackground(ag)
-  local avatarLp = LinearLayout.LayoutParams(dp(28), dp(28))
-  avatarLp.topMargin = dp(2)
-  avatar.setLayoutParams(avatarLp)
-
-  local row = LinearLayout(activity)
-  row.setOrientation(0)
-  local rowLp = LinearLayout.LayoutParams(-1, -2)
-  rowLp.bottomMargin = dp(12)
-  row.setLayoutParams(rowLp)
-
-  local col = LinearLayout(activity)
-  col.setOrientation(1)
-  col.setLayoutParams(LinearLayout.LayoutParams(0, -2, 1))
-
-  -- 内容气泡
-  local inner = loadlayout({
+  -- 用户消息：主色容器气泡右缩进；AI 消息：无气泡平铺全宽（现代 AI 客户端范式）
+  -- 边距不写入布局表：独立加载的根视图拿到的是基类 LayoutParams，margin 会被静默丢弃，
+  -- 必须在 addView 时显式传 LinearLayout.LayoutParams。
+  local rowViews = {}
+  local row = loadlayout({
     LinearLayout,
-    orientation = "vertical",
     layout_width = "match",
     layout_height = "wrap",
-    padding = "12dp",
-  })
+    orientation = "vertical",
+    {
+      MaterialCardView,
+      id = "bubbleCard",
+      radius = "16dp",
+      CardElevation = 0,
+      strokeWidth = "0dp",
+      CardBackgroundColor = ColorPrimaryContainer,
+      layout_width = "match",
+      layout_height = "wrap",
+      visibility = isUser and VISIBLE or GONE,
+      {
+        LinearLayout,
+        id = "bubbleInner",
+        orientation = "vertical",
+        layout_width = "match",
+        layout_height = "wrap",
+        padding = "12dp",
+      },
+    },
+    {
+      LinearLayout,
+      id = "plainInner",
+      orientation = "vertical",
+      layout_width = "match",
+      layout_height = "wrap",
+      visibility = isUser and GONE or VISIBLE,
+    },
+    {
+      LinearLayout,
+      id = "actionRow",
+      layout_width = "match",
+      layout_height = "wrap",
+      gravity = "center_vertical",
+      layout_marginTop = "2dp",
+      visibility = GONE,
+    },
+  }, rowViews)
+
+  local inner = isUser and rowViews.bubbleInner or rowViews.plainInner
 
   local parts = splitCodeBlocks(content or "")
   for _, part in ipairs(parts) do
@@ -360,15 +370,18 @@ addMessageBubble = function(role, content, stateMessage)
       local markdownView = loadlayout({
         MaterialTextView,
         text = renderMarkdown(part.text),
-        textSize = "13sp",
+        textSize = "14sp",
         textColor = textColor,
-        lineSpacingMultiplier = 1.35,
+        lineSpacingMultiplier = 1.4,
+        textIsSelectable = true,
       })
-      markdownView.setMovementMethod(LinkMovementMethod.getInstance())
-      markdownView.setLinksClickable(true)
+      if not isUser then
+        markdownView.setMovementMethod(LinkMovementMethod.getInstance())
+        markdownView.setLinksClickable(true)
+      end
       inner.addView(markdownView)
     else
-      -- 代码块：等宽 + 深色背景 + 复制/插入按钮
+      -- 代码块：等宽 + 染色底 + 复制/插入按钮，代码正文也可选中
       local codeViews = {}
       local codeCard = loadlayout({
         MaterialCardView,
@@ -389,6 +402,7 @@ addMessageBubble = function(role, content, stateMessage)
             typeface = Typeface.MONOSPACE,
             textSize = "12sp",
             textColor = isUser and ColorOnPrimaryContainer or ColorOnSurface,
+            textIsSelectable = true,
           },
           {
             LinearLayout,
@@ -427,61 +441,48 @@ addMessageBubble = function(role, content, stateMessage)
     end
   end
 
-  local continuation = not isUser and stateMessage and continuationLabel(stateMessage.continuation_state)
-  if continuation then
-    local marker = MaterialTextView(activity)
-    marker.setText(continuation)
-    marker.setTextSize(12)
-    marker.setTextColor(ColorText)
-    marker.setPadding(0, dp(6), 0, 0)
-    inner.addView(marker)
-    local continueBtn = createContinueButton()
-    continueBtn.setOnClickListener(function()
-      if AgentTurn.isActive() then return end
-      clearContinuationState(stateMessage)
-      local parent = continueBtn.getParent()
-      if parent then parent.removeView(marker); parent.removeView(continueBtn) end
-      AgentTurn.bumpGeneration()
-      AgentTurn.send(true)
-    end)
-    inner.addView(continueBtn)
+  -- AI 消息的操作行：复制全文 / 续写标记与按钮
+  local actionRow = rowViews.actionRow
+  if not isUser then
+    local continuation = stateMessage and continuationLabel(stateMessage.continuation_state)
+    if (content and content ~= "") or continuation then
+      actionRow.setVisibility(VISIBLE)
+    end
+    if content and content ~= "" then
+      local copyReply = MaterialButton(activity)
+      copyReply.setText(S.ai_copy)
+      copyReply.setTextSize(12)
+      copyReply.setAllCaps(false)
+      copyReply.setTextColor(actionColor)
+      copyReply.setBackgroundTintList(ColorStateList.valueOf(0))
+      copyReply.setLayoutParams(LinearLayout.LayoutParams(-2, dp(30)))
+      copyReply.setOnClickListener(function(v) copyText(content, v) end)
+      actionRow.addView(copyReply)
+    end
+    if continuation then
+      local marker = MaterialTextView(activity)
+      marker.setText(continuation)
+      marker.setTextSize(12)
+      marker.setTextColor(ColorText)
+      marker.setPadding(dp(8), 0, dp(8), 0)
+      actionRow.addView(marker)
+      local continueBtn = createContinueButton()
+      continueBtn.setOnClickListener(function()
+        if AgentTurn.isActive() then return end
+        clearContinuationState(stateMessage)
+        local parent = continueBtn.getParent()
+        if parent then parent.removeView(marker); parent.removeView(continueBtn) end
+        AgentTurn.bumpGeneration()
+        AgentTurn.send(true)
+      end)
+      actionRow.addView(continueBtn)
+    end
   end
 
-  if not isUser and content and content ~= "" then
-    local copyReply = MaterialButton(activity)
-    copyReply.setText(S.ai_copy)
-    copyReply.setTextSize(11)
-    copyReply.setAllCaps(false)
-    copyReply.setTextColor(ColorPrimary)
-    copyReply.setBackgroundTintList(ColorStateList.valueOf(0))
-    copyReply.setLayoutParams(LinearLayout.LayoutParams(-2, dp(30)))
-    copyReply.setOnClickListener(function(v) copyText(content, v) end)
-    inner.addView(copyReply)
-  end
-
-  local card = {
-    MaterialCardView,
-    radius = "16dp",
-    CardElevation = 0,
-    CardBackgroundColor = bgColor,
-    strokeWidth = "0dp",
-    layout_width = "match",
-    layout_height = "wrap",
-    inner,
-  }
-
-  if isUser then
-    avatarLp.leftMargin = dp(8)
-    col.addView(loadlayout(card))
-    row.addView(col)
-    row.addView(avatar)
-  else
-    avatarLp.rightMargin = dp(8)
-    row.addView(avatar)
-    col.addView(loadlayout(card))
-    row.addView(col)
-  end
-  container.addView(row)
+  local rowLp = LinearLayout.LayoutParams(-1, -2)
+  rowLp.leftMargin = isUser and dp(64) or 0
+  rowLp.bottomMargin = dp(14)
+  container.addView(row, rowLp)
   scrollDown()
 end
 
@@ -618,7 +619,7 @@ addToolBubble = function(toolName, args, result)
     CardElevation = 0,
     strokeWidth = isError and "1dp" or "0dp",
     strokeColor = isError and ColorError or 0,
-    CardBackgroundColor = isError and ColorErrorContainer or ColorSurfaceContainerLow,
+    CardBackgroundColor = isError and ColorErrorContainer or ColorSurfaceContainerHigh,
     layout_width = "match",
     layout_height = "wrap",
     {
@@ -667,9 +668,7 @@ addToolBubble = function(toolName, args, result)
   }
   local bubble = loadlayout(card, bubbleViews)
   local bubbleLp = LinearLayout.LayoutParams(-1, -2)
-  bubbleLp.leftMargin = dp(36)
-  bubbleLp.rightMargin = dp(4)
-  bubbleLp.bottomMargin = dp(8)
+  bubbleLp.bottomMargin = dp(10)
   container.addView(bubble, bubbleLp)
   if detail ~= "" then
     local expanded = false
@@ -1143,9 +1142,7 @@ addRequestErrorBubble = function(err, messageIndex)
     },
   }, errorViews)
   local errorLp = LinearLayout.LayoutParams(-1, -2)
-  errorLp.leftMargin = dp(36)
-  errorLp.rightMargin = dp(4)
-  errorLp.bottomMargin = dp(8)
+  errorLp.bottomMargin = dp(10)
   views.msgContainer.addView(errorCard, errorLp)
 
   errorViews.recoverButton.onClick = function()
@@ -3463,32 +3460,23 @@ AgentTurn.configure({
           or not streamState.bubble.getParent() then
         local streamViews = {}
         local bubble = loadlayout({
-          MaterialCardView,
-          radius = "16dp",
-          CardElevation = 0,
-          strokeWidth = "0dp",
-          CardBackgroundColor = ColorSurfaceContainerLow,
+          LinearLayout,
           layout_width = "match",
           layout_height = "wrap",
+          orientation = "vertical",
           {
-            LinearLayout,
-            orientation = "vertical",
-            padding = "12dp",
-            {
-              MaterialTextView,
-              id = "aiStreamText",
-              textSize = "13sp",
-              textColor = ColorOnSurface,
-              lineSpacingMultiplier = 1.35,
-            },
+            MaterialTextView,
+            id = "aiStreamText",
+            textSize = "14sp",
+            textColor = ColorOnSurface,
+            lineSpacingMultiplier = 1.4,
           },
         }, streamViews)
         streamState.container = views.msgContainer
         streamState.bubble = bubble
         streamState.textView = streamViews.aiStreamText
         local streamLp = LinearLayout.LayoutParams(-1, -2)
-        streamLp.rightMargin = dp(16)
-        streamLp.bottomMargin = dp(8)
+        streamLp.bottomMargin = dp(14)
         streamState.container.addView(bubble, streamLp)
       end
       if streamState.textView then streamState.textView.setText(streamState.text) end
