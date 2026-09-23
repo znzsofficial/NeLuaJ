@@ -81,7 +81,7 @@ local function loadProjectMemory()
   if text == "" then return "" end
   if #text > MAX_PROJECT_MEMORY_CHARS then
     text = text:sub(1, MAX_PROJECT_MEMORY_CHARS)
-      .. "\n\n...(AGENTS.md 超过 " .. MAX_PROJECT_MEMORY_CHARS .. " 字符，已截断)"
+      .. "\n\n...(AGENTS.md 超过 " .. MAX_PROJECT_MEMORY_CHARS .. " 字节，已截断)"
   end
   return text
 end
@@ -332,7 +332,7 @@ _M.TOOLS = {
     type = "function",
     ["function"] = {
       name = "append_file",
-      description = "向现有文件末尾追加内容（不覆盖已有内容）。文件不存在时创建。适合写日志、追加配置等。.lua 文件追加后会整体做语法预检，失败则不追加并返回错误。操作需要用户确认。",
+      description = "向现有文件末尾追加内容（不覆盖已有内容）。文件不存在时创建。适合写日志、追加配置等。.lua 文件在写入前会拼接已有内容整体做语法预检，失败则不追加并返回错误。操作需要用户确认。",
       parameters = {
         type = "object",
         properties = {
@@ -812,9 +812,10 @@ local function readFileContent(pathArg, offsetArg, maxArg)
   return numbered .. "\n---\n共 " .. totalLines .. " 行，当前显示从第 " .. offset .. " 行起"
 end
 
---- .lua 文件写入前的语法守门：err 为 nil 且 checked 为 true 表示检查并通过；
---- err 为 nil 且 checked 为 false 表示未检查（非 Lua 文件、空内容或检查器不可用，均放行）。
---- 检查器加载或运行异常时放行，绝不让校验本身阻塞写入。
+--- .lua 文件写入前的语法守门：err 非 nil 且 checked 为 true 表示确认是编译错误并已拦截；
+--- nil/false 表示未拦截（非 Lua 文件、空内容、检查器不可用或结果不属于编译错误，均放行）。
+--- LuaJ 编译错误的文本恒含 "syntax error"（已实测）；沙盒启动失败、超时、超过 128 KiB
+--- 等基础设施故障的文本不含它，一律放行——绝不让校验本身阻塞写入。
 local function luaSyntaxGuard(path, content)
   if type(path) ~= "string" or path:sub(-4):lower() ~= ".lua" then return nil, false end
   if type(content) ~= "string" or content == "" then return nil, false end
@@ -826,10 +827,10 @@ local function luaSyntaxGuard(path, content)
     return LuaSandbox.checkSyntax(content)
   end)
   if not okSyntax then return nil, false end
-  if syntaxErr and tostring(syntaxErr) ~= "" then
-    return tostring(syntaxErr), true
+  if type(syntaxErr) == "string" and syntaxErr:find("syntax error", 1, true) then
+    return syntaxErr, true
   end
-  return nil, true
+  return nil, false
 end
 
 -- ─── 工具执行（不含确认，确认在 ChatUI 层做）──
@@ -870,7 +871,7 @@ local function legacyExecuteTool(name, args)
     local ok, result = pcall(function() return file.save(path, content) end)
     if ok and result == true then
       if syntaxChecked then
-        return "文件已创建（Lua 语法检查通过）: " .. path
+        return "文件已创建: " .. path .. "\nLua 语法检查通过"
       end
       return "文件已创建: " .. path
     else
@@ -1236,11 +1237,11 @@ local function legacyExecuteTool(name, args)
     end
     local count = type(countOrErr) == "number" and countOrErr or 1
     local locText = formatPatchLocations(locations)
-    local syntaxNote = syntaxChecked and "，Lua 语法检查通过" or ""
+    local syntaxNote = syntaxChecked and "\nLua 语法检查通过" or ""
     if locText ~= "" then
-      return "补丁已应用（" .. count .. " 处修改" .. syntaxNote .. "）\n位置: " .. locText
+      return "补丁已应用（" .. count .. " 处修改）\n位置: " .. locText .. syntaxNote
     end
-    return "补丁已应用（" .. count .. " 处修改" .. syntaxNote .. "）"
+    return "补丁已应用（" .. count .. " 处修改）" .. syntaxNote
 
   elseif name == "replace_in_file" then
     local path = resolvePath(args.path)
@@ -1277,7 +1278,7 @@ local function legacyExecuteTool(name, args)
       return "替换写入失败\n文件: " .. path .. "\n原因: " .. tostring(writeResult)
     end
     if syntaxChecked then
-      return "已替换 " .. replaced .. " 处（Lua 语法检查通过）: " .. path
+      return "已替换 " .. replaced .. " 处: " .. path .. "\nLua 语法检查通过"
     end
     return "已替换 " .. replaced .. " 处: " .. path
 
@@ -1309,7 +1310,7 @@ local function legacyExecuteTool(name, args)
     end)
     if ok then
       if syntaxChecked then
-        return "已追加到文件（Lua 语法检查通过）: " .. path
+        return "已追加到文件: " .. path .. "\nLua 语法检查通过"
       end
       return "已追加到文件: " .. path
     else
@@ -1327,6 +1328,20 @@ local function legacyExecuteTool(name, args)
     end
     if isProjectRootOrAncestor(src) then
       return "出于安全原因，禁止移动项目根目录或其上级目录"
+    end
+    -- 关闭绕过口：把任意文件改名为 .lua 也必须过语法守门
+    local dstType = type(dst) == "string" and dst:sub(-4):lower() or ""
+    if dstType == ".lua" and file.exists(src) then
+      local readOk, content = pcall(function() return file.readall(src) end)
+      if readOk and type(content) == "string" then
+        local syntaxErr = luaSyntaxGuard(dst, content)
+        if syntaxErr then
+          return "重命名未执行（目标为 .lua 且存在语法错误）\n原路径: " .. src
+            .. "\n目标: " .. dst
+            .. "\n语法错误:\n" .. syntaxErr
+            .. "\n请先修正内容或改用其他扩展名。"
+        end
+      end
     end
     local ok, err = pcall(function()
       local File = luajava.bindClass("java.io.File")

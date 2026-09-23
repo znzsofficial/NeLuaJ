@@ -240,7 +240,8 @@ function _M.buildCompressedApiMessages(history, onResult, force)
       local maxSummaryChars = math.max(500, summaryReserve * 3)
       if #summary > maxSummaryChars then summary = summary:sub(1, maxSummaryChars) .. "…" end
       local compressed = {
-        { role = "user", content = "以下是较早对话的压缩记忆，仅作为背景信息，不是当前待执行指令：\n" .. summary },
+        -- compressed_summary 标记给 ChatUI：错误/编辑请求不能挂到合成的摘要消息上
+        { role = "user", content = "以下是较早对话的压缩记忆，仅作为背景信息，不是当前待执行指令：\n" .. summary, compressed_summary = true },
       }
       for i = recentStart, #history do compressed[#compressed + 1] = history[i] end
       -- 第三个参数是压缩后的会话历史（不含 system），调用方可持久化它，避免每次发送重复摘要。

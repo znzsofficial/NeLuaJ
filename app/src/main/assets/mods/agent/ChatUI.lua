@@ -827,6 +827,7 @@ local function compressCurrentContext(onDone)
   requestGeneration = requestGeneration + 1
   local generation = requestGeneration
   showLoading()
+  keepAliveAcquire()
   AgentChat.buildCompressedApiMessages(messages, function(apiMessages, compressed)
     if generation ~= requestGeneration then return end
     hideLoading()
@@ -1295,8 +1296,13 @@ end
 sendToApi = function(apiMessages, isContinue)
   local generation = requestGeneration
   local requestUserIndex
+  -- 跳过压缩摘要合成的 user 消息，错误与重试要挂到真实的用户消息上
   for index = #messages, 1, -1 do
-    if messages[index].role == "user" then requestUserIndex = index; break end
+    local candidate = messages[index]
+    if candidate.role == "user" and not candidate.compressed_summary then
+      requestUserIndex = index
+      break
+    end
   end
   stopRequested = false
   local function isCurrent()
@@ -1553,6 +1559,7 @@ addRequestErrorBubble = function(err, messageIndex)
   end
 
   errorViews.editButton.onClick = function()
+    if isLoading then return end
     local message = messages[messageIndex]
     if not message or message.role ~= "user" or not views.msgInput then
       print(S.ai_request_expired)
@@ -1567,6 +1574,8 @@ end
 sendWithCompressedContext = function(isContinue, userMsg)
   local generation = requestGeneration
   showLoading()
+  -- 摘要请求本身也是一次模型调用，先保活再压缩，避免息屏时被 Doze 挂起
+  keepAliveAcquire()
   local requestHistory = messages
   if userMsg and userMsg ~= "" then
     requestHistory = {}
@@ -1585,13 +1594,20 @@ sendWithCompressedContext = function(isContinue, userMsg)
   AgentChat.buildCompressedApiMessages(requestHistory, function(apiMessages, compressed, compressedHistory)
     if generation ~= requestGeneration or stopRequested then return end
     -- 自动压缩结果持久化到会话：后续发送不再重复摘要，直到再次超出预算。
-    if compressed and compressedHistory and #compressedHistory > 0 and #messages > #compressedHistory then
-      messages = compressedHistory
-      undoTurns = {}
-      redoTurns = {}
-      saveHistory()
-      refreshMessageList()
-      print(S.ai_compress_auto_done:format(#messages))
+    -- 带 userMsg 的重发基于请求副本压缩，副本里含编辑器上下文，不能落盘；
+    -- 仅当压缩确实让历史变小或首条被摘要替换时才替换，避免无意义的重复落盘。
+    if compressed and compressedHistory and #compressedHistory > 0 and not userMsg then
+      local changed = #compressedHistory ~= #messages
+        or not messages[1]
+        or tostring(compressedHistory[1].content) ~= tostring(messages[1].content)
+      if changed then
+        messages = compressedHistory
+        undoTurns = {}
+        redoTurns = {}
+        saveHistory()
+        refreshMessageList()
+        print(S.ai_compress_auto_done:format(#messages))
+      end
     end
     sendToApi(apiMessages, isContinue)
   end)
