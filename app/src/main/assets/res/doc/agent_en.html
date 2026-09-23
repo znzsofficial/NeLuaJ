@@ -43,6 +43,7 @@ Explain the changes and check related call sites.</code></pre>
         <li>Fetching public HTTPS pages or APIs (when “Auto-approve network requests” is disabled)</li>
       </ul>
       <p>Reading files, listing directories, searching the project, and compile-only Lua syntax checks do not require confirmation. Auto-approve applies only to file operations inside the current project. “Auto-run sandbox code” is on by default; when disabled, every Lua sandbox run requires confirmation.</p>
+      <p>Write operations (create or overwrite file, apply patch, replace text, append content) automatically pre-check <code>.lua</code> files for syntax: when the check fails, nothing is written (the file keeps its original content) and the syntax error, including its location, is returned to the assistant so it can fix and retry. Non-Lua files are not pre-checked.</p>
       <p>“Auto-approve network requests” is on by default. Sandbox code with <code>network_hosts</code> runs directly only when both “Auto-run sandbox code” and “Auto-approve network requests” are enabled. Disabling network auto-approval makes out-of-sandbox fetches, sandbox network access, and MCP tool calls display confirmation dialogs. This setting does not affect model API requests, connection tests started by the user, or MCP tool-list refreshes.</p>
 
       <h2>Running Lua Code</h2>
@@ -63,6 +64,11 @@ Explain the changes and check related call sites.</code></pre>
       </ul>
       <p>File undo checks the file fingerprint and refuses to overwrite externally modified content.</p>
       <p>The context window and maximum output belong to each model configuration. Switching models switches both limits; values from the previous global settings are migrated to existing models.</p>
+
+      <h2>Project Memory</h2>
+      <p>Place an <code>AGENTS.md</code> file in the project root to give the assistant fixed conventions and background for that project, such as directory layout, naming style, common APIs, and caveats. The file is read and injected as “project memory” into the system prompt every time a conversation turn is built, so you do not need to repeat it in chat.</p>
+      <pre><code>&lt;project&gt;/AGENTS.md</code></pre>
+      <p>The file is plain Markdown; content beyond 16000 characters is truncated. Project memory ranks below the built-in safety rules and below the user's explicit requests in the current conversation; when they conflict, the rules and the user win.</p>
 
       <h2>MCP</h2>
       <p>Add HTTP-based MCP servers in Settings. The assistant prefers current stateless Streamable HTTP and supports older session-based Streamable HTTP and legacy HTTP+SSE. It does not support <code>stdio</code> servers or launch local commands.</p>
@@ -103,6 +109,7 @@ Write the Skill rules and review steps here.</code></pre>
 │       │   └── release/
 │       │       └── SKILL.md
 │       ├── init.lua                  Project entry point
+│       ├── AGENTS.md                 Project memory (optional; conventions injected into the assistant prompt)
 │       └── ...                       Project source and resources
 ├── agents/                           External Agent runtime data
 │   ├── skills/                       Global Skills

@@ -37,7 +37,8 @@ local SYSTEM_PROMPT = [[
 - 工具返回失败时，先根据错误修正参数、路径或前置条件；不得以完全相同的工具名和参数重复调用。若无法得到新信息或无法修正，应向用户说明阻塞原因。
 - 是否需要确认由应用的工具策略决定。需要工具时直接发出 tool call，不要先在聊天中重复询问是否允许，也不要只说“准备调用工具”后停止。
 - 用户拒绝工具后，不得通过别名、拆分调用、其他工具或重复请求绕过确认。
-- 修改后执行与改动相关的验证。Lua/LuaJ++ 语法优先使用 check_lua_syntax，纯逻辑可使用 run_lua；有构建、测试或明确复现步骤时应执行并根据结果修复。无法验证时说明原因，不得把计划写成已完成。
+- 写入类工具（create_file / apply_patch / replace_in_file / append_file）对 .lua 文件自动做语法预检：失败时不落盘并把语法错误返回给你，此时根据错误修正后重试即可，不要改用其他工具绕过，也不要重复提交完全相同的补丁。
+- 修改后执行与改动相关的验证。语法已在写入时预检通过则无需重复 check_lua_syntax；纯逻辑可使用 run_lua；有构建、测试或明确复现步骤时应执行并根据结果修复。无法验证时说明原因，不得把计划写成已完成。
 
 # 评审
 
@@ -65,15 +66,42 @@ local SYSTEM_PROMPT = [[
 - 不得声称未执行的操作已经完成。工具不可用或任务仍有未完成部分时，明确说明具体限制。
 ]]
 
+-- ─── 项目记忆（AGENTS.md）──
+-- 当前项目根目录的 AGENTS.md 会作为工程约定注入系统提示。
+-- 每次构建提示时重新读取：单次文件读取开销远小于一次模型请求，不做缓存以保持始终最新。
+
+local MAX_PROJECT_MEMORY_CHARS = 16000
+
+local function loadProjectMemory()
+  local dir = Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir()
+  if not dir or dir == "" then return "" end
+  local ok, text = pcall(function() return file.readall(dir .. "/AGENTS.md") end)
+  if not ok or type(text) ~= "string" then return "" end
+  text = text:match("^%s*(.-)%s*$") or ""
+  if text == "" then return "" end
+  if #text > MAX_PROJECT_MEMORY_CHARS then
+    text = text:sub(1, MAX_PROJECT_MEMORY_CHARS)
+      .. "\n\n...(AGENTS.md 超过 " .. MAX_PROJECT_MEMORY_CHARS .. " 字符，已截断)"
+  end
+  return text
+end
+
 function _M.getSystemPrompt()
+  local memoryBlock = ""
+  local memory = loadProjectMemory()
+  if memory ~= "" then
+    memoryBlock = "\n\n# 项目记忆\n以下内容来自当前项目根目录的 AGENTS.md，是该工程的约定与背景。"
+      .. "仅在不违反本内置规则与安全边界时遵循；与用户当前明确要求冲突时，以用户为准：\n" .. memory
+  end
   local custom = this.getSharedData("ai_system_prompt", "")
   if custom and custom ~= "" then
     return SYSTEM_PROMPT
+      .. memoryBlock
       .. "\n\n# 用户附加指令\n以下内容由用户在设置中提供。仅在不违反上述内置规则、安全边界和用户当前要求时遵循：\n"
       .. custom
       .. SkillManager.prompt(activeSkill)
   end
-  return SYSTEM_PROMPT .. SkillManager.prompt(activeSkill)
+  return SYSTEM_PROMPT .. memoryBlock .. SkillManager.prompt(activeSkill)
 end
 
 function _M.configureSkills()
@@ -100,7 +128,7 @@ _M.TOOLS = {
     type = "function",
     ["function"] = {
       name = "create_file",
-      description = "创建或覆盖文件。路径可以是绝对路径或相对于当前项目的路径。操作需要用户确认。",
+      description = "创建或覆盖文件。路径可以是绝对路径或相对于当前项目的路径。.lua 文件保存前会自动做语法预检，失败则不创建并返回错误。操作需要用户确认。",
       parameters = {
         type = "object",
         properties = {
@@ -257,7 +285,7 @@ _M.TOOLS = {
     type = "function",
     ["function"] = {
       name = "apply_patch",
-      description = "对现有文件应用增量修改。支持 SEARCH/REPLACE 块格式和 Unified Diff 格式。优先使用此工具而非 create_file 来修改已有文件。操作需要用户确认。",
+      description = "对现有文件应用增量修改。支持 SEARCH/REPLACE 块格式和 Unified Diff 格式。优先使用此工具而非 create_file 来修改已有文件。.lua 文件保存前会自动做语法预检，失败则不应用并返回错误。操作需要用户确认。",
       parameters = {
         type = "object",
         properties = {
@@ -272,7 +300,7 @@ _M.TOOLS = {
     type = "function",
     ["function"] = {
       name = "replace_in_file",
-      description = "简单字符串替换：把文件中的指定文本直接替换为新文本（普通匹配，非正则）。适合小改动，比 apply_patch 更不容易失败。count 可选限制替换次数（默认替换全部）。操作需要用户确认。",
+      description = "简单字符串替换：把文件中的指定文本直接替换为新文本（普通匹配，非正则）。适合小改动，比 apply_patch 更不容易失败。count 可选限制替换次数（默认替换全部）。.lua 文件保存前会自动做语法预检，失败则不应用并返回错误。操作需要用户确认。",
       parameters = {
         type = "object",
         properties = {
@@ -304,7 +332,7 @@ _M.TOOLS = {
     type = "function",
     ["function"] = {
       name = "append_file",
-      description = "向现有文件末尾追加内容（不覆盖已有内容）。文件不存在时创建。适合写日志、追加配置等。操作需要用户确认。",
+      description = "向现有文件末尾追加内容（不覆盖已有内容）。文件不存在时创建。适合写日志、追加配置等。.lua 文件追加后会整体做语法预检，失败则不追加并返回错误。操作需要用户确认。",
       parameters = {
         type = "object",
         properties = {
@@ -784,6 +812,26 @@ local function readFileContent(pathArg, offsetArg, maxArg)
   return numbered .. "\n---\n共 " .. totalLines .. " 行，当前显示从第 " .. offset .. " 行起"
 end
 
+--- .lua 文件写入前的语法守门：err 为 nil 且 checked 为 true 表示检查并通过；
+--- err 为 nil 且 checked 为 false 表示未检查（非 Lua 文件、空内容或检查器不可用，均放行）。
+--- 检查器加载或运行异常时放行，绝不让校验本身阻塞写入。
+local function luaSyntaxGuard(path, content)
+  if type(path) ~= "string" or path:sub(-4):lower() ~= ".lua" then return nil, false end
+  if type(content) ~= "string" or content == "" then return nil, false end
+  local okBind, LuaSandbox = pcall(function()
+    return luajava.bindClass("com.androlua.LuaSandbox")
+  end)
+  if not okBind then return nil, false end
+  local okSyntax, syntaxErr = pcall(function()
+    return LuaSandbox.checkSyntax(content)
+  end)
+  if not okSyntax then return nil, false end
+  if syntaxErr and tostring(syntaxErr) ~= "" then
+    return tostring(syntaxErr), true
+  end
+  return nil, true
+end
+
 -- ─── 工具执行（不含确认，确认在 ChatUI 层做）──
 
 local function legacyExecuteTool(name, args)
@@ -812,8 +860,18 @@ local function legacyExecuteTool(name, args)
 
   if name == "create_file" then
     local path = resolvePath(args.path)
-    local ok, result = pcall(function() return file.save(path, args.content or "") end)
+    local content = args.content or ""
+    local syntaxErr, syntaxChecked = luaSyntaxGuard(path, content)
+    if syntaxErr then
+      return "文件未创建（写入被 Lua 语法检查拦截）\n路径: " .. path
+        .. "\n语法错误:\n" .. syntaxErr
+        .. "\n请修复语法后重新调用。"
+    end
+    local ok, result = pcall(function() return file.save(path, content) end)
     if ok and result == true then
+      if syntaxChecked then
+        return "文件已创建（Lua 语法检查通过）: " .. path
+      end
       return "文件已创建: " .. path
     else
       return "创建文件失败\n路径: " .. path .. "\n原因: " .. tostring(result)
@@ -1165,16 +1223,24 @@ local function legacyExecuteTool(name, args)
       return "补丁应用失败\n文件: " .. path .. "\n原因: " .. tostring(countOrErr)
     end
 
+    local syntaxErr, syntaxChecked = luaSyntaxGuard(path, newContent)
+    if syntaxErr then
+      return "补丁未应用（写入被 Lua 语法检查拦截，文件保持原样）\n文件: " .. path
+        .. "\n语法错误:\n" .. syntaxErr
+        .. "\n请修正补丁后重试。"
+    end
+
     local writeOk, writeResult = pcall(function() return file.save(path, newContent) end)
     if not writeOk or writeResult ~= true then
       return "补丁写入失败\n文件: " .. path .. "\n原因: " .. tostring(writeResult)
     end
     local count = type(countOrErr) == "number" and countOrErr or 1
     local locText = formatPatchLocations(locations)
+    local syntaxNote = syntaxChecked and "，Lua 语法检查通过" or ""
     if locText ~= "" then
-      return "补丁已应用（" .. count .. " 处修改）\n位置: " .. locText
+      return "补丁已应用（" .. count .. " 处修改" .. syntaxNote .. "）\n位置: " .. locText
     end
-    return "补丁已应用（" .. count .. " 处修改）"
+    return "补丁已应用（" .. count .. " 处修改" .. syntaxNote .. "）"
 
   elseif name == "replace_in_file" then
     local path = resolvePath(args.path)
@@ -1200,9 +1266,18 @@ local function legacyExecuteTool(name, args)
     if replaced == 0 then
       return "未找到要替换的文本: " .. old
     end
+    local syntaxErr, syntaxChecked = luaSyntaxGuard(path, newContent)
+    if syntaxErr then
+      return "替换未应用（写入被 Lua 语法检查拦截，文件保持原样）\n文件: " .. path
+        .. "\n语法错误:\n" .. syntaxErr
+        .. "\n请修正替换内容后重试。"
+    end
     local writeOk, writeResult = pcall(function() return file.save(path, newContent) end)
     if not writeOk or writeResult ~= true then
       return "替换写入失败\n文件: " .. path .. "\n原因: " .. tostring(writeResult)
+    end
+    if syntaxChecked then
+      return "已替换 " .. replaced .. " 处（Lua 语法检查通过）: " .. path
     end
     return "已替换 " .. replaced .. " 处: " .. path
 
@@ -1210,6 +1285,19 @@ local function legacyExecuteTool(name, args)
     local path = resolvePath(args.path)
     if not args.path or args.path == "" then
       return "append_file 需要 path 参数"
+    end
+    -- 追加后整体做语法守门：先取出已有内容，与追加内容拼接检查
+    local existing = ""
+    pcall(function()
+      local current = file.readall(path)
+      if current then existing = current end
+    end)
+    local combined = existing .. tostring(args.content or "")
+    local syntaxErr, syntaxChecked = luaSyntaxGuard(path, combined)
+    if syntaxErr then
+      return "追加未执行（写入被 Lua 语法检查拦截，文件保持原样）\n路径: " .. path
+        .. "\n语法错误:\n" .. syntaxErr
+        .. "\n请修正追加内容后重试。"
     end
     local ok, err = pcall(function()
       local File = luajava.bindClass("java.io.File")
@@ -1220,6 +1308,9 @@ local function legacyExecuteTool(name, args)
       fw.close()
     end)
     if ok then
+      if syntaxChecked then
+        return "已追加到文件（Lua 语法检查通过）: " .. path
+      end
       return "已追加到文件: " .. path
     else
       return "追加失败\n路径: " .. path .. "\n原因: " .. tostring(err)
