@@ -8,12 +8,15 @@ local ConversationStore = require("mods.agent.ConversationStore")
 
 local MaterialTextView = bindClass "com.google.android.material.textview.MaterialTextView"
 local MaterialAlertDialogBuilder = bindClass "com.google.android.material.dialog.MaterialAlertDialogBuilder"
+local MaterialCardView = bindClass "com.google.android.material.card.MaterialCardView"
 local GradientDrawable = bindClass "android.graphics.drawable.GradientDrawable"
 local LinearLayout = bindClass "android.widget.LinearLayout"
 local View = bindClass "android.view.View"
 local WindowManager = bindClass "android.view.WindowManager"
 local ColorDrawable = bindClass "android.graphics.drawable.ColorDrawable"
 local Typeface = bindClass "android.graphics.Typeface"
+local TextUtils = bindClass "android.text.TextUtils"
+local TruncateAt = TextUtils and TextUtils.TruncateAt or nil
 
 this.dynamicColor()
 local res = res
@@ -38,6 +41,7 @@ local ColorOnPrimaryContainer = ColorUtil.primary.onContainer
 local ColorSurfaceContainerLow = ColorUtil.surface.containerLow
 local ColorOnSurface = ColorUtil.surface.on
 local ColorText = ColorUtil.surface.onVariant
+local ColorOutline = ColorUtil.outline.variant
 local ColorErrorContainer = ColorUtil.error.container
 local ColorOnErrorContainer = ColorUtil.error.onContainer
 local ColorStateList = bindClass "android.content.res.ColorStateList"
@@ -62,36 +66,54 @@ else
   window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR)
 end
 
+function onOptionsItemSelected(item)
+  if item.getItemId() == android.R.id.home then
+    activity.finish()
+    return true
+  end
+end
+
 local function dp(n) return this.dpToPx(n) end
 
 local scope = "all" -- all | current
 
 local function styleChip(btn, selected)
-  btn.setBackgroundTintList(ColorStateList.valueOf(
-    selected and ColorPrimaryContainer or ColorSurfaceContainerLow))
-  btn.setTextColor(selected and ColorOnPrimaryContainer or ColorOnSurface)
+  if selected then
+    btn.setBackgroundTintList(ColorStateList.valueOf(ColorPrimaryContainer))
+    btn.setTextColor(ColorOnPrimaryContainer)
+    btn.setStrokeWidth(0)
+  else
+    btn.setBackgroundTintList(ColorStateList.valueOf(ColorSurfaceContainerLow))
+    btn.setTextColor(ColorOnSurface)
+    btn.setStrokeWidth(dp(1))
+    btn.setStrokeColor(ColorStateList.valueOf(ColorOutline))
+  end
 end
 
 local function shortProject(p)
-  return tostring(p):gsub("^.*/", "")
+  return tostring(p or ""):gsub("/+$", ""):gsub("^.*/", "")
 end
 
 local function buildRow(conv, projectName)
   local name = tostring(conv.name or "")
   if name == "" then name = S.ai_unnamed_conv end
 
+  local card = MaterialCardView(activity)
+  card.setRadius(dp(16))
+  card.setCardElevation(0)
+  card.setStrokeWidth(0)
+  card.setCardBackgroundColor(ColorSurfaceContainerLow)
+  card.setClickable(true)
+  card.setFocusable(true)
+
+  local cardLp = LinearLayout.LayoutParams(-1, -2)
+  cardLp.bottomMargin = dp(8)
+  card.setLayoutParams(cardLp)
+
   local row = LinearLayout(activity)
   row.setOrientation(0)
   row.setGravity(16)
-  row.setPadding(dp(14), dp(10), dp(14), dp(10))
-  local lp = LinearLayout.LayoutParams(-1, -2)
-  lp.bottomMargin = dp(8)
-  row.setLayoutParams(lp)
-  row.setClickable(true)
-  local bg = GradientDrawable()
-  bg.setColor(ColorSurfaceContainerLow)
-  bg.setCornerRadius(dp(16))
-  row.setBackground(bg)
+  row.setPadding(dp(14), dp(12), dp(14), dp(12))
 
   -- 头像（按 UTF-8 取首字符，避免中文截断成乱码）
   local firstChar = name:match("[\0-\127\192-\255][\128-\191]*") or "?"
@@ -118,6 +140,7 @@ local function buildRow(conv, projectName)
   nameTv.setTypeface(Typeface.DEFAULT, 1)
   nameTv.setTextColor(ColorOnSurface)
   nameTv.setSingleLine(true)
+  if TruncateAt then nameTv.setEllipsize(TruncateAt.END) end
   col.addView(nameTv)
 
   local n = type(conv.messages) == "table" and #conv.messages or 0
@@ -133,6 +156,7 @@ local function buildRow(conv, projectName)
   metaTv.setTextSize(12)
   metaTv.setTextColor(ColorText)
   metaTv.setSingleLine(true)
+  if TruncateAt then metaTv.setEllipsize(TruncateAt.END) end
   col.addView(metaTv)
   row.addView(col)
 
@@ -151,7 +175,8 @@ local function buildRow(conv, projectName)
     row.addView(badge)
   end
 
-  row.setOnClickListener(function()
+  card.addView(row)
+  card.setOnClickListener(function()
     if projectName then
       -- 跨工程：确认后回传主界面切换工程并打开
       MaterialAlertDialogBuilder(activity)
@@ -167,7 +192,7 @@ local function buildRow(conv, projectName)
     end
   end)
 
-  return row
+  return card
 end
 
 local function refresh()

@@ -29,6 +29,7 @@ return {
     layout_width = "match",
     layout_height = "wrap",
     horizontalScrollBarEnabled = false,
+    clipToPadding = false,
     paddingTop = "8dp",
     paddingBottom = "4dp",
     {
@@ -60,11 +61,15 @@ return {
       {
         MaterialButton,
         id = "btnNewConv",
+        text = res.string.ai_new_conv_btn,
         textSize = "12sp",
         layout_width = "wrap",
         layout_height = "32dp",
         cornerRadius = "16dp",
         icon = res.drawable("add"),
+        BackgroundTintList = ColorStateList.valueOf(ColorPrimary),
+        textColor = ColorOnPrimary,
+        iconTint = ColorStateList.valueOf(ColorOnPrimary),
         contentDescription = res.string.ai_new_conv_btn,
       },
     },
