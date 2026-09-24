@@ -40,7 +40,7 @@ local SYSTEM_PROMPT = [[
 - 是否需要确认由应用的工具策略决定。需要工具时直接发出 tool call，不要先在聊天中重复询问是否允许，也不要只说“准备调用工具”后停止。
 - 用户拒绝工具后，不得通过别名、拆分调用、其他工具或重复请求绕过确认。
 - 写入类工具（create_file / apply_patch / replace_in_file / append_file）对 .lua 文件自动做语法预检：失败时不落盘并把语法错误返回给你，此时根据错误修正后重试即可，不要改用其他工具绕过，也不要重复提交完全相同的补丁。
-- 修改后执行与改动相关的验证。语法已在写入时预检通过则无需重复 check_lua_syntax；纯逻辑可使用 run_lua；需要验证真实运行行为（界面、生命周期、Android API）时使用 run_project 启动工程入口并根据返回的崩溃日志修复；有构建、测试或明确复现步骤时应执行并根据结果修复。无法验证时说明原因，不得把计划写成已完成。
+- 修改后执行与改动相关的验证。语法已在写入时预检通过则无需重复 check_lua_syntax；纯逻辑可使用 run_lua；需要验证真实运行行为（界面、生命周期、Android API）时使用 run_project 启动工程入口并根据返回的崩溃日志修复；需要打包 APK 时使用 build_project 检查 init.lua 配置并调起打包器；有构建、测试或明确复现步骤时应执行并根据结果修复。无法验证时说明原因，不得把计划写成已完成。
 
 # 评审
 
@@ -286,6 +286,19 @@ _M.TOOLS = {
         properties = {
           path = { type = "string", description = "入口脚本路径（可选；默认依次取当前打开文件、工程 init.lua、main.lua 中第一个存在的）" },
           wait_ms = { type = "integer", description = "等待崩溃记录的时长毫秒数（可选，默认 4000，范围 1000-10000）" },
+        },
+      },
+    },
+  },
+  {
+    type = "function",
+    ["function"] = {
+      name = "build_project",
+      description = "调用 NeLuaJ+ 打包器（Builder）对当前工程进行打包配置与构建。调用前会自动预检 init.lua 语法与必要字段（app_name、app_package、app_version 等），并保存当前编辑器内容。启动独立的打包器界面，每次调用都需要用户确认。",
+      parameters = {
+        type = "object",
+        properties = {
+          path = { type = "string", description = "工程目录路径（可选，默认当前工程根目录）" },
         },
       },
     },
@@ -1331,6 +1344,112 @@ local function legacyExecuteTool(name, args)
     end
     return "运行已启动（" .. waitMs .. "ms 内无新增崩溃记录）\n入口: " .. entry
       .. "\n注意：只有未捕获的运行时错误会写入崩溃日志；脚本内 onError 捕获的处理与界面表现不会记录，需要时用 read_file 检查相关代码或再次运行。", true
+
+  elseif name == "build_project" then
+    local projectDir = tostring(args.path or "")
+    if projectDir ~= "" then projectDir = resolvePath(projectDir) end
+    if projectDir == "" or not file.exists(projectDir) then
+      projectDir = Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir()
+    end
+    if not projectDir or projectDir == "" or not file.exists(projectDir) then
+      return "打包失败：工程目录不存在", false
+    end
+
+    local initPath = projectDir .. "/init.lua"
+    if not file.exists(initPath) then
+      return "打包失败：工程缺少 init.lua 配置文件（打包器必须依赖 init.lua）", false
+    end
+
+    -- 预检 init.lua 语法与基本配置
+    local initContent = file.readall(initPath)
+    if not initContent or initContent == "" then
+      return "打包失败：init.lua 为空", false
+    end
+    local syntaxErr, _ = luaSyntaxGuard(initPath, initContent)
+    if syntaxErr then
+      return "打包失败：init.lua 存在语法错误\n" .. syntaxErr, false
+    end
+
+    local appName, appPkg, appVer
+    pcall(function()
+      local config = loadstring(initContent)
+      if config then
+        local env = {}
+        setfenv(config, env)
+        local res = config()
+        if type(res) == "table" then
+          appName = res.app_name or res.appname
+          appPkg = res.app_package or res.packagename
+          appVer = res.app_version or res.app_version_name or res.version_name
+        end
+      end
+    end)
+
+    -- 如果编辑器有未保存文件，先保存
+    pcall(function()
+      if EditorUtil and EditorUtil.save then EditorUtil.save() end
+    end)
+
+    -- 检查是否安装 Builder
+    local BUILDER_PACKAGE = "com.nekolaska.Builder"
+    local BUILDER_ACTIVITY = "com.nekolaska.MainActivity"
+    local BUILDER_OPEN_PROJECT = "com.nekolaska.Builder.action.OPEN_PROJECT"
+    local BUILDER_PROJECT_PATH = "com.nekolaska.Builder.extra.PROJECT_PATH"
+
+    local pm = activity.getPackageManager()
+    local hasBuilder = pcall(function()
+      pm.getPackageInfo(BUILDER_PACKAGE, 0)
+    end)
+    if not hasBuilder then
+      return "打包失败：未检测到 NeLuaJ+ 打包器（" .. BUILDER_PACKAGE .. "）。\n请先安装打包器 APK，或访问 https://github.com/znzsofficial/NeLuaJ-Builder 下载安装。", false
+    end
+
+    local File = luajava.bindClass("java.io.File")
+    local Intent = luajava.bindClass("android.content.Intent")
+    local ComponentName = luajava.bindClass("android.content.ComponentName")
+    local canonicalProject = projectDir
+    pcall(function() canonicalProject = tostring(File(projectDir).getCanonicalPath()) end)
+
+    local okLaunch, launchErr = pcall(function()
+      local intent = Intent()
+      intent.setComponent(ComponentName(BUILDER_PACKAGE, BUILDER_ACTIVITY))
+      intent.setAction(BUILDER_OPEN_PROJECT)
+      intent.putExtra(BUILDER_PROJECT_PATH, canonicalProject)
+      intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+      intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+      activity.startActivity(intent)
+    end)
+
+    if not okLaunch then
+      return "调起打包器失败: " .. tostring(launchErr), false
+    end
+
+    local info = "已调起 NeLuaJ+ 打包器\n"
+      .. "工程路径: " .. canonicalProject
+    if appName then info = info .. "\n应用名称: " .. tostring(appName) end
+    if appPkg then info = info .. "\n包名: " .. tostring(appPkg) end
+    if appVer then info = info .. "\n版本: " .. tostring(appVer) end
+    info = info .. "\n\n打包器已在独立界面打开工程配置，请在打包器中完成签名与导出 APK。"
+
+    pcall(function()
+      local buildsDir = (Bean and Bean.Path and Bean.Path.app_root_dir or "/sdcard/LuaJ") .. "/Builds"
+      if file.exists(buildsDir) then
+        local apks = {}
+        local names = file.list(buildsDir)
+        if names then
+          for _, name in ipairs(names) do
+            if tostring(name):match("%.apk$") then
+              apks[#apks + 1] = tostring(name)
+            end
+          end
+        end
+        if #apks > 0 then
+          info = info .. "\n（提示：Builds/ 目录下已有 " .. #apks .. " 个历史构建包）"
+        end
+      end
+    end)
+
+    return info, true
 
   elseif name == "fetch_url" then
     local url = tostring(args.url or "")

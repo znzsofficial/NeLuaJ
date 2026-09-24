@@ -141,6 +141,7 @@ local function toolDisplayName(name)
     check_lua_syntax = S.ai_tool_check_syntax,
     fetch_url = S.ai_tool_fetch_url,
     run_project = S.run_project,
+    build_project = S.build_project,
     update_todos = S.ai_tool_todo,
   }
   return labels[name] or tostring(name or "")
@@ -607,7 +608,8 @@ addToolBubble = function(toolName, args, result)
   elseif toolName == "rename_file" then icon = "⇄"
   elseif toolName == "get_env_info" then icon = "ℹ"
   elseif toolName == "fetch_url" then icon = "↗"
-  elseif toolName == "run_project" then icon = "▶" end
+  elseif toolName == "run_project" then icon = "▶"
+  elseif toolName == "build_project" then icon = "📦" end
 
   local resultText = tostring(result or "")
   local resultLower = resultText:lower()
