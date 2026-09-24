@@ -11,6 +11,7 @@ local OpenAIClient = require("mods.agent.OpenAIClient")
 local OpenAIProtocol = require("mods.agent.OpenAIProtocol")
 local ToolExecutor = require("mods.agent.ToolExecutor")
 local SkillManager = require("mods.agent.SkillManager")
+local TodoManager = require("mods.agent.TodoManager")
 local AiHttpClient = luajava.bindClass("com.nekolaska.ai.AiHttpClient")
 local agentHttp = AiHttpClient(activity)
 local activeSkill = nil
@@ -28,6 +29,7 @@ local SYSTEM_PROMPT = [[
 - 不要为假设的旧行为、旧数据或外部调用者添加兼容代码。只有存在具体需求时才处理兼容性。
 - 工作区可能已有用户或其他 Agent 的改动。不要回退、覆盖或修改与当前任务无关的内容；直接冲突时停止并询问用户。
 - 用户粘贴错误或问题描述时，优先定位根因；可行时复现并验证修复，不要只处理表面症状。
+- 任务需要 3 个及以上明确步骤时，先用 update_todos 写入任务计划再逐步推进；每完成一步立即更新对应条目状态，全部完成后把所有条目标记为 completed。两步以内的简单任务不需要任务计划。
 
 # 工具与编辑
 
@@ -93,15 +95,25 @@ function _M.getSystemPrompt()
     memoryBlock = "\n\n# 项目记忆\n以下内容来自当前项目根目录的 AGENTS.md，是该工程的约定与背景。"
       .. "仅在不违反本内置规则与安全边界时遵循；与用户当前明确要求冲突时，以用户为准：\n" .. memory
   end
+  -- 当前任务计划注入：工具消息会被压缩摘要吞掉，计划必须随系统提示每轮重建
+  local todoBlock = ""
+  local todoList = TodoManager.renderForPrompt()
+  if todoList then
+    todoBlock = "\n\n# 当前任务计划\n以下是本会话的任务计划（update_todos 的当前状态）。"
+      .. "继续推进前先核对各条目状态：不要重复已完成（completed）的条目，"
+      .. "开始新条目或完成条目时用 update_todos 全量更新列表；计划全部完成后应把所有条目标记为 completed：\n"
+      .. todoList
+  end
   local custom = this.getSharedData("ai_system_prompt", "")
   if custom and custom ~= "" then
     return SYSTEM_PROMPT
       .. memoryBlock
+      .. todoBlock
       .. "\n\n# 用户附加指令\n以下内容由用户在设置中提供。仅在不违反上述内置规则、安全边界和用户当前要求时遵循：\n"
       .. custom
       .. SkillManager.prompt(activeSkill)
   end
-  return SYSTEM_PROMPT .. memoryBlock .. SkillManager.prompt(activeSkill)
+  return SYSTEM_PROMPT .. memoryBlock .. todoBlock .. SkillManager.prompt(activeSkill)
 end
 
 function _M.configureSkills()
@@ -369,6 +381,31 @@ _M.TOOLS = {
           new_path = { type = "string", description = "新路径（目标路径）" },
         },
         required = { "path", "new_path" },
+      },
+    },
+  },
+  {
+    type = "function",
+    ["function"] = {
+      name = "update_todos",
+      description = "维护当前会话的任务计划（全量替换，每次传入完整列表）。任务含 3 个及以上步骤时先建立计划，每完成一步更新条目状态，全部完成后把所有条目标记为 completed。两步以内的任务不需要使用。",
+      parameters = {
+        type = "object",
+        properties = {
+          todos = {
+            type = "array",
+            description = "完整的任务列表；传空数组表示清空计划",
+            items = {
+              type = "object",
+              properties = {
+                content = { type = "string", description = "任务条目内容，简洁的动词短语" },
+                status = { type = "string", enum = { "pending", "in_progress", "completed" }, description = "pending 待办 / in_progress 进行中 / completed 已完成" },
+              },
+              required = { "content", "status" },
+            },
+          },
+        },
+        required = { "todos" },
       },
     },
   },
@@ -1463,6 +1500,9 @@ local function legacyExecuteTool(name, args)
     else
       return "重命名失败\n原路径: " .. src .. "\n目标: " .. dst .. "\n原因: " .. tostring(err), false
     end
+
+  elseif name == "update_todos" then
+    return TodoManager.update(args.todos)
 
   elseif name == "get_env_info" then
     local out = {}

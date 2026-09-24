@@ -21,6 +21,8 @@ local aliases = {
   execute_code = "run_lua", run_code = "run_lua",
   check_syntax = "check_lua_syntax", syntax_check = "check_lua_syntax",
   fetch = "fetch_url", web_fetch = "fetch_url", read_url = "fetch_url", http_get = "fetch_url",
+  todo = "update_todos", todos = "update_todos", todo_write = "update_todos",
+  update_todo = "update_todos", write_todos = "update_todos",
 }
 
 function _M.configure(options)
@@ -79,6 +81,7 @@ function _M.normalizeToolName(name, args)
     elseif args.paths then name = "read_files"
     elseif args.path and args.new_path then name = "rename_file"
     elseif args.content then name = "create_file"
+    elseif args.todos then name = "update_todos"
     elseif args.path then name = "read_file" end
   end
   return name

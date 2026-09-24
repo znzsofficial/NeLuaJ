@@ -4,6 +4,7 @@
 local _M = {}
 
 local AgentChat = require("mods.agent.AgentChat")
+local TodoManager = require("mods.agent.TodoManager")
 local S = res.string
 
 -- 编辑器刷新依赖 EditorUtil 全局；自行 import，不依赖 ChatUI 的副作用
@@ -230,6 +231,9 @@ executeToolCalls = function(toolCalls, index, results, onAllDone, generation)
       tool_call_id = tc.id,
       content = resultStr,
     }
+    -- 任务计划状态在主线程提交：update 在工具线程只做规范化，
+    -- 此处与下方 saveHistory 合并为一次落盘（携带 tool 结果与新计划）
+    if tc.name == "update_todos" then pcall(TodoManager.commitPending) end
     -- 执行器的结构化标志优先（true=成功，false=失败）；旧式工具（nil）回退到文本嗅探
     local failed = toolOk == false
     if toolOk == nil then failed = hooks.isToolError(tc.name, resultStr) end

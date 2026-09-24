@@ -24,6 +24,7 @@ import "androidx.core.graphics.ColorUtils"
 local AgentChat = require("mods.agent.AgentChat")
 local AgentTurn = require("mods.agent.AgentTurn")
 local MCPClient = require("mods.agent.MCPClient")
+local TodoManager = require("mods.agent.TodoManager")
 local ActivityUtil = require("mods.utils.ActivityUtil")
 import "mods.utils.EditorUtil"
 local ColorUtil = this.themeUtil
@@ -68,6 +69,10 @@ local activeConversationHadMessages = false
 
 -- 前向声明
 local saveHistory, loadHistory, showModelManager, showModelPicker, showConvManager, showConvList, showSettings, addMessageBubble, addToolBubble, updateProjectLabel, sendMessage, addRequestErrorBubble
+
+-- 任务计划随会话记录的 todos 字段持久化：saveHistory 每次落盘都镜像
+-- TodoManager 的当前状态，因此工具更新只需在主线程 commit 状态即可。
+-- 状态注入与重置分别由 loadHistory / 各会话切换路径负责。
 
 local function convName(conv)
   local n = conv and conv.name or ""
@@ -136,6 +141,7 @@ local function toolDisplayName(name)
     check_lua_syntax = S.ai_tool_check_syntax,
     fetch_url = S.ai_tool_fetch_url,
     run_project = S.run_project,
+    update_todos = S.ai_tool_todo,
   }
   return labels[name] or tostring(name or "")
 end
@@ -486,10 +492,111 @@ addMessageBubble = function(role, content, stateMessage)
   scrollDown()
 end
 
+--- 任务计划卡片：标题 + 进度 + 状态图标条目（完成项划线置灰）
+local function addTodoBubble(list)
+  local container = views.msgContainer
+  if not container then return end
+  local items = type(list) == "table" and list or {}
+  local done = 0
+  for _, item in ipairs(items) do
+    if tostring(item.status or ""):lower() == "completed" then done = done + 1 end
+  end
+
+  local bubbleViews = {}
+  local card = loadlayout({
+    MaterialCardView,
+    radius = "12dp",
+    CardElevation = 0,
+    strokeWidth = "0dp",
+    CardBackgroundColor = ColorSurfaceContainerHigh,
+    layout_width = "match",
+    layout_height = "wrap",
+    {
+      LinearLayout,
+      id = "todoInner",
+      orientation = "vertical",
+      padding = "10dp",
+      {
+        LinearLayout,
+        orientation = "horizontal",
+        gravity = "center_vertical",
+        {
+          MaterialTextView,
+          text = S.ai_tool_todo,
+          textSize = "12sp",
+          textStyle = "bold",
+          textColor = ColorOnSurface,
+        },
+        {
+          MaterialTextView,
+          text = done .. "/" .. #items,
+          textSize = "12sp",
+          textColor = ColorText,
+          layout_marginLeft = "8dp",
+        },
+      },
+    },
+  }, bubbleViews)
+
+  local inner = bubbleViews.todoInner
+  for index, item in ipairs(items) do
+    local status = tostring(item.status or ""):match("^%s*(.-)%s*$"):lower()
+    if status ~= "completed" and status ~= "in_progress" then status = "pending" end
+    local rowViews = {}
+    local row = loadlayout({
+      LinearLayout,
+      orientation = "horizontal",
+      layout_width = "match",
+      layout_height = "wrap",
+      gravity = "center_vertical",
+      {
+        MaterialTextView,
+        text = status == "completed" and "✓" or (status == "in_progress" and "◐" or "○"),
+        textSize = "12sp",
+        textColor = status == "pending" and ColorText or ColorPrimary,
+        layout_width = "18dp",
+        gravity = "center",
+      },
+      {
+        MaterialTextView,
+        id = "todoContent",
+        text = tostring(item.content or ""),
+        textSize = "13sp",
+        textColor = status == "in_progress" and ColorOnSurface or ColorText,
+        textStyle = status == "in_progress" and "bold" or nil,
+        layout_marginLeft = "2dp",
+      },
+    }, rowViews)
+    if status == "completed" then
+      rowViews.todoContent.setPaintFlags(rowViews.todoContent.getPaintFlags()
+        + luajava.bindClass("android.graphics.Paint").STRIKE_THRU_TEXT_FLAG)
+    end
+    -- 独立加载的根视图 margin 会被加载器丢弃，间距在 addView 时显式传参
+    local rowLp = LinearLayout.LayoutParams(-1, -2)
+    rowLp.topMargin = dp(index > 1 and 4 or 8)
+    inner.addView(row, rowLp)
+  end
+
+  local todoLp = LinearLayout.LayoutParams(-1, -2)
+  todoLp.bottomMargin = dp(10)
+  container.addView(card, todoLp)
+  scrollDown()
+end
+
 --- 添加工具操作气泡（显示工具名和参数摘要）
 addToolBubble = function(toolName, args, result)
   local container = views.msgContainer
   if not container then return end
+
+  if AgentChat.normalizeToolName(toolName) == "update_todos" then
+    local list = args and args.todos
+    local failed = result and tostring(result):find("任务计划未更新", 1, true) ~= nil
+    -- 列表合法且更新成功才渲染计划卡片；失败或清空走通用气泡展示结果文本
+    if type(list) == "table" and #list > 0 and not failed then
+      addTodoBubble(list)
+      return
+    end
+  end
 
   local isError = isToolError(toolName, result)
   local icon = "→"
@@ -988,7 +1095,17 @@ saveHistory = function(updates)
   if #messages == 0 and activeConversationHadMessages and not allowEmpty then
     return false
   end
-  local saved = AgentChat.saveConversation(activeConversationId, messages, updates)
+  -- 镜像同步任务计划：每次落盘都携带 TodoManager 当前状态，
+  -- 与工具回合的状态提交合并为同一次写入
+  local merged = updates
+  if type(updates) ~= "table" or updates.todos == nil then
+    merged = {}
+    if type(updates) == "table" then
+      for key, value in pairs(updates) do merged[key] = value end
+    end
+    merged.todos = TodoManager.get() or {}
+  end
+  local saved = AgentChat.saveConversation(activeConversationId, messages, merged)
   if saved then activeConversationHadMessages = #messages > 0 end
   return saved
 end
@@ -1007,6 +1124,8 @@ loadHistory = function(resetTurnHistory)
   activeConversationId = conv and conv.id or nil
   activeConversationProjectPath = conv and AgentChat.getCurrentProjectPath() or nil
   messages = conv and conv.messages or {}
+  -- 会话的任务计划随会话切换整体注入（空/缺失即清空）
+  TodoManager.set(conv and conv.todos or nil)
   conversationLoaded = conv ~= nil
   -- 上次会话的任务可能被应用退出打断：注入提示并清除标记
   -- （必须在 conversationLoaded 置位之后，saveHistory 才会真正落盘）
@@ -2821,6 +2940,7 @@ showConvList = function()
     conversationLoaded = created ~= nil
     activeConversationHadMessages = false
     messages = created and created.messages or {}
+    TodoManager.set(nil)
     if views.msgContainer then views.msgContainer.removeAllViews() end
     if views.aiTitle then views.aiTitle.setText(S.ai_new_conv) end
     if updateProjectLabel then updateProjectLabel() end
@@ -3012,6 +3132,7 @@ showConvManager = function()
     conversationLoaded = created ~= nil
     activeConversationHadMessages = false
     messages = {}
+    TodoManager.set(nil)
     if views.msgContainer then views.msgContainer.removeAllViews() end
     if views.aiTitle then views.aiTitle.setText(S.ai_new_conv) end
     render()
@@ -3239,6 +3360,7 @@ function _M.show()
       conversationLoaded = created ~= nil
       activeConversationHadMessages = false
       messages = {}
+      TodoManager.set(nil)
       if views.msgContainer then views.msgContainer.removeAllViews() end
       if views.aiTitle then views.aiTitle.setText(S.ai_new_conv) end
       addWelcomeCard(S.ai_new_conv, S.ai_start_chat)

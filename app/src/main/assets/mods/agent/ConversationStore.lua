@@ -384,7 +384,7 @@ function _M.save(id, messages, path, updates)
 end
 
 function _M.clear(id, path)
-  return _M.save(id, {}, path, { __allow_empty = true })
+  return _M.save(id, {}, path, { __allow_empty = true, todos = {} })
 end
 
 function _M.rename(id, name, path)
