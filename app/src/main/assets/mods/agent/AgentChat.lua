@@ -294,7 +294,7 @@ _M.TOOLS = {
     type = "function",
     ["function"] = {
       name = "build_project",
-      description = "调用 NeLuaJ+ 打包器（Builder）对当前工程进行打包配置与构建。调用前会自动预检 init.lua 语法与必要字段（app_name、app_package、app_version 等），并保存当前编辑器内容。启动独立的打包器界面，每次调用都需要用户确认。",
+      description = "调用 NeLuaJ+ 打包器（Builder）对当前工程进行打包配置与构建。调用前会自动预检 init.lua 语法与必要字段（app_name、package_name、ver_name 等），并保存当前编辑器内容。启动独立的打包器界面，每次调用都需要用户确认。",
       parameters = {
         type = "object",
         properties = {
@@ -1349,6 +1349,10 @@ local function legacyExecuteTool(name, args)
     local projectDir = tostring(args.path or "")
     if projectDir ~= "" then projectDir = resolvePath(projectDir) end
     if projectDir == "" or not file.exists(projectDir) then
+      -- 未指定路径时必须是已打开的工程（与主界面打包入口一致的防护）
+      if not (Bean and Bean.Project and Bean.Project.this_project ~= nil and Bean.Project.this_project ~= "") then
+        return "打包失败：当前没有打开的工程。请先在主界面打开工程，或用 path 参数指定工程目录。", false
+      end
       projectDir = Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir()
     end
     if not projectDir or projectDir == "" or not file.exists(projectDir) then
@@ -1360,28 +1364,24 @@ local function legacyExecuteTool(name, args)
       return "打包失败：工程缺少 init.lua 配置文件（打包器必须依赖 init.lua）", false
     end
 
-    -- 预检 init.lua 语法与基本配置
+    -- 预检 init.lua 语法
     local initContent = file.readall(initPath)
     if not initContent or initContent == "" then
       return "打包失败：init.lua 为空", false
     end
-    local syntaxErr, _ = luaSyntaxGuard(initPath, initContent)
+    local syntaxErr = luaSyntaxGuard(initPath, initContent)
     if syntaxErr then
       return "打包失败：init.lua 存在语法错误\n" .. syntaxErr, false
     end
 
+    -- 在独立 Lua 环境解析配置（约定字段：app_name / package_name / ver_name / ver_code）
     local appName, appPkg, appVer
     pcall(function()
-      local config = loadstring(initContent)
-      if config then
-        local env = {}
-        setfenv(config, env)
-        local res = config()
-        if type(res) == "table" then
-          appName = res.app_name or res.appname
-          appPkg = res.app_package or res.packagename
-          appVer = res.app_version or res.app_version_name or res.version_name
-        end
+      local env = LuaFileUtil.loadLua(initPath)
+      if type(env) == "table" then
+        appName = env.app_name
+        appPkg = env.package_name
+        appVer = env.ver_name
       end
     end)
 
