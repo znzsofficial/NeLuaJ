@@ -50,8 +50,18 @@ class LuaActivityTheme(private val activity: LuaActivity) {
      * reflect the new color scheme.
      *
      * Usage in Lua: this.dynamicColor(0xFF6750A4)
+     *
+     * Note: Material's ColorResourcesOverride (the mechanism backing
+     * content-based sources) is unavailable on Android 12/12L/13 (SDK
+     * 31-33), where applyToActivityIfAvailable(options) would silently
+     * do nothing and leave the baseline palette in place. On those
+     * versions we fall back to wallpaper-based dynamic colors instead.
      */
     fun dynamicColor(seedColor: Int) {
+        if (Build.VERSION.SDK_INT in 31..33) {
+            DynamicColors.applyToActivityIfAvailable(activity)
+            return
+        }
         val options = DynamicColorsOptions.Builder()
             .setContentBasedSource(seedColor)
             .build()

@@ -26,7 +26,6 @@ import com.google.android.material.color.MaterialColors
  * ```
  */
 class LuaThemeUtil(private val context: Context) {
-    val typedValue = TypedValue()
 
     //region Helper Methods
     private fun getMaterialColor(@AttrRes attrResId: Int): Int {
@@ -34,6 +33,7 @@ class LuaThemeUtil(private val context: Context) {
     }
 
     private fun resolveSystemColor(@AttrRes attrResId: Int): Int {
+        val typedValue = TypedValue()
         context.theme.resolveAttribute(attrResId, typedValue, true)
         return typedValue.data
     }

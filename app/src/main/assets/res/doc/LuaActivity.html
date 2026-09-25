@@ -250,7 +250,7 @@ theme = "Theme_Material_Light"
 <pre><code class="language-lua">activity.setTheme(R.style.Theme_NeLuaJ_Material3_NoActionBar_ActionOverlay)
 </code></pre>
 <h3>动态颜色与深色模式</h3>
-<p><code>this.dynamicColor()</code> 会为当前 Activity 应用动态色板：无参时优先使用 SharedData 中的 <code>theme_seed_color</code>（设置页「主题色」写入的值），否则跟随系统壁纸（若支持）。编辑器界面会调用它，所以设置里的主题色会反映在编辑器上。项目主题由 <code>init.lua</code> 的 <code>NeLuaJ_Theme</code> 决定；需要动态色时在项目入口自行调用即可。详见 <a class="doc-link" href="color_api.html">颜色与主题</a>。</p>
+<p><code>this.dynamicColor()</code> 会为当前 Activity 应用动态色板：无参时优先使用 SharedData 中的 <code>theme_seed_color</code>（设置页「主题色」写入的值），否则跟随系统壁纸（若支持）。编辑器界面会调用它，所以设置里的主题色会反映在编辑器上。项目主题由 <code>init.lua</code> 的 <code>NeLuaJ_Theme</code> 决定；需要动态色时在项目入口自行调用即可。注意：Android 12/12L/13 上种子色因系统限制无法生效，会自动回退为跟随壁纸（色值仍保存，升级系统后生效）。详见 <a class="doc-link" href="color_api.html">颜色与主题</a>。</p>
 <pre><code class="language-lua">this.dynamicColor()
 
 if this.isNightMode() then

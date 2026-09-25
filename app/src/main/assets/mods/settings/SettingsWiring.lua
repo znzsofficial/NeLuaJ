@@ -358,7 +358,7 @@ local formatColorValue = function(value)
         local a, r, g, b = colorToArgb(color)
         return string.format("#%02X%02X%02X%02X", a, r, g, b)
     end
-    return "跟随系统动态取色"
+    return res.string.theme_color_follow_system
 end
 
 local function rgbToHsv(r, g, b)
@@ -644,6 +644,15 @@ for _, tag in ipairs(COLOR_TAGS) do
     if item then item.setOnClickListener(click) end
 end
 
+--- MDC 的 ColorResourcesOverride 在 Android 12/12L/13（SDK 31-33）缺失，
+--- 种子色在这类设备上由运行时回退为跟随壁纸；色值仍会保存，升级系统后生效
+local function seedColorUnsupported()
+    local ok, sdk = pcall(function()
+        return tonumber(luajava.bindClass("android.os.Build$VERSION").SDK_INT)
+    end)
+    return ok and sdk ~= nil and sdk >= 31 and sdk <= 33
+end
+
 local function applyThemeSeedColor(color)
     if color == nil then
         this.setSharedData("theme_seed_color", nil)
@@ -653,6 +662,12 @@ local function applyThemeSeedColor(color)
         color = argbToColor(255, r, g, b)
         this.setSharedData("theme_seed_color", color)
         this.dynamicColor(color)
+        if seedColorUnsupported() then
+            pcall(function()
+                local Toast = luajava.bindClass("android.widget.Toast")
+                Toast.makeText(activity, res.string.theme_color_fallback, Toast.LENGTH_SHORT).show()
+            end)
+        end
     end
     this.recreate()
 end
