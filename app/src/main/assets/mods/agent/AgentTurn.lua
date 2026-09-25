@@ -66,6 +66,8 @@ function _M.hideLoading()
   state.loading = false
   keepAliveRelease()
   if was and hooks.setConversationRunning then pcall(hooks.setConversationRunning, false) end
+  -- 回合从进行中转为空闲时通知 UI（会话标题生成等收尾动作）
+  if was and hooks.onTurnSettled then pcall(hooks.onTurnSettled) end
   if hooks.hideViews then hooks.hideViews() end
 end
 
@@ -348,6 +350,8 @@ function _M.sendRaw(apiMessages, isContinue)
   AgentChat.sendStream(apiMessages, {
     onPrepared = function(usage)
       if not isCurrentRequest() or type(usage) ~= "table" then return end
+      -- 会话用量统计：累计主请求数与估算输入 token（纯展示，不做限制）
+      if hooks.reportUsage then pcall(hooks.reportUsage, usage.used) end
       if hooks.updateContextUsage then hooks.updateContextUsage(usage) end
     end,
     onChunk = function(chunk)

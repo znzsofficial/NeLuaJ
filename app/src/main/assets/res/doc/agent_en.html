@@ -66,10 +66,11 @@ Explain the changes and check related call sites.</code></pre>
         <li><strong>Undo / redo conversation turn</strong>: change chat history without executing tools again.</li>
         <li><strong>Undo / redo file change</strong>: restore the latest Agent file transaction.</li>
         <li><strong>Switch conversation</strong>: conversations are isolated by project.</li>
-        <li><strong>Settings</strong>: change sampling temperature, retries, safety options, additional instructions, and MCP servers. Additional instructions do not replace built-in safety or tool rules.</li>
+        <li><strong>Settings</strong>: change sampling temperature, retries, the auxiliary model, safety options, additional instructions, and MCP servers. Additional instructions do not replace built-in safety or tool rules.</li>
       </ul>
       <p>File undo checks the file fingerprint and refuses to overwrite externally modified content.</p>
-      <p>When the context exceeds the budget, sending a message or continuing a tool chain automatically compresses the older conversation and persists the result into the current session; no repeated summarization happens until the budget is exceeded again. Auto-compression shows a notice and behaves like manual compression.</p>
+      <p>After the first exchange completes, the assistant generates a short conversation title with the “auxiliary model” (falling back to the current model when unset), replacing the default first-message name; failures retry automatically at the next turn end. The context indicator in the panel also shows the conversation's cumulative request count and estimated input usage (main requests only — a cost reference, never a limit).</p>
+      <p>When the context exceeds the budget, sending a message or continuing a tool chain automatically compresses the older conversation — the summary request goes through the auxiliary model (or the current model when unset) — and persists the result into the current session; no repeated summarization happens until the budget is exceeded again. Auto-compression shows a notice and behaves like manual compression.</p>
       <p>The context window and maximum output belong to each model configuration. Switching models switches both limits; values from the previous global settings are migrated to existing models.</p>
 
       <h2>Project Memory</h2>

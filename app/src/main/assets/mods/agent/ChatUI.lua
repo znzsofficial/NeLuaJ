@@ -63,6 +63,9 @@ local activeConversationId = nil
 local conversationLoaded = false
 local activeConversationProjectPath = nil
 local activeConversationHadMessages = false
+-- 会话累计用量（主请求次数与估算输入 token），随会话记录持久化
+local convUsage = { requests = 0, tokens = 0 }
+local titleInFlight = false
 
 -- 回合状态（loading/generation/stopRequested/activeStream/failedToolCalls/
 -- retryPayloads/activeToolStop）已迁至 AgentTurn；此处仅保留会话与视图状态。
@@ -821,6 +824,13 @@ local function showLoading() AgentTurn.showLoading() end
 
 local function hideLoading() AgentTurn.hideLoading() end
 
+local function fmtTokens(n)
+  n = tonumber(n) or 0
+  if n >= 1000000 then return string.format("%.1fM", n / 1000000) end
+  if n >= 1000 then return math.floor(n / 1000) .. "k" end
+  return tostring(n)
+end
+
 local function updateContextUsage(usage)
   if type(usage) ~= "table" or not views.ctxUsage then return end
   local used = tonumber(usage.used) or 0
@@ -833,7 +843,89 @@ local function updateContextUsage(usage)
     color, label = 0xffe6a23c, S.ai_ctx_near_limit
   end
   views.ctxUsage.setTextColor(color)
-  views.ctxUsage.setText(label .. " · " .. used .. "/" .. budget)
+  local text = label .. " · " .. used .. "/" .. budget
+  if convUsage.requests > 0 then
+    text = text .. " · " .. S.ai_usage_total:format(convUsage.requests, fmtTokens(convUsage.tokens))
+  end
+  views.ctxUsage.setText(text)
+end
+
+--- 首轮问答完成后用辅助模型异步生成简短会话标题（替换“首条消息前 30 字”默认名）。
+--- 生成成功后落盘 name 与 titled 标记；失败保持默认名，下个回合结束时重试。
+local function maybeGenerateTitle()
+  if titleInFlight or AgentTurn.isActive() or not conversationLoaded then return end
+  local conv = AgentChat.getCurrentConv()
+  if not conv or conv.titled then return end
+  if #AgentChat.loadModels() == 0 then return end
+  local convId = activeConversationId
+  local firstUser, firstAssistant
+  for _, msg in ipairs(messages) do
+    if not firstUser and msg.role == "user" and not msg.compressed_summary
+        and tostring(msg.content or "") ~= "" then
+      firstUser = tostring(msg.content)
+    elseif not firstAssistant and msg.role == "assistant"
+        and tostring(msg.content or "") ~= "" then
+      firstAssistant = tostring(msg.content)
+    end
+    if firstUser and firstAssistant then break end
+  end
+  if not firstUser or not firstAssistant then return end
+
+  local function clip(text, limit)
+    if #text > limit then return text:sub(1, limit) .. "…" end
+    return text
+  end
+  local function settleTitle(raw)
+    raw = tostring(raw or ""):gsub("[\r\n]+", " ")
+    -- 去包裹符号与结尾标点：多字节字符逐个精确匹配，避免字节类误伤正文
+    for _ = 1, 4 do
+      local changed = false
+      for _, lead in ipairs({ '"', "'", "“", "「", "『", "《" }) do
+        if raw:sub(1, #lead) == lead then
+          raw = raw:sub(#lead + 1); changed = true
+        end
+      end
+      for _, tail in ipairs({ '"', "'", "”", "」", "』", "》", "。", ".", "！", "!", "？", "?" }) do
+        if raw:sub(-#tail) == tail then
+          raw = raw:sub(1, -#tail - 1); changed = true
+        end
+      end
+      if not changed then break end
+    end
+    raw = raw:match("^%s*(.-)%s*$") or ""
+    -- 与会话记录命名长度一致（30 字节），UTF-8 边界安全截断
+    if #raw > 30 then
+      raw = raw:sub(1, 30)
+      while #raw > 0 and raw:byte(#raw) >= 0x80 and raw:byte(#raw) <= 0xBF do
+        raw = raw:sub(1, -2)
+      end
+      if #raw > 0 and raw:byte(#raw) >= 0xC0 then raw = raw:sub(1, -2) end
+    end
+    return raw
+  end
+
+  titleInFlight = true
+  AgentChat.sendStream({
+    { role = "system", content = "为下面的对话生成一个简短标题。要求：不超过 16 个字；概括用户的核心诉求；只输出标题文本本身，不要引号、解释或结尾标点；使用与对话相同的语言。" },
+    { role = "user", content = "用户: " .. clip(firstUser, 400) .. "\n\n助手: " .. clip(firstAssistant, 400) },
+  }, {
+    disableTools = true,
+    maxTokens = 60,
+    modelOverride = AgentChat.getAuxModelConfig and AgentChat.getAuxModelConfig() or nil,
+    onDone = function(title)
+      titleInFlight = false
+      -- 会话已切换时不落盘，避免写错对象
+      if not conversationLoaded or activeConversationId ~= convId then return end
+      title = settleTitle(title)
+      if title == "" then return end
+      saveHistory({ name = title, titled = true })
+      if views.aiTitle then views.aiTitle.setText(title) end
+      print(S.ai_title_generated)
+    end,
+    onError = function()
+      titleInFlight = false
+    end,
+  })
 end
 
 local function refreshMessageList()
@@ -1097,7 +1189,7 @@ saveHistory = function(updates)
   if #messages == 0 and activeConversationHadMessages and not allowEmpty then
     return false
   end
-  -- 镜像同步任务计划：每次落盘都携带 TodoManager 当前状态，
+  -- 镜像同步会话级状态：任务计划与累计用量随每次落盘持久化，
   -- 与工具回合的状态提交合并为同一次写入
   local merged = updates
   if type(updates) ~= "table" or updates.todos == nil then
@@ -1106,6 +1198,7 @@ saveHistory = function(updates)
       for key, value in pairs(updates) do merged[key] = value end
     end
     merged.todos = TodoManager.get() or {}
+    merged.usage = { requests = convUsage.requests, tokens = convUsage.tokens }
   end
   local saved = AgentChat.saveConversation(activeConversationId, messages, merged)
   if saved then activeConversationHadMessages = #messages > 0 end
@@ -1128,6 +1221,12 @@ loadHistory = function(resetTurnHistory)
   messages = conv and conv.messages or {}
   -- 会话的任务计划随会话切换整体注入（空/缺失即清空）
   TodoManager.set(conv and conv.todos or nil)
+  -- 累计用量随会话载入
+  local savedUsage = type(conv and conv.usage) == "table" and conv.usage or nil
+  convUsage = {
+    requests = tonumber(savedUsage and savedUsage.requests) or 0,
+    tokens = tonumber(savedUsage and savedUsage.tokens) or 0,
+  }
   conversationLoaded = conv ~= nil
   -- 上次会话的任务可能被应用退出打断：注入提示并清除标记
   -- （必须在 conversationLoaded 置位之后，saveHistory 才会真正落盘）
@@ -3630,6 +3729,11 @@ AgentTurn.configure({
   end,
   isToolError = function(name, result) return isToolError(name, result) end,
   toolDisplayName = function(name) return toolDisplayName(name) end,
+  reportUsage = function(used)
+    convUsage.requests = convUsage.requests + 1
+    convUsage.tokens = convUsage.tokens + math.max(0, tonumber(used) or 0)
+  end,
+  onTurnSettled = function() maybeGenerateTitle() end,
   setConversationRunning = function(running)
     if conversationLoaded then saveHistory({ running = running == true }) end
   end,
