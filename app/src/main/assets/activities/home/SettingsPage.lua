@@ -11,7 +11,6 @@ local SettingsWiring = require "mods.settings.SettingsWiring"
 local ColorUtil = this.themeUtil
 local res = res
 
-local background = ColorUtil.getColorBackground()
 local built = nil
 local wiringApplied = false
 

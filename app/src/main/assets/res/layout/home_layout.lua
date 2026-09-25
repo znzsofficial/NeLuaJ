@@ -26,7 +26,7 @@ local tabMeta = {
   { title = res.string.home_tab_settings, icon = "ic_settings" },
 }
 
-local background = ColorUtil.getColorBackground()
+local background = ColorUtil.getColorSurface()
 
 local shellViews = {}
 local view = loadlayout({
@@ -88,6 +88,14 @@ pager.setAdapter(LuaFragmentAdapter(activity, LuaFragmentAdapter.Creator {
 bottomNav.setOnItemSelectedListener({
   onNavigationItemSelected = function(item)
     pager.setCurrentItem(item.getItemId() - 1, true)
+    -- 切到的 tab 补刷一次：onResume 只刷当前 tab，其余 tab 的
+    -- 数据可能已过期；post 到布局后执行，此时目标片段视图已就绪
+    local page = pages[item.getItemId()]
+    if page and page.refresh then
+      pager.post(function()
+        pcall(page.refresh)
+      end)
+    end
     return true
   end,
 })

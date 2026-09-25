@@ -19,14 +19,30 @@ local ColorUtil = this.themeUtil
 local res = res
 local dp = function(n) return this.dpToPx(n) end
 
-local background = ColorUtil.getColorBackground()
-local onSurface = ColorUtil.getColorOnSurface()
-local onSurfaceVar = ColorUtil.getColorOnSurfaceVariant()
-local primary = ColorUtil.getColorPrimary()
-local surfaceCard = ColorUtil.getColorSurfaceContainer()
+-- 主题色在 build() 时解析：模块若在 dynamicColor() 生效前被 require，
+-- 顶层立即取色会把当时的主题色冻结（曾导致首页背景偏紫）
+local background, onSurface, onSurfaceVar, primary, surfaceCard
 
 local built = nil
 local views = {}
+
+--- init.lua 字段缓存：以 init.lua 的 mtime 为键，目录重扫时未变更的
+--- 工程跳过文件读取（首页每次 onResume/切 tab 都会重扫，这里是 IO 大头）
+local initCache = {} -- path -> { appName, pkg, mtime }
+
+local function readInitInfo(path)
+  local ok, mtime = pcall(function() return LuaFileUtil.lastModified(path .. "/init.lua") end)
+  mtime = tonumber(mtime) or 0
+  local cached = initCache[path]
+  if cached and mtime > 0 and cached.mtime == mtime then
+    return cached.appName, cached.pkg
+  end
+  local fields = InitReader.readFields(path, { "app_name", "package_name" }) or {}
+  if mtime > 0 then
+    initCache[path] = { appName = fields.app_name, pkg = fields.package_name, mtime = mtime }
+  end
+  return fields.app_name, fields.package_name
+end
 
 --- 扫描工程目录，按 mtime 降序返回 { { path, name, appName, pkg, mtime } }
 --- 使用 LuaFileUtil.listMeta 一次取回条目元信息（isDir/mtime）
@@ -38,11 +54,12 @@ local function scanProjects()
   for _, entry in ipairs(entries) do
     if entry.isDir then
       local path = root .. "/" .. tostring(entry.name)
+      local appName, pkg = readInitInfo(path)
       projects[#projects + 1] = {
         path = path,
         name = tostring(entry.name),
-        appName = InitReader.readField(path, "app_name"),
-        pkg = InitReader.readField(path, "package_name"),
+        appName = appName,
+        pkg = pkg,
         mtime = tonumber(entry.mtime) or 0,
       }
     end
@@ -235,6 +252,11 @@ end
 
 function _M.build()
   if built then return built end
+  background = ColorUtil.getColorSurface()
+  onSurface = ColorUtil.getColorOnSurface()
+  onSurfaceVar = ColorUtil.getColorOnSurfaceVariant()
+  primary = ColorUtil.getColorPrimary()
+  surfaceCard = ColorUtil.getColorSurfaceContainer()
   built = loadlayout({
     LinearLayout,
     layout_width = "match",
@@ -364,6 +386,9 @@ function _M.build()
     })
   end
 
+  -- 片段视图创建即自刷：外部 refresh 与片段装配的时序无保证，
+  -- build 时自刷保证数据首次出现与视图同步
+  _M.refresh()
   return built
 end
 

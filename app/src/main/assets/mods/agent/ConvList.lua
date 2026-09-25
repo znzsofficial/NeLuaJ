@@ -31,7 +31,8 @@ function _M.buildRow(conv, projectName, onOpen)
   if name == "" then name = S.ai_unnamed_conv end
   local firstChar = name:match("[\0-\127\192-\255][\128-\191]*") or "?"
 
-  local n = type(conv.messages) == "table" and #conv.messages or 0
+  -- loadIndex 轻量记录只有 messageCount；完整记录（编辑器内）仍有 messages
+  local n = tonumber(conv.messageCount) or (type(conv.messages) == "table" and #conv.messages or 0)
   local metaParts = { S.ai_center_msg_count:format(n) }
   local usage = type(conv.usage) == "table" and conv.usage or nil
   if usage and tonumber(usage.tokens) and tonumber(usage.tokens) > 0 then

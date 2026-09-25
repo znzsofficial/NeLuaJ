@@ -14,8 +14,8 @@ local ActivityUtil = require("mods.utils.ActivityUtil")
 local ColorUtil = this.themeUtil
 local res = res
 
-local background = ColorUtil.getColorBackground()
-local onSurface = ColorUtil.getColorOnSurface()
+-- 主题色在 build() 时解析（理由同 ProjectsPage）
+local background, onSurface
 
 local built = nil
 local views = {}
@@ -28,7 +28,8 @@ function _M.refresh()
   if not built then return end
   if not views.convList then return end
   local rows = {}
-  for _, record in ipairs(ConversationStore.load()) do
+  -- loadIndex 只取元数据不深拷贝 messages，会话多时全量 load 是列表卡顿主因
+  for _, record in ipairs(ConversationStore.loadIndex()) do
     local project = normPath(record.projectPath)
     rows[#rows + 1] = {
       conv = record,
@@ -49,6 +50,8 @@ end
 
 function _M.build()
   if built then return built end
+  background = ColorUtil.getColorSurface()
+  onSurface = ColorUtil.getColorOnSurface()
   built = loadlayout({
     LinearLayout,
     layout_width = "match",
@@ -98,6 +101,8 @@ function _M.build()
       },
     },
   }, views)
+  -- 片段视图创建即自刷：与 ProjectsPage 同理，保证数据首次出现与视图同步
+  _M.refresh()
   return built
 end
 

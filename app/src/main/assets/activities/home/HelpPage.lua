@@ -14,11 +14,8 @@ local ColorUtil = this.themeUtil
 local res = res
 local dp = function(n) return this.dpToPx(n) end
 
-local background = ColorUtil.getColorBackground()
-local onSurface = ColorUtil.getColorOnSurface()
-local onSurfaceVar = ColorUtil.getColorOnSurfaceVariant()
-local primary = ColorUtil.getColorPrimary()
-local surfaceCard = ColorUtil.getColorSurfaceContainer()
+-- 主题色在 build() 时解析（理由同 ProjectsPage）
+local background, onSurface, onSurfaceVar, primary, surfaceCard
 
 local built = nil
 local views = {}
@@ -96,6 +93,11 @@ end
 
 function _M.build()
   if built then return built end
+  background = ColorUtil.getColorSurface()
+  onSurface = ColorUtil.getColorOnSurface()
+  onSurfaceVar = ColorUtil.getColorOnSurfaceVariant()
+  primary = ColorUtil.getColorPrimary()
+  surfaceCard = ColorUtil.getColorSurfaceContainer()
   built = loadlayout({
     LinearLayout,
     layout_width = "match",

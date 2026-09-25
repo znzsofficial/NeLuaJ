@@ -4,11 +4,22 @@
 --- field：对 load 结果做规范化字段读取（空串/"nil" 回退默认值）。
 local _M = {}
 
---- 从 init.lua 源码字符串直读字段（仅支持字面量字符串赋值）
-function _M.readField(path, key)
+--- 一次读取 init.lua 并直读多个字段（仅支持字面量字符串赋值）。
+--- 列表扫描需要多个字段时比逐个 readField 少 N-1 次文件 IO。
+function _M.readFields(path, keys)
   local ok, content = pcall(function() return file.readall(path .. "/init.lua") end)
   if not ok or type(content) ~= "string" then return nil end
-  return content:match(key .. '%s*=%s*"([^"]*)"') or content:match(key .. "%s*=%s*'([^']+)'")
+  local result = {}
+  for _, key in ipairs(keys) do
+    result[key] = content:match(key .. '%s*=%s*"([^"]*)"') or content:match(key .. "%s*=%s*'([^']+)'")
+  end
+  return result
+end
+
+--- 从 init.lua 源码字符串直读字段（仅支持字面量字符串赋值）
+function _M.readField(path, key)
+  local fields = _M.readFields(path, { key })
+  return fields and fields[key] or nil
 end
 
 --- 完整解析 init.lua（独立 Lua 环境）；失败返回 nil

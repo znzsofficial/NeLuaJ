@@ -17,7 +17,15 @@ end
 
 local function getData(key, defaultValue)
   local getter = cfg().getData
-  if not getter then return defaultValue end
+  if not getter then
+    -- 未 configure 时的默认回退（与 encode/decode 回退 json 同理）：
+    -- 首页等未加载 AgentChat 的环境也能读到共享数据
+    if this and this.getSharedData then
+      local ok, value = pcall(this.getSharedData, key, defaultValue)
+      if ok and value ~= nil then return value end
+    end
+    return defaultValue
+  end
   local ok, value = pcall(getter, key, defaultValue)
   if ok and value ~= nil then return value end
   return defaultValue
@@ -25,7 +33,13 @@ end
 
 local function setData(key, value)
   local setter = cfg().setData
-  if not setter then return false end
+  if not setter then
+    if this and this.setSharedData then
+      local ok, result = pcall(this.setSharedData, key, value)
+      return ok and result == true
+    end
+    return false
+  end
   local ok, result = pcall(setter, key, value)
   return ok and result == true
 end
@@ -268,6 +282,27 @@ function _M.load(force)
   end
   if migrated and raw ~= "" then persistConversations(normalized) end
   return clone(conversations)
+end
+
+--- 轻量索引：仅提取记录的标量元数据，不深拷贝 messages。
+--- 会话列表渲染（首页会话 tab）只需要元信息，全量 load 的深克隆
+--- 在会话较多时是列表卡顿的主因。
+function _M.loadIndex(force)
+  if not conversations or force then _M.load(force) end
+  local result = {}
+  for _, record in ipairs(conversations) do
+    local usage = type(record.usage) == "table" and clone(record.usage) or nil
+    result[#result + 1] = {
+      id = record.id,
+      name = record.name,
+      projectPath = record.projectPath,
+      createdAt = record.createdAt,
+      updatedAt = record.updatedAt,
+      usage = usage,
+      messageCount = type(record.messages) == "table" and #record.messages or 0,
+    }
+  end
+  return result
 end
 
 function _M.list(path, force)

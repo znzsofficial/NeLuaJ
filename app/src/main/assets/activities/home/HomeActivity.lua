@@ -15,13 +15,22 @@ local ActivityUtil = require "mods.utils.ActivityUtil"
 local ColorUtil = this.themeUtil
 local res = res
 
--- 与 home_layout require 的是同一批模块实例（require 缓存）
-local pages = {
-  require "activities.home.ProjectsPage",
-  require "activities.home.ConversationsPage",
-  require "activities.home.HelpPage",
-  require "activities.home.SettingsPage",
-}
+-- 页面模块必须在 dynamicColor() 之后才首次加载：模块顶层会立即解析主题色，
+-- 而 main.lua 模块体先于 Lua onCreate 执行（此时 dynamicColor 尚未生效），
+-- 提前 require 会把基线紫色冻结进页面背景。home_layout 在 setContentView
+-- 阶段首次 require 各页，此后 require 命中缓存拿到同一实例。
+local pages
+local function getPages()
+  if not pages then
+    pages = {
+      require "activities.home.ProjectsPage",
+      require "activities.home.ConversationsPage",
+      require "activities.home.HelpPage",
+      require "activities.home.SettingsPage",
+    }
+  end
+  return pages
+end
 
 local ready = false
 
@@ -33,15 +42,30 @@ local function ensureReady()
 end
 
 local function refreshAllPages()
-  for _, page in ipairs(pages) do
+  for _, page in ipairs(getPages()) do
     if page.refresh then pcall(page.refresh) end
+  end
+end
+
+--- 只刷新当前可见 tab——全部四个 tab 每次 onResume 都扫盘是首帧卡顿的主因
+local function refreshVisiblePage()
+  if not _G.__homeUi then
+    -- pager 尚未装配（首次 onCreate 时 home_layout 还没跑完）
+    refreshAllPages()
+    return
+  end
+  local current = tonumber(_G.__homeUi.pager.getCurrentItem()) or 0
+  local all = getPages()
+  if current >= 0 and current < #all then
+    local page = all[current + 1]
+    if page and page.refresh then pcall(page.refresh) end
   end
 end
 
 local function setupWindow()
   local window = activity.getWindow() {
     SoftInputMode = 0x10,
-    StatusBarColor = ColorUtil.getColorBackground()
+    StatusBarColor = ColorUtil.getColorSurface()
   }
     .addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
     .clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
@@ -98,7 +122,7 @@ local function consumeIntent()
 end
 
 function onCreate()
-  activity.setTheme(R.style.Theme_NeLuaJ_Material3_NoActionBar)
+  activity.setTheme(R.style.Theme_NeLuaJ_Material3_DynamicColors_NoActionBar)
   activity.dynamicColor()
   activity.setContentView(res.layout.home_layout)
   setupWindow()
@@ -136,14 +160,20 @@ function onStorageRequestResult(isGranted)
     return
   end
   ensureReady()
-  refreshAllPages()
+  -- 授权完成后同样只刷当前 tab，延迟到布局完成避免阻塞
+  activity.getWindow().getDecorView().post(function()
+    refreshVisiblePage()
+  end)
 end
 
 function onResume()
-  -- 从编辑器/设置等子页返回时刷新各 tab；后台授权返回也在此就绪
+  -- 从编辑器/设置等子页返回时只刷新当前 tab；后台授权返回也在此就绪
   if this.checkStoragePermission() then
     ensureReady()
-    refreshAllPages()
+    -- 延迟到布局完成后执行，避免阻塞首帧渲染
+    activity.getWindow().getDecorView().post(function()
+      refreshVisiblePage()
+    end)
   end
 end
 
@@ -155,7 +185,7 @@ this.addOnBackPressedCallback(function()
   end
   _exit = os.time()
   pcall(function()
-    Snackbar.make(pages[1].build(), res.string.confirm_exit, Snackbar.LENGTH_SHORT)
+    Snackbar.make(getPages()[1].build(), res.string.confirm_exit, Snackbar.LENGTH_SHORT)
       .setAction(res.string.exit, function()
         activity.finish(true)
       end)
