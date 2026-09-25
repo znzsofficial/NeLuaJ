@@ -416,9 +416,21 @@ pcall(function()
   settings.setUseWideViewPort(true)
 end)
 
-if initialDoc == "agent" then
-  openDoc(catalog[1].items[1])
+-- 路由参数为文档文件名（或标题）时直接落到文档页——首页帮助 tab 的
+-- 条目点击不应先看到分类列表；"agent" 为兼容别名，指向第一篇文档
+local function findInitialDoc(name)
+  if not name or name == "" then return nil end
+  for _, section in ipairs(catalog) do
+    for _, item in ipairs(section.items) do
+      if item.file == name or item.title == name then return item end
+    end
+  end
+  if name == "agent" then return catalog[1].items[1] end
+  return nil
 end
+
+local initialItem = findInitialDoc(initialDoc)
+if initialItem then openDoc(initialItem) end
 
 function onOptionsItemSelected(m)
   if m.getItemId() == android.R.id.home then

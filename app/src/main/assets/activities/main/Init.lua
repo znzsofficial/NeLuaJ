@@ -144,6 +144,11 @@ _M.restoreLastFile = function()
     if not lastPath or not File(lastPath).exists() then
       return
     end
+    -- 工程上下文已被显式切换（首页打开工程的启动参数，或 onResume 消费的
+    -- open_agent_* pending）时不回退上次文件，否则会把刚切换的列表覆盖掉
+    if tostring(Bean.Path.this_dir or "") ~= tostring(Bean.Path.app_root_pro_dir or "") then
+      return
+    end
 
     EditorUtil.load(lastPath)
     EditorUtil.setSelection(lastSelect or 0)

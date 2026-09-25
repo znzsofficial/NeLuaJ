@@ -141,24 +141,27 @@ function onCreate()
     }
 
   setupWindow()
-  Init.initView2().initBar().initFunctionTab().initCheck().restoreLastFile()
+
+  -- 首页打开工程时传入目录：先切换工程上下文再装配视图，
+  -- initView 会用 this_dir 初始化文件列表；restoreLastFile 检测到
+  -- 上下文已被显式切换后会跳过「回退上次文件」，不再覆盖本次目标工程
+  pcall(function()
+    if launchProject ~= "" and File(launchProject).isDirectory()
+        and tostring(Bean.Path.this_dir) ~= launchProject then
+      local PathManager = require "mods.utils.PathManager"
+      PathManager.updateDir(launchProject)
+    end
+  end)
+
+  -- 首页壳重构（c5a4e90）时误把 initView 从装配链上删掉：搜索条默认可见、
+  -- 抽屉开关无汉堡动画、文件列表初始路径未设置皆由此而来，此处恢复完整链
+  Init.initView().initView2().initBar().initFunctionTab().initCheck().restoreLastFile()
 
   -- 权限门禁已迁至首页；编辑器直达时仅做轻提示（文件操作会失败但不阻塞界面）
   if not this.checkStoragePermission() then
     Actions.snack(res.string.need_manage_permission)
   end
   AppInit.prepareDirs()
-
-  -- 首页打开工程时传入目录：切换工程上下文并刷新文件列表
-  pcall(function()
-    if launchProject ~= "" and File(launchProject).isDirectory()
-        and tostring(Bean.Path.this_dir) ~= launchProject then
-      local PathManager = require "mods.utils.PathManager"
-      PathManager.updateDir(launchProject)
-      filetab.setPath(launchProject)
-      MainActivity.RecyclerView.update()
-    end
-  end)
 end
 
 local function handleNavAction(action, path)
