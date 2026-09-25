@@ -27,4 +27,7 @@ app/libs/mao.dex
 # macOS system files
 .DS_Store
 
+# Lua 测试的编译产物
+/tests/out/
+
 /ref/
