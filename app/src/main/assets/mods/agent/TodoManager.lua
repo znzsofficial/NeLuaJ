@@ -17,23 +17,8 @@ function _M.get()
   return todos
 end
 
---- 字节上限截断，回退尾部被切开的 UTF-8 序列（先去续字节，再去孤立的起始字节）。
-local function truncateUtf8(text, limit)
-  if #text <= limit then return text end
-  text = text:sub(1, limit)
-  while #text > 0 do
-    local b = text:byte(#text)
-    if b >= 0x80 and b <= 0xBF then
-      text = text:sub(1, #text - 1)
-    elseif b >= 0xC0 then
-      text = text:sub(1, #text - 1)
-      break
-    else
-      break
-    end
-  end
-  return text
-end
+local TextUtil = require("mods.utils.TextUtil")
+local truncateUtf8 = TextUtil.utf8Cap
 
 --- 校验并规范化任务列表。返回 (list, err)；空数组合法（表示清空计划）。
 local function normalizeList(list)

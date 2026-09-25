@@ -26,6 +26,7 @@ local AgentTurn = require("mods.agent.AgentTurn")
 local MCPClient = require("mods.agent.MCPClient")
 local TodoManager = require("mods.agent.TodoManager")
 local SubagentRunner = require("mods.agent.SubagentRunner")
+local TextUtil = require("mods.utils.TextUtil")
 local ActivityUtil = require("mods.utils.ActivityUtil")
 import "mods.utils.EditorUtil"
 local ColorUtil = this.themeUtil
@@ -897,13 +898,7 @@ local function maybeGenerateTitle()
     end
     raw = raw:match("^%s*(.-)%s*$") or ""
     -- 与会话记录命名长度一致（30 字节），UTF-8 边界安全截断
-    if #raw > 30 then
-      raw = raw:sub(1, 30)
-      while #raw > 0 and raw:byte(#raw) >= 0x80 and raw:byte(#raw) <= 0xBF do
-        raw = raw:sub(1, -2)
-      end
-      if #raw > 0 and raw:byte(#raw) >= 0xC0 then raw = raw:sub(1, -2) end
-    end
+    raw = TextUtil.utf8Cap(raw, 30)
     return raw
   end
 

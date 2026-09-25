@@ -73,14 +73,13 @@ local function buildPrompt()
 - 工具确认策略与主代理完全一致；被拒绝时调整方案或说明阻塞，不要重试相同调用。]]
 end
 
-local function utf8Cap(text, limit)
-  if #text <= limit then return text end
-  text = text:sub(1, limit)
-  while #text > 0 and text:byte(#text) >= 0x80 and text:byte(#text) <= 0xBF do
-    text = text:sub(1, -2)
-  end
-  if #text > 0 and text:byte(#text) >= 0xC0 then text = text:sub(1, -2) end
-  return text .. "…（已截断）"
+local TextUtil = require("mods.utils.TextUtil")
+
+local function capResult(text, limit)
+  local raw = tostring(text or "")
+  local capped = TextUtil.utf8Cap(raw, limit)
+  if #capped < #raw then capped = capped .. "…（已截断）" end
+  return capped
 end
 
 --- 执行子任务。在工具执行线程调用，同步阻塞直至完成或被取消。
@@ -214,7 +213,7 @@ function _M.run(task, lightweight)
     sleepMs(200)
   end
   if current == state then current = nil end
-  return utf8Cap(tostring(state.result or ""), 4000), state.ok
+  return capResult(state.result, 4000), state.ok
 end
 
 return _M
