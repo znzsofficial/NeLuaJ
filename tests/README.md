@@ -31,9 +31,11 @@ ToolExecutor、SubagentRunner、ConversationStore、Markdown、ModelRegistry、T
 
 脚本会自动做三件事：
 
-1. 定位 luajpp.jar（默认取兄弟仓库 `NeLuaJ+Builder/app/libs/luajpp.jar`；
-   本仓库 `app/libs/luajpp_nocglib.jar` 只够语法检查，行为测试会缺 `JavaClass` 报
-   `NoClassDefFoundError`，找不到完整版时可用 `-Luajpp <路径>` 显式指定）
+1. 定位 luajpp.jar——按顺序找 `tests/libs/luajpp.jar`（仓库内置的纯 JSE 精简版，
+   含 LuaC 编译器与 `org/luaj/lib/jse` 平台层，`com/androlua`、`org/luaj/android`
+   等 Android 类已剔除）→ 兄弟仓库 `NeLuaJ+Builder/app/libs/luajpp.jar` 完整版 →
+   本仓库 `app/libs/luajpp_nocglib.jar`（仅够 `-Check` 语法检查，行为测试会因缺
+   `JavaClass` 报 `NoClassDefFoundError`）；也可用 `-Luajpp <路径>` 显式指定
 2. 增量编译 `Run.java` / `SyntaxCheck.java` 到 `tests/out/`（已 gitignore）
 3. 逐套件执行，末尾输出 `ALL SUITES PASS` 或失败清单并以非零码退出
 
@@ -111,8 +113,10 @@ file = { readall = function(p) local h = io.open(p, "rb"); ... end }
 
 ## 已知注意事项
 
-- 两个 luajpp.jar 的区别见「快速开始」第 1 条；报 `NoClassDefFoundError: org/luaj/lib/jse/JavaClass`
-  说明用错了 nocglib 版
+- jar 查找顺序见「快速开始」；报 `NoClassDefFoundError: org/luaj/lib/jse/JavaClass`
+  说明回退到了 nocglib 版。行为测试要求的 jar 必备项：`org/luaj` 核心 + `LuaC` 编译器
+  （必须 luajpp 方言）+ `org/luaj/lib/jse` 平台层；Android 侧类（`com/androlua`、
+  `org/luaj/android`）非必需，惰性类加载保证不触碰即无害
 - 控制台中文显示乱码多为代码页问题，不影响断言（字符串比较在 JVM 内部按 UTF-8 进行）
 - 手动执行单条命令的等价形式：
   ```powershell

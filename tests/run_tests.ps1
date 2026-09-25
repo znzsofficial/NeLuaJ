@@ -8,8 +8,8 @@
 #
 # 依赖：
 #   - JDK（java/javac 在 PATH 上）
-#   - 完整版 luajpp.jar（默认取兄弟仓库 NeLuaJ+Builder/app/libs/luajpp.jar；
-#     行为测试需要它，本仓库 app/libs/luajpp_nocglib.jar 仅够语法检查用）
+#   - luajpp.jar：优先 tests/libs/luajpp.jar（仓库内纯 JSE 精简版），
+#     缺失时自动回退兄弟仓库完整版 / 本仓库 nocglib（仅 -Check）
 param(
   [string]$Suite,
   [string[]]$Check,
@@ -21,9 +21,15 @@ $testsDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $root = Split-Path -Parent $testsDir
 
 # ── 定位 luajpp.jar ──
+# 优先 tests/libs/luajpp.jar（随仓库分发的纯 JSE 精简版）；
+# 其次兄弟仓库 NeLuaJ+Builder 的完整版；
+# 最后本仓库 luajpp_nocglib.jar（仅支持 -Check 语法检查）
 if (-not $Luajpp) {
+  $bundled = Join-Path $testsDir "libs\luajpp.jar"
   $sibling = Join-Path (Split-Path -Parent $root) "NeLuaJ+Builder\app\libs\luajpp.jar"
-  if (Test-Path $sibling) {
+  if (Test-Path $bundled) {
+    $Luajpp = $bundled
+  } elseif (Test-Path $sibling) {
     $Luajpp = $sibling
   } else {
     $local = Join-Path $root "app\libs\luajpp_nocglib.jar"
@@ -36,6 +42,7 @@ if (-not $Luajpp) {
 if (-not $Luajpp -or -not (Test-Path $Luajpp)) {
   throw "未找到 luajpp.jar，请用 -Luajpp 指定完整版（NeLuaJ+Builder/app/libs/luajpp.jar）"
 }
+Write-Host "luajpp.jar: $Luajpp" -ForegroundColor DarkGray
 
 # ── 增量编译基础设施 ──
 $out = Join-Path $testsDir "out"
