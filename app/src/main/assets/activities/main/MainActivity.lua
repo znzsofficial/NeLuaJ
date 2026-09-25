@@ -11,11 +11,15 @@ import "com.google.android.material.dialog.MaterialAlertDialogBuilder"
 local Init = require "activities.main.Init"
 import "mods.utils.ActivityUtil"
 import "mods.utils.EditorUtil"
+local AppInit = require "mods.utils.AppInit"
 
 local Actions = Init.Actions
 local _exit = 0
 local ColorUtil = this.themeUtil
 local res = res
+
+-- 作为编辑器路由页直接启动时的工程目录参数（首页打开工程时传入）
+local launchProject = tostring(select(1, ...) or "")
 
 local SHOW_AS_ACTION_NEVER = 0
 local SHOW_AS_ACTION_IF_ROOM = 1
@@ -26,12 +30,6 @@ local SHOW_AS_ACTION_ALWAYS_TEXT = 6 -- ALWAYS | WITH_TEXT
 local VISIBLE = Init.VISIBLE
 local INVISIBLE = Init.INVISIBLE
 local GONE = Init.GONE
-
-local function initFiles()
-  LuaFileUtil.checkDirectory(Bean.Path.app_root_pro_dir)
-  checkBackup()
-  Init.initView2().initBar().initFunctionTab().initCheck().restoreLastFile()
-end
 
 local function setupWindow()
   local window = activity.getWindow() {
@@ -163,70 +161,24 @@ function onCreate()
     }
 
   setupWindow()
-  Init.initView()
+  Init.initView2().initBar().initFunctionTab().initCheck().restoreLastFile()
 
-  if this.checkStoragePermission() then
-    initFiles()
-  else
-    MaterialAlertDialogBuilder(activity)
-      .setTitle(res.string.tip)
-      .setMessage(res.string.need_manage_permission)
-      .setPositiveButton(android.R.string.ok, function()
-        this.requestStoragePermission()
-      end)
-      .setNegativeButton(android.R.string.cancel, function()
-        this.finish()
-      end)
-      .setCancelable(false)
-      .show()
+  -- 权限门禁已迁至首页；编辑器直达时仅做轻提示（文件操作会失败但不阻塞界面）
+  if not this.checkStoragePermission() then
+    Actions.snack(res.string.need_manage_permission)
   end
+  AppInit.prepareDirs()
 
-  -- 桌面动态快捷方式：AI 助手。纯 Lua 创建（ShortcutManager），只存在于 IDE 本体，
-  -- 不会进入用户打包的应用；每次冷启动刷新一次，保持目标路径与标签最新。
+  -- 首页打开工程时传入目录：切换工程上下文并刷新文件列表
   pcall(function()
-    local Intent = luajava.bindClass("android.content.Intent")
-    local Uri = luajava.bindClass("android.net.Uri")
-    local ShortcutInfo = luajava.bindClass("android.content.pm.ShortcutInfo")
-    local ShortcutManager = luajava.bindClass("android.content.pm.ShortcutManager")
-    local ArrayList = luajava.bindClass("java.util.ArrayList")
-    local Icon = luajava.bindClass("android.graphics.drawable.Icon")
-    local sm = activity.getSystemService("shortcut")
-    if not sm then return end
-    local mainPath = activity.getLuaDir() .. "/main.lua"
-    local intent = Intent(Intent.ACTION_VIEW)
-    intent.setClassName(activity, "com.androlua.LuaActivity")
-    intent.setData(Uri.parse("file://" .. mainPath))
-    intent.putExtra("name", mainPath)
-    intent.putExtra("open_agent", true)
-    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    local builder = ShortcutInfo.Builder(activity, "agent")
-      .setShortLabel(res.string.shortcut_agent_short)
-      .setLongLabel(res.string.shortcut_agent_long)
-      .setIntent(intent)
-    pcall(function()
-      local iconId = activity.getResources().getIdentifier("icon", "drawable", activity.getPackageName())
-      if iconId ~= 0 then builder.setIcon(Icon.createWithResource(activity, iconId)) end
-    end)
-    local list = ArrayList()
-    list.add(builder.build())
-    sm.setDynamicShortcuts(list)
-  end)
-
-  -- 从快捷方式进入时直接唤起 AI 助手面板
-  pcall(function()
-    local intent = activity.getIntent()
-    if intent and intent.getBooleanExtra("open_agent", false) then
-      require("mods.agent.ChatUI").show()
+    if launchProject ~= "" and File(launchProject).isDirectory()
+        and tostring(Bean.Path.this_dir) ~= launchProject then
+      local PathManager = require "mods.utils.PathManager"
+      PathManager.updateDir(launchProject)
+      filetab.setPath(launchProject)
+      MainActivity.RecyclerView.update()
     end
   end)
-end
-
-function onStorageRequestResult(isGranted)
-  if not isGranted then
-    Actions.snack(res.string.need_manage_permission)
-    return
-  end
-  initFiles()
 end
 
 local function handleNavAction(action, path)

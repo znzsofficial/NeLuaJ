@@ -1,1 +1,1 @@
-import "activities.main.MainActivity"
+import "activities.home.HomeActivity"

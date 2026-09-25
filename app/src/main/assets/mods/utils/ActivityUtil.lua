@@ -9,6 +9,8 @@ _M.lua_path = activity.getLuaDir()
 -- 路由表：name → activities/ 下相对路径
 local routes = {
   main             = "main/MainActivity.lua",
+  home             = "home/HomeActivity.lua",
+  editor           = "main/MainActivity.lua",
   axml             = "axml/CreatorActivity.lua",
   api              = "api/ApiActivity.lua",
   help             = "help/HelpActivity.lua",
