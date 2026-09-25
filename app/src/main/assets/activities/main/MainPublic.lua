@@ -8,6 +8,7 @@ local BottomSheetDialog = bindClass "com.google.android.material.bottomsheet.Bot
 local BottomSheetBehavior = bindClass "com.google.android.material.bottomsheet.BottomSheetBehavior"
 local LuaUtil = bindClass "com.androlua.LuaUtil"
 local TabUtil = require "mods.utils.TabUtil"
+local InitReader = require "mods.project.InitReader"
 import "mods.utils.EditorUtil"
 import "mods.utils.PathManager"
 local res = res
@@ -234,27 +235,11 @@ local function isProjectFolder(path)
 end
 
 local function readProjectInit(path)
-    local initPath = path .. "/init.lua"
-    if not File(initPath).isFile() then
-        return nil
-    end
-    local ok, t = pcall(function()
-        return LuaFileUtil.loadLua(initPath)
-    end)
-    if ok and type(t) == "table" then
-        return t
-    end
-    return nil
+    return InitReader.load(path)
 end
 
 local function initField(init, key, fallback)
-    if not init then return fallback end
-    local ok, v = pcall(function() return init[key] end)
-    if ok and v ~= nil then
-        local s = tostring(v)
-        if s ~= "" and s ~= "nil" then return s end
-    end
-    return fallback
+    return InitReader.field(init, key, fallback)
 end
 
 local function formatPermissions(init)

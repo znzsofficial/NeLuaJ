@@ -13,6 +13,7 @@ local MaterialCardView = luajava.bindClass("com.google.android.material.card.Mat
 local Toast = luajava.bindClass("android.widget.Toast")
 
 local ActivityUtil = require "mods.utils.ActivityUtil"
+local InitReader = require "mods.project.InitReader"
 
 local ColorUtil = this.themeUtil
 local res = res
@@ -27,13 +28,6 @@ local surfaceCard = ColorUtil.getColorSurfaceContainer()
 local built = nil
 local views = {}
 
---- 读取 init.lua 的 app_name / package_name（纯字符串匹配，不执行文件）
-local function readInitField(path, key)
-  local ok, content = pcall(function() return file.readall(path .. "/init.lua") end)
-  if not ok or type(content) ~= "string" then return nil end
-  return content:match(key .. '%s*=%s*"([^"]*)"') or content:match(key .. "%s*=%s*'([^']+)'")
-end
-
 --- 扫描工程目录，按 mtime 降序返回 { { path, name, appName, pkg, mtime } }
 --- 使用 LuaFileUtil.listMeta 一次取回条目元信息（isDir/mtime）
 local function scanProjects()
@@ -47,8 +41,8 @@ local function scanProjects()
       projects[#projects + 1] = {
         path = path,
         name = tostring(entry.name),
-        appName = readInitField(path, "app_name"),
-        pkg = readInitField(path, "package_name"),
+        appName = InitReader.readField(path, "app_name"),
+        pkg = InitReader.readField(path, "package_name"),
         mtime = tonumber(entry.mtime) or 0,
       }
     end
