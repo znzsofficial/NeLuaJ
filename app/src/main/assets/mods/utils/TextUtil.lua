@@ -21,4 +21,12 @@ function _M.utf8Cap(text, limit)
   return text
 end
 
+--- token 数值的紧凑展示：1800 → 1k，1800000 → 1.8M
+function _M.fmtTokens(n)
+  n = tonumber(n) or 0
+  if n >= 1000000 then return string.format("%.1fM", n / 1000000) end
+  if n >= 1000 then return math.floor(n / 1000) .. "k" end
+  return tostring(n)
+end
+
 return _M

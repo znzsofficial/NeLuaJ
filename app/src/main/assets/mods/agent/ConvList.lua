@@ -7,6 +7,7 @@ local MaterialTextView = luajava.bindClass("com.google.android.material.textview
 local MaterialCardView = luajava.bindClass("com.google.android.material.card.MaterialCardView")
 local GradientDrawable = luajava.bindClass("android.graphics.drawable.GradientDrawable")
 local LinearLayout = luajava.bindClass("android.widget.LinearLayout")
+local TextUtil = require("mods.utils.TextUtil")
 
 local S = res.string
 
@@ -32,6 +33,10 @@ function _M.buildRow(conv, projectName, onOpen)
 
   local n = type(conv.messages) == "table" and #conv.messages or 0
   local metaParts = { S.ai_center_msg_count:format(n) }
+  local usage = type(conv.usage) == "table" and conv.usage or nil
+  if usage and tonumber(usage.tokens) and tonumber(usage.tokens) > 0 then
+    metaParts[#metaParts + 1] = S.ai_row_usage:format(TextUtil.fmtTokens(usage.tokens))
+  end
   if tostring(conv.updatedAt or "") ~= "" then
     metaParts[#metaParts + 1] = tostring(conv.updatedAt)
   end

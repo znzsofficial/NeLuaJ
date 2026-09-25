@@ -289,12 +289,7 @@ local function showLoading() AgentTurn.showLoading() end
 
 local function hideLoading() AgentTurn.hideLoading() end
 
-local function fmtTokens(n)
-  n = tonumber(n) or 0
-  if n >= 1000000 then return string.format("%.1fM", n / 1000000) end
-  if n >= 1000 then return math.floor(n / 1000) .. "k" end
-  return tostring(n)
-end
+local fmtTokens = TextUtil.fmtTokens
 
 local function updateContextUsage(usage)
   if type(usage) ~= "table" or not views.ctxUsage then return end
@@ -459,6 +454,179 @@ local function compressCurrentContext(onDone)
   return AgentTurn.compress(onDone)
 end
 
+--- 导出当前会话为 Markdown，经系统分享面板发出
+local function exportConversation()
+  local conv = AgentChat.getCurrentConv()
+  if not conv or #messages == 0 then return end
+  local out = { "# " .. convName(conv), "" }
+  for _, msg in ipairs(messages) do
+    if msg.role == "user" then
+      out[#out + 1] = "## " .. S.ai_you
+      out[#out + 1] = ""
+      out[#out + 1] = tostring(msg.content or "")
+      out[#out + 1] = ""
+    elseif msg.role == "assistant" then
+      local reasoning = tostring(msg.reasoning_content or "")
+      if reasoning ~= "" then
+        out[#out + 1] = "> " .. S.ai_thinking .. ": " .. reasoning:gsub("\n", "\n> ")
+        out[#out + 1] = ""
+      end
+      out[#out + 1] = "## AI"
+      out[#out + 1] = ""
+      out[#out + 1] = tostring(msg.content or "")
+      out[#out + 1] = ""
+    elseif msg.role == "tool" then
+      local text = tostring(msg.content or "")
+      if text ~= "" then
+        out[#out + 1] = "```"
+        out[#out + 1] = "[tool] " .. text:sub(1, 2000)
+        out[#out + 1] = "```"
+        out[#out + 1] = ""
+      end
+    end
+  end
+  local Intent = luajava.bindClass("android.content.Intent")
+  local intent = Intent(Intent.ACTION_SEND)
+  intent.setType("text/plain")
+  intent.putExtra(Intent.EXTRA_TEXT, table.concat(out, "\n"))
+  intent.putExtra(Intent.EXTRA_TITLE, convName(conv) .. ".md")
+  activity.startActivity(Intent.createChooser(intent, S.ai_export_conv))
+end
+
+--- 会话内搜索：实时过滤消息内容，点击结果跳到对应气泡
+local function showConvSearch()
+  if #messages == 0 then return end
+  local searchViews = {}
+  local searchDlg
+  local content = loadlayout({
+    LinearLayout,
+    orientation = "vertical",
+    layout_width = "match",
+    layout_height = "wrap",
+    padding = "16dp",
+    {
+      EditText,
+      id = "searchInput",
+      layout_width = "match",
+      layout_height = "wrap",
+      minHeight = "46dp",
+      hint = S.ai_search_hint,
+      textSize = "14sp",
+      singleLine = true,
+    },
+    {
+      ScrollView,
+      layout_width = "match",
+      layout_height = "wrap",
+      {
+        LinearLayout,
+        id = "searchResults",
+        orientation = "vertical",
+        layout_width = "match",
+        layout_height = "wrap",
+        layout_marginTop = "8dp",
+      },
+    },
+  }, searchViews)
+
+  local function jumpToMessage(msg)
+    local row = bubbleByMessage[msg]
+    if row and views.msgScroll then
+      views.msgScroll.post(function()
+        pcall(function()
+          views.msgScroll.smoothScrollTo(0, math.max(0, row.getTop() - dp(16)))
+        end)
+      end)
+    end
+  end
+
+  local function doSearch()
+    local container = searchViews.searchResults
+    if not container then return end
+    container.removeAllViews()
+    local query = tostring(searchViews.searchInput.getText() or ""):match("^%s*(.-)%s*$")
+    if query == "" then return end
+    local lowerQuery = query:lower()
+    local count = 0
+    for _, msg in ipairs(messages) do
+      if count >= 30 then break end
+      local text = tostring(msg.content or "")
+      local lowerText = text:lower()
+      local start = lowerText:find(lowerQuery, 1, true)
+      if start then
+        count = count + 1
+        local snippet = text:sub(math.max(1, start - 40), start + #query + 60)
+        if start > 41 then snippet = "…" .. snippet end
+        if start + #query + 60 < #text then snippet = snippet .. "…" end
+        local role = msg.role == "user" and S.ai_you or (msg.role == "assistant" and "AI" or "[tool]")
+        local target = msg
+        local resultRow = loadlayout({
+          MaterialCardView,
+          radius = "10dp",
+          CardElevation = 0,
+          CardBackgroundColor = ColorSurfaceContainerHigh,
+          layout_width = "match",
+          layout_height = "wrap",
+          clickable = true,
+          focusable = true,
+          {
+            LinearLayout,
+            orientation = "vertical",
+            layout_width = "match",
+            layout_height = "wrap",
+            padding = "10dp",
+            {
+              MaterialTextView,
+              text = role,
+              textSize = "11sp",
+              textStyle = "bold",
+              textColor = ColorPrimary,
+            },
+            {
+              MaterialTextView,
+              text = snippet,
+              textSize = "12sp",
+              textColor = ColorText,
+              maxLines = 2,
+              ellipsize = "end",
+              layout_marginTop = "2dp",
+            },
+          },
+        })
+        resultRow.onClick = function()
+          if searchDlg then searchDlg.dismiss() end
+          jumpToMessage(target)
+        end
+        local lp = LinearLayout.LayoutParams(-1, -2)
+        lp.bottomMargin = dp(6)
+        container.addView(resultRow, lp)
+      end
+    end
+    if count == 0 then
+      local empty = MaterialTextView(activity)
+      empty.setText(S.ai_search_empty)
+      empty.setTextSize(13)
+      empty.setTextColor(ColorText)
+      empty.setPadding(0, dp(24), 0, dp(24))
+      container.addView(empty)
+    end
+  end
+
+  pcall(function()
+    searchViews.searchInput.addTextChangedListener({
+      beforeTextChanged = function() end,
+      onTextChanged = function() end,
+      afterTextChanged = function() doSearch() end,
+    })
+  end)
+
+  searchDlg = MaterialAlertDialogBuilder(activity)
+    .setTitle(S.ai_search_conv)
+    .setView(content)
+    .setNegativeButton(S.ai_close, nil)
+    .show()
+end
+
 local function showCommandMenu()
   local content = LinearLayout(activity)
   content.setOrientation(1)
@@ -503,6 +671,8 @@ local function showCommandMenu()
   addAction(S.ai_compress_context, not AgentTurn.isActive() and #messages > 0, compressCurrentContext)
   addAction(S.ai_undo_turn, not AgentTurn.isActive() and hasTurn, undoLastTurn)
   addAction(S.ai_redo_turn, not AgentTurn.isActive() and #redoTurns > 0, redoLastTurn)
+  addAction(S.ai_search_conv, #messages > 0, showConvSearch)
+  addAction(S.ai_export_conv, #messages > 0, exportConversation)
   addSection(S.ai_command_files)
   addAction(S.ai_undo_file, not AgentTurn.isActive() and AgentChat.hasFileUndo(), undoFileChange)
   addAction(S.ai_redo_file, not AgentTurn.isActive() and AgentChat.hasFileRedo(), redoFileChange)

@@ -6,6 +6,7 @@ local _M = {}
 
 local AgentChat = require("mods.agent.AgentChat")
 local AgentTurn = require("mods.agent.AgentTurn")
+local TextUtil = require("mods.utils.TextUtil")
 
 local ColorStateList = luajava.bindClass("android.content.res.ColorStateList")
 local MaterialAlertDialogBuilder = luajava.bindClass("com.google.android.material.dialog.MaterialAlertDialogBuilder")
@@ -90,7 +91,12 @@ end
 
 local function convMetaText(conv)
   local project = tostring(conv.projectPath or ""):match("([^/]+)$") or S.ai_project_unknown
-  return S.ai_conv_meta:format(tostring(conv.createdAt or ""), #(conv.messages or {})) .. "  ·  " .. project
+  local meta = S.ai_conv_meta:format(tostring(conv.createdAt or ""), #(conv.messages or {}))
+  local usage = type(conv.usage) == "table" and conv.usage or nil
+  if usage and tonumber(usage.tokens) and tonumber(usage.tokens) > 0 then
+    meta = meta .. "  ·  " .. S.ai_row_usage:format(TextUtil.fmtTokens(usage.tokens))
+  end
+  return meta .. "  ·  " .. project
 end
 
 local function showRenameDialog(convId, oldName)
