@@ -129,6 +129,42 @@ object LuaFileUtil {
 
     fun isEmpty(path: String) = File(path).listFiles()?.isEmpty() == true
 
+    /**
+     * 目录条目元信息：一次返回 name/isDir/mtime/size。
+     * Lua 侧拿到的直接是 LuaTable 数组，免去逐项构造 File 对象与多次 JNI 往返。
+     */
+    fun listMeta(path: String): LuaTable {
+        val result = LuaTable()
+        val files = File(path).listFiles() ?: return result
+        var index = 1
+        for (f in files) {
+            val entry = LuaTable()
+            entry.set("name", f.name.toLuaValue())
+            entry.set("isDir", f.isDirectory.toLuaValue())
+            entry.set("mtime", f.lastModified().toLuaValue())
+            entry.set("size", f.length().toLuaValue())
+            result.set(index, entry)
+            index++
+        }
+        return result
+    }
+
+    /** 只列子目录名，按最近修改优先。 */
+    fun listDirs(path: String): LuaTable {
+        val result = LuaTable()
+        val dirs = File(path).listFiles()?.filter { it.isDirectory } ?: return result
+        var index = 1
+        for (f in dirs.sortedByDescending { it.lastModified() }) {
+            result.set(index, f.name.toLuaValue())
+            index++
+        }
+        return result
+    }
+
+    /** 最近修改时间（毫秒）；不存在返回 0。 */
+    fun lastModified(path: String): Long =
+        File(path).takeIf { it.exists() }?.lastModified() ?: 0L
+
     interface Impl {
         fun write(path: String, content: String): Boolean
         fun read(path: String): String

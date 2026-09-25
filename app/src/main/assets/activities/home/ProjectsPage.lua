@@ -3,7 +3,7 @@
 --- app_name（字符串直读，不执行文件），回退目录名。
 local _M = {}
 
-local File = luajava.bindClass("java.io.File")
+local LuaFileUtil = luajava.kotlinObject("com.nekolaska.io.LuaFileUtil")
 local LinearLayout = luajava.bindClass("android.widget.LinearLayout")
 local HorizontalScrollView = luajava.bindClass("android.widget.HorizontalScrollView")
 local ScrollView = luajava.bindClass("android.widget.ScrollView")
@@ -35,23 +35,21 @@ local function readInitField(path, key)
 end
 
 --- 扫描工程目录，按 mtime 降序返回 { { path, name, appName, pkg, mtime } }
+--- 使用 LuaFileUtil.listMeta 一次取回条目元信息（isDir/mtime）
 local function scanProjects()
   local root = Bean.Path.app_root_pro_dir
   local projects = {}
-  local ok, names = pcall(function() return file.list(root) end)
-  if not ok or type(names) ~= "table" then return projects end
-  for _, name in ipairs(names) do
-    local path = root .. "/" .. tostring(name)
-    local dir = File(path)
-    if dir.isDirectory() then
-      local mtime = 0
-      pcall(function() mtime = tonumber(dir.lastModified()) or 0 end)
+  local ok, entries = pcall(function() return LuaFileUtil.listMeta(root) end)
+  if not ok or type(entries) ~= "table" then return projects end
+  for _, entry in ipairs(entries) do
+    if entry.isDir then
+      local path = root .. "/" .. tostring(entry.name)
       projects[#projects + 1] = {
         path = path,
-        name = tostring(name),
+        name = tostring(entry.name),
         appName = readInitField(path, "app_name"),
         pkg = readInitField(path, "package_name"),
-        mtime = mtime,
+        mtime = tonumber(entry.mtime) or 0,
       }
     end
   end
