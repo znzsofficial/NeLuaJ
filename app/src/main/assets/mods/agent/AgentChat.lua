@@ -714,84 +714,46 @@ local function legacyExecuteTool(name, args)
     local recursive = args.recursive == true or args.recursive == "true" or args.recursive == 1
     local filter = args.pattern or ""
     if type(filter) == "string" then filter = filter:gsub("^%s*(.-)%s*$", "%1") end
-    local ok, list = pcall(function()
-      return file.list(path)
-    end)
-    if not ok then
-      return "列出目录失败\n路径: " .. path .. "\n原因: " .. tostring(list)
-    end
-    if not list then
+    local typeOk, ftype = pcall(function() return file.type(path) end)
+    if not typeOk or ftype ~= "dir" then
       return "目录不存在或无法访问: " .. path
     end
 
-    -- 递归列出：跳过的目录 + 深度/数量上限
+    -- 递归列出：Kotlin 一次完成（跳过 .git/build 等 + 深度/数量上限）
     if recursive then
-      local SKIP = {
-        [".git"] = true, [".svn"] = true, [".hg"] = true, [".idea"] = true,
-        [".gradle"] = true, ["build"] = true, ["dist"] = true, ["target"] = true,
-        ["node_modules"] = true, ["bin"] = true, ["obj"] = true, [".cxx"] = true,
-      }
-      local out = {}
-      local count = 0
-      local MAX_DEPTH = 6
-      local MAX_ITEMS = 500
-      local function walk(dir, depth, prefix)
-        if count >= MAX_ITEMS or depth > MAX_DEPTH then return end
-        local okw, entries = pcall(function() return file.list(dir) end)
-        if not okw or not entries then return end
-        local names = {}
-        for _, name in ipairs(entries) do
-          if name ~= "." and name ~= ".." then names[#names + 1] = name end
-        end
-        table.sort(names)
-        for _, name in ipairs(names) do
-          if count >= MAX_ITEMS then return end
-          local full = dir .. "/" .. name
-          local typeOk, ftype = pcall(function() return file.type(full) end)
-          if typeOk and ftype == "dir" then
-            local line = prefix .. name .. "/"
-            if filter == "" or line:find(filter, 1, true) or name:find(filter, 1, true) then
-              out[#out + 1] = line
-              count = count + 1
-            end
-            if not SKIP[name] then
-              walk(full, depth + 1, line)
-            end
-          elseif typeOk and ftype == "file" then
-            local line = prefix .. name
-            if filter == "" or line:find(filter, 1, true) or name:find(filter, 1, true) then
-              out[#out + 1] = line
-              count = count + 1
-            end
-          end
-        end
+      local okT, entries = pcall(function()
+        return LuaFileUtil.listTree(path, filter, 500, 6)
+      end)
+      if not okT then
+        return "递归列出失败\n路径: " .. path .. "\n原因: " .. tostring(entries)
       end
-      walk(path, 0, "")
-      if count == 0 then
+      if #entries == 0 then
         return "目录为空或没有匹配项: " .. path
       end
-      local result = table.concat(out, "\n")
+      local lines = {}
+      for i = 1, #entries do lines[i] = tostring(entries[i]) end
+      local result = table.concat(lines, "\n")
       if #result > 8000 then
         result = result:sub(1, 8000) .. "\n...(结果过多，已截断)"
       end
-      return "递归列表（" .. count .. " 项）:\n" .. result
+      return "递归列表（" .. #entries .. " 项）:\n" .. result
     end
 
+    -- 平铺列出：listMeta 一次取回类型与大小
+    local ok, entries = pcall(function() return LuaFileUtil.listMeta(path) end)
+    if not ok then
+      return "列出目录失败\n路径: " .. path .. "\n原因: " .. tostring(entries)
+    end
+    table.sort(entries, function(a, b)
+      if a.isDir == b.isDir then return tostring(a.name) < tostring(b.name) end
+      return a.isDir == true
+    end)
     local dirs, files = {}, {}
-    for i, name in ipairs(list) do
-      if name ~= "." and name ~= ".." then
-        local full = path .. "/" .. name
-        local typeOk, ftype = pcall(function() return file.type(full) end)
-        if typeOk and ftype == "dir" then
-          dirs[#dirs + 1] = name .. "/"
-        else
-          local size = ""
-          local infoOk, info = pcall(function() return file.info(full) end)
-          if infoOk and info and info.size then
-            size = "  " .. formatSize(info.size)
-          end
-          files[#files + 1] = name .. size
-        end
+    for _, entry in ipairs(entries) do
+      if entry.isDir then
+        dirs[#dirs + 1] = tostring(entry.name) .. "/"
+      else
+        files[#files + 1] = tostring(entry.name) .. "  " .. formatSize(tonumber(entry.size) or 0)
       end
     end
     local out = {}
@@ -816,67 +778,26 @@ local function legacyExecuteTool(name, args)
     if pattern == "" then
       return "search_in_files 需要 pattern 参数"
     end
-    local matchPattern = pattern
-    if ignoreCase then matchPattern = pattern:lower() end
-
-    -- 跳过的目录
-    local SKIP_DIRS = {
-      [".git"] = true, [".svn"] = true, [".hg"] = true, [".idea"] = true,
-      [".gradle"] = true, ["build"] = true, ["dist"] = true, ["target"] = true,
-      ["node_modules"] = true, ["bin"] = true, ["obj"] = true, [".cxx"] = true,
-    }
-    local results = {}
-    local scanned = 0
-    local MAX_SCAN = 2000
-    local MAX_DEPTH = 8
-    local MAX_FILE = 1024 * 1024
-
-    local function walk(dir, depth)
-      if #results >= maxResults or scanned >= MAX_SCAN or depth > MAX_DEPTH then return end
-      local ok, entries = pcall(function() return file.list(dir) end)
-      if not ok or not entries then return end
-      for _, name in ipairs(entries) do
-        if #results >= maxResults or scanned >= MAX_SCAN then return end
-        if name ~= "." and name ~= ".." then
-          local full = dir .. "/" .. name
-          local typeOk, ftype = pcall(function() return file.type(full) end)
-          if typeOk and ftype == "dir" then
-            if not SKIP_DIRS[name] then
-              walk(full, depth + 1)
-            end
-          elseif typeOk and ftype == "file" then
-            scanned = scanned + 1
-            local infoOk, info = pcall(function() return file.info(full) end)
-            if infoOk and info and info.size and info.size <= MAX_FILE then
-              local okr, content = pcall(function() return file.readall(full) end)
-              if okr and content and not content:find("\0", 1, true) then
-                local lineno = 0
-                for line in (content .. "\n"):gmatch("(.-)\n") do
-                  lineno = lineno + 1
-                  local haystack = line
-                  if ignoreCase then haystack = haystack:lower() end
-                  if haystack:find(matchPattern, 1, true) then
-                    results[#results + 1] = full .. ":" .. lineno .. ": " .. line
-                    if #results >= maxResults then return end
-                  end
-                end
-              end
-            end
-          end
-        end
-      end
+    -- Kotlin 一次完成：递归 + 跳过构建目录 + 二进制嗅探 + 行级匹配
+    local ok, out = pcall(function()
+      return LuaFileUtil.searchInFiles(root, pattern, ignoreCase, maxResults, 1024)
+    end)
+    if not ok then
+      return "搜索失败\n目录: " .. root .. "\n原因: " .. tostring(out)
     end
-
-    walk(root, 0)
-    if #results == 0 then
+    local matches = out.matches
+    local scanned = tonumber(out.scanned) or 0
+    if #matches == 0 then
       return "未找到匹配「" .. pattern .. "」的文件\n目录: " .. root
         .. "\n已扫描 " .. scanned .. " 个文件"
     end
-    local out = table.concat(results, "\n")
-    if #out > 8000 then
-      out = out:sub(1, 8000) .. "\n...(结果过多，已截断)"
+    local lines = {}
+    for i = 1, #matches do lines[i] = tostring(matches[i]) end
+    local result = table.concat(lines, "\n")
+    if #result > 8000 then
+      result = result:sub(1, 8000) .. "\n...(结果过多，已截断)"
     end
-    return "搜索「" .. pattern .. "」共 " .. #results .. " 处:\n" .. out
+    return "搜索「" .. pattern .. "」共 " .. #matches .. " 处:\n" .. result
 
   elseif name == "check_lua_syntax" then
     local code = args.code or ""
@@ -978,17 +899,16 @@ local function legacyExecuteTool(name, args)
       if mediaDir then crashDir = mediaDir.getAbsolutePath() .. "/crash" end
     end)
 
-    local File = luajava.bindClass("java.io.File")
     local System = luajava.bindClass("java.lang.System")
     local Thread = luajava.bindClass("java.lang.Thread")
+    -- listMeta 一次取回崩溃目录的 mtime，免去逐文件 File 对象
     local before = 0
     if crashDir then
       pcall(function()
-        local names = file.list(crashDir)
-        if not names then return end
-        for _, name in ipairs(names) do
-          local okM, m = pcall(function() return File(crashDir, tostring(name)).lastModified() end)
-          if okM and type(m) == "number" and m > before then before = m end
+        local entries = LuaFileUtil.listMeta(crashDir)
+        for _, entry in ipairs(entries) do
+          local m = tonumber(entry.mtime) or 0
+          if m > before then before = m end
         end
       end)
     end
@@ -1010,13 +930,11 @@ local function legacyExecuteTool(name, args)
         pcall(function() Thread.sleep(250) end)
         local hit = nil
         pcall(function()
-          local names = file.list(crashDir)
-          if not names then return end
-          for _, name in ipairs(names) do
-            local path = crashDir .. "/" .. tostring(name)
-            local okM, m = pcall(function() return File(crashDir, tostring(name)).lastModified() end)
-            if okM and type(m) == "number" and m > before then
-              if not hit or m > hit.m then hit = { path = path, m = m } end
+          local entries = LuaFileUtil.listMeta(crashDir)
+          for _, entry in ipairs(entries) do
+            local m = tonumber(entry.mtime) or 0
+            if m > before then
+              if not hit or m > hit.m then hit = { path = crashDir .. "/" .. tostring(entry.name), m = m } end
             end
           end
         end)

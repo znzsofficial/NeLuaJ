@@ -165,6 +165,114 @@ object LuaFileUtil {
     fun lastModified(path: String): Long =
         File(path).takeIf { it.exists() }?.lastModified() ?: 0L
 
+    private val SKIP_DIRS = setOf(
+        ".git", ".svn", ".hg", ".idea", ".gradle", "build", "dist",
+        "target", "node_modules", "bin", "obj", ".cxx"
+    )
+
+    /**
+     * 递归列出目录树，返回相对路径数组（目录带 / 后缀，逐层按名称排序）。
+     * [filter] 为空白时不过滤；跳过版本控制与构建目录。
+     */
+    fun listTree(path: String, filter: String, maxItems: Int, maxDepth: Int): LuaTable {
+        val result = LuaTable()
+        val root = File(path)
+        if (!root.isDirectory) return result
+        val flt = (filter ?: "").trim()
+        var count = 0
+
+        fun walk(dir: File, prefix: String, depth: Int) {
+            if (count >= maxItems || depth > maxDepth) return
+            val entries = dir.listFiles() ?: return
+            for (f in entries.sortedBy { it.name }) {
+                if (count >= maxItems) return
+                val rel = prefix + f.name + (if (f.isDirectory) "/" else "")
+                if (flt.isEmpty() || rel.contains(flt) || f.name.contains(flt)) {
+                    count++
+                    result.set(count, rel.toLuaValue())
+                }
+                if (f.isDirectory && f.name !in SKIP_DIRS) {
+                    walk(f, rel, depth + 1)
+                }
+            }
+        }
+        walk(root, "", 0)
+        return result
+    }
+
+    /**
+     * 在目录树内做文本搜索（子串匹配，非正则）。
+     * 返回 { matches = { "路径:行号: 内容" }, scanned = 已扫描文件数 }。
+     * 跳过版本控制与构建目录、超过 [maxFileKB] 的文件与二进制文件（NUL 检测）。
+     */
+    fun searchInFiles(
+        root: String,
+        pattern: String,
+        ignoreCase: Boolean,
+        maxResults: Int,
+        maxFileKB: Int
+    ): LuaTable {
+        val result = LuaTable()
+        val matches = LuaTable()
+        result.set("matches", matches)
+        result.set("scanned", 0.toLuaValue())
+        val rootDir = File(root)
+        if (pattern.isEmpty() || !rootDir.isDirectory) return result
+        var scanned = 0
+        var found = 0
+        val maxBytes = maxFileKB.coerceAtLeast(1) * 1024L
+        val maxScanFiles = 2000
+        val maxDepth = 8
+
+        fun walk(dir: File, depth: Int) {
+            if (found >= maxResults || scanned >= maxScanFiles || depth > maxDepth) return
+            val entries = dir.listFiles() ?: return
+            for (f in entries.sortedBy { it.name }) {
+                if (found >= maxResults || scanned >= maxScanFiles) return
+                if (f.isDirectory) {
+                    if (f.name !in SKIP_DIRS) walk(f, depth + 1)
+                    continue
+                }
+                scanned++
+                val length = f.length()
+                if (length <= 0 || length > maxBytes) continue
+                try {
+                    val bytes = f.readBytes()
+                    // 二进制嗅探：含 NUL 跳过（与原 Lua 实现一致）
+                    var binary = false
+                    for (b in bytes) {
+                        if (b == 0.toByte()) {
+                            binary = true
+                            break
+                        }
+                    }
+                    if (binary) continue
+                    val content = String(bytes, Charsets.UTF_8)
+                    var lineno = 0
+                    for (line in content.lineSequence()) {
+                        lineno++
+                        val hit = if (ignoreCase) {
+                            line.contains(pattern, ignoreCase = true)
+                        } else {
+                            line.contains(pattern)
+                        }
+                        if (hit) {
+                            found++
+                            matches.set(found, (f.path + ":" + lineno + ": " + line).toLuaValue())
+                            if (found >= maxResults) return
+                        }
+                    }
+                } catch (_: Exception) {
+                    // 单个文件读取/解码失败不影响整体搜索
+                }
+            }
+        }
+        walk(rootDir, 0)
+        result.set("matches", matches)
+        result.set("scanned", scanned.toLuaValue())
+        return result
+    }
+
     interface Impl {
         fun write(path: String, content: String): Boolean
         fun read(path: String): String
