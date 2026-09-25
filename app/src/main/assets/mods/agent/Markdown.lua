@@ -20,7 +20,28 @@ local function escapeHtml(text)
   return text
 end
 
---- 把文本段渲染为 Spanned，支持标题、列表、粗体、斜体和行内代码。
+--- 表格行解析：`| a | b |` → 单元格数组（保留空单元格）
+function _M.splitTableRow(line)
+  local body = line:gsub("^%s*|", ""):gsub("|%s*$", "")
+  local cells = {}
+  for cell in (body .. "|"):gmatch("(.-)|") do
+    cells[#cells + 1] = cell:gsub("^%s*", ""):gsub("%s*$", "")
+  end
+  return cells
+end
+
+--- 分隔行：| --- | :---: | 之类只含 -、:、空白的行
+function _M.isTableSeparator(line)
+  if not line:match("^%s*|") then return false end
+  local cells = _M.splitTableRow(line)
+  if #cells == 0 then return false end
+  for _, cell in ipairs(cells) do
+    if not cell:match("^:?%-+:?$") then return false end
+  end
+  return true
+end
+
+--- 把文本段渲染为 Spanned，支持标题、列表、粗体、斜体、行内代码与表格。
 function _M.renderMarkdown(text)
   local function inline(source)
     local html = escapeHtml(source)
@@ -46,40 +67,76 @@ function _M.renderMarkdown(text)
   end
 
   text = tostring(text or ""):gsub("\r\n", "\n")
+  local lines = {}
+  for line in (text .. "\n"):gmatch("(.-)\n") do
+    lines[#lines + 1] = line
+  end
   local html = {}
   local inList = nil
   local function closeList()
     if inList then html[#html + 1] = "</" .. inList .. ">"; inList = nil end
   end
-  for line in (text .. "\n"):gmatch("(.-)\n") do
-    local headingLevel, heading = line:match("^%s*(#+)%s+(.+)$")
-    local bullet = line:match("^%s*[-*+]%s+(.+)$")
-    local ordered = line:match("^%s*%d+[%.%)]%s+(.+)$")
-    local quote = line:match("^%s*>%s?(.*)$")
-    if heading and #headingLevel <= 3 then
+
+  --- 分隔行检测走模块级共享实现
+  local isTableSeparator = _M.isTableSeparator
+  local splitTableRow = _M.splitTableRow
+
+  local function renderTableRow(cells, tag)
+    local rendered = {}
+    for _, cell in ipairs(cells) do
+      rendered[#rendered + 1] = "<" .. tag .. ">" .. inline(cell) .. "</" .. tag .. ">"
+    end
+    return "<tr>" .. table.concat(rendered) .. "</tr>"
+  end
+
+  local i = 1
+  while i <= #lines do
+    local line = lines[i]
+    -- 表格块：表头行 + 分隔行 + 任意数据行
+    if line:match("^%s*|") and lines[i + 1] and isTableSeparator(lines[i + 1]) then
       closeList()
-      local level = #headingLevel
-      if level == 1 then
-        html[#html + 1] = "<big><big><b>" .. inline(heading) .. "</b></big></big><br><br>"
-      elseif level == 2 then
-        html[#html + 1] = "<big><b>" .. inline(heading) .. "</b></big><br>"
-      else
-        html[#html + 1] = "<b>" .. inline(heading) .. "</b><br>"
+      local headerCells = splitTableRow(line)
+      local rowsHtml = {}
+      local j = i + 2
+      while j <= #lines and lines[j]:match("^%s*|") do
+        rowsHtml[#rowsHtml + 1] = renderTableRow(splitTableRow(lines[j]), "td")
+        j = j + 1
       end
-    elseif line:match("^%s*[-*_]%s*[-*_]%s*[-*_]%s*[-*_]%s*[-*_]%s*$") then
-      closeList(); html[#html + 1] = "<hr>"
-    elseif bullet then
-      if inList ~= "ul" then closeList(); html[#html + 1] = "<ul>"; inList = "ul" end
-      html[#html + 1] = "<li>" .. inline(bullet) .. "</li>"
-    elseif ordered then
-      if inList ~= "ol" then closeList(); html[#html + 1] = "<ol>"; inList = "ol" end
-      html[#html + 1] = "<li>" .. inline(ordered) .. "</li>"
-    elseif quote then
-      closeList(); html[#html + 1] = "<blockquote><i>" .. inline(quote) .. "</i></blockquote>"
-    elseif line:match("^%s*$") then
-      closeList(); html[#html + 1] = "<br>"
+      html[#html + 1] = "<table>"
+        .. renderTableRow(headerCells, "th") .. table.concat(rowsHtml)
+        .. "</table><br>"
+      i = j
     else
-      closeList(); html[#html + 1] = inline(line) .. "<br>"
+      local headingLevel, heading = line:match("^%s*(#+)%s+(.+)$")
+      local bullet = line:match("^%s*[-*+]%s+(.+)$")
+      local ordered = line:match("^%s*%d+[%.%)]%s+(.+)$")
+      local quote = line:match("^%s*>%s?(.*)$")
+      if heading and #headingLevel <= 3 then
+        closeList()
+        local level = #headingLevel
+        if level == 1 then
+          html[#html + 1] = "<big><big><b>" .. inline(heading) .. "</b></big></big><br><br>"
+        elseif level == 2 then
+          html[#html + 1] = "<big><b>" .. inline(heading) .. "</b></big><br>"
+        else
+          html[#html + 1] = "<b>" .. inline(heading) .. "</b><br>"
+        end
+      elseif line:match("^%s*[-*_]%s*[-*_]%s*[-*_]%s*[-*_]%s*[-*_]%s*$") then
+        closeList(); html[#html + 1] = "<hr>"
+      elseif bullet then
+        if inList ~= "ul" then closeList(); html[#html + 1] = "<ul>"; inList = "ul" end
+        html[#html + 1] = "<li>" .. inline(bullet) .. "</li>"
+      elseif ordered then
+        if inList ~= "ol" then closeList(); html[#html + 1] = "<ol>"; inList = "ol" end
+        html[#html + 1] = "<li>" .. inline(ordered) .. "</li>"
+      elseif quote then
+        closeList(); html[#html + 1] = "<blockquote><i>" .. inline(quote) .. "</i></blockquote>"
+      elseif line:match("^%s*$") then
+        closeList(); html[#html + 1] = "<br>"
+      else
+        closeList(); html[#html + 1] = inline(line) .. "<br>"
+      end
+      i = i + 1
     end
   end
   closeList()
