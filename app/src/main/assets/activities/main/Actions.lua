@@ -194,11 +194,6 @@ function Actions.openHelp()
   ActivityUtil.open("help")
 end
 
-function Actions.openSetting()
-  -- 设置页唯一宿主已迁至首页：返回首页并定位「设置」tab
-  ActivityUtil.finishWith("open_settings_tab")
-end
-
 function Actions.openResource()
   ActivityUtil.open("resource")
 end

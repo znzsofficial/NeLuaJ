@@ -306,7 +306,6 @@ function onCreateOptionsMenu(menu)
     addAction(menu, res.string.search, icon("search"), Actions.showSearchBar, SHOW_AS_ACTION_ALWAYS)
     addAction(menu, res.string.format, icon("format"), Actions.formatCode, SHOW_AS_ACTION_IF_ROOM)
     addAction(menu, res.string.layout_helper, icon("layout_helper"), Actions.openLayoutHelper, SHOW_AS_ACTION_IF_ROOM)
-    addAction(menu, res.string.setting, icon("settings"), Actions.openSetting, SHOW_AS_ACTION_IF_ROOM)
     addAction(menu, res.string.help, icon("help"), Actions.openHelp, SHOW_AS_ACTION_IF_ROOM)
   end
 
@@ -352,9 +351,6 @@ function onCreateOptionsMenu(menu)
     local ActivityUtil = require "mods.utils.ActivityUtil"
     ActivityUtil.open("agent_center", Bean.Path.this_dir)
   end, nil, icon("ic_command"))
-  if not tablet then
-    addItem(moreMenu, res.string.setting, Actions.openSetting, nil, icon("settings"))
-  end
 
   addItem(menu, res.string.exit, function() activity.finish(true) end, nil, icon("exit"))
 
