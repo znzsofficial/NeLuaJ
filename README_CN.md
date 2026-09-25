@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Android-green)](https://developer.android.com)
 
-**基于 LuaJ 的现代 Android 开发环境**
+**AI 加持的 Android Lua IDE**
 
 [English](README.md) | [简体中文](README_CN.md)
 
@@ -14,184 +14,106 @@
 
 <br>
 
-**NeLuaJ+** 是一个现代化的 Android Lua 开发环境，基于 LuaJ 引擎并在其基础上进行了深度扩展。它允许开发者使用 Lua 语言直接调用 Android API，编写原生 Android 应用。本项目完全拥抱 **AndroidX** 生态，集成了 **Kotlin 协程**、**Coil 3** 图片加载库，并提供了丰富的内置功能，以支持高效的移动端开发。
+**NeLuaJ+** 是一个在手机上用 Lua 构建 Android 应用的 IDE，并把 AI 编码代理内建进了开发流程。用 Lua 表声明式写界面、在设备上直接运行，还有一个面向当前工程的智能体，能随你一起读写、打补丁、搜索、运行乃至打包代码。
 
-## ✨ 核心特性
+## ✨ 核心亮点
 
-根据代码库分析，NeLuaJ+ 提供了以下核心功能：
+### 🤖 内建 AI 代理（`mods/agent`）
 
-- **🚀 现代化技术栈**
-    - **完全迁移至 AndroidX**：`LuaActivity` 继承自 `AppCompatActivity`，支持最新的 Android 组件和 Material Design。
-    - **Kotlin 协程支持**：内置协程作用域 (`lifecycleScope`)，支持异步任务处理，告别传统线程管理的复杂性。
-    - **Coil 3 图片加载**：集成最新的 Coil 3 库，支持高效的图片加载与缓存，通过 `lua` 接口可直接调用。
+- **带真实工具的代理循环** —— 20 个内置工具跑在 `AgentTurn` 回合状态机上（generation 守卫、无硬上限工具循环）：文件读写、多格式**补丁引擎**（search-replace / 统一 diff / 整文件替换）、工程内搜索、工程运行器，以及把工程打包成 APK 的**构建器交接**。
+- **并行与委托执行** —— 只读工具批量并发；`run_subtask` 派生隔离子代理并展示实时进度卡；破坏性操作需显式确认。
+- **安全的代码执行** —— 模型生成的 Lua 跑在独立的 `:lua_sandbox` 进程里：无文件系统与 Android 访问、严格超时、白名单 HTTPS 出口；公开网页读取也经加固的只许公网的抓取器。
+- **文件变更是事务** —— 每次修改都被 `ChangeSet` 快照，带 fingerprint 冲突检测、按工程的撤销/恢复，以及部分失败时的回滚。
+- **上下文自我管理** —— 按模型上下文窗口自动压缩历史、待办计划注入提示词、本地 `SKILL.md` 技能，以及供廉价任务（标题、压缩、轻量子代理）使用的**辅助模型路由**。
+- **MCP 支持** —— 经 Streamable HTTP 挂载外部 MCP 服务器，一键 `context7` / `deepwiki` 预设，单服务器连接测试。
+- **会话工作台** —— 会话按工程持久化、自动生成标题、按会话的 token 用量、面板内搜索、导出、重新生成 / 编辑重发，以及带表格的 Markdown 渲染。详见 [docs/AIAgent.md](./docs/AIAgent.md)。
 
-- **🔧 强大的 Lua 互操作性**
-    - **原生 API 访问**：通过 `LuaJava` 桥接技术，可直接在 Lua 中调用 Java/Android 类库（如 `android.widget.TextView`）。
-    - **增强的接口代理**：支持 `luajava.createProxy`、`JavaClass(function)` 函数式接口代理，以及多个 Java 接口组合实现。
-    - **全局环境增强**：内置 `activity`、`this`、`call` 等全局变量，以及 `print`、`printf` 等标准输出函数。
-    - **布局动态加载**：提供 `loadlayout` 函数，支持将 Lua 表结构直接转换为 Android View 层次结构，实现声明式 UI 开发。
+### ☕ 超越原版 LuaJ 的 Java 互操作
 
-- **⚡ 内置实用工具**
-    - **多线程与并发**：提供 `xTask`、`thread`、`timer` 等函数，轻松实现多线程操作和定时任务。
-    - **网络请求**：内置 `okHttp` (基于 OkHttp) 和 `http` 模块，支持同步/异步网络请求。
-    - **文件与数据**：集成 `json` 解析库和 `file` 操作模块，方便数据处理与本地存储。
-    - **Dex 动态加载**：支持 `LuaDexLoader`，可在运行时加载外部 `.dex` 或 `.jar` 文件，实现插件化扩展。
+- **行为像 Java 对象的代理** —— 单方法接口直接用函数实现（`Runnable(function() ... end)`）；`luajava.createProxy(...)` 一个代理组合多个接口；`override` 可继承 Java 类，被覆写方法的第一个参数是调用原实现的 `superCall`。代理默认获得 Java 语义的 `equals` / `hashCode` / `toString`，可安全放进 `HashMap` 等容器。
+- **确定性的成员选择** —— 重载评分有歧义时，`luajava.constructor` / `luajava.method` 按精确 public 参数类型选择成员；自动数值评分基于完整 64 位 Lua 整数判断范围，`byte` / `short` / `char` / `int` 重载按值而非截断结果胜出。
+- **Kotlin 优先的桥接，不依赖 kotlin-reflect** —— `luajava.kotlinObject` / `luajava.kotlinCompanion` 访问 Kotlin `object` 与 companion 单例；`@JvmStatic` 成员可从 `bindClass` 直接调用。Java 与 Kotlin 成员统一使用点调用。
+- **集合是一等公民** —— `luajava.iterate` 支持数组、`Map`、`Iterable` / `Iterator` 与 Kotlin `Sequence` 的泛型 `for` 遍历；`#` 对 Map 和所有集合生效；`luajava.toTable` / `toList` / `toSet` / `toMap` 在 Lua 表与 Java 容器间转换。
+- **插件安全的动态加载** —— `loadDex` / `loadJar` 的类经 loader 感知缓存解析（`JavaClass` 以 `Class<?>` 为键、弱引用持有，loader 变更时失效包缓存），不同 `DexClassLoader` 的同名类相互独立，卸载的工程可被正常回收。
+- **桥接层在项目源码内维护** —— 关键 `org.luaj.lib.jse` 桥接类在构建时由项目源码接管，UTF-8 正确的字符串内部实现、协程驱动的 `xTask`，均有本地单元测试回归。详见 [docs/LuaJRuntime.md](./docs/LuaJRuntime.md)。
 
-- **🤖 内置 AI 编码助手（`mods/agent`）**
-    - **对话与工具调用**：OpenAI 兼容流式 `/chat/completions` 客户端，内置失败自动重试/退避、文件与项目工具（创建、编辑、补丁、搜索、沙盒运行 Lua），以及破坏性操作确认流程。
-    - **MCP 支持**：管理 MCP 服务器（发现与调用工具），一键添加 `context7`、`deepwiki` 预设，处理基于会话的 Streamable HTTP 协议，并支持单服务器连接测试。
-    - **会话管理**：多个命名会话与历史持久化、模型预设、国际化（`res/string/` 下 `ai_*` 键）。详见 [docs/AIAgent.md](./docs/AIAgent.md)。
+```lua
+import "java.lang.Runnable"
+
+-- 单方法接口用普通函数实现
+local r = Runnable(function() print("run") end)
+
+-- 继承 Java 类；superCall 调用原实现
+local List = ArrayList.override {
+  add = function(superCall, v)
+    print("add:", v)
+    return superCall(v)
+  end,
+}
+
+-- 泛型 for 遍历 Java 容器
+for i, item in luajava.iterate(someJavaList) do
+  print(i, item)
+end
+```
+
+### 🧪 工程化
+
+- **Lua 代码库的 JVM 行为测试**：8 个套件 / 200+ 断言，桌面端 `.\tests\run_tests.ps1` 直接运行，无需设备。方法论与套件清单见 [tests/README.md](./tests/README.md)。
+- Lua 改动过 **LuaC 语法门禁**；Kotlin 层由 Gradle 构建验证。
 
 ## 🛠️ 快速开始
 
-### 环境要求
-- Android Studio Ladybug 或更高版本
-- JDK 17+
-- Android SDK 33+
+环境要求：Android Studio Ladybug 及以上、JDK 17+、Android SDK 33+。
 
-### 构建项目
-如果你想使用打包器生成发布版本，可前往：[NeLuaJ-Builder](https://github.com/znzsofficial/NeLuaJ-Builder)。IDE 侧对接协议见 [docs/BuilderHandoff.md](./docs/BuilderHandoff.md)。
+```bash
+git clone https://github.com/znzsofficial/NeLuaJ.git
+cd NeLuaJ
+./gradlew assembleRelease
+```
 
-1.  **克隆仓库**
-    ```bash
-    git clone https://github.com/znzsofficial/NeLuaJ.git
-    cd NeLuaJ
-    ```
+要把 Lua 工程打包成独立 APK，请使用配套构建器：[NeLuaJ-Builder](https://github.com/znzsofficial/NeLuaJ-Builder)。IDE ⇄ 构建器的交接协议见 [docs/BuilderHandoff.md](./docs/BuilderHandoff.md)。
 
-2.  **编译 APK**
-    ```bash
-    ./gradlew assembleRelease
-    ```
-    编译产物位于 `app/build/outputs/apk/release/` 目录下。
-
-## 📝 使用指南
-
-### 1. Hello World
-在 `main.lua` 中编写如下代码即可显示一个简单的界面：
+## 📝 Hello World
 
 ```lua
-require "import"
 import "android.widget.*"
-import "android.view.*"
 
--- 定义布局
 layout = {
   LinearLayout,
-  orientation="vertical",
-  layout_width="match_parent",
-  layout_height="match_parent",
-  gravity="center",
+  orientation = "vertical",
+  layout_width = "match_parent",
+  layout_height = "match_parent",
+  gravity = "center",
   {
     TextView,
-    text="Hello, NeLuaJ+!",
-    textSize="24sp",
-    textColor="#333333"
+    text = "Hello, NeLuaJ+!",
+    textSize = "24sp",
   },
   {
     Button,
-    text="点击我",
-    onClick=function(v)
-      print("按钮被点击了！")
-      Toast.makeText(activity, "欢迎使用 NeLuaJ+", Toast.LENGTH_SHORT).show()
-    end
-  }
+    text = "点我",
+    onClick = function()
+      print("Clicked!")
+    end,
+  },
 }
 
--- 加载布局
 activity.setContentView(loadlayout(layout))
 ```
 
-### 2. 异步网络请求 (OkHttp)
-NeLuaJ+ 提供了强大的 `okHttp` 模块用于处理异步网络请求。
+Lua 运行时保留了熟悉的声明式开发体验——`loadlayout`、`luajava` 桥接、`task` / `thread` / `timer`、`okHttp`、`json`、动态 dex 加载——文档见 [docs/LuaJRuntime.md](./docs/LuaJRuntime.md)、[docs/LuaActivity.md](./docs/LuaActivity.md) 与 [docs/LuaLayout.md](./docs/LuaLayout.md)。
 
-```lua
--- GET 请求
-okHttp.get("https://www.baidu.com", nil, function(code, body, response)
-  print("响应代码: " .. code)
-  print("内容长度: " .. #body)
-end)
+## 📚 文档
 
--- POST JSON 请求
-local jsonData = '{"key": "value"}'
-local headers = {["Content-Type"] = "application/json"}
-
-okHttp.postJson("https://api.example.com/data", jsonData, headers, function(code, body, response)
-  if code == 200 then
-    print("成功: " .. body)
-  else
-    print("错误: " .. code)
-  end
-end)
-```
-
-### 3. Java 接口代理
-
-`LuaJava` 支持使用 Lua 表或函数实现 Java 接口。单方法接口可以直接传入函数，多接口代理会按所有接口查找方法；未实现 `equals`、`hashCode`、`toString` 时会回退到 Java 默认对象语义，便于代理对象作为 `HashMap` 等容器的键使用。
-
-```lua
-require "import"
-import "java.lang.Runnable"
-import "java.io.Closeable"
-import "java.util.Map"
-
--- 单方法接口函数式写法
-local runnable = Runnable(function()
-  print("running")
-end)
-
--- 多接口代理
-local proxy = luajava.createProxy(Map, Closeable, {
-  get = function(key)
-    return key
-  end,
-  close = function()
-    print("closed")
-  end
-})
-
-proxy.get("name")
-proxy.close()
-```
-
-也可以通过 `override` 继承 Java 类或抽象类并覆盖指定方法。覆盖方法的第一个参数是 `superCall`，调用它可以执行父类原方法；未覆盖的方法保持 Java 原本行为。
-
-```lua
-require "import"
-import "java.util.ArrayList"
-
-local MyList = ArrayList.override {
-  add = function(superCall, value)
-    print("add:", value)
-    return superCall(value)
-  end
-}
-
-local list = MyList()
-list.add("item")
-```
-
-## 📚 API 参考
-
-以下是 `LuaActivity` 注入到 Lua 全局环境中的主要变量和函数：
-
-| 变量/函数 | 描述 |
-| :--- | :--- |
-| `activity` / `this` | 当前的 `LuaActivity` 实例 (继承自 `AppCompatActivity`) |
-| `print(msg)` | 在控制台或日志视图中输出信息 |
-| `printf(fmt, ...)` | 格式化输出 |
-| `loadlayout(table)` | 将 Lua 表解析为 Android View |
-| `task(func, callback)` | 在后台线程执行函数，并在主线程回调结果 |
-| `thread(func)` | 启动一个新的线程 |
-| `timer(func, delay, period)` | 启动定时器 |
-| `okHttp` | 异步 OkHttp 客户端实例 |
-| `json` | JSON 解析库 |
-| `ext` | 扩展库，提供 Lua 5.5 风格的二进制辅助函数：`pack`、`unpack`、`packsize` |
-| `import` | 导入 Java 类 (需要 `require "import"`) |
+- [AI 代理](./docs/AIAgent.md) —— 工具、MCP、会话模型
+- [构建器交接](./docs/BuilderHandoff.md) —— 打包用户工程
+- [Lua 运行时](./docs/LuaJRuntime.md) · [LuaActivity](./docs/LuaActivity.md) · [布局](./docs/LuaLayout.md)
+- [测试](./tests/README.md) —— 方法论、套件与新增方式
 
 ## 📄 许可证
 
 本项目基于 [Apache License 2.0](LICENSE) 开源。
 
 ---
-**注意**：本项目处于活跃开发中，API 可能会随版本更新而变化。建议查阅源码 (`LuaActivity.kt`) 获取最新信息。
-
+**注**：项目处于活跃开发中，API 可能随版本变化；请以源码与上述文档为准。
