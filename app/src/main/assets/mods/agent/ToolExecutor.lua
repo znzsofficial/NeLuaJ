@@ -24,6 +24,8 @@ local aliases = {
   todo = "update_todos", todos = "update_todos", todo_write = "update_todos",
   update_todo = "update_todos", write_todos = "update_todos",
   build = "build_project", build_apk = "build_project", package = "build_project", package_project = "build_project",
+  subtask = "run_subtask", delegate = "run_subtask", dispatch_task = "run_subtask",
+  run_agent = "run_subtask", spawn_agent = "run_subtask",
 }
 
 function _M.configure(options)
@@ -83,6 +85,7 @@ function _M.normalizeToolName(name, args)
     elseif args.path and args.new_path then name = "rename_file"
     elseif args.content then name = "create_file"
     elseif args.todos then name = "update_todos"
+    elseif args.task then name = "run_subtask"
     elseif args.path then name = "read_file" end
   end
   return name

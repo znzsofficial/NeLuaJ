@@ -13,6 +13,7 @@ local ToolExecutor = require("mods.agent.ToolExecutor")
 local SkillManager = require("mods.agent.SkillManager")
 local TodoManager = require("mods.agent.TodoManager")
 local PatchEngine = require("mods.agent.PatchEngine")
+local SubagentRunner = require("mods.agent.SubagentRunner")
 local AiHttpClient = luajava.bindClass("com.nekolaska.ai.AiHttpClient")
 local agentHttp = AiHttpClient(activity)
 local activeSkill = nil
@@ -42,6 +43,7 @@ local SYSTEM_PROMPT = [[
 - 用户拒绝工具后，不得通过别名、拆分调用、其他工具或重复请求绕过确认。
 - 写入类工具（create_file / apply_patch / replace_in_file / append_file）对 .lua 文件自动做语法预检：失败时不落盘并把语法错误返回给你，此时根据错误修正后重试即可，不要改用其他工具绕过，也不要重复提交完全相同的补丁。
 - 修改后执行与改动相关的验证。语法已在写入时预检通过则无需重复 check_lua_syntax；纯逻辑可使用 run_lua；需要验证真实运行行为（界面、生命周期、Android API）时使用 run_project 启动工程入口并根据返回的崩溃日志修复；需要打包 APK 时使用 build_project 检查 init.lua 配置并调起打包器；有构建、测试或明确复现步骤时应执行并根据结果修复。无法验证时说明原因，不得把计划写成已完成。
+- 需要多轮独立调查（跨多文件检索、崩溃日志分析、方案对比）时，可用 run_subtask 委派子代理完成并取回精简结果；任务描述必须自包含，子代理看不到当前对话。两三轮工具调用就能完成的任务不要委派。
 
 # 评审
 
@@ -420,6 +422,21 @@ _M.TOOLS = {
           },
         },
         required = { "todos" },
+      },
+    },
+  },
+  {
+    type = "function",
+    ["function"] = {
+      name = "run_subtask",
+      description = "委派子代理在隔离上下文中独立完成一个调查或实现任务，并取回精简结果。子代理拥有完整的文件与运行工具，但不继承当前对话历史，任务描述必须自包含（目标、相关路径与背景、期望的产出形式）。适合多文件调研、问题定位、方案对比等需要大量工具往返的工作；简单任务直接自己做。",
+      parameters = {
+        type = "object",
+        properties = {
+          task = { type = "string", description = "自包含的任务描述" },
+          lightweight = { type = "boolean", description = "用辅助模型执行（适合纯调研任务，默认 false 用当前模型）" },
+        },
+        required = { "task" },
       },
     },
   },
@@ -1293,6 +1310,9 @@ local function legacyExecuteTool(name, args)
       return "重命名失败\n原路径: " .. src .. "\n目标: " .. dst .. "\n原因: " .. tostring(err), false
     end
 
+  elseif name == "run_subtask" then
+    return SubagentRunner.run(args.task, args.lightweight == true)
+
   elseif name == "update_todos" then
     return TodoManager.update(args.todos)
 
@@ -1782,6 +1802,18 @@ ToolExecutor.configure({
   end,
   platformExecute = legacyExecuteTool,
   changeSet = ChangeSet,
+})
+-- 子代理能力注入（UI 确认钩子由 ChatUI 在面板装配时补充）
+SubagentRunner.configure({
+  getBuiltinTools = function() return _M.TOOLS end,
+  getSystemPrompt = function() return _M.getSystemPrompt() end,
+  sendStream = function(messages, callbacks) return _M.sendStream(messages, callbacks) end,
+  getAuxModelConfig = function() return ModelRegistry.getAuxModelConfig() end,
+  normalizeToolName = ToolExecutor.normalizeToolName,
+  executeToolAsync = ToolExecutor.executeToolAsync,
+  shouldAutoApprove = ToolExecutor.shouldAutoApprove,
+  requiresConfirmation = ToolExecutor.requiresConfirmation,
+  isDestructiveTool = ToolExecutor.isDestructiveTool,
 })
 _M.testConnection = OpenAIClient.testConnection
 _M.sendStream = OpenAIClient.sendStream

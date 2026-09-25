@@ -5,6 +5,7 @@ local _M = {}
 
 local AgentChat = require("mods.agent.AgentChat")
 local TodoManager = require("mods.agent.TodoManager")
+local SubagentRunner = require("mods.agent.SubagentRunner")
 local S = res.string
 
 -- 编辑器刷新依赖 EditorUtil 全局；自行 import，不依赖 ChatUI 的副作用
@@ -94,6 +95,7 @@ function _M.retryPayloadFor(message) return state.retryPayloads[message] end
 -- 用户主动停止：保持当前 generation，让取消回调能保存已生成的部分文本。
 function _M.requestStop()
   state.stopRequested = true
+  pcall(SubagentRunner.cancel)
   if hooks.cancelToolConfirm then hooks.cancelToolConfirm() end
   AgentChat.cancelPendingRequest()
   if AgentChat.cancelPendingTools then AgentChat.cancelPendingTools() end
@@ -106,6 +108,7 @@ end
 -- 彻底作废当前回合：切工程、清空会话、新建会话时调用。
 function _M.invalidate()
   state.stopRequested = true
+  pcall(SubagentRunner.cancel)
   if hooks.cancelToolConfirm then hooks.cancelToolConfirm() end
   state.generation = state.generation + 1
   state.stopRequested = false

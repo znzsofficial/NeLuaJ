@@ -590,7 +590,8 @@ function _M.buildRequest(cfg, messages, callbacks)
     )
   end
   if toolsEnabled then
-    local tools = collectTools(cfg)
+    -- callbacks.builtinTools：单请求工具集覆盖（子代理排除部分工具时使用）
+    local tools = type(callbacks.builtinTools) == "table" and callbacks.builtinTools or collectTools(cfg)
     if legacyFunctionMode then
       body.functions = legacyFunctions(tools)
       if #body.functions > 0 then body.function_call = "auto" end

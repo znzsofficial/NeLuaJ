@@ -25,6 +25,7 @@ local AgentChat = require("mods.agent.AgentChat")
 local AgentTurn = require("mods.agent.AgentTurn")
 local MCPClient = require("mods.agent.MCPClient")
 local TodoManager = require("mods.agent.TodoManager")
+local SubagentRunner = require("mods.agent.SubagentRunner")
 local ActivityUtil = require("mods.utils.ActivityUtil")
 import "mods.utils.EditorUtil"
 local ColorUtil = this.themeUtil
@@ -146,6 +147,7 @@ local function toolDisplayName(name)
     run_project = S.run_project,
     build_project = S.build_project,
     update_todos = S.ai_tool_todo,
+    run_subtask = S.ai_tool_subtask,
   }
   return labels[name] or tostring(name or "")
 end
@@ -612,7 +614,8 @@ addToolBubble = function(toolName, args, result)
   elseif toolName == "get_env_info" then icon = "ℹ"
   elseif toolName == "fetch_url" then icon = "↗"
   elseif toolName == "run_project" then icon = "▶"
-  elseif toolName == "build_project" then icon = "📦" end
+  elseif toolName == "build_project" then icon = "📦"
+  elseif toolName == "run_subtask" then icon = "⚑" end
 
   local resultText = tostring(result or "")
   local resultLower = resultText:lower()
@@ -3706,6 +3709,21 @@ end
 
 -- ─── 回合状态机装配 ──
 -- 编排逻辑全部位于 AgentTurn；此处注入视图钩子。
+
+-- 子代理的 UI 侧钩子：工具确认复用全局确认对话框，
+-- 状态条实时显示子任务进度，模型请求计入会话用量统计
+SubagentRunner.configure({
+  showToolConfirm = function(name, args, onAllow, onDeny)
+    showToolConfirm(name, args, onAllow, onDeny)
+  end,
+  setStatus = function(text)
+    AgentTurn.setLoadingStatus(text)
+  end,
+  reportUsage = function(used)
+    convUsage.requests = convUsage.requests + 1
+    convUsage.tokens = convUsage.tokens + math.max(0, tonumber(used) or 0)
+  end,
+})
 
 AgentTurn.configure({
   getMessages = function() return messages end,
