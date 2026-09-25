@@ -191,6 +191,19 @@ return {
     padding = "12dp",
     paddingTop = "8dp",
     {
+      -- 编辑器上下文指示：点击预览 / 本次跳过
+      MaterialTextView,
+      id = "ctxChip",
+      visibility = 8,
+      textSize = "11sp",
+      textColor = ColorText,
+      padding = "4dp",
+      paddingLeft = "8dp",
+      paddingRight = "8dp",
+      clickable = true,
+      focusable = true,
+    },
+    {
       LinearLayout,
       layout_width = "match",
       layout_height = "wrap",

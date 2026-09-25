@@ -735,6 +735,35 @@ local function updatePlanStrip()
   views.planStrip.setVisibility(VISIBLE)
 end
 
+--- 编辑器上下文指示：显示发送时将附带的上下文摘要，点击预览/本次跳过。
+--- buildContext 静默拼接当前文件内容——这里让它可见、可控。
+local skipContext = false
+
+local function updateContextChip()
+  if not views.ctxChip then return end
+  local context = AgentChat.buildContext()
+  if context == "" then
+    skipContext = false
+    views.ctxChip.setVisibility(GONE)
+    return
+  end
+  local thisFile = Bean and Bean.Path and Bean.Path.this_file or ""
+  local name = thisFile ~= "" and tostring(thisFile):gsub("^.*/", "") or S.ai_ctx_env
+  local label
+  if skipContext then
+    label = "📎 " .. S.ai_ctx_skipped
+  else
+    local tokens = 0
+    pcall(function()
+      local ContextManager = require("mods.agent.ContextManager")
+      tokens = ContextManager.estimateTokens(context)
+    end)
+    label = "📎 " .. S.ai_ctx_chip:format(name) .. " · ~" .. tokens .. " tokens"
+  end
+  views.ctxChip.setText(label)
+  views.ctxChip.setVisibility(VISIBLE)
+end
+
 --- 添加工具操作气泡（显示工具名和参数摘要）
 addToolBubble = function(toolName, args, result)
   local container = views.msgContainer
@@ -1382,6 +1411,7 @@ loadHistory = function(resetTurnHistory)
   if updateProjectLabel then updateProjectLabel() end
   if views.aiTitle and conv then views.aiTitle.setText(convName(conv)) end
   updatePlanStrip()
+  updateContextChip()
   -- 重建气泡
   local container = views.msgContainer
   if container then
@@ -1598,11 +1628,16 @@ sendMessage = function()
     return
   end
 
-  -- 构建上下文
+  -- 构建上下文（用户可通过上下文 chip 本次跳过）
   local context = AgentChat.buildContext()
   local userMsg = text
-  if context ~= "" then
+  if not skipContext and context ~= "" then
     userMsg = context .. "\n\n用户问题: " .. text
+  end
+  -- “本次”语义：无论是否跳过，发送后复位
+  if skipContext then
+    skipContext = false
+    updateContextChip()
   end
 
   -- 编辑器上下文只加入请求副本，不写入持久化会话；超预算时先压缩历史。
@@ -3676,6 +3711,25 @@ function _M.show()
         .setTitle(S.ai_todo)
         .setItems(items, nil)
         .setPositiveButton(S.ai_close, nil)
+        .show()
+    end
+  end
+
+  -- 上下文指示点击：预览本次将附带的内容，并可在“附带/跳过”间切换
+  if views.ctxChip then
+    views.ctxChip.onClick = function()
+      local context = AgentChat.buildContext()
+      if context == "" then return end
+      local preview = context
+      if #preview > 1500 then preview = preview:sub(1, 1500) .. "\n…" end
+      MaterialAlertDialogBuilder(activity)
+        .setTitle(S.ai_ctx_preview_title)
+        .setMessage(preview)
+        .setPositiveButton(skipContext and S.ai_ctx_resume or S.ai_ctx_skip, function()
+          skipContext = not skipContext
+          updateContextChip()
+        end)
+        .setNegativeButton(S.ai_close, nil)
         .show()
     end
   end
