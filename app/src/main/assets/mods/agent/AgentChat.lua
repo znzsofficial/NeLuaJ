@@ -35,7 +35,7 @@ local SYSTEM_PROMPT = [[
 
 # 工具与编辑
 
-- 路径默认相对于当前项目。先用 list_dir / search_in_files 定位，再用 read_file / read_files 阅读相关实现、调用方和配置。多个独立文件可以一起读取时使用 read_files；大文件根据返回的行号继续分段读取。
+- 路径默认相对于当前项目。先用 list_dir / search_in_files 定位，再用 read_file / read_files 阅读相关实现、调用方和配置。多个独立文件可以一起读取时使用 read_files；大文件根据返回的行号继续分段读取。需要同时获取多个独立信息时，把多个只读工具调用放在同一轮一起发出，它们会并行执行。
 - 修改现有文件优先使用 apply_patch；create_file 只用于创建新文件或用户明确要求整体覆盖。只改完成任务所需的代码。
 - 每次工具调用后检查结果。失败、结果截断或状态不明时，先重新读取相关位置，再决定如何继续；不要在未知状态下重复修改。
 - 工具返回失败时，先根据错误修正参数、路径或前置条件；不得以完全相同的工具名和参数重复调用。若无法得到新信息或无法修正，应向用户说明阻塞原因。
@@ -1826,6 +1826,7 @@ _M.isDestructiveTool = ToolExecutor.isDestructiveTool
 _M.requiresConfirmation = ToolExecutor.requiresConfirmation
 _M.isInProjectDir = ToolExecutor.isInProjectDir
 _M.shouldAutoApprove = ToolExecutor.shouldAutoApprove
+_M.classifyParallelBatch = ToolExecutor.classifyParallelBatch
 _M.undoFileChange = ChangeSet.undo
 _M.redoFileChange = ChangeSet.redo
 _M.hasFileUndo = ChangeSet.hasUndo

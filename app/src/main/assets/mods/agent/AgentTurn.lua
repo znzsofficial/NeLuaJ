@@ -158,9 +158,72 @@ local function finishStopped(toolCalls, index, args)
   end)
 end
 
+-- 并行批次执行：整批只读工具并发调度，结果全部回调后按调用顺序落盘，
+-- 产生的历史与串行路径完全一致（配对顺序确定）。只读批次无确认间隙，
+-- 无需 activeToolStop；用户停止时所有真实结果照常记录并标记 stopped。
+local function executeToolCallsParallel(calls, toolCalls, results, onAllDone, generation)
+  local total = #calls
+  local pending = total
+  local collected = {}
+  _M.setLoadingStatus(S.ai_tool_pending .. " · " .. S.ai_parallel_batch:format(total))
+  for i = 1, total do
+    local call = calls[i]
+    local tc = toolCalls[i]
+    tc.name = call.name
+    local argsEncoded, encodedArgs = pcall(json.encode, call.args)
+    local toolCallKey = call.name .. "\n"
+      .. (argsEncoded and tostring(encodedArgs) or tostring(tc.arguments or ""))
+    AgentChat.executeToolAsync(call.name, call.args, function(resultStr, toolOk)
+      if generation and not isCurrent(generation) then return end
+      collected[i] = { id = call.id, result = resultStr, ok = toolOk, key = toolCallKey }
+      pending = pending - 1
+      if pending > 0 then return end
+      -- 全部回调已到：按调用顺序落盘
+      local messages = getMessages()
+      for j = 1, total do
+        local entry = collected[j]
+        local content = tostring(entry.result)
+        messages[#messages + 1] = {
+          role = "tool",
+          tool_call_id = entry.id,
+          content = content,
+        }
+        results[#results + 1] = { tool_call_id = entry.id, content = content }
+        if entry.ok == false then
+          state.failedToolCalls[entry.key] = content:sub(1, 1000)
+        else
+          state.failedToolCalls[entry.key] = nil
+        end
+      end
+      if state.stopRequested then
+        local stateMessage = messages[#messages]
+        if stateMessage and stateMessage.role == "tool" then
+          stateMessage.continuation_state = "stopped"
+        end
+      end
+      hooks.saveHistory()
+      hooks.refreshMessageList()
+      pcall(function()
+        if MainActivity and MainActivity.RecyclerView then MainActivity.RecyclerView.update() end
+      end)
+      if state.stopRequested then return end
+      onAllDone(results)
+    end)
+  end
+end
+
 executeToolCalls = function(toolCalls, index, results, onAllDone, generation)
   if generation and not isCurrent(generation) then return end
   if state.stopRequested then return end
+  -- 首轮先尝试整批并行：全部为只读白名单且免确认时并发执行；
+  -- 混批、含写入/需确认/重复失败调用时自动回退串行路径，语义不变
+  if index == 1 and AgentChat.classifyParallelBatch then
+    local calls = AgentChat.classifyParallelBatch(toolCalls, state.failedToolCalls)
+    if calls then
+      executeToolCallsParallel(calls, toolCalls, results, onAllDone, generation)
+      return
+    end
+  end
   if index > #toolCalls then
     -- 文件操作后刷新编辑器
     pcall(function()

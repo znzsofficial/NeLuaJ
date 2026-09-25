@@ -371,4 +371,44 @@ function _M.shouldAutoApprove(name, args)
   return _M.isInProjectDir(path)
 end
 
+-- ─── 并行工具批次 ──
+-- 只有只读、免确认、无全局状态副作用的工具允许并行：并发执行不会互相干扰，
+-- 也不会堆叠确认对话框。run_lua（沙盒全局槽位）与 fetch_url（取消注册表）
+-- 各自有全局单例语义，明确排除。
+
+local PARALLEL_SAFE_TOOLS = {
+  read_file = true, read_files = true, list_dir = true,
+  search_in_files = true, check_lua_syntax = true, get_env_info = true,
+}
+
+function _M.isParallelSafe(name, args)
+  return PARALLEL_SAFE_TOOLS[_M.normalizeToolName(name, args)] == true
+end
+
+--- 判断一批 tool_calls 是否可整体并行执行。满足才返回逐调用描述表：
+--- 全部 ≥2 个、均为白名单只读工具、免确认、参数 JSON 可解析，
+--- 且不含“曾失败的同参调用”（重复失败短路必须走串行路径正确处理）。
+--- deps: { failedToolCalls = 回合层失败去重表（可省略） }
+function _M.classifyParallelBatch(toolCalls, deps)
+  if type(toolCalls) ~= "table" or #toolCalls < 2 then return nil end
+  local failedCalls = deps and deps.failedToolCalls
+  local calls = {}
+  for i, tc in ipairs(toolCalls) do
+    local args = {}
+    local decodeOk = pcall(function() args = json.decode(tc.arguments) end)
+    if not decodeOk or type(args) ~= "table" then return nil end
+    local name = _M.normalizeToolName(tc.name, args)
+    if not PARALLEL_SAFE_TOOLS[name] then return nil end
+    if _M.requiresConfirmation(name, args) then return nil end
+    if failedCalls then
+      local argsEncoded, encodedArgs = pcall(json.encode, args)
+      local key = name .. "\n"
+        .. (argsEncoded and tostring(encodedArgs) or tostring(tc.arguments or ""))
+      if failedCalls[key] then return nil end
+    end
+    calls[i] = { name = name, args = args, id = tc.id }
+  end
+  return calls
+end
+
 return _M
