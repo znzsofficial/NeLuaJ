@@ -1,10 +1,13 @@
----@diagnostic disable: undefined-global
-local ColorDrawable = luajava.bindClass "android.graphics.drawable.ColorDrawable"
+--- 设置页接线模块：由首页「设置」tab 在加载 setting_layout 后调用 apply()。
+--- setting_layout 是纯布局表模块，loadlayout 后视图 id 落在当前环境全局——
+--- 因此 apply() 必须在「加载布局的同一环境」中调用（当前唯一宿主为首页 tab；
+--- 原独立 SettingActivity 已移除，避免双宿主下的全局 id 相互覆盖）。
+local _M = {}
+
 local MaterialAlertDialogBuilder = luajava.bindClass "com.google.android.material.dialog.MaterialAlertDialogBuilder"
 local GradientDrawable = luajava.bindClass "android.graphics.drawable.GradientDrawable"
 local Color = luajava.bindClass "android.graphics.Color"
 local View = luajava.bindClass "android.view.View"
-local WindowManager = luajava.bindClass "android.view.WindowManager"
 local MDC_R = luajava.bindClass "com.google.android.material.R"
 import "android.widget.LinearLayout"
 import "android.widget.FrameLayout"
@@ -19,41 +22,13 @@ import "android.graphics.drawable.BitmapDrawable"
 import "vinx.material.textfield.MaterialTextField"
 import "com.google.android.material.textview.MaterialTextView"
 import "com.google.android.material.card.MaterialCardView"
-this.dynamicColor()
+
 local ColorUtil = this.themeUtil
-local barColor = ColorUtil.getColorBackground()
 local onSurfaceColor = ColorUtil.getColorOnSurface()
 local onSurfaceVarColor = ColorUtil.getColorOnSurfaceVariant()
 local primaryColor = ColorUtil.getColorPrimary()
 
-activity {
-    title = res.string.setting,
-    ContentView = res.layout.setting_layout
-}
-    .supportActionBar {
-        Elevation = 0,
-        BackgroundDrawable = ColorDrawable(barColor),
-        DisplayShowTitleEnabled = true,
-        DisplayHomeAsUpEnabled = true
-    }
-
-local window = activity.getWindow()
-    .setStatusBarColor(barColor)
-    .setNavigationBarColor(barColor)
-    .addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
-    .clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
-if this.isNightMode() then
-    window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE)
-else
-    window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR)
-end
-
-function onOptionsItemSelected(m)
-    if m.getItemId() == android.R.id.home then
-        this.finish()
-    end
-end
-
+function _M.apply()
 local function sliderRow(label, seekId, valueId)
     return {
         LinearLayout,
@@ -1373,3 +1348,6 @@ CopyrightItem.onClick = function()
         .setPositiveButton(android.R.string.ok, nil)
         .show()
 end
+end
+
+return _M

@@ -14,7 +14,6 @@ local routes = {
   axml             = "axml/CreatorActivity.lua",
   api              = "api/ApiActivity.lua",
   help             = "help/HelpActivity.lua",
-  setting          = "setting/SettingActivity.lua",
   fix              = "fix/FixActivity.lua",
   photo            = "photo/PhotoActivity.lua",
   java             = "java/JavaEditorActivity.lua",
@@ -37,7 +36,7 @@ function _M.path(name)
   return _M.lua_path .. "/activities/" .. route
 end
 
---- 打开页面：ActivityUtil.open("setting") / open("project_settings", projectDir)
+--- 打开页面：ActivityUtil.open("help") / open("project_settings", projectDir)
 function _M.open(name, ...)
   local fullPath = _M.path(name)
   if not fullPath then

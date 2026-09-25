@@ -108,26 +108,6 @@ local function showRunMenu()
   pop.show()
 end
 
-local function showAbout()
-  local views = {}
-  MaterialAlertDialogBuilder(this)
-    .setTitle(res.string.about)
-    .setMessage(res.string.about_this)
-    .setView(loadlayout(res.layout.dialog_about, views))
-    .setPositiveButton(android.R.string.ok, nil)
-    .show()
-  views.author.onClick = function()
-    xpcall(function()
-      import "android.content.Intent"
-      import "android.net.Uri"
-      local url = "mqqapi://card/show_pslcard?src_type=internal&source=sharecard&version=1&uin=1071723770"
-      activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-    end, function()
-      Actions.snack(res.string.please_install_qq)
-    end)
-  end
-end
-
 local function requestCommonPermissions()
   local permission = android.Manifest.permission
   activity.requestPermissions({
@@ -372,7 +352,6 @@ function onCreateOptionsMenu(menu)
     local ActivityUtil = require "mods.utils.ActivityUtil"
     ActivityUtil.open("agent_center", Bean.Path.this_dir)
   end, nil, icon("ic_command"))
-  addItem(moreMenu, res.string.about, showAbout, nil, icon("info"))
   if not tablet then
     addItem(moreMenu, res.string.setting, Actions.openSetting, nil, icon("settings"))
   end

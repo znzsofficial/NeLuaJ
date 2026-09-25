@@ -92,4 +92,10 @@ bottomNav.setOnItemSelectedListener({
   end,
 })
 
+-- 首页切换钩子：编辑器「设置」等回传（finishWith open_settings_tab）经此定位 tab
+_G.__homeUi = {
+  pager = pager,
+  bottomNav = bottomNav,
+}
+
 return view

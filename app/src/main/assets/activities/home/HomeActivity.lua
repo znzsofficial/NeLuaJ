@@ -145,6 +145,22 @@ function onResume()
     ensureReady()
     refreshAllPages()
   end
+  -- 编辑器回传的 tab 定位（open_settings_tab）
+  pcall(function()
+    local pending = ActivityUtil.takePending()
+    if pending and pending.action == "open_settings_tab" and _G.__homeUi then
+      _G.__homeUi.pager.setCurrentItem(3, true)
+    end
+  end)
+end
+
+--- 编辑器 finishWith 的 result 通道：直接消费并清兜底 pending
+function onResult(name, action, path)
+  if action == "open_settings_tab" then
+    if _G.__homeUi then _G.__homeUi.pager.setCurrentItem(3, true) end
+    pcall(function() ActivityUtil.takePending() end)
+    return true
+  end
 end
 
 local _exit = 0
