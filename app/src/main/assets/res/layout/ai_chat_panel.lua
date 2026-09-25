@@ -122,6 +122,47 @@ return {
     },
   },
   { MaterialDivider, dividerColor = ColorOutline },
+  -- 任务计划置顶条（有计划时显示，点击展开完整清单）
+  {
+    MaterialCardView,
+    id = "planStrip",
+    visibility = 8,
+    radius = "10dp",
+    CardElevation = 0,
+    CardBackgroundColor = ColorSurface,
+    clickable = true,
+    focusable = true,
+    layout_marginLeft = "12dp",
+    layout_marginRight = "12dp",
+    layout_marginTop = "6dp",
+    {
+      LinearLayout,
+      orientation = "horizontal",
+      gravity = "center_vertical",
+      padding = "10dp",
+      paddingLeft = "12dp",
+      paddingRight = "12dp",
+      {
+        MaterialTextView,
+        id = "planLabel",
+        text = res.string.ai_todo,
+        textSize = "12sp", textStyle = "bold", textColor = ColorPrimary,
+      },
+      {
+        MaterialTextView,
+        id = "planProgress",
+        text = "",
+        textSize = "12sp", textColor = ColorText,
+        layout_marginLeft = "8dp",
+        layout_width = "0dp", layout_weight = 1,
+      },
+      {
+        MaterialTextView,
+        text = "▾",
+        textSize = "12sp", textColor = ColorText,
+      },
+    },
+  },
   -- 消息列表
   {
     ScrollView,

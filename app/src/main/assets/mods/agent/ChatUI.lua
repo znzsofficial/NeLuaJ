@@ -717,6 +717,24 @@ local function renderSubtaskCard()
   scrollDown()
 end
 
+--- 任务计划置顶条：显示当前计划的完成进度，点击弹出完整清单。
+--- 数据源就是 TodoManager 的实时状态（系统提示注入的同一份）。
+local function updatePlanStrip()
+  if not views.planStrip then return end
+  local todos = TodoManager.get()
+  if not todos or #todos == 0 then
+    views.planStrip.setVisibility(GONE)
+    return
+  end
+  local done = 0
+  for _, item in ipairs(todos) do
+    if item.status == "completed" then done = done + 1 end
+  end
+  views.planLabel.setText(S.ai_todo)
+  views.planProgress.setText(S.ai_plan_progress:format(done, #todos))
+  views.planStrip.setVisibility(VISIBLE)
+end
+
 --- 添加工具操作气泡（显示工具名和参数摘要）
 addToolBubble = function(toolName, args, result)
   local container = views.msgContainer
@@ -1363,6 +1381,7 @@ loadHistory = function(resetTurnHistory)
   activeConversationHadMessages = #messages > 0
   if updateProjectLabel then updateProjectLabel() end
   if views.aiTitle and conv then views.aiTitle.setText(convName(conv)) end
+  updatePlanStrip()
   -- 重建气泡
   local container = views.msgContainer
   if container then
@@ -3636,6 +3655,29 @@ function _M.show()
   -- 模型标签点击切换
   if views.modelChip then
     views.modelChip.onClick = function() showModelPicker() end
+  end
+
+  -- 任务计划置顶条点击：弹出完整清单
+  if views.planStrip then
+    views.planStrip.onClick = function()
+      local todos = TodoManager.get() or {}
+      if #todos == 0 then return end
+      local items = {}
+      for index, item in ipairs(todos) do
+        local mark = "○"
+        if item.status == "completed" then
+          mark = "✓"
+        elseif item.status == "in_progress" then
+          mark = "◐"
+        end
+        items[index] = mark .. "  " .. tostring(item.content or "")
+      end
+      MaterialAlertDialogBuilder(activity)
+        .setTitle(S.ai_todo)
+        .setItems(items, nil)
+        .setPositiveButton(S.ai_close, nil)
+        .show()
+    end
   end
 
   if views.btnClear then
