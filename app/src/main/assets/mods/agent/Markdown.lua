@@ -79,32 +79,22 @@ function _M.renderMarkdown(text)
 
   --- 分隔行检测走模块级共享实现
   local isTableSeparator = _M.isTableSeparator
-  local splitTableRow = _M.splitTableRow
-
-  local function renderTableRow(cells, tag)
-    local rendered = {}
-    for _, cell in ipairs(cells) do
-      rendered[#rendered + 1] = "<" .. tag .. ">" .. inline(cell) .. "</" .. tag .. ">"
-    end
-    return "<tr>" .. table.concat(rendered) .. "</tr>"
-  end
 
   local i = 1
   while i <= #lines do
     local line = lines[i]
-    -- 表格块：表头行 + 分隔行 + 任意数据行
+    -- 表格块：表头行 + 分隔行 + 任意数据行。
+    -- HtmlCompat.fromHtml 不支持 <table> 标签（单元格会被挤进同一行），
+    -- 改为逐行等宽渲染——保留对齐且行为确定。
     if line:match("^%s*|") and lines[i + 1] and isTableSeparator(lines[i + 1]) then
       closeList()
-      local headerCells = splitTableRow(line)
-      local rowsHtml = {}
+      local rowLines = { "<font face='monospace'>" .. line .. "</font><br>" }
       local j = i + 2
       while j <= #lines and lines[j]:match("^%s*|") do
-        rowsHtml[#rowsHtml + 1] = renderTableRow(splitTableRow(lines[j]), "td")
+        rowLines[#rowLines + 1] = "<font face='monospace'>" .. lines[j] .. "</font><br>"
         j = j + 1
       end
-      html[#html + 1] = "<table>"
-        .. renderTableRow(headerCells, "th") .. table.concat(rowsHtml)
-        .. "</table><br>"
+      for k = 1, #rowLines do html[#html + 1] = rowLines[k] end
       i = j
     else
       local headingLevel, heading = line:match("^%s*(#+)%s+(.+)$")

@@ -190,9 +190,8 @@ local function showAgentHelp()
 end
 
 -- ─── Markdown 渲染辅助（已抽到 mods/agent/Markdown）──
-local Markdown = require("mods.agent.Markdown")
-local renderMarkdown = Markdown.renderMarkdown
-local splitCodeBlocks = Markdown.splitCodeBlocks
+-- 气泡正文渲染在 BubbleRenderer 内直接 require Markdown；ChatUI 自身仅
+-- 欢迎卡等纯文本展示，不再持有渲染别名。
 --- 复制文本到剪贴板
 -- ─── 气泡渲染层（已抽到 mods/agent/BubbleRenderer）──
 -- 容器/消息表/回调节点经 configure 注入；渲染入口保持原局部名转发，
@@ -468,6 +467,7 @@ local function exportConversation()
     elseif msg.role == "assistant" then
       local reasoning = tostring(msg.reasoning_content or "")
       if reasoning ~= "" then
+        reasoning = TextUtil.utf8Cap(reasoning, 2000)
         out[#out + 1] = "> " .. S.ai_thinking .. ": " .. reasoning:gsub("\n", "\n> ")
         out[#out + 1] = ""
       end
@@ -868,7 +868,6 @@ loadHistory = function(resetTurnHistory)
   if updateProjectLabel then updateProjectLabel() end
   if views.aiTitle and conv then views.aiTitle.setText(convName(conv)) end
   updatePlanStrip()
-  updateContextChip()
   -- 重建气泡
   local container = views.msgContainer
   if container then
@@ -1202,6 +1201,8 @@ local function newConversation()
   if views.msgContainer then views.msgContainer.removeAllViews() end
   if views.aiTitle then views.aiTitle.setText(S.ai_new_conv) end
   if updateProjectLabel then updateProjectLabel() end
+  -- 新会话清空计划后同步置顶条（loadHistory 不在此路径上）
+  updatePlanStrip()
 end
 
 local ConvUi = require("mods.agent.ConvUi")
@@ -1529,6 +1530,9 @@ function _M.show()
   if views.msgContainer then
     views.msgContainer.removeAllViews()  -- 先移除默认欢迎消息
     local historyCount = loadHistory(not AgentTurn.isActive())
+    -- 上下文 chip 只在面板打开时重建：loadHistory 在每个工具结果后都会触发，
+    -- buildContext（读编辑器全文 + 列目录）在那里跑是显著浪费
+    updateContextChip()
     if historyCount == 0 then
       addWelcomeCard(S.ai_welcome_title, S.ai_welcome_body)
     end
