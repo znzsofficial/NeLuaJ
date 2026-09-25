@@ -378,6 +378,48 @@ addMessageBubble = function(role, content, stateMessage)
 
   local inner = isUser and rowViews.bubbleInner or rowViews.plainInner
 
+  -- 思考过程折叠块：推理模型存的 reasoning_content，默认收起
+  local reasoning = stateMessage and tostring(stateMessage.reasoning_content or "") or ""
+  if not isUser and reasoning ~= "" then
+    local rViews = {}
+    loadlayout({
+      LinearLayout,
+      orientation = "vertical",
+      layout_width = "match",
+      layout_height = "wrap",
+      {
+        MaterialTextView,
+        id = "rToggle",
+        text = "🧠 " .. S.ai_thinking .. "  ▸",
+        textSize = "12sp",
+        textStyle = "bold",
+        textColor = ColorText,
+        clickable = true,
+        focusable = true,
+        padding = "4dp",
+      },
+      {
+        MaterialTextView,
+        id = "rDetail",
+        textSize = "12sp",
+        textColor = ColorText,
+        lineSpacingMultiplier = 1.3,
+        textIsSelectable = true,
+        visibility = GONE,
+        layout_marginTop = "4dp",
+      },
+    }, rViews)
+    rViews.rDetail.setText(reasoning)
+    local reasoningExpanded = false
+    rViews.rToggle.onClick = function()
+      reasoningExpanded = not reasoningExpanded
+      rViews.rDetail.setVisibility(reasoningExpanded and VISIBLE or GONE)
+      rViews.rToggle.setText("🧠 " .. S.ai_thinking .. (reasoningExpanded and "  ▾" or "  ▸"))
+    end
+    inner.addView(rViews.rToggle)
+    inner.addView(rViews.rDetail)
+  end
+
   local parts = splitCodeBlocks(content or "")
   for _, part in ipairs(parts) do
     if part.type == "text" then
