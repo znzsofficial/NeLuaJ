@@ -153,12 +153,34 @@ local function toolDisplayName(name)
   return labels[name] or tostring(name or "")
 end
 
+--- 智能滚动：仅当用户停留在底部附近时自动跟随；回看历史时不再打扰，
+--- 并显示“跳到最新”悬浮按钮。
+local function isNearBottom()
+  local sv = views.msgScroll
+  if not sv then return true end
+  local child = sv.getChildAt(0)
+  if not child then return true end
+  -- 距底部阈值 240dp：流式增量之外的滚动都视为“在跟读”
+  local distFromBottom = child.getBottom() - sv.getScrollY() - sv.getHeight()
+  return distFromBottom <= dp(240)
+end
+
+local function updateJumpLatest(visible)
+  if not views.btnJumpLatest then return end
+  views.btnJumpLatest.setVisibility(visible and VISIBLE or GONE)
+end
+
 local function scrollDown()
-  if views.msgScroll then
-    views.msgScroll.post(function()
-      views.msgScroll.fullScroll(130)
-    end)
-  end
+  local sv = views.msgScroll
+  if not sv then return end
+  sv.post(function()
+    if isNearBottom() then
+      sv.fullScroll(130)
+      updateJumpLatest(false)
+    else
+      updateJumpLatest(true)
+    end
+  end)
 end
 
 local function showAgentHelp()
@@ -1221,6 +1243,25 @@ function _M.show()
     views.btnClear.onClick = function()
       newConversation()
       addWelcomeCard(S.ai_new_conv, S.ai_start_chat)
+    end
+  end
+
+  -- 智能滚动：手动回滚到顶部时显示“跳到最新”，滚回底部自动隐藏
+  if views.msgScroll then
+    pcall(function()
+      views.msgScroll.setOnScrollChangeListener({
+        onScrollChange = function()
+          updateJumpLatest(not isNearBottom())
+        end,
+      })
+    end)
+  end
+  if views.btnJumpLatest then
+    views.btnJumpLatest.onClick = function()
+      if views.msgScroll then
+        views.msgScroll.fullScroll(130)
+      end
+      updateJumpLatest(false)
     end
   end
 
