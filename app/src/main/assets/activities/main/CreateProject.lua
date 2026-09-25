@@ -226,7 +226,6 @@ end
 function _M.show(deps)
   deps = deps or {}
   local snack = deps.snack or function(msg) print(msg) end
-
   local binding = {}
   local dialog = MaterialAlertDialogBuilder(this)
     .setTitle(res.string.create_project)
@@ -309,6 +308,8 @@ function _M.show(deps)
 
       dialog.dismiss()
       snack(res.string.create_success .. ": " .. appname)
+      -- 首页等非编辑器环境：创建完成后回调（刷新列表/直接打开），编辑器环境不传
+      if deps.onCreated then pcall(deps.onCreated, base_path) end
       pcall(function() MainActivity.RecyclerView.update() end)
 
       if openAfter then
