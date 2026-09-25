@@ -1404,82 +1404,48 @@ end
 
 -- ─── 判断工具是否需要用户确认 ──
 
--- ─── 配置读写 ──
+-- ─── 配置与模型注册表 ──
+-- 供应商/模型 CRUD、当前模型解析、配置读取与旧版迁移已抽到
+-- mods/agent/ModelRegistry.lua（存储与 JSON 经 configure 注入，含独立行为测试）。
+-- 这里保留原局部名与 _M 转发，ContextManager / OpenAIClient / ChatUI 调用点零改动。
 
-local function getLegacyApiKey()
-  return this.getSharedData("ai_api_key", "")
-end
+local ModelRegistry = require("mods.agent.ModelRegistry")
+ModelRegistry.configure({
+  getSharedData = function(key, defaultValue) return this.getSharedData(key, defaultValue) end,
+  setSharedData = function(key, value) this.setSharedData(key, value) end,
+})
 
-local function getLegacyApiUrl()
-  return this.getSharedData("ai_api_url", "https://api.deepseek.com/v1")
-end
+local trim = ModelRegistry.trim
+local getApiKey = ModelRegistry.getApiKey
+local getApiUrl = ModelRegistry.getApiUrl
+local getModel = ModelRegistry.getModel
+local getTemperature = ModelRegistry.getTemperature
+local getContextLength = ModelRegistry.getContextLength
+local getMaxTokens = ModelRegistry.getMaxTokens
+local getRetryCount = ModelRegistry.getRetryCount
 
-local function getLegacyModel()
-  return this.getSharedData("ai_model", "deepseek-v4-flash")
-end
-
-local function getApiKey()
-  local current = _M.getCurrentModelConfig and _M.getCurrentModelConfig()
-  return current and tostring(current.key or "") or ""
-end
-
-local function getApiUrl()
-  local current = _M.getCurrentModelConfig and _M.getCurrentModelConfig()
-  return current and tostring(current.url or "") or ""
-end
-
-local function getModel()
-  local current = _M.getCurrentModelConfig and _M.getCurrentModelConfig()
-  return current and tostring(current.model or "") or ""
-end
-
-local function getTemperature()
-  local v = tonumber(this.getSharedData("ai_temperature", "0.7"))
-  if not v then return 0.7 end
-  return math.max(0, math.min(2, v))
-end
-
-local DEFAULT_CONTEXT_LENGTH = 30000
-local DEFAULT_MAX_TOKENS = 4096
-
-local function normalizeContextLength(value, fallback)
-  local parsed = tonumber(value) or fallback or DEFAULT_CONTEXT_LENGTH
-  return math.max(1000, math.floor(parsed))
-end
-
-local function normalizeMaxTokens(value, fallback)
-  local parsed = tonumber(value) or fallback or DEFAULT_MAX_TOKENS
-  return math.max(256, math.min(32768, math.floor(parsed)))
-end
-
-local function normalizeModelLimits(contextLength, maxTokens, fallbackContext, fallbackMaxTokens)
-  local normalizedContext = normalizeContextLength(contextLength, fallbackContext)
-  local normalizedMax = normalizeMaxTokens(maxTokens, fallbackMaxTokens)
-  normalizedMax = math.min(normalizedMax, math.max(256, normalizedContext - 500))
-  return normalizedContext, normalizedMax
-end
-
--- 模型上下文长度（context window），用于历史消息截断预算
-local function getContextLength()
-  local current = _M.getCurrentModelConfig and _M.getCurrentModelConfig()
-  return normalizeContextLength(current and current.contextLength, DEFAULT_CONTEXT_LENGTH)
-end
-
-local function getMaxTokens()
-  local current = _M.getCurrentModelConfig and _M.getCurrentModelConfig()
-  local v = normalizeMaxTokens(current and current.maxTokens, DEFAULT_MAX_TOKENS)
-  -- 输出不能超过上下文窗口（至少留 500 token 余量）
-  local ctx = getContextLength()
-  return math.min(v, math.max(256, ctx - 500))
-end
-
--- 失败自动重试次数（0 = 不重试）
-local function getRetryCount()
-  local v = tonumber(this.getSharedData("ai_retry_count", "2"))
-  if not v then return 2 end
-  if v < 0 then return 0 end
-  return math.min(5, math.floor(v))
-end
+function _M.hasApiKey() return ModelRegistry.hasApiKey() end
+_M.getApiKey = getApiKey
+_M.getApiUrl = getApiUrl
+_M.getModel = getModel
+_M.loadProviders = ModelRegistry.loadProviders
+_M.saveProviders = ModelRegistry.saveProviders
+_M.findProvider = ModelRegistry.findProvider
+_M.addProvider = ModelRegistry.addProvider
+_M.updateProvider = ModelRegistry.updateProvider
+_M.removeProvider = ModelRegistry.removeProvider
+_M.loadModels = ModelRegistry.loadModels
+_M.saveModels = ModelRegistry.saveModels
+_M.getCurrentModelIndex = ModelRegistry.getCurrentModelIndex
+_M.setCurrentModel = ModelRegistry.setCurrentModel
+_M.getCurrentModelName = ModelRegistry.getCurrentModelName
+_M.getCurrentModelConfig = ModelRegistry.getCurrentModelConfig
+_M.findModel = ModelRegistry.findModel
+_M.countModels = ModelRegistry.countModels
+_M.addModel = ModelRegistry.addModel
+_M.addModels = ModelRegistry.addModels
+_M.updateModel = ModelRegistry.updateModel
+_M.removeModel = ModelRegistry.removeModel
 
 -- 自签名证书开关：开启时用忽略证书校验的客户端
 local function getHttpClient()
@@ -1488,365 +1454,6 @@ local function getHttpClient()
     if ok and client then return client end
   end
   return agentHttp
-end
-
-function _M.hasApiKey()
-  return getApiKey() ~= ""
-end
-
-function _M.getApiKey() return getApiKey() end
-function _M.getApiUrl() return getApiUrl() end
-function _M.getModel() return getModel() end
-
--- ─── 供应商与模型 ──
-
-local PROVIDERS_KEY = "ai_providers"
-local MODELS_KEY = "ai_models"
-local MODEL_INDEX_KEY = "ai_model_index"
-local providersCache = nil
-local modelsCache = nil
-local idSerial = 0
-
-local function trim(value)
-  return tostring(value or ""):gsub("^%s*(.-)%s*$", "%1")
-end
-
-local function newId(prefix)
-  idSerial = idSerial + 1
-  return prefix .. tostring(os.time()) .. tostring(idSerial)
-end
-
-local function resolvedModel(model)
-  if type(model) ~= "table" then return nil end
-  local copy = {
-    name = model.name,
-    providerId = model.providerId,
-    model = model.model,
-    responses = model.responses == true,
-    contextLength = model.contextLength,
-    maxTokens = model.maxTokens,
-    url = model.url,
-    key = model.key,
-  }
-  local provider = _M.findProvider(model.providerId)
-  if provider then
-    copy.url = provider.url
-    copy.key = provider.key
-    copy.providerName = provider.name
-  end
-  return copy
-end
-
-function _M.loadProviders()
-  if providersCache then return providersCache end
-  local raw = this.getSharedData(PROVIDERS_KEY, "")
-  if raw == "" then
-    providersCache = {}
-    return providersCache
-  end
-  local ok, decoded = pcall(json.decode, raw)
-  providersCache = ok and type(decoded) == "table" and decoded or {}
-  return providersCache
-end
-
-function _M.saveProviders(providers)
-  providersCache = providers
-  local ok, encoded = pcall(json.encode, providers)
-  if ok then this.setSharedData(PROVIDERS_KEY, encoded) end
-end
-
-function _M.findProvider(id)
-  if id == nil or id == "" then return nil end
-  for _, provider in ipairs(_M.loadProviders()) do
-    if provider.id == id then return provider end
-  end
-end
-
-function _M.addProvider(name, url, key)
-  local providers = _M.loadProviders()
-  name, url, key = trim(name), trim(url), trim(key)
-  local provider = {
-    id = newId("p"),
-    name = name ~= "" and name or url,
-    url = url,
-    key = key,
-  }
-  providers[#providers + 1] = provider
-  _M.saveProviders(providers)
-  return provider
-end
-
-function _M.updateProvider(id, name, url, key)
-  local providers = _M.loadProviders()
-  name, url, key = trim(name), trim(url), trim(key)
-  for index, provider in ipairs(providers) do
-    if provider.id == id then
-      providers[index] = {
-        id = id,
-        name = name ~= "" and name or url,
-        url = url,
-        key = key,
-      }
-      _M.saveProviders(providers)
-      return true
-    end
-  end
-  return false
-end
-
-local function attachProviders(models)
-  local providers = _M.loadProviders()
-  local changedProviders, changedModels = false, false
-  local function findOrCreate(url, key, name)
-    url, key, name = trim(url), trim(key), trim(name)
-    for _, provider in ipairs(providers) do
-      if provider.url == url and provider.key == key then return provider.id end
-    end
-    local provider = {
-      id = newId("p"),
-      name = name ~= "" and name or (url ~= "" and url or "Provider"),
-      url = url,
-      key = key,
-    }
-    providers[#providers + 1] = provider
-    changedProviders = true
-    return provider.id
-  end
-  for _, model in ipairs(models) do
-    if type(model) == "table" then
-      if _M.findProvider(model.providerId) then
-        if model.url ~= nil or model.key ~= nil then
-          model.url = nil
-          model.key = nil
-          changedModels = true
-        end
-      elseif trim(model.url) ~= "" or trim(model.key) ~= "" then
-        model.providerId = findOrCreate(model.url, model.key, model.name)
-        model.url = nil
-        model.key = nil
-        changedModels = true
-      end
-    end
-  end
-  if changedProviders then _M.saveProviders(providers) end
-  return changedModels
-end
-
-function _M.loadModels()
-  if modelsCache then return modelsCache end
-  local raw = this.getSharedData(MODELS_KEY, "")
-  if raw == "" then
-    local key = getLegacyApiKey()
-    if key ~= "" then
-      local model = getLegacyModel()
-      local contextLength, maxTokens = normalizeModelLimits(
-        this.getSharedData("ai_context_length", "30000"),
-        this.getSharedData("ai_max_tokens", "4096"),
-        DEFAULT_CONTEXT_LENGTH,
-        DEFAULT_MAX_TOKENS
-      )
-      modelsCache = { {
-        name = model, url = getLegacyApiUrl(), key = key, model = model, responses = false,
-        contextLength = contextLength,
-        maxTokens = maxTokens,
-      } }
-      attachProviders(modelsCache)
-      _M.saveModels(modelsCache)
-      return modelsCache
-    end
-    modelsCache = {}
-    return modelsCache
-  end
-  local ok, decoded = pcall(json.decode, raw)
-  if ok and type(decoded) == "table" then
-    local legacyContextLength = normalizeContextLength(
-      this.getSharedData("ai_context_length", tostring(DEFAULT_CONTEXT_LENGTH)),
-      DEFAULT_CONTEXT_LENGTH
-    )
-    local legacyMaxTokens = normalizeMaxTokens(
-      this.getSharedData("ai_max_tokens", tostring(DEFAULT_MAX_TOKENS)),
-      DEFAULT_MAX_TOKENS
-    )
-    local migrated = false
-    for _, modelConfig in ipairs(decoded) do
-      if type(modelConfig) == "table" then
-        local contextLength, maxTokens = normalizeModelLimits(
-          modelConfig.contextLength,
-          modelConfig.maxTokens,
-          legacyContextLength,
-          legacyMaxTokens
-        )
-        if contextLength ~= modelConfig.contextLength or maxTokens ~= modelConfig.maxTokens then migrated = true end
-        modelConfig.contextLength = contextLength
-        modelConfig.maxTokens = maxTokens
-      end
-    end
-    modelsCache = decoded
-    if attachProviders(modelsCache) or migrated then _M.saveModels(modelsCache) end
-    return modelsCache
-  end
-  modelsCache = {}
-  return modelsCache
-end
-
-function _M.saveModels(models)
-  modelsCache = models
-  local ok, encoded = pcall(json.encode, models)
-  if ok then this.setSharedData(MODELS_KEY, encoded) end
-end
-
-function _M.getCurrentModelIndex()
-  local idx = tonumber(this.getSharedData(MODEL_INDEX_KEY, "0")) or 0
-  local models = _M.loadModels()
-  if idx < 1 or idx > #models then idx = 1 end
-  if #models == 0 then idx = 0 end
-  return idx
-end
-
-function _M.setCurrentModel(index)
-  local models = _M.loadModels()
-  if #models == 0 then index = 0
-  elseif index < 1 or index > #models then index = 1 end
-  this.setSharedData(MODEL_INDEX_KEY, tostring(index))
-end
-
-function _M.getCurrentModelName()
-  local models = _M.loadModels()
-  local idx = _M.getCurrentModelIndex()
-  if idx >= 1 and idx <= #models then
-    return models[idx].name
-  end
-  return ""
-end
-
-function _M.getCurrentModelConfig()
-  local models = _M.loadModels()
-  local index = _M.getCurrentModelIndex()
-  return index >= 1 and resolvedModel(models[index]) or nil
-end
-
-function _M.findModel(providerId, modelId)
-  modelId = trim(modelId)
-  for index, model in ipairs(_M.loadModels()) do
-    if model.providerId == providerId and model.model == modelId then
-      return model, index
-    end
-  end
-end
-
-function _M.countModels(providerId)
-  local count = 0
-  for _, model in ipairs(_M.loadModels()) do
-    if model.providerId == providerId then count = count + 1 end
-  end
-  return count
-end
-
-local function appendModel(models, name, providerId, modelId, responses, contextLength, maxTokens)
-  contextLength, maxTokens = normalizeModelLimits(
-    contextLength, maxTokens, DEFAULT_CONTEXT_LENGTH, DEFAULT_MAX_TOKENS
-  )
-  name, modelId = trim(name), trim(modelId)
-  models[#models + 1] = {
-    name = name ~= "" and name or modelId,
-    providerId = providerId,
-    model = modelId,
-    responses = responses == true,
-    contextLength = contextLength,
-    maxTokens = maxTokens,
-  }
-  return #models
-end
-
-function _M.addModel(name, providerId, model, responses, contextLength, maxTokens)
-  local models = _M.loadModels()
-  local index = appendModel(models, name, providerId, model, responses, contextLength, maxTokens)
-  _M.saveModels(models)
-  return index
-end
-
-function _M.addModels(providerId, ids, responses, contextLength, maxTokens)
-  local models = _M.loadModels()
-  local indexes = {}
-  for _, modelId in ipairs(ids or {}) do
-    modelId = trim(modelId)
-    if modelId ~= "" and not _M.findModel(providerId, modelId) then
-      indexes[#indexes + 1] = appendModel(models, modelId, providerId, modelId, responses, contextLength, maxTokens)
-    end
-  end
-  if #indexes > 0 then _M.saveModels(models) end
-  return indexes
-end
-
-function _M.updateModel(index, name, providerId, model, responses, contextLength, maxTokens)
-  local models = _M.loadModels()
-  if index >= 1 and index <= #models then
-    contextLength, maxTokens = normalizeModelLimits(
-      contextLength, maxTokens, DEFAULT_CONTEXT_LENGTH, DEFAULT_MAX_TOKENS
-    )
-    name, model = trim(name), trim(model)
-    models[index] = {
-      name = name ~= "" and name or model,
-      providerId = providerId,
-      model = model,
-      responses = responses == true,
-      contextLength = contextLength,
-      maxTokens = maxTokens,
-    }
-    _M.saveModels(models)
-    return true
-  end
-  return false
-end
-
-function _M.removeModel(index)
-  local models = _M.loadModels()
-  if index >= 1 and index <= #models then
-    local current = _M.getCurrentModelIndex()
-    table.remove(models, index)
-    _M.saveModels(models)
-    if #models == 0 then
-      _M.setCurrentModel(0)
-    elseif current > index then
-      _M.setCurrentModel(current - 1)
-    elseif current == index then
-      _M.setCurrentModel(math.min(current, #models))
-    elseif current > #models then
-      _M.setCurrentModel(#models)
-    end
-    return true
-  end
-  return false
-end
-
-function _M.removeProvider(id)
-  local providers = _M.loadProviders()
-  local removed = false
-  for index, provider in ipairs(providers) do
-    if provider.id == id then
-      table.remove(providers, index)
-      removed = true
-      break
-    end
-  end
-  if not removed then return false end
-  _M.saveProviders(providers)
-  local models = _M.loadModels()
-  local current = _M.getCurrentModelIndex()
-  local kept, removedBefore, removedCurrent = {}, 0, false
-  for index, model in ipairs(models) do
-    if model.providerId == id then
-      if index < current then removedBefore = removedBefore + 1
-      elseif index == current then removedCurrent = true end
-    else
-      kept[#kept + 1] = model
-    end
-  end
-  _M.saveModels(kept)
-  if #kept == 0 then _M.setCurrentModel(0)
-  elseif removedCurrent then _M.setCurrentModel(math.max(1, math.min(current - removedBefore, #kept)))
-  else _M.setCurrentModel(math.max(1, current - removedBefore)) end
-  return true
 end
 
 local function readHttp(code, body, onResult, accept)
