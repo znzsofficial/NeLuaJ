@@ -16,6 +16,7 @@ local Switch = luajava.bindClass("com.google.android.material.materialswitch.Mat
 local HtmlCompat = luajava.bindClass("androidx.core.text.HtmlCompat")
 local LinkMovementMethod = luajava.bindClass("android.text.method.LinkMovementMethod")
 local Typeface = luajava.bindClass("android.graphics.Typeface")
+local ProgressBar = luajava.bindClass("android.widget.ProgressBar")
 local WindowManager = luajava.bindClass("android.view.WindowManager")
 local DialogInterface = luajava.bindClass("android.content.DialogInterface")
 
@@ -587,6 +588,90 @@ local function addTodoBubble(list)
   local todoLp = LinearLayout.LayoutParams(-1, -2)
   todoLp.bottomMargin = dp(10)
   container.addView(card, todoLp)
+  scrollDown()
+end
+
+--- 子代理实时卡片：运行期间显示任务描述、轮次与当前工具；
+--- 消息列表重建（refreshMessageList）后由 renderSubtaskCard 恢复。
+local liveSubtask = nil
+local subtaskCardView = nil
+
+local function renderSubtaskCard()
+  if subtaskCardView then
+    local parent = subtaskCardView.getParent()
+    if parent then parent.removeView(subtaskCardView) end
+    subtaskCardView = nil
+  end
+  if not liveSubtask or liveSubtask.done then return end
+  local container = views.msgContainer
+  if not container or not isPanelVisible() then return end
+
+  local statusText = S.ai_subtask_round:format(liveSubtask.rounds or 0)
+  if liveSubtask.tool and liveSubtask.tool ~= "" then
+    statusText = statusText .. " · " .. tostring(liveSubtask.tool)
+  end
+  local cardViews = {}
+  local card = loadlayout({
+    MaterialCardView,
+    radius = "12dp",
+    CardElevation = 0,
+    CardBackgroundColor = ColorSurfaceContainerHigh,
+    layout_width = "match",
+    layout_height = "wrap",
+    {
+      LinearLayout,
+      orientation = "vertical",
+      padding = "12dp",
+      {
+        LinearLayout,
+        orientation = "horizontal",
+        gravity = "center_vertical",
+        {
+          MaterialTextView,
+          text = "⚑",
+          textSize = "14sp",
+          textColor = ColorPrimary,
+        },
+        {
+          MaterialTextView,
+          text = S.ai_tool_subtask,
+          textSize = "12sp",
+          textStyle = "bold",
+          textColor = ColorOnSurface,
+          layout_marginLeft = "6dp",
+          layout_width = "0dp",
+          layout_weight = 1,
+        },
+        {
+          ProgressBar,
+          layout_width = "12dp",
+          layout_height = "12dp",
+          indeterminate = true,
+          indeterminateTintList = ColorStateList.valueOf(ColorPrimary),
+        },
+      },
+      {
+        MaterialTextView,
+        text = tostring(liveSubtask.task or ""),
+        textSize = "12sp",
+        textColor = ColorText,
+        maxLines = 2,
+        ellipsize = "end",
+        layout_marginTop = "2dp",
+      },
+      {
+        MaterialTextView,
+        text = statusText,
+        textSize = "11sp",
+        textColor = ColorPrimary,
+        layout_marginTop = "4dp",
+      },
+    },
+  }, cardViews)
+  subtaskCardView = card
+  local cardLp = LinearLayout.LayoutParams(-1, -2)
+  cardLp.bottomMargin = dp(10)
+  container.addView(card, cardLp)
   scrollDown()
 end
 
@@ -1295,6 +1380,12 @@ loadHistory = function(resetTurnHistory)
       end
     end
   end
+  -- 子代理仍在运行时恢复实时卡片；已完成的清除（结果气泡已由历史重建呈现）
+  if liveSubtask and liveSubtask.done then liveSubtask = nil end
+  if not liveSubtask and SubagentRunner.isRunning() then
+    liveSubtask = SubagentRunner.progressInfo()
+  end
+  renderSubtaskCard()
   AgentTurn.rerenderStream()
   return #messages
 end
@@ -3717,6 +3808,10 @@ SubagentRunner.configure({
   reportUsage = function(used)
     convUsage.requests = convUsage.requests + 1
     convUsage.tokens = convUsage.tokens + math.max(0, tonumber(used) or 0)
+  end,
+  onProgress = function(info)
+    liveSubtask = info
+    renderSubtaskCard()
   end,
 })
 

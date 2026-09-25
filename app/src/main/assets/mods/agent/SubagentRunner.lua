@@ -29,6 +29,29 @@ function _M.cancel()
   if current then current.cancelled = true end
 end
 
+--- 当前子代理运行快照；无运行中子代理返回 nil。
+--- 供 UI 在消息列表重建后恢复实时卡片。
+function _M.progressInfo()
+  if not current then return nil end
+  return {
+    task = current.task,
+    rounds = current.rounds,
+    tool = current.currentTool,
+    done = current.done,
+  }
+end
+
+local function notifyProgress(state)
+  local report = config and config.onProgress
+  if not report then return end
+  pcall(report, {
+    task = state.task,
+    rounds = state.rounds,
+    tool = state.currentTool,
+    done = state.done,
+  })
+end
+
 local function postToMain(fn)
   local post = config and config.postToMain
   if post then return post(fn) end
@@ -91,7 +114,9 @@ function _M.run(task, lightweight)
 
   subSerial = subSerial + 1
   local state = { cancelled = false, done = false, result = nil, ok = false, rounds = 0 }
+  state.task = task
   current = state
+  notifyProgress(state)
 
   local messages = {
     { role = "system", content = buildPrompt() },
@@ -103,6 +128,8 @@ function _M.run(task, lightweight)
     state.done = true
     state.result = result
     state.ok = ok == true
+    state.currentTool = nil
+    notifyProgress(state)
     if current == state then current = nil end
   end
 
@@ -125,6 +152,8 @@ function _M.run(task, lightweight)
     stopIfCancelled()
     if state.done then return end
     state.rounds = state.rounds + 1
+    state.currentTool = nil
+    notifyProgress(state)
     local override = lightweight and c().getAuxModelConfig and c().getAuxModelConfig() or nil
     setStatus("子任务 #" .. subSerial .. " · 第 " .. state.rounds .. " 轮")
     c().sendStream(messages, {
@@ -192,6 +221,8 @@ function _M.run(task, lightweight)
       runToolCalls(toolCalls, index + 1, onAll)
     end
     local function execute()
+      state.currentTool = tc.name
+      notifyProgress(state)
       c().executeToolAsync(tc.name, args, proceedWithResult)
     end
     -- 确认策略与主代理一致：自动批准直通；需确认的走全局确认钩子
