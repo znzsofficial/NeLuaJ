@@ -104,18 +104,29 @@ function _M.renderMarkdown(text, opts)
   local i = 1
   while i <= #lines do
     local line = lines[i]
-    -- 表格块：表头行 + 分隔行 + 任意数据行。
-    -- HtmlCompat.fromHtml 不支持 <table> 标签（单元格会被挤进同一行），
-    -- 改为逐行等宽渲染——保留对齐且行为确定。
+    -- 表格块：表头行 + 分隔行 + 任意数据行，emit 真实 <table><tr><td> 标签
+    -- 由 MarkdownTagHandler 加背景色 + 左缩进 + 行间换行 + 单元格间隔
     if line:match("^%s*|") and lines[i + 1] and isTableSeparator(lines[i + 1]) then
       closeList()
-      local rowLines = { "<font face='monospace'>" .. line .. "</font><br>" }
+      local tableHtml = { "<table>" }
+      -- 表头行（<th>，TagHandler 同样用双空格间隔）
+      tableHtml[#tableHtml + 1] = "<tr>"
+      for _, cell in ipairs(_M.splitTableRow(line)) do
+        tableHtml[#tableHtml + 1] = "<th>" .. inline(cell) .. "</th>"
+      end
+      tableHtml[#tableHtml + 1] = "</tr>"
+      -- 数据行
       local j = i + 2
       while j <= #lines and lines[j]:match("^%s*|") do
-        rowLines[#rowLines + 1] = "<font face='monospace'>" .. lines[j] .. "</font><br>"
+        tableHtml[#tableHtml + 1] = "<tr>"
+        for _, cell in ipairs(_M.splitTableRow(lines[j])) do
+          tableHtml[#tableHtml + 1] = "<td>" .. inline(cell) .. "</td>"
+        end
+        tableHtml[#tableHtml + 1] = "</tr>"
         j = j + 1
       end
-      for k = 1, #rowLines do html[#html + 1] = rowLines[k] end
+      tableHtml[#tableHtml + 1] = "</table>"
+      html[#html + 1] = table.concat(tableHtml)
       i = j
     else
       local headingLevel, heading = line:match("^%s*(#+)%s+(.+)$")
@@ -138,7 +149,7 @@ function _M.renderMarkdown(text, opts)
           html[#html + 1] = "<b>" .. inline(heading) .. "</b><br>"
         end
       elseif line:match("^%s*[-*_]%s*[-*_]%s*[-*_]%s*[-*_]%s*[-*_]%s*$") then
-        closeList(); html[#html + 1] = "<hr>"
+        closeList(); html[#html + 1] = "<hr/>"
       elseif taskMark then
         -- 任务列表：[x] 完成 / [ ] 待办，渲染为勾选符号行（不进 <ul>）
         closeList()
@@ -168,7 +179,23 @@ function _M.renderMarkdown(text, opts)
   end
   closeList()
   local compat = ensureHtmlCompat()
-  return compat.fromHtml(table.concat(html), compat.FROM_HTML_MODE_LEGACY)
+  local htmlText = table.concat(html)
+  if not htmlText:find("<table>") and not htmlText:find("<hr/>") then
+    -- 无表格与分割线时直接走双参版本，省去 TagHandler 构造
+    return compat.fromHtml(htmlText, compat.FROM_HTML_MODE_LEGACY)
+  end
+  -- 有表格/分割线：TagHandler 给 <table> 整块加背景+缩进，<hr> 画着色分割线
+  local ok, result = pcall(function()
+    local ColorUtil = this.themeUtil
+    local tableBg = ColorUtil.surface.containerHigh
+    local hrColor = ColorUtil.outline.variant
+    local HandlerClass = luajava.bindClass("com.nekolaska.ai.MarkdownTagHandler")
+    local handler = HandlerClass(tableBg, hrColor)
+    return compat.fromHtml(htmlText, compat.FROM_HTML_MODE_LEGACY, nil, handler)
+  end)
+  if ok then return result end
+  -- TagHandler 失败（如旧安装缺类）时回退双参版本——<table> 内容仍会渲染（标签被忽略）
+  return compat.fromHtml(htmlText, compat.FROM_HTML_MODE_LEGACY)
 end
 
 --- 把内容拆分为文本段 + 代码块序列
