@@ -1653,296 +1653,8 @@ SettingsUi.configure({ updateModelLabel = updateModelLabel })
 showModelPicker = SettingsUi.showModelPicker
 showModelManager = SettingsUi.showModelManager
 showSettings = SettingsUi.showSettings
--- ─── 会话管理 ──
-
-local CONV_COLORS = {
-  0xFF7C4DFF, 0xFF536DFE, 0xFF448AFF, 0xFF00BFA5,
-  0xFF00C853, 0xFFFFB300, 0xFFFF6E40, 0xFFE040FB,
-  0xFFF50057, 0xFF26A69A,
-}
-
-local function convColor(name)
-  local s = tostring(name or "")
-  local h = 0
-  for i = 1, #s do h = (h * 31 + s:byte(i)) % 65536 end
-  return CONV_COLORS[(h % #CONV_COLORS) + 1]
-end
-
-local function makeAvatar(name, sizeDp)
-  local size = dp(sizeDp)
-  local tv = MaterialTextView(activity)
-  local s = tostring(name or "?")
-  local ok, first = pcall(function() return utf8.sub(s, 1, 1) end)
-  if not ok or first == nil or first == "" then
-    first = s:sub(1, 1) or "?"
-  end
-  tv.setText(first)
-  tv.setTextSize(16)
-  tv.setTextColor(0xffffffff)
-  tv.setGravity(17)
-  tv.setTypeface(Typeface.DEFAULT, 1)
-  local gd = GradientDrawable()
-  gd.setShape(GradientDrawable.OVAL)
-  gd.setColor(convColor(name))
-  tv.setBackground(gd)
-  tv.setLayoutParams(LinearLayout.LayoutParams(size, size))
-  return tv
-end
-
-local function convMetaText(conv)
-  local project = tostring(conv.projectPath or ""):match("([^/]+)$") or S.ai_project_unknown
-  return S.ai_conv_meta:format(tostring(conv.createdAt or ""), #(conv.messages or {})) .. "  ·  " .. project
-end
-
-updateProjectLabel = function()
-  if not views.aiProject then return end
-  local path = AgentChat.getCurrentProjectPath()
-  local project = tostring(path or ""):match("([^/]+)$") or S.ai_project_unknown
-  views.aiProject.setText(S.ai_project:format(project))
-end
-
-local function showRenameDialog(convId, oldName)
-  local dlgViews = {}
-  local inputLayout = {
-    LinearLayout,
-    orientation = "vertical",
-    layout_width = "match",
-    layout_height = "wrap",
-    padding = "16dp",
-    {
-      EditText,
-      id = "nameInput",
-      layout_width = "match", layout_height = "wrap", minHeight = "48dp",
-      textSize = "14sp", singleLine = true,
-      text = oldName,
-    },
-  }
-  local content = loadlayout(inputLayout, dlgViews)
-
-  MaterialAlertDialogBuilder(activity)
-    .setTitle(S.ai_rename)
-    .setView(content)
-    .setPositiveButton(S.ai_ok, function()
-      local name = tostring(dlgViews.nameInput.getText() or ""):gsub("^%s*(.-)%s*$", "%1")
-      if name ~= "" and convId then
-        AgentChat.renameConversation(convId, name)
-        local c = AgentChat.getCurrentConv()
-        if views.aiTitle and c and c.id == convId then
-          views.aiTitle.setText(convName(c))
-        end
-      end
-    end)
-    .setNegativeButton(S.ai_cancel, nil)
-    .show()
-end
-
-local function buildConvRow(conv, isCurrent, onClick)
-  local name = convName(conv)
-  local rowViews = {}
-  local row = loadlayout({
-    LinearLayout,
-    layout_width = "match",
-    layout_height = "wrap",
-    orientation = "horizontal",
-    gravity = "center_vertical",
-    clickable = true,
-    focusable = true,
-    layout_marginBottom = "8dp",
-    paddingLeft = "14dp",
-    paddingRight = "14dp",
-    paddingTop = "10dp",
-    paddingBottom = "10dp",
-    {
-      LinearLayout,
-      id = "avatarSlot",
-      layout_width = "wrap",
-      layout_height = "wrap",
-    },
-    {
-      LinearLayout,
-      orientation = "vertical",
-      layout_width = "0dp",
-      layout_weight = 1,
-      layout_height = "wrap",
-      layout_marginLeft = "12dp",
-      layout_marginRight = "6dp",
-      {
-        MaterialTextView,
-        text = name,
-        textSize = "15sp",
-        textStyle = "bold",
-        textColor = isCurrent and ColorOnPrimaryContainer or ColorOnSurface,
-        singleLine = true,
-        ellipsize = "end",
-      },
-      {
-        MaterialTextView,
-        text = convMetaText(conv),
-        textSize = "12sp",
-        textColor = isCurrent and ColorOnPrimaryContainer or ColorText,
-        singleLine = true,
-        ellipsize = "end",
-        layout_marginTop = "2dp",
-      },
-    },
-    {
-      MaterialTextView,
-      id = "badge",
-      textSize = "11sp",
-      gravity = "center",
-      singleLine = true,
-      visibility = (isCurrent or conv.running) and VISIBLE or GONE,
-      layout_width = "wrap",
-      layout_height = "24dp",
-    },
-  }, rowViews)
-
-  local bg = GradientDrawable()
-  bg.setCornerRadius(dp(16))
-  bg.setColor(isCurrent and ColorPrimaryContainer or ColorSurfaceContainerLow)
-  row.setBackground(bg)
-
-  rowViews.avatarSlot.addView(makeAvatar(name, 40))
-
-  local badge = rowViews.badge
-  if isCurrent then
-    badge.setText(S.ai_current)
-    badge.setTextColor(ColorOnPrimary)
-    local bbg = GradientDrawable()
-    bbg.setShape(GradientDrawable.OVAL)
-    bbg.setColor(ColorPrimary)
-    badge.setBackground(bbg)
-  elseif conv.running then
-    -- 该会话有任务进行中（进程被杀后标记可能残留，仅作提示）
-    badge.setText(S.ai_conv_running)
-    badge.setTextColor(ColorOnErrorContainer)
-    local rbg = GradientDrawable()
-    rbg.setCornerRadius(dp(8))
-    rbg.setColor(ColorErrorContainer)
-    badge.setBackground(rbg)
-    badge.setPadding(dp(8), 0, dp(8), 0)
-  end
-
-  row.setOnClickListener(function() if onClick then onClick() end end)
-  return row
-end
-
-local function buildManagerRow(conv, render)
-  local name = convName(conv)
-  local convId = conv and conv.id
-  local rowViews = {}
-  local row = loadlayout({
-    LinearLayout,
-    layout_width = "match",
-    layout_height = "wrap",
-    orientation = "horizontal",
-    gravity = "center_vertical",
-    layout_marginBottom = "8dp",
-    paddingLeft = "12dp",
-    paddingRight = "12dp",
-    paddingTop = "8dp",
-    paddingBottom = "8dp",
-    {
-      LinearLayout,
-      id = "avatarSlot",
-      layout_width = "wrap",
-      layout_height = "wrap",
-    },
-    {
-      LinearLayout,
-      orientation = "vertical",
-      layout_width = "0dp",
-      layout_weight = 1,
-      layout_height = "wrap",
-      layout_marginLeft = "10dp",
-      layout_marginRight = "4dp",
-      {
-        MaterialTextView,
-        text = name,
-        textSize = "15sp",
-        textColor = ColorOnSurface,
-        singleLine = true,
-        ellipsize = "end",
-      },
-      {
-        MaterialTextView,
-        text = convMetaText(conv),
-        textSize = "12sp",
-        textColor = ColorText,
-        singleLine = true,
-        ellipsize = "end",
-        layout_marginTop = "2dp",
-      },
-      {
-        LinearLayout,
-        layout_width = "match",
-        layout_height = "wrap",
-        gravity = "end",
-        layout_marginTop = "6dp",
-        {
-          MaterialButton,
-          text = S.ai_rename_btn,
-          textSize = "12sp",
-          layout_width = "wrap",
-          layout_height = "wrap",
-          allCaps = false,
-          minWidth = 0,
-          minHeight = 0,
-          paddingLeft = "12dp",
-          paddingRight = "12dp",
-          BackgroundTintList = ColorStateList.valueOf(ColorSecondaryContainer),
-          textColor = ColorOnSecondaryContainer,
-          onClick = function() showRenameDialog(convId, name) end,
-        },
-        {
-          MaterialButton,
-          text = S.ai_delete,
-          textSize = "12sp",
-          layout_width = "wrap",
-          layout_height = "wrap",
-          layout_marginLeft = "8dp",
-          allCaps = false,
-          minWidth = 0,
-          minHeight = 0,
-          paddingLeft = "12dp",
-          paddingRight = "12dp",
-          BackgroundTintList = ColorStateList.valueOf(ColorErrorContainer),
-          textColor = ColorOnErrorContainer,
-          onClick = function()
-            MaterialAlertDialogBuilder(activity)
-              .setTitle(S.ai_delete_conv)
-              .setMessage(S.ai_confirm_delete_conv:format(name))
-              .setPositiveButton(S.ai_delete, function()
-                AgentTurn.invalidate()
-                if not AgentChat.deleteConversation(convId) then
-                  print(S.ai_delete_failed)
-                  return
-                end
-                local current = AgentChat.getCurrentConv()
-                if not current then
-                  AgentChat.createConversation()
-                end
-                messages = {}
-                if views.msgContainer then views.msgContainer.removeAllViews() end
-                loadHistory()
-                if views.aiTitle then
-                  local c = AgentChat.getCurrentConv()
-                  if c then views.aiTitle.setText(convName(c)) end
-                end
-                print(S.ai_deleted)
-                render()
-              end)
-              .setNegativeButton(S.ai_cancel, nil)
-              .show()
-          end,
-        },
-      },
-    },
-  }, rowViews)
-
-  rowViews.avatarSlot.addView(makeAvatar(name, 36))
-  return row
-end
+-- ─── 会话管理（UI 已抽到 mods/agent/ConvUi）──
+-- 状态序列（切换/新建/删除后重载/重命名刷新）留在 ChatUI，经 configure 注入。
 
 -- 统一的会话切换序列（面板内列表、首屏 chips 与对外 openConversation 共用）
 local function switchToConversation(conv)
@@ -1960,229 +1672,46 @@ local function switchToConversation(conv)
   if updateProjectLabel then updateProjectLabel() end
 end
 
--- 赋值给前向声明的局部量：命令菜单捕获的是声明处的变量，
--- 若在此重新 local 声明，菜单入口会调用到 nil（历史 bug）
-showConvList = function()
-  local list = AgentChat.listConversations()
-  local currentConv = AgentChat.getCurrentConv()
-  local currentId = currentConv and currentConv.id or nil
-  -- 会话中心按最近更新排序，进行中的任务自然靠前
-  table.sort(list, function(a, b)
-    return tostring(a.conversation.updatedAt or "") > tostring(b.conversation.updatedAt or "")
-  end)
-
-  if #list == 0 then
-    local created = AgentChat.createConversation()
-    activeConversationId = created and created.id or nil
-    activeConversationProjectPath = created and AgentChat.getCurrentProjectPath() or nil
-    conversationLoaded = created ~= nil
-    activeConversationHadMessages = false
-    messages = created and created.messages or {}
-    TodoManager.set(nil)
-    if views.msgContainer then views.msgContainer.removeAllViews() end
-    if views.aiTitle then views.aiTitle.setText(S.ai_new_conv) end
-    if updateProjectLabel then updateProjectLabel() end
-    return
-  end
-
-  local dlgViews = {}
-  local dlg = nil
-  local content = loadlayout({
-    ScrollView,
-    layout_width = "match",
-    layout_height = "match",
-    fillViewport = true,
-    {
-      LinearLayout,
-      orientation = "vertical",
-      layout_width = "match",
-      layout_height = "wrap",
-      padding = "12dp",
-      {
-        LinearLayout,
-        orientation = "horizontal",
-        gravity = "center_vertical",
-        layout_width = "match",
-        layout_height = "wrap",
-        padding = "8dp",
-        paddingBottom = "2dp",
-        {
-          MaterialTextView,
-          text = S.ai_switch_conv,
-          textSize = "18sp", textStyle = "bold", textColor = ColorOnSurface,
-          layout_width = "0dp", layout_weight = 1,
-        },
-        {
-          MaterialTextView,
-          id = "convCount",
-          text = S.ai_conv_count:format(#list),
-          textSize = "13sp", textColor = ColorText,
-        },
-      },
-      {
-        LinearLayout,
-        id = "convList",
-        orientation = "vertical",
-        layout_width = "match",
-        layout_height = "wrap",
-        layout_marginTop = "2dp",
-      },
-      {
-        LinearLayout,
-        orientation = "horizontal",
-        layout_width = "match",
-        layout_height = "wrap",
-        layout_marginTop = "4dp",
-        {
-          MaterialButton,
-          id = "btnManage",
-          text = S.ai_manage_convs,
-          textSize = "14sp",
-          layout_width = "0dp", layout_weight = 1,
-          layout_marginRight = "6dp",
-          BackgroundTintList = ColorStateList.valueOf(ColorSecondaryContainer),
-          textColor = ColorOnSecondaryContainer,
-        },
-        {
-          MaterialButton,
-          id = "btnNew",
-          text = S.ai_new_conv_btn,
-          textSize = "14sp",
-          layout_width = "0dp", layout_weight = 1,
-          layout_marginLeft = "6dp",
-          BackgroundTintList = ColorStateList.valueOf(ColorPrimary),
-          textColor = ColorOnPrimary,
-        },
-      },
-    },
-  }, dlgViews)
-
-  local container = dlgViews.convList
-  container.removeAllViews()
-  for _, item in ipairs(list) do
-    local conv = item.conversation
-    local row = buildConvRow(conv, conv.id == currentId, function()
-      switchToConversation(conv)
-      if dlg then dlg.dismiss() end
-    end)
-    container.addView(row)
-  end
-
-  dlgViews.btnManage.onClick = function()
-    if dlg then dlg.dismiss() end
-    showConvManager()
-  end
-  dlgViews.btnNew.onClick = function()
-    saveHistory()
-    AgentTurn.invalidate()
-    local created = AgentChat.createConversation()
-    activeConversationId = created and created.id or nil
-    activeConversationProjectPath = created and AgentChat.getCurrentProjectPath() or nil
-    conversationLoaded = created ~= nil
-    activeConversationHadMessages = false
-    messages = {}
-    if views.msgContainer then views.msgContainer.removeAllViews() end
-    if views.aiTitle then views.aiTitle.setText(S.ai_new_conv) end
-    if updateProjectLabel then updateProjectLabel() end
-    if dlg then dlg.dismiss() end
-  end
-
-  dlg = MaterialAlertDialogBuilder(activity)
-    .setView(content)
-    .setNegativeButton(S.ai_close, nil)
-    .show()
+-- 统一的新建会话序列：原先在 4 处各写一份，顺带修复其中两处
+-- 遗漏的任务计划清理与陈旧用量统计未复位的问题
+local function newConversation()
+  saveHistory()
+  AgentTurn.invalidate()
+  local created = AgentChat.createConversation()
+  activeConversationId = created and created.id or nil
+  activeConversationProjectPath = created and AgentChat.getCurrentProjectPath() or nil
+  conversationLoaded = created ~= nil
+  activeConversationHadMessages = false
+  messages = created and created.messages or {}
+  TodoManager.set(nil)
+  convUsage = { requests = 0, tokens = 0 }
+  if views.msgContainer then views.msgContainer.removeAllViews() end
+  if views.aiTitle then views.aiTitle.setText(S.ai_new_conv) end
+  if updateProjectLabel then updateProjectLabel() end
 end
 
-showConvManager = function()
-  local list = AgentChat.listConversations()
-  if #list == 0 then return end
-
-  local dlgViews = {}
-  local content = loadlayout({
-    ScrollView,
-    layout_width = "match",
-    layout_height = "match",
-    fillViewport = true,
-    {
-      LinearLayout,
-      orientation = "vertical",
-      layout_width = "match",
-      layout_height = "wrap",
-      padding = "12dp",
-      {
-        LinearLayout,
-        orientation = "horizontal",
-        gravity = "center_vertical",
-        layout_width = "match",
-        layout_height = "wrap",
-        padding = "8dp",
-        paddingBottom = "2dp",
-        {
-          MaterialTextView,
-          text = S.ai_manage_convs,
-          textSize = "18sp", textStyle = "bold", textColor = ColorOnSurface,
-          layout_width = "0dp", layout_weight = 1,
-        },
-        {
-          MaterialTextView,
-          id = "convCount",
-          text = S.ai_conv_count:format(#list),
-          textSize = "13sp", textColor = ColorText,
-        },
-      },
-      {
-        LinearLayout,
-        id = "convList",
-        orientation = "vertical",
-        layout_width = "match",
-        layout_height = "wrap",
-        layout_marginTop = "2dp",
-      },
-      {
-        MaterialButton,
-        id = "btnNew",
-        text = S.ai_new_conv_btn,
-        textSize = "14sp",
-        layout_width = "match",
-        layout_marginTop = "4dp",
-        BackgroundTintList = ColorStateList.valueOf(ColorPrimary),
-        textColor = ColorOnPrimary,
-      },
-    },
-  }, dlgViews)
-
-  local container = dlgViews.convList
-  local function render()
-    local currentList = AgentChat.listConversations()
-    container.removeAllViews()
-    for _, item in ipairs(currentList) do
-      container.addView(buildManagerRow(item.conversation, render))
+local ConvUi = require("mods.agent.ConvUi")
+ConvUi.configure({
+  onSwitch = switchToConversation,
+  onNew = newConversation,
+  onAfterDelete = function(convId)
+    messages = {}
+    if views.msgContainer then views.msgContainer.removeAllViews() end
+    loadHistory()
+    if views.aiTitle then
+      local c = AgentChat.getCurrentConv()
+      if c then views.aiTitle.setText(convName(c)) end
     end
-    if dlgViews.convCount then dlgViews.convCount.setText(S.ai_conv_count:format(#currentList)) end
-  end
-
-  dlgViews.btnNew.onClick = function()
-    saveHistory()
-    AgentTurn.invalidate()
-    local created = AgentChat.createConversation()
-    activeConversationId = created and created.id or nil
-    activeConversationProjectPath = created and AgentChat.getCurrentProjectPath() or nil
-    conversationLoaded = created ~= nil
-    activeConversationHadMessages = false
-    messages = {}
-    TodoManager.set(nil)
-    if views.msgContainer then views.msgContainer.removeAllViews() end
-    if views.aiTitle then views.aiTitle.setText(S.ai_new_conv) end
-    render()
-  end
-
-  render()
-  MaterialAlertDialogBuilder(activity)
-    .setView(content)
-    .setNegativeButton(S.ai_close, nil)
-    .show()
-end
-
+  end,
+  onRenamed = function(convId)
+    local c = AgentChat.getCurrentConv()
+    if views.aiTitle and c and c.id == convId then
+      views.aiTitle.setText(convName(c))
+    end
+  end,
+})
+showConvList = ConvUi.showConvList
+showConvManager = ConvUi.showConvManager
 local function addWelcomeCard(title, body)
   if not views.msgContainer then return end
   local welcomeViews = {}
@@ -2432,17 +1961,7 @@ function _M.show()
 
   if views.btnClear then
     views.btnClear.onClick = function()
-      AgentTurn.invalidate()
-      saveHistory()
-      local created = AgentChat.createConversation()
-      activeConversationId = created and created.id or nil
-      activeConversationProjectPath = created and AgentChat.getCurrentProjectPath() or nil
-      conversationLoaded = created ~= nil
-      activeConversationHadMessages = false
-      messages = {}
-      TodoManager.set(nil)
-      if views.msgContainer then views.msgContainer.removeAllViews() end
-      if views.aiTitle then views.aiTitle.setText(S.ai_new_conv) end
+      newConversation()
       addWelcomeCard(S.ai_new_conv, S.ai_start_chat)
     end
   end
