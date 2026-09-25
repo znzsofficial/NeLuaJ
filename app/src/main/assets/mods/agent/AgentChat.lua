@@ -1428,6 +1428,9 @@ function _M.hasApiKey() return ModelRegistry.hasApiKey() end
 _M.getApiKey = getApiKey
 _M.getApiUrl = getApiUrl
 _M.getModel = getModel
+_M.getAuxModelIndex = ModelRegistry.getAuxModelIndex
+_M.setAuxModelIndex = ModelRegistry.setAuxModelIndex
+_M.getAuxModelConfig = ModelRegistry.getAuxModelConfig
 _M.loadProviders = ModelRegistry.loadProviders
 _M.saveProviders = ModelRegistry.saveProviders
 _M.findProvider = ModelRegistry.findProvider
@@ -1647,11 +1650,19 @@ end
 -- 实际实现位于 ContextManager.lua，公开入口在文件末尾转发。
 
 -- 上下文策略集中在 ContextManager；这里保留公开入口，兼容现有调用方。
+-- ContextManager 的 sendStream 只服务于压缩摘要请求：未显式指定模型时
+-- 注入辅助模型（未配置则回退当前主模型），让后台任务走便宜模型。
 ContextManager.configure({
   getSystemPrompt = function() return _M.getSystemPrompt() end,
   getContextLength = getContextLength,
   getMaxTokens = getMaxTokens,
-  sendStream = function(messages, callbacks) return _M.sendStream(messages, callbacks) end,
+  sendStream = function(messages, callbacks)
+    callbacks = callbacks or {}
+    if callbacks.modelOverride == nil then
+      callbacks.modelOverride = ModelRegistry.getAuxModelConfig()
+    end
+    return _M.sendStream(messages, callbacks)
+  end,
 })
 OpenAIClient.configure({
   getApiKey = getApiKey,

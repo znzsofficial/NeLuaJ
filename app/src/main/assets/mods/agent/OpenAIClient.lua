@@ -44,6 +44,18 @@ function _M.sendStream(messages, callbacks)
   callbacks = callbacks or {}
   local finish = finishOnce(callbacks)
   local cfg = requireConfig()
+  -- 模型路由：辅助任务（压缩摘要/标题生成）经 callbacks.modelOverride 指定
+  -- 其他供应商/模型；未指定或字段不全时维持当前主模型。
+  local override = callbacks.modelOverride
+  if type(override) == "table" and override.model and override.model ~= "" then
+    local wrapped = {}
+    for key, value in pairs(cfg) do wrapped[key] = value end
+    wrapped.getModel = function() return tostring(override.model) end
+    wrapped.getApiUrl = function() return tostring(override.url or "") end
+    wrapped.getApiKey = function() return tostring(override.key or "") end
+    wrapped.useResponses = function() return override.responses == true end
+    cfg = wrapped
+  end
   local key = cfg.getApiKey()
   if key == "" then finish(callbacks.onError, "请先设置 API Key") return end
 

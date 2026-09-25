@@ -2027,6 +2027,23 @@ showSettings = function()
           inputType = 0x0002,
           hint = S.ai_retry_hint,
         },
+        {
+          MaterialTextView,
+          text = S.ai_aux_model,
+          textSize = "13sp", textColor = ColorText,
+          layout_marginTop = "12dp",
+        },
+        {
+          MaterialTextView,
+          text = S.ai_aux_model_desc,
+          textSize = "11sp", textColor = ColorText,
+        },
+        {
+          MaterialTextView,
+          id = "auxModelValue",
+          textSize = "14sp", textColor = ColorPrimary,
+          padding = "8dp",
+        },
       },
     },
     -- 行为
@@ -2579,6 +2596,45 @@ showSettings = function()
   end
   dlgViews.btnAddDw.onClick = function()
     addPresetServer("deepwiki", "https://mcp.deepwiki.com/mcp")
+  end
+
+  local function renderAuxModelValue()
+    if not dlgViews.auxModelValue then return end
+    local models = AgentChat.loadModels()
+    local idx = AgentChat.getAuxModelIndex()
+    if idx >= 1 and models[idx] then
+      dlgViews.auxModelValue.setText(S.ai_aux_model_set:format(models[idx].name))
+    else
+      dlgViews.auxModelValue.setText(S.ai_aux_model_follow)
+    end
+  end
+  renderAuxModelValue()
+
+  dlgViews.auxModelValue.onClick = function()
+    local models = AgentChat.loadModels()
+    if #models == 0 then
+      print(S.ai_need_config)
+      return
+    end
+    local currentAux = AgentChat.getAuxModelIndex()
+    local labels = {}
+    for i, m in ipairs(models) do
+      local marker = (i == currentAux) and " ✓ " or "    "
+      labels[i] = marker .. m.name .. "  (" .. m.model .. ")"
+    end
+    labels[#labels + 1] = "    " .. S.ai_aux_model_clear
+    MaterialAlertDialogBuilder(activity)
+      .setTitle(S.ai_aux_model)
+      .setItems(labels, function(_, which)
+        if which == #models then
+          AgentChat.setAuxModelIndex(0)
+        else
+          AgentChat.setAuxModelIndex(which + 1)
+        end
+        renderAuxModelValue()
+      end)
+      .setNegativeButton(S.ai_close, nil)
+      .show()
   end
 
   renderMcpList()

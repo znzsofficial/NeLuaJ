@@ -471,4 +471,42 @@ function _M.removeProvider(id)
   return true
 end
 
+-- ─── 辅助模型路由 ──
+-- 压缩摘要、标题生成等后台任务使用的轻量模型。
+-- 以“供应商 ID + 模型 ID”的身份方式存储而非索引：删除/重排模型后
+-- 引用自然失效并回退主模型，不会静默漂移指向其他模型。
+
+local AUX_PROVIDER_KEY = "ai_aux_provider_id"
+local AUX_MODEL_KEY = "ai_aux_model_id"
+
+local function auxIdentity()
+  return tostring(shared(AUX_PROVIDER_KEY, "")), tostring(shared(AUX_MODEL_KEY, ""))
+end
+
+function _M.getAuxModelIndex()
+  local providerId, modelId = auxIdentity()
+  if providerId == "" or modelId == "" then return 0 end
+  local _, index = _M.findModel(providerId, modelId)
+  return index or 0
+end
+
+function _M.setAuxModelIndex(index)
+  index = tonumber(index) or 0
+  local model = index >= 1 and _M.loadModels()[index] or nil
+  if model and model.providerId and model.model and model.model ~= "" then
+    persist(AUX_PROVIDER_KEY, tostring(model.providerId))
+    persist(AUX_MODEL_KEY, tostring(model.model))
+  else
+    persist(AUX_PROVIDER_KEY, "")
+    persist(AUX_MODEL_KEY, "")
+  end
+end
+
+--- 辅助模型配置（含供应商 url/key 解析）；未配置或引用失效返回 nil
+function _M.getAuxModelConfig()
+  local idx = _M.getAuxModelIndex()
+  if idx < 1 then return nil end
+  return resolvedModel(_M.loadModels()[idx])
+end
+
 return _M
