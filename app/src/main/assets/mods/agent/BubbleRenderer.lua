@@ -266,7 +266,10 @@ function _M.renderMessage(role, content, stateMessage, opts)
     if part.type == "text" then
       local markdownView = loadlayout({
         MaterialTextView,
-        text = renderMarkdown(part.text),
+        text = renderMarkdown(part.text, {
+          codeColor = isUser and ColorOnPrimaryContainer or ColorPrimary,
+          linkColor = isUser and ColorOnPrimaryContainer or ColorPrimary,
+        }),
         textSize = "14sp",
         textColor = textColor,
         lineSpacingMultiplier = 1.4,
