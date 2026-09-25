@@ -68,6 +68,8 @@ local activeConversationHadMessages = false
 -- 会话累计用量（主请求次数与估算输入 token），随会话记录持久化
 local convUsage = { requests = 0, tokens = 0 }
 local titleInFlight = false
+-- 消息 → 气泡视图索引（loadHistory 重建），供会话内搜索跳转定位
+local bubbleByMessage = {}
 
 -- 回合状态（loading/generation/stopRequested/activeStream/failedToolCalls/
 -- retryPayloads/activeToolStop）已迁至 AgentTurn；此处仅保留会话与视图状态。
@@ -205,6 +207,8 @@ BubbleRenderer.configure({
   isToolError = isToolError,
   toolDisplayName = toolDisplayName,
   insertCode = function(code) _M.insertCode(code) end,
+  onRegenerate = regenerateLastTurn,
+  onEditRequest = editUserMessage,
 })
 addMessageBubble = BubbleRenderer.renderMessage
 addToolBubble = BubbleRenderer.renderTool
@@ -698,15 +702,30 @@ loadHistory = function(resetTurnHistory)
   -- 重建气泡
   local container = views.msgContainer
   if container then
+    -- 最新用户/AI 消息索引：渲染“编辑重发 / 重新生成”操作行用
+    local lastUserIndex, lastAssistantIndex
+    for i = #messages, 1, -1 do
+      if not lastUserIndex and messages[i].role == "user" then lastUserIndex = i end
+      if not lastAssistantIndex and messages[i].role == "assistant"
+          and tostring(messages[i].content or "") ~= "" then
+        lastAssistantIndex = i
+      end
+      if lastUserIndex and lastAssistantIndex then break end
+    end
+    bubbleByMessage = {}
     local consumedTools = {}
     for messageIndex, msg in ipairs(messages) do
       if msg.role == "user" then
-        addMessageBubble("user", msg.content or "")
+        local row = addMessageBubble("user", msg.content or "", msg,
+          { isLastUser = messageIndex == lastUserIndex })
+        if row then bubbleByMessage[msg] = row end
       elseif msg.role == "assistant" then
         -- 跳过纯工具调用（无文本内容）的空 assistant 消息
         local content = msg.content or ""
         if content ~= "" or msg.continuation_state then
-          addMessageBubble("assistant", content, msg)
+          local row = addMessageBubble("assistant", content, msg,
+            { isLastAssistant = messageIndex == lastAssistantIndex })
+          if row then bubbleByMessage[msg] = row end
         end
         -- 显示工具调用气泡，并记录 id 供 tool 结果回填
         if msg.tool_calls then
@@ -923,6 +942,51 @@ sendMessage = function()
   -- 编辑器上下文只加入请求副本，不写入持久化会话；超预算时先压缩历史。
   AgentTurn.bumpGeneration()
   AgentTurn.send(false, userMsg)
+end
+
+--- 最新一轮“重新生成”：撤销整轮后用原文本重发（上下文按当前编辑器重建）
+local function regenerateLastTurn()
+  if AgentTurn.isActive() then return false end
+  local lastUser
+  for i = #messages, 1, -1 do
+    if messages[i].role == "user" then lastUser = messages[i]; break end
+  end
+  if not lastUser then return false end
+  if not undoLastTurn() then return false end
+  local text = tostring(lastUser.content or "")
+  addMessageBubble("user", text)
+  messages[#messages + 1] = { role = "user", content = text }
+  redoTurns = {}
+  saveHistory()
+  if not AgentChat.hasApiKey() then
+    addMessageBubble("assistant", S.ai_need_config)
+    return true
+  end
+  local context = AgentChat.buildContext()
+  local userMsg = text
+  if not skipContext and context ~= "" then
+    userMsg = context .. "\n\n用户问题: " .. text
+  end
+  if skipContext then
+    skipContext = false
+    updateContextChip()
+  end
+  AgentTurn.bumpGeneration()
+  AgentTurn.send(false, userMsg)
+  return true
+end
+
+--- 编辑重发：把该用户消息回填输入框并进入编辑态（发送时原地替换并截断后续）
+local function editUserMessage(stateMessage)
+  if AgentTurn.isActive() then return end
+  local index
+  for i, msg in ipairs(messages) do
+    if msg == stateMessage then index = i; break end
+  end
+  if not index or not views.msgInput then return end
+  editingMessageIndex = index
+  views.msgInput.setText(tostring(stateMessage.content or ""))
+  pcall(function() views.msgInput.requestFocus() end)
 end
 
 -- ─── 供应商与模型设置 UI（已抽到 mods/agent/SettingsUi）──

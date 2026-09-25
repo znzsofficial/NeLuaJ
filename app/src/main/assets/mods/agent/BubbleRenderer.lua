@@ -85,6 +85,14 @@ local insertCode = function(code)
   if hooks.insertCode then hooks.insertCode(code) end
 end
 
+local onRegenerate = function()
+  if hooks.onRegenerate then hooks.onRegenerate() end
+end
+
+local onEditRequest = function(stateMessage)
+  if hooks.onEditRequest then hooks.onEditRequest(stateMessage) end
+end
+
 -- ─── 复制与续写辅助 ──
 
 local function copyText(text, button)
@@ -135,9 +143,11 @@ end
 
 -- ─── 消息气泡 ──
 
-function _M.renderMessage(role, content, stateMessage)
+function _M.renderMessage(role, content, stateMessage, opts)
   local container = getContainer()
   if not container then return end
+  opts = opts or {}
+  local canAct = not AgentTurn.isActive()
 
   local isUser = (role == "user")
   local textColor = isUser and ColorOnPrimaryContainer or ColorOnSurface
@@ -191,6 +201,23 @@ function _M.renderMessage(role, content, stateMessage)
   }, rowViews)
 
   local inner = isUser and rowViews.bubbleInner or rowViews.plainInner
+
+  -- 用户消息（最新一条）操作行：编辑重发
+  if isUser and opts.isLastUser and canAct and stateMessage then
+    local userRow = rowViews.actionRow
+    userRow.setVisibility(VISIBLE)
+    local editBtn = MaterialButton(activity)
+    editBtn.setText(S.ai_edit_request)
+    editBtn.setTextSize(12)
+    editBtn.setAllCaps(false)
+    editBtn.setTextColor(actionColor)
+    editBtn.setBackgroundTintList(ColorStateList.valueOf(0))
+    editBtn.setLayoutParams(LinearLayout.LayoutParams(-2, dp(30)))
+    editBtn.setOnClickListener(function()
+      onEditRequest(stateMessage)
+    end)
+    userRow.addView(editBtn)
+  end
 
   -- 思考过程折叠块：推理模型存的 reasoning_content，默认收起
   local reasoning = stateMessage and tostring(stateMessage.reasoning_content or "") or ""
@@ -311,11 +338,11 @@ function _M.renderMessage(role, content, stateMessage)
     end
   end
 
-  -- AI 消息的操作行：复制全文 / 续写标记与按钮
+  -- AI 消息的操作行：复制全文 / 重新生成 / 续写标记与按钮
   local actionRow = rowViews.actionRow
   if not isUser then
     local continuation = stateMessage and continuationLabel(stateMessage.continuation_state)
-    if (content and content ~= "") or continuation then
+    if (content and content ~= "") or continuation or opts.isLastAssistant then
       actionRow.setVisibility(VISIBLE)
     end
     if content and content ~= "" then
@@ -328,6 +355,21 @@ function _M.renderMessage(role, content, stateMessage)
       copyReply.setLayoutParams(LinearLayout.LayoutParams(-2, dp(30)))
       copyReply.setOnClickListener(function(v) copyText(content, v) end)
       actionRow.addView(copyReply)
+    end
+    -- 最新一条 AI 回复（且无进行中任务）：一键重新生成
+    if opts.isLastAssistant and canAct and content and content ~= "" then
+      local regenBtn = MaterialButton(activity)
+      regenBtn.setText(S.ai_regenerate)
+      regenBtn.setTextSize(12)
+      regenBtn.setAllCaps(false)
+      regenBtn.setTextColor(actionColor)
+      regenBtn.setBackgroundTintList(ColorStateList.valueOf(0))
+      regenBtn.setLayoutParams(LinearLayout.LayoutParams(-2, dp(30)))
+      regenBtn.setOnClickListener(function(v)
+        regenBtn.setEnabled(false)
+        onRegenerate()
+      end)
+      actionRow.addView(regenBtn)
     end
     if continuation then
       local marker = MaterialTextView(activity)
@@ -354,6 +396,7 @@ function _M.renderMessage(role, content, stateMessage)
   rowLp.bottomMargin = dp(14)
   container.addView(row, rowLp)
   scrollDown()
+  return row
 end
 
 -- ─── 任务计划卡片 ──
