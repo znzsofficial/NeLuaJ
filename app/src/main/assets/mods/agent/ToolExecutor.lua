@@ -3,6 +3,8 @@
 local _M = {}
 local config
 local activeJob
+-- 进程级标记：模型是否已读过沙盒文档（run_lua 自动运行的前置条件）
+local sandboxDocRead = false
 local activeToolName
 
 local aliases = {
@@ -60,6 +62,22 @@ local function freezeFileArgs(name, args)
         local resolved = requireConfig().resolveReadPath and requireConfig().resolveReadPath(path) or resolve(path)
         frozen.paths[#frozen.paths + 1] = resolved
       end
+    end
+  end
+  -- 沙盒文档前置读取的执行器侧记录：模型读过 res/doc 下的 sandbox_*.html
+  -- 后才允许 run_lua 自动运行（见 requiresConfirmation/shouldAutoApprove）
+  if not sandboxDocRead and (name == "read_file" or name == "read_files") then
+    local isSandboxDocPath = requireConfig().isSandboxDocPath
+    if isSandboxDocPath then
+      pcall(function()
+        if name == "read_file" then
+          sandboxDocRead = sandboxDocRead or isSandboxDocPath(frozen.path)
+        else
+          for _, path in ipairs(frozen.paths or {}) do
+            sandboxDocRead = sandboxDocRead or isSandboxDocPath(path)
+          end
+        end
+      end)
     end
   end
   return frozen
@@ -325,18 +343,26 @@ local function projectAutoApproveBlocked()
   return ok and type(policy) == "table" and policy.autoApprove == false or false
 end
 
+--- 沙盒文档是否已被读过（run_lua 自动运行的前置条件；进程级）
+function _M.hasReadSandboxDoc()
+  return sandboxDocRead
+end
+
 function _M.requiresConfirmation(name, args)
   name = _M.normalizeToolName(name, args)
+  -- MCP 工具可能有任意副作用，项目 networkHosts 也不约束 MCP 服务器：
+  -- 一律需要确认，不得经网络自动批准放行
+  if name:match("^mcp::") or name:match("^mcp__") then return true end
   if name == "run_project" or name == "build_project" then return true end
   if name == "run_lua" then
     if not autoRunsSandbox() then return true end
+    if not sandboxDocRead then return true end
     if not isNetworkRequest(name, args) then return false end
     return not (autoApprovesNetworkRequests() and networkAllowedByPolicy(name, args))
   end
   if isNetworkRequest(name, args) then
     return not (autoApprovesNetworkRequests() and networkAllowedByPolicy(name, args))
   end
-  if name:match("^mcp::") or name:match("^mcp__") then return true end
   if _M.isDestructiveTool(name) then return true end
   if name == "fetch_url" then return true end
   if name == "read_file" or name == "read_files" or name == "list_dir" or name == "search_in_files" then
@@ -347,19 +373,34 @@ end
 
 function _M.shouldAutoApprove(name, args)
   name = _M.normalizeToolName(name, args)
+  -- MCP 工具一律不自动批准（副作用未知，且不受项目 networkHosts 约束）
+  if name:match("^mcp::") or name:match("^mcp__") then return false end
   if name == "run_lua" then
     if not autoRunsSandbox() then return false end
+    if not sandboxDocRead then return false end
     if not isNetworkRequest(name, args) then return true end
     return autoApprovesNetworkRequests() and networkAllowedByPolicy(name, args)
   end
   if isNetworkRequest(name, args) then
     return autoApprovesNetworkRequests() and networkAllowedByPolicy(name, args)
   end
-  if name:match("^mcp::") or name:match("^mcp__") then return false end
   if name == "run_project" or name == "build_project" then return false end
   if name == "get_env_info" or name == "check_lua_syntax" then return true end
   if name == "read_file" or name == "read_files" or name == "list_dir" or name == "search_in_files" then
     return allPathsInProject(name, args)
+  end
+  if name == "create_file" then
+    -- 覆盖已存在文件等于静默数据丢失：即使开启文件自动批准也要求确认
+    -- （系统提示词已引导模型对已有文件改用 apply_patch）
+    local path = tostring((args or {}).path or "")
+    local getPathType = requireConfig().getPathType
+    if path ~= "" and getPathType then
+      local ok, exists = pcall(function()
+        local resolved = requireConfig().resolvePath and requireConfig().resolvePath(path) or path
+        return getPathType(resolved) ~= nil
+      end)
+      if ok and exists then return false end
+    end
   end
   if not _M.isDestructiveTool(name) then return false end
   if requireConfig().getSharedData("ai_auto_approve", "0") ~= "1" then return false end

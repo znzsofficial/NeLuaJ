@@ -20,7 +20,7 @@ local activeSkill = nil
 
 local SYSTEM_PROMPT = [[
 你是 NeLuaJ+ 内置编码助手。NeLuaJ+ 是 Android Lua 运行时，用 Lua 在手机上写完整 App。
-使用中文回复。代码块使用与内容对应的语言标记，例如 `lua`、`kotlin`、`json`。
+使用与用户消息相同的语言回复；无法判断时用中文。代码块使用与内容对应的语言标记，例如 `lua`、`kotlin`、`json`。
 
 # 工作方式
 
@@ -1666,22 +1666,34 @@ function _M.saveProjectPolicy(policy)
   return AgentStorage.write(POLICY_FILE, json.encode(clean))
 end
 
+local isTrustedReadPath = function(path)
+  local resolved = resolveReadablePath(tostring(path or ""))
+  local docRoot = activity.getLuaDir() .. "/res/doc"
+  local okCanonical, canonical, canonicalRoot = pcall(function()
+    local JavaFile = luajava.bindClass("java.io.File")
+    return normalizePath(tostring(JavaFile(resolved).getCanonicalPath())),
+      normalizePath(tostring(JavaFile(docRoot).getCanonicalPath()))
+  end)
+  if not okCanonical or canonical == "" or canonicalRoot == "" then return false end
+  return canonical == canonicalRoot
+    or canonical:sub(1, #canonicalRoot + 1) == canonicalRoot .. "/"
+end
+
+-- 沙盒前置文档：命中受信 res/doc 根下的 sandbox_zh/en.html 才算数，
+-- 防止模型在工程里自建同名文件绕过前置读取门
+local isSandboxDocPath = function(path)
+  path = tostring(path or "")
+  local base = path:match("([^/\\]+)$") or ""
+  if base ~= "sandbox_zh.html" and base ~= "sandbox_en.html" then return false end
+  return isTrustedReadPath(path)
+end
+
 ToolExecutor.configure({
   normalizePath = normalizePath,
   resolvePath = resolvePath,
   resolveReadPath = resolveReadablePath,
-  isTrustedReadPath = function(path)
-    local resolved = resolveReadablePath(tostring(path or ""))
-    local docRoot = activity.getLuaDir() .. "/res/doc"
-    local okCanonical, canonical, canonicalRoot = pcall(function()
-      local JavaFile = luajava.bindClass("java.io.File")
-      return normalizePath(tostring(JavaFile(resolved).getCanonicalPath())),
-        normalizePath(tostring(JavaFile(docRoot).getCanonicalPath()))
-    end)
-    if not okCanonical or canonical == "" or canonicalRoot == "" then return false end
-    return canonical == canonicalRoot
-      or canonical:sub(1, #canonicalRoot + 1) == canonicalRoot .. "/"
-  end,
+  isTrustedReadPath = isTrustedReadPath,
+  isSandboxDocPath = isSandboxDocPath,
   getProjectScope = function()
     return normalizePath(Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir())
   end,

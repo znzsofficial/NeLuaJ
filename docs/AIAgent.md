@@ -87,7 +87,7 @@ NeLuaJ+ 的内置 AI 助手是面向当前工程的编码 Agent。当前实现�
 - NeLuaJ+ API 不确定时，模型应先读取 `res/doc/agent_docs.md`，再读取对应文档和工程现有用法。
 - `activity.getLuaDir()/res/doc` 下的文档是可信只读路径；仅 `read_file` 和 `read_files` 可因此免确认，信任不会扩展到写入、删除、目录遍历或应用其他私有文件。
 - 当前会话首次调用 `run_lua` 前，提示词和工具描述要求先读取 `res/doc/sandbox_zh.html`；英文对话读取 `res/doc/sandbox_en.html`。文档已在上下文中时无需重复读取。
-- 沙盒文档前置读取目前是模型提示词约束，不是 `ToolExecutor` 的运行时硬门禁。
+- 沙盒文档前置读取是运行时硬门禁：执行器记录本次进程内是否通过 `read_file` / `read_files` 读过受信 `res/doc` 根下的 `sandbox_*.html`，未读过时 `run_lua` 需要确认（即使沙盒自动运行开启）。该标记进程级共享，切换会话不重置；工程内自建的同名文件不满足条件。
 
 ## 模型与协议
 
@@ -176,14 +176,15 @@ name, url, key, model, responses, contextLength, maxTokens
 | 通过 `read_file` / `read_files` 读取内置 `res/doc` 文档 | 自动批准 |
 | `get_env_info`、`check_lua_syntax` | 自动批准 |
 | 工程外读取、列目录或搜索 | 请求确认 |
-| 文件创建、修改、删除、移动 | 请求确认 |
-| 不带 `network_hosts` 的 `run_lua` | 由 `ai_auto_run_sandbox` 控制；默认自动运行 |
+| 文件创建、修改、删除、移动 | 请求确认；开启 `ai_auto_approve` 后工程内变更可免确认，但**已存在目标的 `create_file`（覆盖写）仍要求确认** |
+| 不带 `network_hosts` 的 `run_lua` | 由 `ai_auto_run_sandbox` 控制，且需已读过沙盒前置文档；默认自动运行 |
 | 带有效 `network_hosts` 的 `run_lua` | 需同时开启 `ai_auto_run_sandbox` 和 `ai_auto_approve_network` 才自动运行 |
-| `fetch_url`、MCP | 由 `ai_auto_approve_network` 控制；默认自动批准 |
+| `fetch_url` | 由 `ai_auto_approve_network` 控制；默认自动批准 |
+| MCP 工具 | **一律需要确认**：副作用未知，项目 `networkHosts` 不约束 MCP 服务器 |
 
 开启 `ai_auto_approve` 后，执行器判定为当前工程内的文件变更可以免确认；`rename_file` 要求源路径和目标路径都通过工程检查。当前实现对不存在的相对目标无法通过 `getPathType` 判定，因此新建相对路径即使开启文件自动批准也可能继续显示确认框。
 
-关闭 `ai_auto_run_sandbox` 后，所有 `run_lua` 调用都会逐次确认。关闭 `ai_auto_approve_network` 后，`fetch_url`、MCP 调用和带联网主机的沙盒代码都会逐次确认。两个设置都不会放宽沙盒自身的隔离和网络校验；网络设置也不影响模型 API 请求、用户主动连接测试或 MCP 工具列表刷新。
+关闭 `ai_auto_run_sandbox` 后，所有 `run_lua` 调用都会逐次确认。关闭 `ai_auto_approve_network` 后，`fetch_url` 和带联网主机的沙盒代码都会逐次确认。MCP 调用与上述开关无关，恒需确认。这些设置都不放宽沙盒自身的隔离和网络校验；网络设置也不影响模型 API 请求、用户主动连接测试或 MCP 工具列表刷新。
 
 拒绝确认会生成普通 `tool` 结果并持久化，后续同批工具仍可继续执行。系统提示词禁止模型通过别名、拆分调用或重复请求绕过拒绝。
 
@@ -262,7 +263,7 @@ json, codec, hash.sha256, inspect, assert_equal, http.request
 - MCP 返回的 text 和 `structuredContent` 会传给模型；图片内容当前转换为 `[图片内容]` 占位文本。
 - 会话过期、旧 SSE 断开或现代参数头不匹配时会刷新/重新初始化并重试一次。
 - HTTPS 服务器不受 `fetch_url` 的公网 DNS 限制；明文 HTTP 只允许 localhost，URL 不允许内嵌用户名或密码。
-- MCP 工具调用受 `ai_auto_approve_network` 控制；工具发现刷新不受该开关影响。
+- MCP 工具调用一律需要用户确认，不受 `ai_auto_approve_network` 影响；工具发现刷新不受确认策略影响。
 
 ## 本地 Skill
 
@@ -284,7 +285,7 @@ frontmatter 支持 `name`、`description`、`triggers`、`keywords`。匹配使�
 
 - 请求历史预算为 `max(2000, contextLength - maxTokens - 200)`。
 - token 估算是启发式值，不是服务商 tokenizer 的精确结果。
-- 自动压缩在原历史超过预算时触发，为摘要最多预留 1200 token；摘要只用于当前请求，不替换持久化全量历史。
+- 自动压缩在原历史超过预算时触发，为摘要最多预留 1200 token；未携带新用户消息的发送会把压缩结果持久化回会话，避免后续每轮重复摘要（代价是更早的工具原文被摘要替换）；携带编辑器上下文的重发基于请求副本压缩，副本不落盘。
 - 手动“压缩上下文”会把摘要和较新的消息写回当前会话。
 - 摘要请求禁用工具，并把对话内容声明为待总结数据，防止旧消息中的指令被执行。
 - 自动压缩失败、摘要为空或无法分离历史时，回退到按消息组保留最近内容。
@@ -334,7 +335,7 @@ frontmatter 支持 `name`、`description`、`triggers`、`keywords`。匹配使�
 
 ## 已知实现边界
 
-- 沙盒文档前置读取由系统提示词和 `run_lua` 描述要求，执行器不会验证模型是否真的读过文档。
+- 沙盒文档前置读取由系统提示词、`run_lua` 描述与执行器共同强制：进程内未通过 `read_file`/`read_files` 读过受信 `res/doc` 根下的 `sandbox_*.html` 前，`run_lua` 需要确认；该标记进程级共享，切换会话不重置。
 - 文件自动批准对不存在的相对目标仍可能要求确认，因为当前工程内判定会检查目标类型。
 - Skill 使用记录会持久化，但激活状态不会从会话记录恢复。
 - 工具 `xTask` 绑定当前 Activity 生命周期；模型流式状态也只保存在内存中，没有跨 Activity、跨进程或跨重启的任务恢复队列。

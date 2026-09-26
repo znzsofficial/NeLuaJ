@@ -230,23 +230,37 @@ executeToolCalls = function(toolCalls, index, results, onAllDone, generation)
       if MainActivity and MainActivity.RecyclerView then
         MainActivity.RecyclerView.update()
       end
-      -- 如果修改了当前打开的文件，刷新编辑器
+      -- 如果修改了当前打开的文件，刷新编辑器；rename_file 命中旧路径时改载新路径
       local messages = getMessages()
+      local function resolveToolPath(p)
+        p = tostring(p or "")
+        if p == "" then return nil end
+        if p:sub(1, 1) ~= "/" then
+          local base = Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir()
+          p = base .. "/" .. p
+        end
+        return p:gsub("/+$", "")
+      end
       for _, r in ipairs(results) do
         if r.tool_call_id then
           for _, tc in ipairs(toolCalls) do
-            if tc.id == r.tool_call_id and (tc.name == "create_file" or tc.name == "apply_patch" or tc.name == "append_file") then
+            if tc.id == r.tool_call_id and (tc.name == "create_file" or tc.name == "apply_patch"
+                or tc.name == "append_file" or tc.name == "replace_in_file" or tc.name == "rename_file") then
               local args = {}
               pcall(function() args = json.decode(tc.arguments) end)
               if args.path then
                 local thisFile = Bean and Bean.Path and Bean.Path.this_file
-                local resolvedPath = args.path
-                if resolvedPath:sub(1, 1) ~= "/" then
-                  local base = Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir()
-                  resolvedPath = base .. "/" .. resolvedPath
-                end
-                if thisFile and thisFile == resolvedPath then
-                  EditorUtil.load(resolvedPath)
+                if thisFile then
+                  thisFile = tostring(thisFile):gsub("/+$", "")
+                  local resolvedPath = resolveToolPath(args.path)
+                  if tc.name == "rename_file" then
+                    local renamedTo = resolveToolPath(args.new_path)
+                    if thisFile == resolvedPath and renamedTo then
+                      EditorUtil.load(renamedTo)
+                    end
+                  elseif thisFile == resolvedPath then
+                    EditorUtil.load(resolvedPath)
+                  end
                 end
               end
             end
