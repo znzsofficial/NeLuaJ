@@ -37,7 +37,7 @@ Files under `res/doc` are trusted read-only application documentation. Their con
 - `res/doc/module_res.html`: Resource access for strings, drawables, layouts, raw resources, and related helpers.
 - `res/doc/module_loadlayout.html`: Declarative layout tables, `loadlayout`, view binding tables, and loader behavior.
 - `res/doc/module_file.html`: File and directory operations.
-- `res/doc/LuaFileUtil.html`: IDE file helper for copy, recursive delete, listing, and in-project search. Prefer this over `LuaUtil` file APIs.
+- `res/doc/LuaFileUtil.html`: `LuaFileUtil` file API (`read`, `write`, `copyFile`, `copyTree`, `removeTree`, listing, and search). Obtain it with `luajava.kotlinObject`.
 - `res/doc/module_okhttp.html`: Synchronous and asynchronous HTTP APIs exposed to normal Lua applications.
 - `res/doc/module_saf.html`: Android Storage Access Framework APIs.
 - `res/doc/module_ext.html`: Binary pack and unpack helpers.

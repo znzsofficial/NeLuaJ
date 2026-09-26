@@ -15,15 +15,16 @@
 <h2>1. LuaFileUtil — 文件操作</h2>
 <pre><code class="language-lua">local LuaFileUtil = luajava.bindClass "com.nekolaska.io.LuaFileUtil".INSTANCE
 </code></pre>
-<div class="table-wrapper"><table><thead><tr><th>方法</th><th>说明</th><th>示例</th></tr></thead><tbody><tr><td><code>create(path, content)</code></td><td>创建文件</td><td><code>LuaFileUtil.create("test.txt", "hello")</code></td></tr><tr><td><code>write(path, content)</code></td><td>写入文件</td><td><code>LuaFileUtil.write("test.txt", "world")</code></td></tr><tr><td><code>read(path)</code></td><td>读取文件</td><td><code>local s = LuaFileUtil.read("test.txt")</code></td></tr><tr><td><code>remove(path)</code></td><td>删除文件</td><td><code>LuaFileUtil.remove("test.txt")</code></td></tr><tr><td><code>rename(old, new)</code></td><td>重命名</td><td><code>LuaFileUtil.rename("a.txt", "b.txt")</code></td></tr><tr><td><code>checkDirectory(path)</code></td><td>确保目录存在</td><td><code>LuaFileUtil.checkDirectory("output/")</code></td></tr><tr><td><code>isEmpty(path)</code></td><td>目录是否为空</td><td><code>LuaFileUtil.isEmpty("dir/")</code></td></tr><tr><td><code>moveDirectory(src, dest)</code></td><td>移动目录</td><td><code>LuaFileUtil.moveDirectory("a/", "b/")</code></td></tr><tr><td><code>loadLua(path)</code></td><td>加载 Lua 文件为表</td><td><code>local t = LuaFileUtil.loadLua("config.lua")</code></td></tr></tbody></table></div>
+<div class="table-wrapper"><table><thead><tr><th>方法</th><th>说明</th></tr></thead><tbody><tr><td><code>read(path)</code></td><td>读出整个文件。失败或不存在时返回 <code>""</code></td></tr><tr><td><code>write(path, content)</code></td><td>覆盖已存在的文件。不存在则返回 <code>false</code></td></tr><tr><td><code>writeOrCreate(path, content)</code></td><td>写入；必要时创建文件和父目录</td></tr><tr><td><code>create(path, content)</code></td><td>创建并写入。失败抛错</td></tr><tr><td><code>remove(path)</code></td><td>删除文件或空目录</td></tr><tr><td><code>removeTree(path)</code></td><td>递归删除。路径不存在也返回 <code>true</code></td></tr><tr><td><code>copyFile(src, dest)</code></td><td>复制单个文件，覆盖已存在的目标</td></tr><tr><td><code>copyTree(src, dest)</code></td><td>递归复制，不删除源。不能复制到源目录内部</td></tr><tr><td><code>rename(old, new)</code></td><td>移动或改名。目标已存在则失败</td></tr><tr><td><code>moveDirectory(src, dest)</code></td><td>先复制再删除源，不是原子操作</td></tr><tr><td><code>checkDirectory(path)</code></td><td>目录不存在则创建</td></tr><tr><td><code>isEmpty(path)</code></td><td>是否为空目录</td></tr><tr><td><code>lastModified(path)</code></td><td>修改时间（毫秒），不存在为 <code>0</code></td></tr><tr><td><code>listMeta(path)</code></td><td>直接子项：<code>name</code> / <code>isDir</code> / <code>mtime</code> / <code>size</code></td></tr><tr><td><code>listDirs(path)</code></td><td>子目录名，按最近修改从新到旧</td></tr><tr><td><code>listTree(...)</code></td><td>递归相对路径。参数与跳过的目录名见专页</td></tr><tr><td><code>searchInFiles(...)</code></td><td>目录内子串搜索。返回 <code>matches</code> 和 <code>scanned</code></td></tr><tr><td><code>loadLua(path)</code></td><td>执行 Lua 文件并取其返回的表</td></tr></tbody></table></div>
 <h3>压缩/解压</h3>
-<pre><code class="language-lua">-- 解压 ZIP（带进度回调）
-LuaFileUtil.extract(File(zipPath), File(outDir), function(progress)
-    print("进度:", progress)
+<pre><code class="language-lua">local File = luajava.bindClass("java.io.File")
+
+-- 回调的两个数是已处理量和 zip 文件总字节数
+LuaFileUtil.extract(File(zipPath), File(outDir), function(done, total)
+    print(done, total)
 end)
 
--- 压缩文件夹
-LuaFileUtil.compress(srcFolder, destZip, fileName)
+LuaFileUtil.compress(srcFolder, destDir, "backup.zip")
 </code></pre>
 <hr>
 <h2>2. json — JSON 模块</h2>
@@ -84,7 +85,7 @@ end)
 </code></pre>
 <hr>
 <h2>6. Kotlin 类互操作</h2>
-<pre><code class="language-lua">-- Kotlin object：不需要手动读取 .INSTANCE
+<pre><code class="language-lua">-- Kotlin object：kotlinObject 或 .INSTANCE 都可以
 local LuaFileUtil = luajava.kotlinObject("com.nekolaska.io.LuaFileUtil")
 LuaFileUtil.writeOrCreate(path, content)
 

@@ -153,7 +153,7 @@ local proxy = luajava.createProxy(
       <p>未显式实现 <code>equals</code> / <code>hashCode</code> / <code>toString</code> 时，使用 Java 默认对象语义，避免作为 Map 键时匹配失败。</p>
 
       <h2>7. override 覆盖方法</h2>
-      <p><code>override</code> 生成增强子类，只覆盖表中提供的方法。覆盖方法的第一个参数是 <code>superCall</code>，调用可执行父类原方法。</p>
+      <p><code>override</code> 只用于类，会生成子类并只覆盖表中提供的方法。接口要用 <code>luajava.createProxy()</code>。覆盖方法的第一个参数是 <code>superCall</code>，调用它会执行父类原方法。调用 Java 方法时用点号；冒号会多传入 <code>self</code>。</p>
       <pre><code class="language-lua">local ArrayList = luajava.bindClass("java.util.ArrayList")
 
 local list = ArrayList.override {
@@ -238,7 +238,7 @@ end
 </code></pre>
 
       <h2>10. Kotlin 类</h2>
-      <p>Kotlin 的 <code>object</code> 与 companion object 在 JVM 上分别会生成 <code>INSTANCE</code> 与 <code>Companion</code> 字段。使用专用函数可避免 Lua 代码依赖这些生成字段名。</p>
+      <p>Kotlin 的 <code>object</code> 与 companion object 在 JVM 上分别会生成 <code>INSTANCE</code> 与 <code>Companion</code> 字段。可以直接读这些字段，也可以用下面的函数取得。</p>
       <pre><code class="language-lua">-- Kotlin object
 local LuaFileUtil = luajava.kotlinObject("com.nekolaska.io.LuaFileUtil")
 LuaFileUtil.writeOrCreate(path, content)
