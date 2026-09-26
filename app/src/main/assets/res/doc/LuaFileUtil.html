@@ -56,7 +56,7 @@ end
       <p>复制单个文件，并创建目标的父目录。源不是普通文件，或源和目标是同一路径时，返回 <code>false</code>。目标已存在则覆盖。</p>
 
       <h3>copyTree(src, dest)</h3>
-      <p>递归复制文件或目录，不删除源。目标就是源，或者落在源目录里面时，直接返回 <code>false</code>，避免复制进自己导致无限递归。比较按路径的每一段进行：<code>/proj</code> 不会被当成 <code>/proj2</code> 的前缀。</p>
+      <p>递归复制文件或目录，不删除源。目标就是源，或者落在源目录里面时，直接返回 <code>false</code>，避免复制进自己导致无限递归。已存在的路径会先展开符号链接再比较，所以 <code>/sdcard</code> 和 <code>/storage/emulated/0</code> 指的是同一处时也会被认出来。<code>/proj</code> 不会被当成 <code>/proj2</code> 的前缀。</p>
       <pre><code class="language-lua">LuaFileUtil.copyTree("/sdcard/demo/res", "/sdcard/demo/res_backup")
 </code></pre>
 
@@ -71,7 +71,7 @@ end
       <p>目录不存在则创建，包括缺失的父目录。已经存在则什么都不做。没有返回值。</p>
 
       <h3>isEmpty(path)</h3>
-      <p>空目录返回 <code>true</code>。不是目录，或不存在，返回 <code>false</code>。</p>
+      <p>空目录返回 <code>true</code>。不是目录、不存在，或目录读不出来，返回 <code>false</code>。</p>
 
       <h3>lastModified(path)</h3>
       <p>最近修改时间，单位毫秒。不存在返回 <code>0</code>。</p>

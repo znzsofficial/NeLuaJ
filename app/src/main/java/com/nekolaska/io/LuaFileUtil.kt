@@ -8,20 +8,30 @@ import org.luaj.LuaFunction
 import org.luaj.LuaTable
 import org.luaj.lib.jse.JsePlatform
 import java.io.File
-import java.util.Comparator
 import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.nio.file.StandardCopyOption
 import java.nio.file.attribute.BasicFileAttributes
 import kotlin.concurrent.thread
+import kotlin.io.path.copyTo
+import kotlin.io.path.createDirectories
+import kotlin.io.path.exists
+import kotlin.io.path.fileSize
+import kotlin.io.path.getLastModifiedTime
+import kotlin.io.path.isDirectory
+import kotlin.io.path.isRegularFile
+import kotlin.io.path.readAttributes
+import kotlin.io.path.readText
+import kotlin.io.path.writeText
+import kotlin.streams.asSequence
+import kotlin.streams.toList as toKotlinList
 
 object LuaFileUtil {
     fun create(path: String, content: String) {
         ensureParent(path)
-        val p = Paths.get(path)
-        if (!Files.exists(p)) Files.createFile(p)
-        Files.write(p, content.toByteArray(Charsets.UTF_8))
+        Paths.get(path).writeText(content)
     }
 
     fun write(path: String, content: String): Boolean {
@@ -31,7 +41,7 @@ object LuaFileUtil {
     fun write(path: String, content: String, file: File): Boolean {
         if (!file.exists()) return false
         return try {
-            Files.write(file.toPath(), content.toByteArray(Charsets.UTF_8))
+            file.toPath().writeText(content)
             true
         } catch (_: Exception) {
             false
@@ -45,9 +55,7 @@ object LuaFileUtil {
     fun writeOrCreate(path: String, content: String): Boolean {
         return try {
             ensureParent(path)
-            val p = Paths.get(path)
-            if (!Files.exists(p)) Files.createFile(p)
-            Files.write(p, content.toByteArray(Charsets.UTF_8))
+            Paths.get(path).writeText(content)
             true
         } catch (_: Exception) {
             false
@@ -56,12 +64,12 @@ object LuaFileUtil {
 
     private fun ensureParent(path: String) {
         val parent = Paths.get(path).parent ?: return
-        if (!Files.exists(parent)) Files.createDirectories(parent)
+        if (!parent.exists()) parent.createDirectories()
     }
 
     fun read(path: String): String {
         return try {
-            String(Files.readAllBytes(Paths.get(path)), Charsets.UTF_8)
+            Paths.get(path).readText()
         } catch (_: Exception) {
             ""
         }
@@ -82,16 +90,18 @@ object LuaFileUtil {
      */
     fun removeTree(path: String): Boolean {
         val root = Paths.get(path)
-        if (!Files.exists(root)) return true
+        // 不跟随链接。悬空符号链接本身还在，不能当成「路径不存在」。
+        if (!Files.exists(root, LinkOption.NOFOLLOW_LINKS)) return true
         return try {
-            // 先收齐再删。边遍历边删时，目录流还开着，部分机上会漏删或抛错。
-            val ordered = Files.walk(root).use { stream ->
-                stream.sorted(Comparator.reverseOrder()).toList()
-            }
+            // 用 Kotlin 的 Stream.toList()，不要用同名的 Java 成员：
+            // 成员方法优先于扩展，直接写 toList() 会编成 API 34 才有的 Stream.toList()。
+            // 深度大的先删，子文件一定比父目录先去掉。
+            val ordered = Files.walk(root).use { it.toKotlinList() }
+                .sortedByDescending { it.nameCount }
             for (child in ordered) {
-                Files.delete(child)
+                Files.deleteIfExists(child)
             }
-            true
+            !Files.exists(root, LinkOption.NOFOLLOW_LINKS)
         } catch (_: Exception) {
             false
         }
@@ -101,11 +111,11 @@ object LuaFileUtil {
     fun copyFile(src: String, dest: String): Boolean {
         return try {
             val input = Paths.get(src)
-            if (!Files.isRegularFile(input)) return false
+            if (!input.isRegularFile()) return false
             val output = Paths.get(dest)
             if (samePath(input, output)) return false
-            output.parent?.let { Files.createDirectories(it) }
-            Files.copy(input, output, StandardCopyOption.REPLACE_EXISTING)
+            output.parent?.createDirectories()
+            input.copyTo(output, overwrite = true)
             true
         } catch (_: Exception) {
             false
@@ -119,20 +129,26 @@ object LuaFileUtil {
     fun copyTree(src: String, dest: String): Boolean {
         return try {
             val source = Paths.get(src)
-            if (!Files.exists(source)) return false
+            if (!Files.exists(source, LinkOption.NOFOLLOW_LINKS)) return false
             val target = Paths.get(dest)
-            val srcAbs = source.toAbsolutePath().normalize()
-            val destAbs = target.toAbsolutePath().normalize()
-            // Path.startsWith 按路径段比较，不会把 /proj 误判成 /proj2 的前缀
-            if (destAbs == srcAbs || destAbs.startsWith(srcAbs)) return false
+            // 用真实路径比较。只看绝对路径时，/sdcard 和 /storage/emulated/0 对不上，
+            // 复制到自己内部的检查会漏掉。
+            if (isSameOrInside(source, target)) return false
             Files.walk(source).use { stream ->
-                for (child in stream) {
+                stream.asSequence().forEach { child ->
                     val out = target.resolve(source.relativize(child))
-                    if (Files.isDirectory(child)) {
-                        Files.createDirectories(out)
+                    // walk 默认不进入符号链接。isDirectory() 却会跟着链接走，
+                    // 指向目录的链接会被建成一个空目录。这里两边都不跟随。
+                    if (Files.isDirectory(child, LinkOption.NOFOLLOW_LINKS)) {
+                        out.createDirectories()
                     } else {
-                        out.parent?.let { Files.createDirectories(it) }
-                        Files.copy(child, out, StandardCopyOption.REPLACE_EXISTING)
+                        out.parent?.createDirectories()
+                        Files.copy(
+                            child,
+                            out,
+                            StandardCopyOption.REPLACE_EXISTING,
+                            LinkOption.NOFOLLOW_LINKS
+                        )
                     }
                 }
             }
@@ -143,7 +159,48 @@ object LuaFileUtil {
     }
 
     private fun samePath(a: Path, b: Path): Boolean {
-        return a.toAbsolutePath().normalize() == b.toAbsolutePath().normalize()
+        val left = canonical(a) ?: return true
+        val right = canonical(b) ?: return true
+        return left == right
+    }
+
+    /** 目标就是源，或落在源里面。解析不了真实路径时视为不安全，调用方应拒绝复制。 */
+    private fun isSameOrInside(parent: Path, child: Path): Boolean {
+        val base = canonical(parent) ?: return true
+        val other = canonical(child) ?: return true
+        return other == base || other.startsWith(base)
+    }
+
+    /**
+     * 已存在的前缀用 toRealPath() 展开符号链接，后面尚未创建的部分再接回去。
+     * 这样「目标还不存在」时也能和源的真实路径比较。
+     */
+    private fun canonical(path: Path): Path? {
+        // 不能先 normalize()。link/.. 会被词法直接折掉，和内核「先跟链接再处理 ..」不一致，
+        // 复制进自身的检查就能被绕开。
+        val absolute = path.toAbsolutePath()
+        val pending = ArrayList<String>()
+        var current = absolute
+        while (true) {
+            if (Files.exists(current, LinkOption.NOFOLLOW_LINKS)) {
+                val real = try {
+                    current.toRealPath()
+                } catch (_: Exception) {
+                    // 悬空链接本身还在。后面没有剩余路径时，它的位置就是这个目录项。
+                    // 后面还有 .. 或其他分量时，无法证明落点，交给调用方拒绝。
+                    if (pending.isNotEmpty()) return null
+                    current.toAbsolutePath()
+                }
+                var resolved = real
+                for (name in pending.asReversed()) {
+                    resolved = resolved.resolve(name)
+                }
+                return resolved.normalize()
+            }
+            val name = current.fileName?.toString() ?: return null
+            pending.add(name)
+            current = current.parent ?: return null
+        }
     }
 
     fun rename(oldPath: String, newPath: String): Boolean {
@@ -157,7 +214,7 @@ object LuaFileUtil {
 
     fun checkDirectory(path: String) {
         val p = Paths.get(path)
-        if (!Files.exists(p)) Files.createDirectories(p)
+        if (!p.exists()) p.createDirectories()
     }
 
     fun extract(zipPath: String, outPath: String) {
@@ -208,8 +265,14 @@ object LuaFileUtil {
 
     fun isEmpty(path: String): Boolean {
         val p = Paths.get(path)
-        if (!Files.isDirectory(p)) return false
-        return Files.newDirectoryStream(p).use { !it.iterator().hasNext() }
+        if (!p.isDirectory()) return false
+        return try {
+            // 不要在 forEachDirectoryEntry 里 return：那是内联 lambda 的非局部返回，
+            // 读目录失败时也会直接把异常抛出去。
+            Files.newDirectoryStream(p).use { stream -> !stream.iterator().hasNext() }
+        } catch (_: Exception) {
+            false
+        }
     }
 
     /**
@@ -224,7 +287,7 @@ object LuaFileUtil {
             var index = 1
             for (child in stream) {
                 try {
-                    val attrs = Files.readAttributes(child, BasicFileAttributes::class.java)
+                    val attrs = child.readAttributes<BasicFileAttributes>()
                     val entry = LuaTable()
                     entry.set("name", child.fileName.toString().toLuaValue())
                     entry.set("isDir", attrs.isDirectory.toLuaValue())
@@ -246,8 +309,8 @@ object LuaFileUtil {
         val dir = Paths.get(path)
         if (!Files.isDirectory(dir)) return result
         val dirs = Files.newDirectoryStream(dir).use { stream ->
-            stream.filter { Files.isDirectory(it) }
-                .sortedByDescending { Files.getLastModifiedTime(it).toMillis() }
+            stream.filter { it.isDirectory() }
+                .sortedByDescending { it.getLastModifiedTime().toMillis() }
                 .toList()
         }
         var index = 1
@@ -261,9 +324,9 @@ object LuaFileUtil {
     /** 最近修改时间（毫秒）；不存在返回 0。 */
     fun lastModified(path: String): Long {
         val p = Paths.get(path)
-        if (!Files.exists(p)) return 0L
+        if (!p.exists()) return 0L
         return try {
-            Files.getLastModifiedTime(p).toMillis()
+            p.getLastModifiedTime().toMillis()
         } catch (_: Exception) {
             0L
         }
@@ -281,7 +344,7 @@ object LuaFileUtil {
     fun listTree(path: String, filter: String?, maxItems: Int, maxDepth: Int): LuaTable {
         val result = LuaTable()
         val root = Paths.get(path)
-        if (!Files.isDirectory(root)) return result
+        if (!root.isDirectory()) return result
         val flt = (filter ?: "").trim()
         var count = 0
 
@@ -292,7 +355,7 @@ object LuaFileUtil {
             for (child in entries) {
                 if (count >= maxItems) return
                 val name = child.fileName.toString()
-                val isDir = Files.isDirectory(child)
+                val isDir = child.isDirectory()
                 val rel = prefix + name + (if (isDir) "/" else "")
                 if (flt.isEmpty() || rel.contains(flt) || name.contains(flt)) {
                     count++
@@ -324,7 +387,7 @@ object LuaFileUtil {
         result.set("matches", matches)
         result.set("scanned", 0.toLuaValue())
         val rootDir = Paths.get(root)
-        if (pattern.isEmpty() || !Files.isDirectory(rootDir)) return result
+        if (pattern.isEmpty() || !rootDir.isDirectory()) return result
         var scanned = 0
         var found = 0
         val maxBytes = maxFileKB.coerceAtLeast(1) * 1024L
@@ -338,36 +401,27 @@ object LuaFileUtil {
             for (child in entries) {
                 if (found >= maxResults || scanned >= maxScanFiles) return
                 val name = child.fileName.toString()
-                if (Files.isDirectory(child)) {
+                if (child.isDirectory()) {
                     if (name !in SKIP_DIRS) walk(child, depth + 1)
                     continue
                 }
                 scanned++
-                val length = Files.size(child)
-                if (length <= 0 || length > maxBytes) continue
+                val length = child.fileSize()
+                if (length !in 1..maxBytes) continue
                 try {
                     val bytes = Files.readAllBytes(child)
                     // 二进制嗅探：含 NUL 跳过（与原 Lua 实现一致）
-                    var binary = false
-                    for (b in bytes) {
-                        if (b == 0.toByte()) {
-                            binary = true
-                            break
-                        }
-                    }
-                    if (binary) continue
+                    if (bytes.any { it == 0.toByte() }) continue
                     val content = String(bytes, Charsets.UTF_8)
-                    var lineno = 0
-                    for (line in content.lineSequence()) {
-                        lineno++
-                        val hit = if (ignoreCase) {
-                            line.contains(pattern, ignoreCase = true)
-                        } else {
-                            line.contains(pattern)
-                        }
-                        if (hit) {
+                    content.lineSequence().forEachIndexed { index, line ->
+                        if (found >= maxResults) return
+                        if (line.contains(pattern, ignoreCase)) {
                             found++
-                            matches.set(found, (child.toAbsolutePath().toString() + ":" + lineno + ": " + line).toLuaValue())
+                            matches.set(
+                                found,
+                                (child.toAbsolutePath()
+                                    .toString() + ":" + (index + 1) + ": " + line).toLuaValue()
+                            )
                             if (found >= maxResults) return
                         }
                     }
