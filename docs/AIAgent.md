@@ -46,6 +46,7 @@ NeLuaJ+ 的内置 AI 助手是面向当前工程的编码 Agent。当前实现�
 | `mods/agent/AgentStorage.lua` | 工程级 Agent 外部存储、工程哈希、锁和临时文件/备份原子写入 |
 | `mods/agent/SkillManager.lua` | 本地 `SKILL.md` 扫描、优先级合并、关键词匹配和提示词注入 |
 | `mods/agent/TextUtil.lua` | UTF-8 安全截断、token 数格式化等共享文本工具 |
+| `mods/utils/LuaKV.lua` | 目录型 KV 存储引擎：每键一文件、tmp+rename 原子写、键名白名单编码；会话记录的存储底座 |
 
 ### Kotlin 层
 
@@ -70,7 +71,7 @@ NeLuaJ+ 的内置 AI 助手是面向当前工程的编码 Agent。当前实现�
 5. `OpenAIProtocol` 合并内置工具和当前已缓存的 MCP 工具，设置 `tool_choice = "auto"`，并编码为 Chat Completions 或 Responses 请求。
 6. `AiHttpClient` 在后台读取 SSE，在主线程增量更新 UI，并汇总文本、reasoning、结构化工具调用、Responses 原始输出和 incomplete 状态。
 7. 模型返回工具调用后，assistant 消息先持久化。`AgentTurn` 将连续的只读白名单工具（`read_file`、`read_files`、`list_dir`、`search_in_files`、`check_lua_syntax`、`get_env_info`）组成并行批并发执行，其余工具按序串行；每个结果完成后立即持久化。
-8. 工具结果全部完成后发起下一轮模型请求。工具循环没有硬上限，由用户停止或模型结束调用。
+8. 工具结果全部完成后发起下一轮模型请求。工具循环默认没有硬上限（由用户停止或模型结束调用）；可在设置中配置每回合工具轮数上限（`ai_max_rounds`），超出后回合结束并提示，子代理轮次同用此上限。
 9. 最终文本、停止状态、不完整状态、工具后空响应和请求错误都会保存到会话，以支持重开面板、继续或恢复操作。
 
 ## 系统提示词与文档
@@ -132,7 +133,8 @@ name, url, key, model, responses, contextLength, maxTokens
 | `ai_allow_selfsigned` | `"0"` | 仅模型 API 流量允许自签名证书并关闭主机名校验 |
 | `ai_mcp_servers` | 首次写入预设 | MCP 服务器 JSON；默认预设 `context7` 和 `deepwiki` |
 | `ai_aux_provider_id` / `ai_aux_model_id` | `""` | 辅助模型（标题生成、上下文压缩、轻量子代理）按 provider + model 身份持久化；模型列表重排不影响指向，模型被删除时自动清除 |
-| `ai_conversations` | `""` | 全量会话 JSON，使用 `projectPath` 做工程隔离；每条记录含 `usage`（请求数/token 累计）与 `todos` |
+| `ai_max_rounds` | `"0"` | 每回合工具轮数上限；`0` = 不限制（默认）。仅计数自动工具续环，用户发送新消息即重置；超出后回合结束并提示，子代理轮次同用此上限 |
+| `ai_conversations` | SharedData 旧键（迁移源，迁移后清除） | 会话已按记录迁至 LuaKV 文件存储：`<agents 根>/kv/conversations/`，每会话一个记录文件（tmp+rename 原子写），`_index.json` 保存元数据索引（首页列表只读索引即可）。每条记录含 `usage`、`todos`、`seq`（稳定排序） |
 | `ai_current_conv_by_project` | `{}` | 工程 → 会话 ID 映射；会话列表与恢复按工程读取 |
 | `ai_current_conv_id` | `""` | 最近选择的会话 ID |
 | `ai_current_conv` | `"0"` | 旧版会话索引导入源，读取时迁移 |
@@ -180,11 +182,11 @@ name, url, key, model, responses, contextLength, maxTokens
 | 不带 `network_hosts` 的 `run_lua` | 由 `ai_auto_run_sandbox` 控制，且需已读过沙盒前置文档；默认自动运行 |
 | 带有效 `network_hosts` 的 `run_lua` | 需同时开启 `ai_auto_run_sandbox` 和 `ai_auto_approve_network` 才自动运行 |
 | `fetch_url` | 由 `ai_auto_approve_network` 控制；默认自动批准 |
-| MCP 工具 | **一律需要确认**：副作用未知，项目 `networkHosts` 不约束 MCP 服务器 |
+| MCP 工具 | **一律自动执行，不经确认**（用户配置：不需要任何确认） |
 
 开启 `ai_auto_approve` 后，执行器判定为当前工程内的文件变更可以免确认；`rename_file` 要求源路径和目标路径都通过工程检查。当前实现对不存在的相对目标无法通过 `getPathType` 判定，因此新建相对路径即使开启文件自动批准也可能继续显示确认框。
 
-关闭 `ai_auto_run_sandbox` 后，所有 `run_lua` 调用都会逐次确认。关闭 `ai_auto_approve_network` 后，`fetch_url` 和带联网主机的沙盒代码都会逐次确认。MCP 调用与上述开关无关，恒需确认。这些设置都不放宽沙盒自身的隔离和网络校验；网络设置也不影响模型 API 请求、用户主动连接测试或 MCP 工具列表刷新。
+关闭 `ai_auto_run_sandbox` 后，所有 `run_lua` 调用都会逐次确认。关闭 `ai_auto_approve_network` 后，`fetch_url` 和带联网主机的沙盒代码都会逐次确认。MCP 调用不经确认直接执行（用户配置）。这些设置都不放宽沙盒自身的隔离和网络校验；网络设置也不影响模型 API 请求、用户主动连接测试或 MCP 工具列表刷新。
 
 拒绝确认会生成普通 `tool` 结果并持久化，后续同批工具仍可继续执行。系统提示词禁止模型通过别名、拆分调用或重复请求绕过拒绝。
 
@@ -263,7 +265,7 @@ json, codec, hash.sha256, inspect, assert_equal, http.request
 - MCP 返回的 text 和 `structuredContent` 会传给模型；图片内容当前转换为 `[图片内容]` 占位文本。
 - 会话过期、旧 SSE 断开或现代参数头不匹配时会刷新/重新初始化并重试一次。
 - HTTPS 服务器不受 `fetch_url` 的公网 DNS 限制；明文 HTTP 只允许 localhost，URL 不允许内嵌用户名或密码。
-- MCP 工具调用一律需要用户确认，不受 `ai_auto_approve_network` 影响；工具发现刷新不受确认策略影响。
+- MCP 工具调用不经确认直接执行（用户配置：不需要任何确认）；工具发现刷新不受确认策略影响。
 
 ## 本地 Skill
 
@@ -293,9 +295,10 @@ frontmatter 支持 `name`、`description`、`triggers`、`keywords`。匹配使�
 
 ## 会话与生命周期
 
-- 会话以全量 JSON 存入 `ai_conversations`，每条包含 `projectPath`；会话列表和当前索引按工程过滤。
+- 会话按记录存于 `<agents 根>/kv/conversations/`（LuaKV：每会话一个记录文件，tmp+rename 原子写，崩溃只影响正在写的那个会话），`_index.json` 保存元数据索引（首页跨工程列表只读索引，无需解析消息体），每条包含 `projectPath`；会话列表和当前选择按工程过滤。SharedData 旧 `ai_conversations` 键是迁移源，迁移成功后清除。
 - 会话保存用户/assistant/tool 消息、结构化工具调用和结果、reasoning、Responses 原始 output/origin、continuation state 和请求错误。
 - 新会话默认以首条用户消息去换行后的前 30 个字符命名；首轮问答完成后由辅助模型异步生成简短标题（不超过 16 字、与对话同语言）替换默认名，生成失败时保留默认名。
+- 重开会话时按记录的 `skills` 名单恢复激活技能（`SkillManager.findByName` 重查正文；同名技能内容已变更则为新内容，找不到则不恢复）。后续发送仍按消息重新匹配。
 - 关闭 BottomSheet 不取消任务。流式状态和工具链仍保存在当前 Activity/进程内存中；没有跨 Activity、跨进程或跨重启的持久化任务队列。
 - 停止按钮会取消模型 HTTP、当前后台工具、MCP/网页/沙盒调用和待确认对话框。已完成工具结果保留，未完成的 Responses function call 会补入 `stopped` 工具结果以维持历史配对。
 - 切换工程、切换/新建/清空会话会使旧 generation 失效并取消旧任务，过期回调不能修改新上下文。
@@ -337,7 +340,7 @@ frontmatter 支持 `name`、`description`、`triggers`、`keywords`。匹配使�
 
 - 沙盒文档前置读取由系统提示词、`run_lua` 描述与执行器共同强制：进程内未通过 `read_file`/`read_files` 读过受信 `res/doc` 根下的 `sandbox_*.html` 前，`run_lua` 需要确认；该标记进程级共享，切换会话不重置。
 - 文件自动批准对不存在的相对目标仍可能要求确认，因为当前工程内判定会检查目标类型。
-- Skill 使用记录会持久化，但激活状态不会从会话记录恢复。
+- Skill 使用记录持久化在会话里；重开会话时按名单恢复激活技能（找不到同名技能则不恢复），后续发送仍按消息重新匹配。
 - 工具 `xTask` 绑定当前 Activity 生命周期；模型流式状态也只保存在内存中，没有跨 Activity、跨进程或跨重启的任务恢复队列。
 - 自动压缩决策不包含工具 schema token，大量 MCP schema 可能让实际请求比压缩阶段估算更大。
 - MCP 目前只有工具能力，没有资源、提示词或 stdio 支持。

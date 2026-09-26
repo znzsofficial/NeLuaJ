@@ -856,6 +856,10 @@ loadHistory = function(resetTurnHistory)
     requests = tonumber(savedUsage and savedUsage.requests) or 0,
     tokens = tonumber(savedUsage and savedUsage.tokens) or 0,
   }
+  -- 会话激活技能恢复：按记录的技能名重查正文（无记录/找不到即保持清空）
+  if conv and type(conv.skills) == "table" and next(conv.skills) ~= nil then
+    pcall(function() AgentChat.restoreSkillFromConv(conv) end)
+  end
   conversationLoaded = conv ~= nil
   -- 上次会话的任务可能被应用退出打断：注入提示并清除标记
   -- （必须在 conversationLoaded 置位之后，saveHistory 才会真正落盘）

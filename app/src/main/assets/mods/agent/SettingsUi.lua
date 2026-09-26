@@ -646,6 +646,7 @@ showSettings = function()
   local allowSelfSigned = this.getSharedData("ai_allow_selfsigned", "0") == "1"
   local temp = this.getSharedData("ai_temperature", "0.7")
   local retryCount = this.getSharedData("ai_retry_count", "2")
+  local maxRounds = this.getSharedData("ai_max_rounds", "0")
   local systemPrompt = this.getSharedData("ai_system_prompt", "")
   local dlgViews = {}
   local settingsDialog
@@ -708,6 +709,20 @@ showSettings = function()
           textSize = "14sp", singleLine = true,
           inputType = 0x0002,
           hint = S.ai_retry_hint,
+        },
+        {
+          MaterialTextView,
+          text = S.ai_rounds_limit_label,
+          textSize = "13sp", textColor = ColorText,
+        },
+        {
+          EditText,
+          id = "maxRoundsInput",
+          text = tostring(maxRounds),
+          layout_width = "match", layout_height = "wrap", minHeight = "40dp",
+          textSize = "14sp", singleLine = true,
+          inputType = 0x0002,
+          hint = S.ai_rounds_limit_hint,
         },
         {
           MaterialTextView,
@@ -1331,9 +1346,14 @@ showSettings = function()
       this.setSharedData("ai_allow_selfsigned", dlgViews.selfSignedSwitch.isChecked() and "1" or "0")
       local tempVal = tostring(dlgViews.tempInput.getText() or ""):gsub("^%s*(.-)%s*$", "%1")
       local retryVal = tostring(dlgViews.retryInput.getText() or ""):gsub("^%s*(.-)%s*$", "%1")
+      local roundsVal = tostring(dlgViews.maxRoundsInput.getText() or ""):gsub("^%s*(.-)%s*$", "%1")
       local promptVal = tostring(dlgViews.promptInput.getText() or "")
       if tempVal ~= "" then this.setSharedData("ai_temperature", tempVal) end
       if retryVal ~= "" then this.setSharedData("ai_retry_count", retryVal) end
+      -- 回合上限：留空/非数字 = 不限制（存 "0"）
+      local roundsNum = tonumber(roundsVal) or 0
+      if roundsNum < 0 then roundsNum = 0 end
+      this.setSharedData("ai_max_rounds", tostring(math.floor(roundsNum)))
       this.setSharedData("ai_system_prompt", promptVal)
       if dlgViews.policyRestrictSwitch and dlgViews.policyHostsInput then
         local hosts = {}

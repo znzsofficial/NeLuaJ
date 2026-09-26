@@ -2,8 +2,35 @@ local ASSETS = ASSETS or "app/src/main/assets/"
 
 -- ConversationStore.loadIndex + getData 回退 + InitReader.readFields 行为测试
 package.preload["mods.agent.ConversationStore"] = assert(loadfile(ASSETS .. "mods/agent/ConversationStore.lua"))
+package.preload["mods.utils.LuaKV"] = assert(loadfile(ASSETS .. "mods/utils/LuaKV.lua"))
+local LuaKV = require("mods.utils.LuaKV")
 local CS = assert(loadfile(ASSETS .. "mods/agent/ConversationStore.lua"))()
 local IR = assert(loadfile(ASSETS .. "mods/project/InitReader.lua"))()
+
+-- LuaKV 根指向临时目录；编解码用可往返的 Lua 序列化器（桌面无 json 全局）
+local kvRoot = ((os.getenv("TEMP") or "/tmp"):gsub("\\", "/")) .. "/test_luakv"
+local function kvSer(v)
+  local t = type(v)
+  if t == "string" then return string.format("%q", v) end
+  if t == "number" or t == "boolean" or t == "nil" then return tostring(v) end
+  if t == "table" then
+    local parts = {}
+    for k, item in pairs(v) do
+      parts[#parts + 1] = "[" .. kvSer(k) .. "]=" .. kvSer(item)
+    end
+    return "{" .. table.concat(parts, ",") .. "}"
+  end
+  return "nil"
+end
+local function kvDeser(s)
+  local f = loadstring(s)
+  return f and f()
+end
+LuaKV.configure({
+  root = function() return kvRoot end,
+  encode = kvSer,
+  decode = kvDeser,
+})
 
 local failures = 0
 local function check(name, cond)
@@ -126,6 +153,74 @@ check("readFields single quotes", IR.readFields(tmpDir, { "app_name" }).app_name
 -- 文件不存在（目录存在但无 init.lua）
 check("readFields missing file returns nil", IR.readFields(tmpDir .. "/nope_dir", { "app_name" }) == nil)
 os.remove(tmpPath)
+
+-- ── 6. ToolSchemas 纯数据完整性 ──
+local TS = assert(loadfile(ASSETS .. "mods/agent/ToolSchemas.lua"))()
+check("ToolSchemas has 20 tools", type(TS) == "table" and #TS == 20)
+local toolNames, dup = {}, false
+for _, t in ipairs(TS) do
+  local n = t["function"] and t["function"].name
+  if not n or toolNames[n] then dup = true end
+  toolNames[n] = true
+end
+check("ToolSchemas names unique", not dup)
+check("ToolSchemas includes project/task tools",
+  toolNames.run_subtask and toolNames.update_todos and toolNames.build_project and toolNames.run_project)
+
+-- ── 7. LuaKV：读写/删除/键名编码 ──
+local kvTestRoot = ((os.getenv("TEMP") or "/tmp"):gsub("\\", "/")) .. "/test_luakv_unit"
+LuaKV.configure({ root = function() return kvTestRoot end, encode = kvSer, decode = kvDeser })
+check("kv set/get string", (function()
+  LuaKV.set("ns", "k1", "hello")
+  return LuaKV.get("ns", "k1") == "hello"
+end)())
+check("kv set/get table", (function()
+  LuaKV.set("ns", "k2", { a = 1, b = "x" })
+  local v = LuaKV.get("ns", "k2")
+  return v and v.a == 1 and v.b == "x"
+end)())
+check("kv weird key encoded safely", (function()
+  LuaKV.set("ns", "a/b c", "ok")
+  return LuaKV.get("ns", "a/b c") == "ok"
+end)())
+check("kv missing key returns default", LuaKV.get("ns", "nope", "dft") == "dft")
+check("kv delete removes", (function()
+  LuaKV.delete("ns", "k1")
+  return LuaKV.get("ns", "k1", "gone") == "gone"
+end)())
+check("kv no tmp residue", LuaKV.read(kvTestRoot .. "/ns/k1.json.tmp") == nil)
+
+-- ── 8. 旧整包 → 按记录 KV 迁移（独立根 + 独立 Store 实例）──
+local legacyRoot = ((os.getenv("TEMP") or "/tmp"):gsub("\\", "/")) .. "/test_conv_legacy_kv"
+LuaKV.configure({ root = function() return legacyRoot end, encode = kvSer, decode = kvDeser })
+local legacyShared = {}
+local CS2 = assert(loadfile(ASSETS .. "mods/agent/ConversationStore.lua"))()
+local legacyRecord = {
+  id = "conv_legacy",
+  name = "旧会话",
+  projectPath = "/sdcard/LuaJ/Projects/Demo",
+  messages = {},
+  createdAt = "01-01 00:00",
+}
+registry[#registry + 1] = legacyRecord
+legacyShared.ai_conversations = "REF:" .. #registry
+CS2.configure({
+  getData = function(k, d) return legacyShared[k] ~= nil and legacyShared[k] or d end,
+  setData = function(k, v) legacyShared[k] = v; return true end,
+  encode = function(v)
+    registry[#registry + 1] = v
+    return "REF:" .. #registry
+  end,
+  decode = function(s)
+    local n = tonumber(tostring(s or ""):match("REF:(%d+)"))
+    return n and registry[n] or nil
+  end,
+})
+local migrated = CS2.load(true)
+check("legacy blob migrates to store", #migrated == 1 and migrated[1].id == "conv_legacy")
+check("legacy record written to KV", LuaKV.exists("conversations", "conv_legacy"))
+check("index written", LuaKV.read(legacyRoot .. "/conversations/_index.json") ~= nil)
+check("legacy SharedData cleared after migration", legacyShared.ai_conversations == nil)
 
 if failures == 0 then
   print("ALL-PASS")

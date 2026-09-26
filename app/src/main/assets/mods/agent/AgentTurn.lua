@@ -491,6 +491,24 @@ function _M.sendRaw(apiMessages, isContinue)
       -- 执行工具调用
       executeToolCalls(toolCalls, 1, {}, function(results)
         if not isCurrentRequest() or state.stopRequested then return end
+        -- 可选回合上限（ai_max_rounds，默认 0 = 不限制）：仅在工具续环时计数，
+        -- 用户新消息即重置；手动“继续”不经过此处，不会被上限卡住
+        local maxRounds = AgentChat.getMaxRounds and AgentChat.getMaxRounds() or 0
+        state.roundsThisTurn = (state.roundsThisTurn or 0) + 1
+        if maxRounds > 0 and state.roundsThisTurn > maxRounds then
+          _M.hideLoading()
+          local msgs = getMessages()
+          msgs[#msgs + 1] = {
+            role = "assistant",
+            content = S.ai_round_limit:format(maxRounds),
+            continuation_state = "round_limit",
+          }
+          hooks.saveHistory()
+          hooks.refreshMessageList()
+          state.generation = state.generation + 1
+          state.stopRequested = false
+          return
+        end
         _M.send(true)
       end, generation)
     end,
@@ -558,6 +576,7 @@ function _M.send(isContinue, userMsg)
   local generation = state.generation
   -- 与旧 sendMessage/继续按钮的显式清位一致：上一回合的停止标记不能拦截新请求
   state.stopRequested = false
+  if not isContinue then state.roundsThisTurn = 0 end
   _M.showLoading()
   -- 摘要请求本身也是一次模型调用，先保活再压缩，避免息屏时被 Doze 挂起
   keepAliveAcquire()

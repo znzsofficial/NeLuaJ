@@ -86,6 +86,16 @@ function _M.list()
   return skills
 end
 
+--- 按名称查找技能（大小写不敏感）；找不到返回 nil。用于会话激活技能恢复。
+function _M.findByName(name)
+  name = tostring(name or ""):lower()
+  if name == "" then return nil end
+  for _, skill in ipairs(_M.list()) do
+    if tostring(skill.name or ""):lower() == name then return skill end
+  end
+  return nil
+end
+
 function _M.match(text)
   text = trim(text):lower()
   if text == "" then return nil end

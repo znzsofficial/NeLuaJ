@@ -152,6 +152,12 @@ function _M.run(task, lightweight)
     stopIfCancelled()
     if state.done then return end
     state.rounds = state.rounds + 1
+    -- 可选回合上限（默认 0 = 不限制）：超出即结束子任务
+    local maxRounds = c().getMaxRounds and c().getMaxRounds() or 0
+    if maxRounds > 0 and state.rounds > maxRounds then
+      finish("已达到子代理回合上限（" .. maxRounds .. "），任务结束", false)
+      return
+    end
     state.currentTool = nil
     notifyProgress(state)
     local override = lightweight and c().getAuxModelConfig and c().getAuxModelConfig() or nil

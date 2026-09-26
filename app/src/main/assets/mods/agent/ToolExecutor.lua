@@ -350,9 +350,9 @@ end
 
 function _M.requiresConfirmation(name, args)
   name = _M.normalizeToolName(name, args)
-  -- MCP 工具可能有任意副作用，项目 networkHosts 也不约束 MCP 服务器：
-  -- 一律需要确认，不得经网络自动批准放行
-  if name:match("^mcp::") or name:match("^mcp__") then return true end
+  -- 用户配置：MCP 不需要任何确认，直接执行
+  --（副作用未知由用户自担；项目 networkHosts 也不约束 MCP 服务器）
+  if name:match("^mcp::") or name:match("^mcp__") then return false end
   if name == "run_project" or name == "build_project" then return true end
   if name == "run_lua" then
     if not autoRunsSandbox() then return true end
@@ -373,8 +373,8 @@ end
 
 function _M.shouldAutoApprove(name, args)
   name = _M.normalizeToolName(name, args)
-  -- MCP 工具一律不自动批准（副作用未知，且不受项目 networkHosts 约束）
-  if name:match("^mcp::") or name:match("^mcp__") then return false end
+  -- 用户配置：MCP 不需要任何确认，无条件自动执行
+  if name:match("^mcp::") or name:match("^mcp__") then return true end
   if name == "run_lua" then
     if not autoRunsSandbox() then return false end
     if not sandboxDocRead then return false end

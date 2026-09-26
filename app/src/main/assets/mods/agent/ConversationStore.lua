@@ -11,6 +11,26 @@ local conversations
 local currentByProject
 local sequence = 0
 
+-- 会话按记录存储（LuaKV）：每会话一个记录文件 + 元数据索引，
+-- 一次工具轮保存只写当前会话，不再整包重写
+local KV = require("mods.utils.LuaKV")
+local CONV_KV_NS = "conversations"
+local maxSeq = 0
+local kvReady = false
+
+local function ensureKV()
+  if kvReady then return true end
+  if not KV.isConfigured() then
+    KV.configure({
+      root = function()
+        return (Bean and Bean.Path and Bean.Path.agent_root_dir or "/sdcard/LuaJ/agents") .. "/kv"
+      end,
+    })
+  end
+  kvReady = KV.isConfigured()
+  return kvReady
+end
+
 local function cfg()
   return config or {}
 end
@@ -175,11 +195,49 @@ local function normalizeRecord(value, fallbackProject, used)
   return record, changed
 end
 
-local function persistConversations(value)
-  local encoded = encode(value)
-  if not encoded or not setData(CONVERSATIONS_KEY, encoded) then return false end
-  conversations = value
-  return true
+--- 按记录持久化：每个会话一个 KV 记录 + 重写元数据索引；
+--- removedIds 携带本次被删除的会话 id（记录文件随之移除）。
+local function persistConversations(value, removedIds)
+  if not ensureKV() then return false end
+  local root = KV.nsPath(CONV_KV_NS)
+  local ok = true
+  local alive = {}
+  local indexEntries = {}
+  for _, record in ipairs(value) do
+    if record.seq == nil then
+      maxSeq = maxSeq + 1
+      record.seq = maxSeq
+    end
+    if record.seq > maxSeq then maxSeq = record.seq end
+    local id = tostring(record.id)
+    if KV.set(CONV_KV_NS, id, record) then
+      alive[id] = true
+      indexEntries[#indexEntries + 1] = {
+        id = id,
+        name = record.name,
+        projectPath = record.projectPath,
+        createdAt = record.createdAt,
+        updatedAt = record.updatedAt,
+        messageCount = type(record.messages) == "table" and #record.messages or 0,
+        usage = record.usage,
+        seq = record.seq,
+      }
+    else
+      ok = false
+    end
+  end
+  for _, id in ipairs(removedIds or {}) do
+    KV.delete(CONV_KV_NS, tostring(id))
+  end
+  -- 元数据索引：首页跨工程列表只读索引即可，无需解析消息体
+  local encodedIndex = encode(indexEntries)
+  if encodedIndex and KV.writeAtomic(root .. "/_index.json", encodedIndex) then
+    -- index 与记录文件间允许短暂陈旧（自愈型）：记录先行、索引紧随
+  else
+    ok = false
+  end
+  if ok then conversations = value end
+  return ok
 end
 
 local function persistCurrentMap(value)
@@ -247,6 +305,11 @@ function _M.configure(options)
   currentByProject = nil
 end
 
+--- 是否已被宿主配置过（首页等只读方避免重复 configure 清缓存）
+function _M.isConfigured()
+  return cfg().getData ~= nil
+end
+
 function _M.invalidate()
   conversations = nil
   currentByProject = nil
@@ -255,16 +318,36 @@ end
 function _M.load(force)
   if conversations and not force then return clone(conversations) end
 
-  local raw = getData(CONVERSATIONS_KEY, "")
-  local decoded = raw ~= "" and decode(raw) or nil
-  if type(decoded) ~= "table" then decoded = {} end
+  local source = {}
+  local fromLegacy = false
+  if ensureKV() then
+    -- 索引存在时按索引枚举记录文件
+    local rawIndex = KV.read(KV.nsPath(CONV_KV_NS) .. "/_index.json")
+    local decodedIndex = rawIndex and decode(rawIndex) or nil
+    if type(decodedIndex) == "table" and #decodedIndex > 0 then
+      for _, entry in ipairs(decodedIndex) do
+        if type(entry) == "table" and entry.id then
+          local record = KV.get(CONV_KV_NS, tostring(entry.id))
+          if type(record) == "table" then source[#source + 1] = record end
+        end
+      end
+    else
+      -- 迁移源：SharedData 旧 ai_conversations 整包（唯一发布过的形态）
+      local raw = getData(CONVERSATIONS_KEY, "")
+      if type(raw) == "string" and raw ~= "" then
+        local decoded = raw ~= "" and decode(raw) or nil
+        if type(decoded) == "table" then
+          source = decoded.id and { decoded } or decoded
+          fromLegacy = true
+        end
+      end
+    end
+  end
 
-  local source = decoded
-  if decoded.id then source = { decoded } end
   local fallbackProject = projectPath(nil)
   local used = {}
   local normalized = {}
-  local migrated = false
+  local migrated = fromLegacy
   for _, value in ipairs(source) do
     local record, changed = normalizeRecord(value, fallbackProject, used)
     if record then
@@ -275,12 +358,26 @@ function _M.load(force)
     end
   end
 
+  -- 稳定顺序：seq 缺失按位置补齐后排序，保持旧数组语义
+  for index, record in ipairs(normalized) do
+    if record.seq == nil then record.seq = index end
+  end
+  table.sort(normalized, function(a, b) return (a.seq or 0) < (b.seq or 0) end)
+  maxSeq = 0
+  for _, record in ipairs(normalized) do
+    if (record.seq or 0) > maxSeq then maxSeq = record.seq end
+  end
+
   conversations = normalized
   currentByProject = loadCurrentMap()
   if migrateLegacySelection(conversations, currentByProject) then
     persistCurrentMap(currentByProject)
   end
-  if migrated and raw ~= "" then persistConversations(normalized) end
+  if migrated or fromLegacy then persistConversations(normalized) end
+  if fromLegacy then
+    -- 记录已落 KV，清除 SharedData 旧整包（迁移完成标记）
+    setData(CONVERSATIONS_KEY, nil)
+  end
   return clone(conversations)
 end
 
@@ -444,7 +541,7 @@ function _M.delete(id, path)
   local selectedId = selected and selected.id or nil
   local candidate = clone(current)
   table.remove(candidate, index)
-  if not persistConversations(candidate) then return false end
+  if not persistConversations(candidate, { record.id }) then return false end
 
   if selectedId == record.id then
     local replacement
