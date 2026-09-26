@@ -32,12 +32,7 @@ public class LuaAbstractMethodInterceptor implements MethodInterceptor {
         Class<?> retType = method.getReturnType();
 
         if (func.isnil()) {
-            if (retType.equals(boolean.class) || retType.equals(Boolean.class))
-                return false;
-            else if (retType.isPrimitive() || Number.class.isAssignableFrom(retType))
-                return 0;
-            else
-                return null;
+            return LuaMethodInterceptor.defaultValueFor(retType);
         }
 
         Object ret = null;
@@ -49,13 +44,12 @@ public class LuaAbstractMethodInterceptor implements MethodInterceptor {
                 ret = func.jcall(args);
             }
         } catch (LuaError e) {
-            //mContext.sendError(methodName, e);
+            // 不再静默吞掉：进错误日志，返回类型化默认值
+            LuaActivity.logError(methodName, e);
         }
-        if (ret == null)
-            if (retType.equals(boolean.class) || retType.equals(Boolean.class))
-                return false;
-            else if (retType.isPrimitive() || Number.class.isAssignableFrom(retType))
-                return 0;
+        if (ret == null) {
+            return LuaMethodInterceptor.defaultValueFor(retType);
+        }
         return ret;
     }
 }

@@ -44,7 +44,10 @@ public class Enhancer {
         TypeId<?> subType = TypeId.get("L" + subClsName + ";");
         TypeId<?> interfaceTypeId = TypeId.get(EnhancerInterface.class);
 
-        String cacheDir = context.getExternalFilesDir("dexfiles").getAbsolutePath();
+        // external 存储未挂载时可能返回 null，回退到内部缓存目录
+        File cacheDirFile = context.getExternalFilesDir("dexfiles");
+        if (cacheDirFile == null) cacheDirFile = new File(context.getCacheDir(), "dexfiles");
+        String cacheDir = cacheDirFile.getAbsolutePath();
 //		System.out.println("[Enhancer::create()] Create class extends from \"" + superclass.getName() + "\" stored in " + cacheDir);
 
         DexMaker dexMaker = new DexMaker();
@@ -127,6 +130,9 @@ public class Enhancer {
         code.returnValue(retObjLocal);
 
         // override super's methods
+        // getMethods 与 getDeclaredMethods 会覆盖到同一签名：签名去重，
+        // 否则重复 declare 抛异常被吞、只留下日志噪音
+        java.util.HashSet<String> hookedSignatures = new java.util.HashSet<>();
         String methodName = null;
         Method[] methods = superclass.getMethods();
         for (Method method : methods) {
@@ -141,6 +147,9 @@ public class Enhancer {
                 continue;
             if ((method.getModifiers() & Modifier.ABSTRACT) == 0 && methodFilter != null && !methodFilter.filter(method, methodName))
                 continue;
+            if (!hookedSignatures.add(methodName + java.util.Arrays.toString(method.getParameterTypes()))) {
+                continue;
+            }
             try {
                 hookMethod(dexMaker, superType, subType, method, methodName, fieldId);
             } catch (Exception e) {
@@ -162,6 +171,9 @@ public class Enhancer {
                 continue;
             if ((method.getModifiers() & Modifier.ABSTRACT) == 0 && methodFilter != null && !methodFilter.filter(method, methodName))
                 continue;
+            if (!hookedSignatures.add(methodName + java.util.Arrays.toString(method.getParameterTypes()))) {
+                continue;
+            }
             try {
                 hookMethod(dexMaker, superType, subType, method, methodName, fieldId);
             } catch (Exception e) {
@@ -353,25 +365,39 @@ public class Enhancer {
 
         if (isVoid) {
             code.returnVoid();
-        } else {
-            if (retClass.isPrimitive()) {
-                // here use one label, if use two, need jump once and mark twice
-                Label ifBody = new Label();
-                code.loadConstant(retPackLocal, null);
-                code.compare(Comparison.EQ, ifBody, retObjLocal, retPackLocal);
+        } else if (retClass.isPrimitive()) {
+            Label ifBody = new Label();
+            code.loadConstant(retPackLocal, null);
+            code.compare(Comparison.EQ, ifBody, retObjLocal, retPackLocal);
 
+            if (retClass == char.class) {
+                // Character 不是 Number：按包装类型 cast（拦截器对 char 返回类型化默认值）
                 code.cast(retPackLocal, retObjLocal);
                 methodId = TypeId.get(Const.getPackedType(retClass)).getMethod(methodReturnType, Const.getPrimitiveValueMethodName(retClass));
                 code.invokeVirtual(methodId, retLocal, retPackLocal);
                 code.returnValue(retLocal);
-
-                code.mark(ifBody);
-                code.loadConstant(retLocal, 0);
+            } else if (retClass == boolean.class) {
+                // Boolean：cast Boolean + booleanValue（Lua true/false 直接映射）
+                code.cast(retPackLocal, retObjLocal);
+                methodId = TypeId.get(Boolean.class).getMethod(TypeId.BOOLEAN, "booleanValue");
+                code.invokeVirtual(methodId, retLocal, retPackLocal);
                 code.returnValue(retLocal);
             } else {
-                code.cast(retLocal, retObjLocal);
+                // 数值返回：拦截器结果可能被 jcall 装箱为 Double/Long/Integer 任意一种，
+                // 按 Number 接收再调对应 xxxValue()，避免硬 cast 到具体包装类型触发 CCE
+                TypeId<Number> numberType = TypeId.get(Number.class);
+                Local numberLocal = code.newLocal(numberType);
+                code.cast(numberLocal, retObjLocal);
+                methodId = numberType.getMethod(methodReturnType, Const.getPrimitiveValueMethodName(retClass));
+                code.invokeVirtual(methodId, retLocal, numberLocal);
                 code.returnValue(retLocal);
             }
+            code.mark(ifBody);
+            code.loadConstant(retLocal, 0);
+            code.returnValue(retLocal);
+        } else {
+            code.cast(retLocal, retObjLocal);
+            code.returnValue(retLocal);
         }
 
         // generate method {methodName}$Super$ to invoke super's

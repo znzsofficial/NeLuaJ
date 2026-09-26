@@ -42,12 +42,7 @@ public class LuaMethodInterceptor implements MethodInterceptor {
         Class<?> retType = method.getReturnType();
 
         if (func.isnil()) {
-            if (retType.equals(boolean.class) || retType.equals(Boolean.class))
-                return false;
-            else if (retType.isPrimitive() || Number.class.isAssignableFrom(retType))
-                return 0;
-            else
-                return null;
+            return defaultValueFor(retType);
         }
         Object[] na = new Object[args.length + 1];
         System.arraycopy(args, 0, na, 1, args.length);
@@ -64,12 +59,30 @@ public class LuaMethodInterceptor implements MethodInterceptor {
         } catch (LuaError e) {
             LuaActivity.logError(methodName, e);
         }
-        if (ret == null)
-            if (retType.equals(boolean.class) || retType.equals(Boolean.class))
-                return false;
-            else if (retType.isPrimitive() || Number.class.isAssignableFrom(retType))
-                return 0;
+        if (ret == null) {
+            return defaultValueFor(retType);
+        }
         return ret;
+    }
+
+    /**
+     * 生成代码会把拦截结果 cast 成包装类型再拆箱：
+     * double 方法返回 Integer 0 会在 cast 时 ClassCastException，
+     * 因此按返回类型给出类型正确的零值。
+     */
+    static Object defaultValueFor(Class<?> retType) {
+        if (retType.equals(boolean.class) || retType.equals(Boolean.class)) return Boolean.FALSE;
+        if (retType.isPrimitive() || Number.class.isAssignableFrom(retType)) {
+            if (retType == double.class  || retType == Double.class)   return 0d;
+            if (retType == float.class   || retType == Float.class)    return 0f;
+            if (retType == long.class    || retType == Long.class)     return 0L;
+            if (retType == int.class     || retType == Integer.class)  return 0;
+            if (retType == short.class   || retType == Short.class)    return (short) 0;
+            if (retType == byte.class    || retType == Byte.class)     return (byte) 0;
+            if (retType == char.class    || retType == Character.class) return (char) 0;
+            return 0;
+        }
+        return null;
     }
 
     private static Object getDefaultObjectMethodResult(Object object, Method method, Object[] args) {

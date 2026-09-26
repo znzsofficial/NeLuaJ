@@ -1,5 +1,6 @@
 package com.androlua;
 
+import org.luaj.LuaError;
 import org.luaj.LuaValue;
 
 import java.lang.reflect.Field;
@@ -36,27 +37,30 @@ public final class LuaEnhancer {
             field.setAccessible(true);
             field.set(obj, interceptor);
         } catch (Exception e) {
-            e.printStackTrace();
+            throw new LuaError(e);
         }
     }
 
     public Class<?> create() {
         try {
             return mEnhancer.create();
+        } catch (LuaError e) {
+            throw e;
         } catch (Exception e) {
-            e.printStackTrace();
+            // 上抛为 LuaError：Lua 侧 pcall 可捕获，未捕获时进错误视图
+            throw new LuaError(e);
         }
-        return null;
     }
 
     public Class<?> create(MethodFilter filer) {
         try {
             mEnhancer.setMethodFilter(filer);
             return mEnhancer.create();
+        } catch (LuaError e) {
+            throw e;
         } catch (Exception e) {
-            e.printStackTrace();
+            throw new LuaError(e);
         }
-        return null;
     }
 
     public Class<?> create(LuaValue arg) {
@@ -66,9 +70,10 @@ public final class LuaEnhancer {
             Class<?> cls = mEnhancer.create();
             setInterceptor(cls, new LuaMethodInterceptor(arg));
             return cls;
+        } catch (LuaError e) {
+            throw e;
         } catch (Exception e) {
-            e.printStackTrace();
+            throw new LuaError(e);
         }
-        return null;
     }
 }

@@ -111,6 +111,8 @@ The Lua runtime keeps the familiar declarative ergonomics — `loadlayout`, `lua
 - [Lua runtime](./docs/LuaJRuntime.md) · [LuaActivity](./docs/LuaActivity.md) · [Layout](./docs/LuaLayout.md)
 - [Testing](./tests/README.md) — methodology, suites, how to add one
 
+`tests/bench_override.lua` 是仅真机可运行的 override/dx 代理链路基准（运行时 dex 生成无法在桌面 JVM 执行）。
+
 ## 📄 License
 
 This project is open source under the [Apache License 2.0](LICENSE).
