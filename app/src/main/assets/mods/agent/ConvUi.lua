@@ -188,7 +188,12 @@ local function buildConvRow(conv, isCurrent, onClick)
       singleLine = true,
       visibility = (isCurrent or conv.running) and VISIBLE or GONE,
       layout_width = "wrap",
-      layout_height = "24dp",
+      layout_height = "wrap",
+      minWidth = dp(38),
+      paddingLeft = "8dp",
+      paddingRight = "8dp",
+      paddingTop = "3dp",
+      paddingBottom = "3dp",
     },
   }, rowViews)
 
@@ -203,8 +208,9 @@ local function buildConvRow(conv, isCurrent, onClick)
   if isCurrent then
     badge.setText(S.ai_current)
     badge.setTextColor(ColorOnPrimary)
+    -- 圆角矩形而非 OVAL：OVAL 会随视图宽高变形（窄视图 = 竖椭圆）
     local bbg = GradientDrawable()
-    bbg.setShape(GradientDrawable.OVAL)
+    bbg.setCornerRadius(dp(12))
     bbg.setColor(ColorPrimary)
     badge.setBackground(bbg)
   elseif conv.running then
@@ -215,7 +221,6 @@ local function buildConvRow(conv, isCurrent, onClick)
     rbg.setCornerRadius(dp(8))
     rbg.setColor(ColorErrorContainer)
     badge.setBackground(rbg)
-    badge.setPadding(dp(8), 0, dp(8), 0)
   end
 
   row.setOnClickListener(function() if onClick then onClick() end end)

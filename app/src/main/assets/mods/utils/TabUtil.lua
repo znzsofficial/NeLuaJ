@@ -67,6 +67,10 @@ local function closeTabs(paths)
     if mTab.getTabCount() == 0 then
         resetEmptyState()
     end
+    -- 标签变化即保存工程工作区（下次打开工程恢复）
+    pcall(function()
+        require("activities.main.Workspace").saveFor(Bean.Path.this_dir)
+    end)
 end
 
 function _M.add(path)
@@ -160,6 +164,10 @@ function _M.remove(path)
     if mTab.getTabCount() == 0 then
         resetEmptyState()
     end
+    -- 标签变化即保存工程工作区（下次打开工程恢复）
+    pcall(function()
+        require("activities.main.Workspace").saveFor(Bean.Path.this_dir)
+    end)
 end
 
 --- 关闭 path 本身及位于 path/ 下的全部标签（删目录 / 多选删工程）

@@ -50,8 +50,8 @@ end
 print("== 0) 环境冒烟 ==")
 local raw = ArrayList()
 local okSmoke, smokeErr = pcall(function()
-    raw:add("x")
-    assert(raw:size() == 1, "size != 1")
+    raw.add("x")
+    assert(raw.size() == 1, "size != 1")
 end)
 if okSmoke then
     print("  未代理 add/size 正常")

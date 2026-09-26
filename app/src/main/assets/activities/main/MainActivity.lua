@@ -157,6 +157,15 @@ function onCreate()
   -- 抽屉开关无汉堡动画、文件列表初始路径未设置皆由此而来，此处恢复完整链
   Init.initView().initView2().initBar().initFunctionTab().initCheck().restoreLastFile()
 
+  -- 带工程启动参数：恢复该工程上次的工作区（打开的文件标签/活动文件/光标）。
+  -- 此时 this_dir 已是工程目录，restoreLastFile 的根目录守卫会自动跳过，
+  -- 不会与工作区恢复互相干扰。
+  pcall(function()
+    if launchProject ~= "" then
+      require("activities.main.Workspace").restoreCurrent()
+    end
+  end)
+
   -- 权限门禁已迁至首页；编辑器直达时仅做轻提示（文件操作会失败但不阻塞界面）
   if not this.checkStoragePermission() then
     Actions.snack(res.string.need_manage_permission)
@@ -361,6 +370,10 @@ function onCreateOptionsMenu(menu)
 end
 
 function onPause()
+  -- 工程工作区（标签/活动文件/光标）随后台保存，供下次打开工程时恢复
+  pcall(function()
+    require("activities.main.Workspace").saveFor(Bean.Path.this_dir)
+  end)
   if Bean.Path.this_file ~= "" then
     EditorUtil.save()
   end
