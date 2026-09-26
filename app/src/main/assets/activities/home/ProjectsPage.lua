@@ -164,7 +164,6 @@ end
 
 --- 最近修改横向卡片
 local function buildRecentCard(project)
-  local cardViews = {}
   local card = loadlayout({
     MaterialCardView,
     radius = "16dp",
@@ -182,16 +181,8 @@ local function buildRecentCard(project)
       layout_height = "wrap",
       padding = "12dp",
       {
-        AppCompatImageView,
-        id = "icon",
-        layout_width = "40dp",
-        layout_height = "40dp",
-        scaleType = "centerCrop",
-      },
-      {
         MaterialTextView,
         text = project.appName or project.name,
-        layout_marginTop = "8dp",
         textSize = "15sp",
         textStyle = "bold",
         textColor = onSurface,
@@ -215,8 +206,7 @@ local function buildRecentCard(project)
         layout_marginTop = "4dp",
       },
     },
-  }, cardViews)
-  bindProjectIcon(cardViews.icon, project.path)
+  })
   bindProjectActions(card, project)
   return card
 end
