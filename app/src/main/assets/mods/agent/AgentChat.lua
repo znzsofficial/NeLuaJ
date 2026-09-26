@@ -368,9 +368,8 @@ local function legacyExecuteTool(name, args)
       return "出于安全原因，禁止删除项目根目录或其上级目录: " .. args.path
     end
     local ok, result = pcall(function()
-      local LuaUtil = luajava.bindClass("com.androlua.LuaUtil")
-      local File = luajava.bindClass("java.io.File")
-      return LuaUtil.rmDir(File(path))
+      local LuaFileUtil = luajava.kotlinObject("com.nekolaska.io.LuaFileUtil")
+      return LuaFileUtil.removeTree(path)
     end)
     if ok and result == true then
       return "文件夹已删除: " .. path, true
@@ -989,8 +988,7 @@ local function changeSetRemove(path)
   if not kind then return true end
   local ok, result = pcall(function()
     if kind == "dir" then
-      local LuaUtil = luajava.bindClass("com.androlua.LuaUtil")
-      return LuaUtil.rmDir(luajava.bindClass("java.io.File")(path))
+      return luajava.kotlinObject("com.nekolaska.io.LuaFileUtil").removeTree(path)
     else
       return luajava.kotlinObject("com.nekolaska.io.LuaFileUtil").remove(path)
     end

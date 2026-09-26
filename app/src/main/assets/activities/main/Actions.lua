@@ -5,7 +5,6 @@ import "android.content.ComponentName"
 import "android.animation.AnimatorSet"
 import "android.animation.ObjectAnimator"
 import "com.google.android.material.dialog.MaterialAlertDialogBuilder"
-import "com.androlua.LuaUtil"
 
 import "mods.utils.EditorUtil"
 import "mods.utils.ActivityUtil"
@@ -94,7 +93,7 @@ function Actions.injectVConsole()
     return
   end
 
-  LuaUtil.copyFile(src, dest)
+  LuaFileUtil.copyFile(src, dest)
   if not File(dest).isFile() then
     snack(res.string.vconsole_inject_copy_fail)
     return

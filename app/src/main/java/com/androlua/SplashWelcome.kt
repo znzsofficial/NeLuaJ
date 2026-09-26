@@ -8,6 +8,7 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.core.content.edit
 import androidx.lifecycle.lifecycleScope
+import com.nekolaska.io.LuaFileUtil
 import dalvik.system.ZipPathValidator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -202,7 +203,7 @@ class SplashWelcome : ComponentActivity() {
             ?: throw IOException("missing zip entry: $entryName")
         val target = File(destRoot, entryName.substring(prefixLen))
         if (target.exists() && target.isDirectory) {
-            LuaUtil.rmDir(target)
+            LuaFileUtil.removeTree(target.absolutePath)
         }
         val parent = target.parentFile
             ?: throw IOException("no parent for ${target.absolutePath}")

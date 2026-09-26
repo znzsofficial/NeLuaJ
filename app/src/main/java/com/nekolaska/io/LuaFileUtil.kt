@@ -4,25 +4,24 @@ import com.androlua.LuaUtil
 import com.nekolaska.ktx.toLuaValue
 import net.lingala.zip4j.ZipFile
 import net.lingala.zip4j.progress.ProgressMonitor
-import okio.buffer
-import okio.sink
-import okio.source
 import org.luaj.LuaFunction
 import org.luaj.LuaTable
 import org.luaj.lib.jse.JsePlatform
 import java.io.File
+import java.util.Comparator
 import java.nio.file.Files
+import java.nio.file.Path
 import java.nio.file.Paths
+import java.nio.file.StandardCopyOption
+import java.nio.file.attribute.BasicFileAttributes
 import kotlin.concurrent.thread
 
 object LuaFileUtil {
-    val impl =
-        if (runCatching { Class.forName("java.nio.file.Files") }.isSuccess) NioImpl() else OkioImpl()
-
     fun create(path: String, content: String) {
         ensureParent(path)
-        impl.create(path)
-        impl.write(path, content)
+        val p = Paths.get(path)
+        if (!Files.exists(p)) Files.createFile(p)
+        Files.write(p, content.toByteArray(Charsets.UTF_8))
     }
 
     fun write(path: String, content: String): Boolean {
@@ -31,7 +30,12 @@ object LuaFileUtil {
 
     fun write(path: String, content: String, file: File): Boolean {
         if (!file.exists()) return false
-        return impl.write(path, content)
+        return try {
+            Files.write(file.toPath(), content.toByteArray(Charsets.UTF_8))
+            true
+        } catch (_: Exception) {
+            false
+        }
     }
 
     /**
@@ -41,37 +45,119 @@ object LuaFileUtil {
     fun writeOrCreate(path: String, content: String): Boolean {
         return try {
             ensureParent(path)
-            val file = File(path)
-            if (!file.exists()) {
-                impl.create(path)
-            }
-            impl.write(path, content)
+            val p = Paths.get(path)
+            if (!Files.exists(p)) Files.createFile(p)
+            Files.write(p, content.toByteArray(Charsets.UTF_8))
+            true
         } catch (_: Exception) {
             false
         }
     }
 
     private fun ensureParent(path: String) {
-        val parent = File(path).parentFile ?: return
-        if (!parent.exists()) {
-            parent.mkdirs()
-        }
+        val parent = Paths.get(path).parent ?: return
+        if (!Files.exists(parent)) Files.createDirectories(parent)
     }
 
     fun read(path: String): String {
-        return impl.read(path)
+        return try {
+            String(Files.readAllBytes(Paths.get(path)), Charsets.UTF_8)
+        } catch (_: Exception) {
+            ""
+        }
     }
 
     fun remove(path: String): Boolean {
-        return impl.remove(path)
+        return try {
+            Files.delete(Paths.get(path))
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * 递归删除文件或目录。路径不存在视为已成功。
+     * 子项列举失败，或任一子项删不掉时返回 false，且不会假装父目录已经删掉。
+     */
+    fun removeTree(path: String): Boolean {
+        val root = Paths.get(path)
+        if (!Files.exists(root)) return true
+        return try {
+            // 先收齐再删。边遍历边删时，目录流还开着，部分机上会漏删或抛错。
+            val ordered = Files.walk(root).use { stream ->
+                stream.sorted(Comparator.reverseOrder()).toList()
+            }
+            for (child in ordered) {
+                Files.delete(child)
+            }
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /** 复制单个文件。目标父目录不存在时创建。源不是文件、或源和目标是同一路径时返回 false。 */
+    fun copyFile(src: String, dest: String): Boolean {
+        return try {
+            val input = Paths.get(src)
+            if (!Files.isRegularFile(input)) return false
+            val output = Paths.get(dest)
+            if (samePath(input, output)) return false
+            output.parent?.let { Files.createDirectories(it) }
+            Files.copy(input, output, StandardCopyOption.REPLACE_EXISTING)
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * 递归复制文件或目录，不删除源。
+     * 目标落在源目录内部时拒绝，避免复制到自己里面无限递归。
+     */
+    fun copyTree(src: String, dest: String): Boolean {
+        return try {
+            val source = Paths.get(src)
+            if (!Files.exists(source)) return false
+            val target = Paths.get(dest)
+            val srcAbs = source.toAbsolutePath().normalize()
+            val destAbs = target.toAbsolutePath().normalize()
+            // Path.startsWith 按路径段比较，不会把 /proj 误判成 /proj2 的前缀
+            if (destAbs == srcAbs || destAbs.startsWith(srcAbs)) return false
+            Files.walk(source).use { stream ->
+                for (child in stream) {
+                    val out = target.resolve(source.relativize(child))
+                    if (Files.isDirectory(child)) {
+                        Files.createDirectories(out)
+                    } else {
+                        out.parent?.let { Files.createDirectories(it) }
+                        Files.copy(child, out, StandardCopyOption.REPLACE_EXISTING)
+                    }
+                }
+            }
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun samePath(a: Path, b: Path): Boolean {
+        return a.toAbsolutePath().normalize() == b.toAbsolutePath().normalize()
     }
 
     fun rename(oldPath: String, newPath: String): Boolean {
-        return impl.rename(oldPath, newPath)
+        return try {
+            Files.move(Paths.get(oldPath), Paths.get(newPath))
+            true
+        } catch (_: Exception) {
+            false
+        }
     }
 
     fun checkDirectory(path: String) {
-        return impl.checkDirectory(path)
+        val p = Paths.get(path)
+        if (!Files.exists(p)) Files.createDirectories(p)
     }
 
     fun extract(zipPath: String, outPath: String) {
@@ -116,18 +202,15 @@ object LuaFileUtil {
     } as LuaTable
 
     fun moveDirectory(src: String, dest: String): Boolean {
-        return try {
-            val srcFile = File(src)
-            val destFile = File(dest)
-            srcFile.copyRecursively(destFile, overwrite = true)
-            srcFile.deleteRecursively()
-            true
-        } catch (_: Exception) {
-            false
-        }
+        if (!copyTree(src, dest)) return false
+        return removeTree(src)
     }
 
-    fun isEmpty(path: String) = File(path).listFiles()?.isEmpty() == true
+    fun isEmpty(path: String): Boolean {
+        val p = Paths.get(path)
+        if (!Files.isDirectory(p)) return false
+        return Files.newDirectoryStream(p).use { !it.iterator().hasNext() }
+    }
 
     /**
      * 目录条目元信息：一次返回 name/isDir/mtime/size。
@@ -135,16 +218,24 @@ object LuaFileUtil {
      */
     fun listMeta(path: String): LuaTable {
         val result = LuaTable()
-        val files = File(path).listFiles() ?: return result
-        var index = 1
-        for (f in files) {
-            val entry = LuaTable()
-            entry.set("name", f.name.toLuaValue())
-            entry.set("isDir", f.isDirectory.toLuaValue())
-            entry.set("mtime", f.lastModified().toLuaValue())
-            entry.set("size", f.length().toLuaValue())
-            result.set(index, entry)
-            index++
+        val dir = Paths.get(path)
+        if (!Files.isDirectory(dir)) return result
+        Files.newDirectoryStream(dir).use { stream ->
+            var index = 1
+            for (child in stream) {
+                try {
+                    val attrs = Files.readAttributes(child, BasicFileAttributes::class.java)
+                    val entry = LuaTable()
+                    entry.set("name", child.fileName.toString().toLuaValue())
+                    entry.set("isDir", attrs.isDirectory.toLuaValue())
+                    entry.set("mtime", attrs.lastModifiedTime().toMillis().toLuaValue())
+                    entry.set("size", attrs.size().toLuaValue())
+                    result.set(index, entry)
+                    index++
+                } catch (_: Exception) {
+                    // 单个条目读属性失败时跳过，不让整次列举失败
+                }
+            }
         }
         return result
     }
@@ -152,18 +243,31 @@ object LuaFileUtil {
     /** 只列子目录名，按最近修改优先。 */
     fun listDirs(path: String): LuaTable {
         val result = LuaTable()
-        val dirs = File(path).listFiles()?.filter { it.isDirectory } ?: return result
+        val dir = Paths.get(path)
+        if (!Files.isDirectory(dir)) return result
+        val dirs = Files.newDirectoryStream(dir).use { stream ->
+            stream.filter { Files.isDirectory(it) }
+                .sortedByDescending { Files.getLastModifiedTime(it).toMillis() }
+                .toList()
+        }
         var index = 1
-        for (f in dirs.sortedByDescending { it.lastModified() }) {
-            result.set(index, f.name.toLuaValue())
+        for (child in dirs) {
+            result.set(index, child.fileName.toString().toLuaValue())
             index++
         }
         return result
     }
 
     /** 最近修改时间（毫秒）；不存在返回 0。 */
-    fun lastModified(path: String): Long =
-        File(path).takeIf { it.exists() }?.lastModified() ?: 0L
+    fun lastModified(path: String): Long {
+        val p = Paths.get(path)
+        if (!Files.exists(p)) return 0L
+        return try {
+            Files.getLastModifiedTime(p).toMillis()
+        } catch (_: Exception) {
+            0L
+        }
+    }
 
     private val SKIP_DIRS = setOf(
         ".git", ".svn", ".hg", ".idea", ".gradle", "build", "dist",
@@ -174,25 +278,28 @@ object LuaFileUtil {
      * 递归列出目录树，返回相对路径数组（目录带 / 后缀，逐层按名称排序）。
      * [filter] 为空白时不过滤；跳过版本控制与构建目录。
      */
-    fun listTree(path: String, filter: String, maxItems: Int, maxDepth: Int): LuaTable {
+    fun listTree(path: String, filter: String?, maxItems: Int, maxDepth: Int): LuaTable {
         val result = LuaTable()
-        val root = File(path)
-        if (!root.isDirectory) return result
+        val root = Paths.get(path)
+        if (!Files.isDirectory(root)) return result
         val flt = (filter ?: "").trim()
         var count = 0
 
-        fun walk(dir: File, prefix: String, depth: Int) {
+        fun walk(dir: Path, prefix: String, depth: Int) {
             if (count >= maxItems || depth > maxDepth) return
-            val entries = dir.listFiles() ?: return
-            for (f in entries.sortedBy { it.name }) {
+            val entries = Files.newDirectoryStream(dir).use { it.toList() }
+                .sortedBy { it.fileName.toString() }
+            for (child in entries) {
                 if (count >= maxItems) return
-                val rel = prefix + f.name + (if (f.isDirectory) "/" else "")
-                if (flt.isEmpty() || rel.contains(flt) || f.name.contains(flt)) {
+                val name = child.fileName.toString()
+                val isDir = Files.isDirectory(child)
+                val rel = prefix + name + (if (isDir) "/" else "")
+                if (flt.isEmpty() || rel.contains(flt) || name.contains(flt)) {
                     count++
                     result.set(count, rel.toLuaValue())
                 }
-                if (f.isDirectory && f.name !in SKIP_DIRS) {
-                    walk(f, rel, depth + 1)
+                if (isDir && name !in SKIP_DIRS) {
+                    walk(child, rel, depth + 1)
                 }
             }
         }
@@ -216,28 +323,30 @@ object LuaFileUtil {
         val matches = LuaTable()
         result.set("matches", matches)
         result.set("scanned", 0.toLuaValue())
-        val rootDir = File(root)
-        if (pattern.isEmpty() || !rootDir.isDirectory) return result
+        val rootDir = Paths.get(root)
+        if (pattern.isEmpty() || !Files.isDirectory(rootDir)) return result
         var scanned = 0
         var found = 0
         val maxBytes = maxFileKB.coerceAtLeast(1) * 1024L
         val maxScanFiles = 2000
         val maxDepth = 8
 
-        fun walk(dir: File, depth: Int) {
+        fun walk(dir: Path, depth: Int) {
             if (found >= maxResults || scanned >= maxScanFiles || depth > maxDepth) return
-            val entries = dir.listFiles() ?: return
-            for (f in entries.sortedBy { it.name }) {
+            val entries = Files.newDirectoryStream(dir).use { it.toList() }
+                .sortedBy { it.fileName.toString() }
+            for (child in entries) {
                 if (found >= maxResults || scanned >= maxScanFiles) return
-                if (f.isDirectory) {
-                    if (f.name !in SKIP_DIRS) walk(f, depth + 1)
+                val name = child.fileName.toString()
+                if (Files.isDirectory(child)) {
+                    if (name !in SKIP_DIRS) walk(child, depth + 1)
                     continue
                 }
                 scanned++
-                val length = f.length()
+                val length = Files.size(child)
                 if (length <= 0 || length > maxBytes) continue
                 try {
-                    val bytes = f.readBytes()
+                    val bytes = Files.readAllBytes(child)
                     // 二进制嗅探：含 NUL 跳过（与原 Lua 实现一致）
                     var binary = false
                     for (b in bytes) {
@@ -258,7 +367,7 @@ object LuaFileUtil {
                         }
                         if (hit) {
                             found++
-                            matches.set(found, (f.path + ":" + lineno + ": " + line).toLuaValue())
+                            matches.set(found, (child.toAbsolutePath().toString() + ":" + lineno + ": " + line).toLuaValue())
                             if (found >= maxResults) return
                         }
                     }
@@ -271,107 +380,5 @@ object LuaFileUtil {
         result.set("matches", matches)
         result.set("scanned", scanned.toLuaValue())
         return result
-    }
-
-    interface Impl {
-        fun write(path: String, content: String): Boolean
-        fun read(path: String): String
-        fun remove(path: String): Boolean
-        fun checkDirectory(path: String)
-        fun rename(oldPath: String, newPath: String): Boolean
-        fun create(path: String)
-    }
-
-    class NioImpl : Impl {
-        override fun read(path: String): String {
-            return try {
-                String(Files.readAllBytes(Paths.get(path)), Charsets.UTF_8)
-            } catch (_: Exception) {
-                ""
-            }
-        }
-
-        override fun write(path: String, content: String): Boolean {
-            return try {
-                Files.write(Paths.get(path), content.toByteArray(Charsets.UTF_8))
-                true
-            } catch (_: Exception) {
-                false
-            }
-        }
-
-        override fun remove(path: String): Boolean {
-            return try {
-                Files.delete(Paths.get(path))
-                true
-            } catch (_: Exception) {
-                false
-            }
-        }
-
-        override fun checkDirectory(path: String) {
-            Paths.get(path).let {
-                if (!Files.exists(it)) {
-                    Files.createDirectories(it)
-                }
-            }
-        }
-
-        override fun rename(oldPath: String, newPath: String): Boolean {
-            return try {
-                Files.move(Paths.get(oldPath), Paths.get(newPath))
-                true
-            } catch (_: Exception) {
-                false
-            }
-        }
-
-        override fun create(path: String) {
-            Paths.get(path).let {
-                if (!Files.exists(it)) Files.createFile(it)
-            }
-        }
-    }
-
-    class OkioImpl : Impl {
-        override fun read(path: String): String {
-            return try {
-                File(path).source().buffer().readUtf8()
-            } catch (_: Exception) {
-                ""
-            }
-        }
-
-        override fun write(path: String, content: String): Boolean {
-            return try {
-                File(path).sink().buffer().use {
-                    it.writeUtf8(content)
-                }
-                true
-            } catch (_: Exception) {
-                false
-            }
-        }
-
-        override fun remove(path: String): Boolean {
-            return File(path).delete()
-        }
-
-        override fun checkDirectory(path: String) {
-            val file = File(path)
-            if (!file.exists()) {
-                file.mkdirs()
-            }
-        }
-
-        override fun rename(oldPath: String, newPath: String): Boolean {
-            return File(oldPath).renameTo(File(newPath))
-        }
-
-        override fun create(path: String) {
-            File(path).apply {
-                if (!exists()) createNewFile()
-            }
-        }
     }
 }

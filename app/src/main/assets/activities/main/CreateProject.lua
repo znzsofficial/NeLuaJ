@@ -4,7 +4,6 @@
 ]]
 import "java.io.File"
 import "com.google.android.material.dialog.MaterialAlertDialogBuilder"
-local LuaUtil = bindClass "com.androlua.LuaUtil"
 local ProjectTheme = require "mods.utils.ProjectTheme"
 local PathManager = require "mods.utils.PathManager"
 local EditorUtil = require "mods.utils.EditorUtil"
@@ -147,7 +146,7 @@ local function copySelectedModules(binding, base_path, mainTpl)
     pcall(function()
       -- vConsole.lua 在脚本根（assets 根）；本页可能从编辑器环境打开，
       -- getLuaDir 会锚到 activities/main 子目录导致复制失败
-      LuaUtil.copyFile(ActivityUtil.assetsRoot() .. "/vConsole.lua", base_path .. "/vConsole.lua")
+      LuaFileUtil.copyFile(ActivityUtil.assetsRoot() .. "/vConsole.lua", base_path .. "/vConsole.lua")
     end)
   end
 
@@ -159,7 +158,7 @@ local function copySelectedModules(binding, base_path, mainTpl)
     if chipChecked(binding, m.id) then
       local dest = base_path .. "/mods/" .. m.file
       if m.fromLuaDir then
-        LuaUtil.copyFile(ActivityUtil.assetsRoot() .. "/" .. m.file, dest)
+        LuaFileUtil.copyFile(ActivityUtil.assetsRoot() .. "/" .. m.file, dest)
       else
         LuaFileUtil.create(dest, res.string[m.codeKey])
       end

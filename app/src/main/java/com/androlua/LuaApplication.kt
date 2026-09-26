@@ -12,6 +12,7 @@ import coil3.SingletonImageLoader
 import coil3.gif.AnimatedImageDecoder
 import coil3.svg.SvgDecoder
 import com.nekolaska.internal.commit
+import com.nekolaska.io.LuaFileUtil
 import org.luaj.Globals
 import org.luaj.LuaTable
 import java.io.File
@@ -233,11 +234,6 @@ class LuaApplication : Application(), LuaContext, SingletonImageLoader.Factory {
 
         private val sGlobalData: HashMap<*, *> = HashMap<Any?, Any?>()
 
-        fun rmDir(dir: File): Boolean {
-            if (dir.isDirectory) {
-                for (f in dir.listFiles()!!) rmDir(f)
-            }
-            return dir.delete()
-        }
+        fun rmDir(dir: File): Boolean = LuaFileUtil.removeTree(dir.absolutePath)
     }
 }

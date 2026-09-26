@@ -6,7 +6,6 @@ import "com.google.android.material.snackbar.Snackbar"
 import "com.google.android.material.dialog.MaterialAlertDialogBuilder"
 local BottomSheetDialog = bindClass "com.google.android.material.bottomsheet.BottomSheetDialog"
 local BottomSheetBehavior = bindClass "com.google.android.material.bottomsheet.BottomSheetBehavior"
-local LuaUtil = bindClass "com.androlua.LuaUtil"
 local TabUtil = require "mods.utils.TabUtil"
 local InitReader = require "mods.project.InitReader"
 import "mods.utils.EditorUtil"
@@ -116,7 +115,7 @@ function _M.snack(arg)
 end
 
 function _M.deleteFile(path)
-    LuaUtil.rmDir(File(path))
+    LuaFileUtil.removeTree(path)
     -- Rebuild on the normal refresh path so a pending directory scan cannot
     -- interleave an item-range update with a complete dataset replacement.
     MainActivity.RecyclerView.update()

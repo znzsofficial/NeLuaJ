@@ -26,7 +26,6 @@ import "mods.utils.EditorUtil"
 import "mods.utils.ActivityUtil"
 import "mods.utils.TabUtil"
 import "com.google.android.material.dialog.MaterialAlertDialogBuilder"
-import "com.androlua.LuaUtil"
 
 local Bean_Path
 local res = res
@@ -797,16 +796,21 @@ _M.pasteClipboard = function()
         if mode == "cut" and (destDir == src or destDir:find(src .. "/", 1, true) == 1) then
             failN = failN + 1
         else
+            local copied
             if File(src).isDirectory() then
-                LuaUtil.copyDir(File(src), File(dest))
+                copied = LuaFileUtil.copyTree(src, dest)
             else
-                LuaUtil.copyFile(src, dest)
+                copied = LuaFileUtil.copyFile(src, dest)
             end
-            if mode == "cut" then
-                TabUtil.removeUnder(src)
-                LuaUtil.rmDir(File(src))
+            if copied ~= true then
+                failN = failN + 1
+            else
+                if mode == "cut" then
+                    TabUtil.removeUnder(src)
+                    LuaFileUtil.removeTree(src)
+                end
+                okN = okN + 1
             end
-            okN = okN + 1
         end
     end
     if mode == "cut" then
@@ -831,7 +835,7 @@ _M.deleteSelected = function()
             for _, path in ipairs(paths) do
                 -- 目录/工程：关掉其下所有已开标签，不仅精确路径
                 TabUtil.removeUnder(path)
-                LuaUtil.rmDir(File(path))
+                LuaFileUtil.removeTree(path)
             end
             TabUtil.checkAll()
             _M.setSelectMode(false)
