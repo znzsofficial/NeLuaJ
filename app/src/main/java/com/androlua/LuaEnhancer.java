@@ -23,6 +23,11 @@ public final class LuaEnhancer {
     }
 
     public LuaEnhancer(Class<?> cls) {
+        if (cls.isInterface()) {
+            throw new LuaError("expected a Java class, got interface '" + cls.getSimpleName() + "'\n" +
+                    "Interface: " + cls.getName() + "\n" +
+                    "Hint: Interfaces cannot be subclassed with override(). Use luajava.createProxy() instead.");
+        }
         mEnhancer = new Enhancer(LuaApplication.getInstance());
         mEnhancer.setSuperclass(cls);
     }

@@ -131,57 +131,49 @@ public class Enhancer {
 
         // override super's methods
         // getMethods 与 getDeclaredMethods 会覆盖到同一签名：签名去重，
-        // 否则重复 declare 抛异常被吞、只留下日志噪音
+        // 否则重复 declare 抛异常被吞、只留下日志噪音。
+        // 桥接方法必须在入集之前跳过，否则它先占掉擦除后的签名，
+        // 真正的方法就不再生成。
         java.util.HashSet<String> hookedSignatures = new java.util.HashSet<>();
-        String methodName = null;
-        Method[] methods = superclass.getMethods();
-        for (Method method : methods) {
-            methodName = method.getName();
-            if (methodName.contains(Const.SUBCLASS_SUFFIX)) {
-                continue;
-            }
-            if (methodName.contains(Const.SUBCLASS_INVOKE_SUPER_SUFFIX)) {
-                continue;
-            }
-            if ((method.getModifiers() & Modifier.STATIC) != 0 || (method.getModifiers() & Modifier.FINAL) != 0 || (method.getModifiers() & Modifier.NATIVE) != 0)
-                continue;
-            if ((method.getModifiers() & Modifier.ABSTRACT) == 0 && methodFilter != null && !methodFilter.filter(method, methodName))
-                continue;
-            if (!hookedSignatures.add(methodName + java.util.Arrays.toString(method.getParameterTypes()))) {
-                continue;
-            }
+        for (Method method : superclass.getMethods()) {
+            if (!shouldHook(method, hookedSignatures)) continue;
             try {
-                hookMethod(dexMaker, superType, subType, method, methodName, fieldId);
+                hookMethod(dexMaker, superType, subType, method, method.getName(), fieldId);
             } catch (Exception e) {
-
                 e.printStackTrace();
             }
-
         }
-        methods = superclass.getDeclaredMethods();
-        for (Method method : methods) {
-            methodName = method.getName();
-            if (methodName.contains(Const.SUBCLASS_SUFFIX)) {
-                continue;
-            }
-            if (methodName.contains(Const.SUBCLASS_INVOKE_SUPER_SUFFIX)) {
-                continue;
-            }
-            if ((method.getModifiers() & Modifier.STATIC) != 0 || (method.getModifiers() & Modifier.FINAL) != 0 || (method.getModifiers() & Modifier.NATIVE) != 0)
-                continue;
-            if ((method.getModifiers() & Modifier.ABSTRACT) == 0 && methodFilter != null && !methodFilter.filter(method, methodName))
-                continue;
-            if (!hookedSignatures.add(methodName + java.util.Arrays.toString(method.getParameterTypes()))) {
-                continue;
-            }
+        for (Method method : superclass.getDeclaredMethods()) {
+            if (!shouldHook(method, hookedSignatures)) continue;
             try {
-                hookMethod(dexMaker, superType, subType, method, methodName, fieldId);
+                hookMethod(dexMaker, superType, subType, method, method.getName(), fieldId);
             } catch (Exception e) {
-
                 e.printStackTrace();
             }
-
         }
+    }
+
+    /**
+     * DexMaker.declare 只接受可见性 / static / final / synchronized。
+     * bridge、varargs、synthetic、abstract 留在 flags 里会抛 Unexpected flag，
+     * 外层 catch 吞掉后这个方法从生成类里消失。
+     */
+    private static int dexFlags(int modifiers) {
+        return modifiers & (Modifier.PUBLIC | Modifier.PRIVATE | Modifier.PROTECTED
+                | Modifier.STATIC | Modifier.FINAL | Modifier.SYNCHRONIZED);
+    }
+
+    private boolean shouldHook(Method method, java.util.HashSet<String> hookedSignatures) {
+        if (method.isBridge()) return false;
+        String methodName = method.getName();
+        if (methodName.contains(Const.SUBCLASS_SUFFIX)) return false;
+        if (methodName.contains(Const.SUBCLASS_INVOKE_SUPER_SUFFIX)) return false;
+        int mod = method.getModifiers();
+        if ((mod & (Modifier.STATIC | Modifier.FINAL | Modifier.NATIVE)) != 0) return false;
+        if ((mod & Modifier.ABSTRACT) == 0 && methodFilter != null && !methodFilter.filter(method, methodName)) {
+            return false;
+        }
+        return hookedSignatures.add(methodName + java.util.Arrays.toString(method.getParameterTypes()));
     }
 
     private void hookConstructor(DexMaker dexMaker, TypeId<?> superType, TypeId<?> subType, Constructor method, FieldId<?, MethodInterceptor> fieldId) {
@@ -262,7 +254,7 @@ public class Enhancer {
             subMethodId = subType.getConstructor();
             superMethodId = superType.getConstructor();
         }
-        Code code = dexMaker.declare(subMethodId, method.getModifiers());
+        Code code = dexMaker.declare(subMethodId, dexFlags(method.getModifiers()));
         Local[] superArgsValueLocal = null;
         Local thisLocal = code.getThis(subType);
         if (hasParams) {
@@ -311,12 +303,21 @@ public class Enhancer {
         } else {
             subMethodId = subType.getMethod(methodReturnType, methodName);
         }
-        Code code = dexMaker.declare(subMethodId, method.getModifiers() & ~Modifier.ABSTRACT);
+        Code code = dexMaker.declare(subMethodId, dexFlags(method.getModifiers()));
 
         Local retLocal = code.newLocal(methodReturnType);
         Local retPackLocal = null;
+        // Number 局部必须在任何指令之前分配。newLocal 一旦落在指令之后会抛
+        // IllegalStateException，外层 catch 吞掉后方法体停在 compare 上，
+        // generate() 在 RopTranslator 里表现为 IndexOutOfBoundsException: n >= size()。
+        Local numberLocal = null;
+        TypeId<Number> numberType = null;
         if (retClass.isPrimitive()) {
             retPackLocal = code.newLocal(TypeId.get(Const.getPackedType(retClass)));
+            if (!isVoid && retClass != boolean.class && retClass != char.class) {
+                numberType = TypeId.get(Number.class);
+                numberLocal = code.newLocal(numberType);
+            }
         }
 
         Local<Integer> intLocal = code.newLocal(TypeId.INT);
@@ -385,8 +386,6 @@ public class Enhancer {
             } else {
                 // 数值返回：拦截器结果可能被 jcall 装箱为 Double/Long/Integer 任意一种，
                 // 按 Number 接收再调对应 xxxValue()，避免硬 cast 到具体包装类型触发 CCE
-                TypeId<Number> numberType = TypeId.get(Number.class);
-                Local numberLocal = code.newLocal(numberType);
                 code.cast(numberLocal, retObjLocal);
                 methodId = numberType.getMethod(methodReturnType, Const.getPrimitiveValueMethodName(retClass));
                 code.invokeVirtual(methodId, retLocal, numberLocal);
@@ -400,6 +399,11 @@ public class Enhancer {
             code.returnValue(retLocal);
         }
 
+        // 抽象方法没有可调用的 super 实现。flags 里的 abstract 已从 declare 去掉，
+        // 但仍然不能生成 invoke-super，否则加载时会被校验拒绝。
+        if ((method.getModifiers() & Modifier.ABSTRACT) != 0) {
+            return;
+        }
         // generate method {methodName}$Super$ to invoke super's
         if (hasParams) {
             subMethodId = subType.getMethod(methodReturnType, methodName + Const.SUBCLASS_INVOKE_SUPER_SUFFIX, argsTypeId);
@@ -408,7 +412,7 @@ public class Enhancer {
             subMethodId = subType.getMethod(methodReturnType, methodName + Const.SUBCLASS_INVOKE_SUPER_SUFFIX);
             superMethodId = superType.getMethod(methodReturnType, methodName);
         }
-        code = dexMaker.declare(subMethodId, method.getModifiers());
+        code = dexMaker.declare(subMethodId, dexFlags(method.getModifiers()));
         retLocal = code.newLocal(methodReturnType);
         Local[] superArgsValueLocal = null;
         thisLocal = code.getThis(subType);
