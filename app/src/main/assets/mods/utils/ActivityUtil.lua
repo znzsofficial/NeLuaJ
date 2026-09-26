@@ -4,8 +4,6 @@ local Toast = bindClass "android.widget.Toast"
 local _M = {}
 local res = res
 
-_M.lua_path = activity.getLuaDir()
-
 -- 路由表：name → activities/ 下相对路径
 local routes = {
   main             = "main/MainActivity.lua",
@@ -30,10 +28,20 @@ function _M.route(name)
   return routes[name]
 end
 
+--- 脚本根目录锚点：子页环境（如编辑器 activities/main）的 getLuaDir
+--- 带 /activities/... 后缀，统一剥掉；根 main.lua 环境无后缀原样返回。
+--- 路由表全部相对脚本根的 activities/ 目录，禁止用子页 luaDir 拼路由。
+function _M.assetsRoot()
+  local dir = tostring(activity and activity.getLuaDir() or _M.lua_path or "")
+  return (dir:gsub("/activities[/\\].*$", ""))
+end
+
+_M.lua_path = _M.assetsRoot()
+
 function _M.path(name)
   local route = routes[name]
   if not route then return nil end
-  return _M.lua_path .. "/activities/" .. route
+  return _M.assetsRoot() .. "/activities/" .. route
 end
 
 --- 打开页面：ActivityUtil.open("help") / open("project_settings", projectDir)

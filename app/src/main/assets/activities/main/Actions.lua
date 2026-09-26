@@ -283,7 +283,7 @@ end
 function Actions.openLayoutHelper()
   if not requireOpenFile() then return end
   EditorUtil.save()
-  activity.newActivity(ActivityUtil.lua_path .. "/activities/layouthelper/LayoutHelperActivity.lua", {
+  activity.newActivity(ActivityUtil.path("layouthelper"), {
     Bean.Path.this_file,
     Bean.Path.app_root_pro_dir .. "/" .. mToolBar.getTitle()
   })
