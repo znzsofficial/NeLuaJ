@@ -365,13 +365,28 @@ return {
               gravity = "center";
               clickable = true;
               focusable = true;
+              backgroundColor = ColorBackground;
+              padding = "24dp";
               {
                 MaterialTextView,
+                id = "editor_empty_title";
                 layout_width = "wrap",
                 layout_height = "wrap",
                 text = res.string.no_file,
-                textSize = "16sp",
+                textSize = "18sp",
+                textColor = ColorOnSurface,
                 gravity = "center",
+              };
+              {
+                MaterialTextView,
+                id = "editor_empty_hint";
+                layout_width = "wrap",
+                layout_height = "wrap",
+                text = res.string.no_file_hint,
+                textSize = "14sp",
+                textColor = ColorOnSurfaceVar,
+                gravity = "center",
+                layout_marginTop = "8dp",
                 layout_marginBottom = "16dp",
               };
               {

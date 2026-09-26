@@ -171,11 +171,21 @@ end
 function _M.syncEditorEmptyState()
   pcall(function()
     if not editor_empty_state then return end
-    local noFile = mLuaEditor and mLuaEditor.getVisibility() == INVISIBLE
-    local tablet = isTabletModeOn()
-    if noFile and not tablet then
+    local EditorUtil = package.loaded["mods.utils.EditorUtil"]
+    local shown = EditorUtil and EditorUtil.shownFile
+    local noFile = not shown or shown == ""
+    if noFile then
       editor_empty_state.setVisibility(VISIBLE)
       editor_empty_state.bringToFront()
+      local tablet = isTabletModeOn()
+      if editor_empty_hint then
+        local hint = tablet and res.string.no_file_hint_side or res.string.no_file_hint
+        if hint then editor_empty_hint.setText(hint) end
+      end
+      if open_drawer_btn then
+        -- 平板文件列表已经常驻，不再放一个点了没反应的按钮
+        open_drawer_btn.setVisibility(tablet and GONE or VISIBLE)
+      end
     else
       editor_empty_state.setVisibility(GONE)
     end

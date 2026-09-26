@@ -55,6 +55,9 @@ local function parseSymbolBar(raw)
 end
 
 local function pasteSymbol(symbol)
+  local EditorUtil = package.loaded["mods.utils.EditorUtil"]
+  local shown = EditorUtil and EditorUtil.shownFile
+  if not shown or shown == "" or not mLuaEditor then return end
   if symbol == "fun" then
     mLuaEditor.paste("function()")
   else

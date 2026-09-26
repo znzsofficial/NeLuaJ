@@ -19,34 +19,45 @@ end
 local function projectKeyOf(dir)
     dir = normalize(dir)
     local root = normalize(Bean and Bean.Path and Bean.Path.app_root_pro_dir or "")
-    if dir == "" or dir == root or not dir:find(root, 1, true) then return nil end
-    local project = dir:sub(#root + 2):match("^([^/]+)")
+    if dir == "" or root == "" or dir == root then return nil end
+    -- 必须是 root 后紧跟 /，避免 Projects 误匹配 ProjectsBackup
+    if dir:sub(1, #root) ~= root then return nil end
+    local rest = dir:sub(#root + 1)
+    if rest:sub(1, 1) ~= "/" then return nil end
+    local project = rest:match("^/([^/]+)")
     if not project or project == "" then return nil end
     return root .. "/" .. project
+end
+
+local function underProject(path, key)
+    if path == "" or not key or key == "" then return false end
+    local prefix = key .. "/"
+    return path:sub(1, #prefix) == prefix
 end
 
 local function editorContext()
     return mLuaEditor ~= nil
 end
 
---- 收集当前工作区：打开的标签（按最近加载排序）+ 活动文件 + 光标
-local function collect()
+--- 收集当前工作区：只收该工程目录下的标签，避免切工程时把别的工程文件写进这份记录
+local function collect(key)
     local tabs, seen = {}, {}
     for _, p in ipairs(EditorUtil.last_history or {}) do
         p = normalize(p)
-        if p ~= "" and not seen[p] and TabUtil.Table[p] and File(p).isFile() then
+        if underProject(p, key) and not seen[p] and TabUtil.Table[p] and File(p).isFile() then
             seen[p] = true
             tabs[#tabs + 1] = p
         end
     end
     for p in pairs(TabUtil.Table) do
         p = normalize(p)
-        if p ~= "" and not seen[p] and File(p).isFile() then
+        if underProject(p, key) and not seen[p] and File(p).isFile() then
             seen[p] = true
             tabs[#tabs + 1] = p
         end
     end
     local active = normalize(Bean.Path.this_file)
+    if not underProject(active, key) then active = "" end
     local select = nil
     if active ~= "" and mLuaEditor then
         pcall(function() select = mLuaEditor.getSelectionEnd() end)
@@ -63,7 +74,7 @@ function _M.saveFor(dir)
     if not editorContext() then return false end
     local key = projectKeyOf(dir or Bean.Path.this_dir)
     if not key then return false end
-    return LuaKV.set("workspace", key, collect())
+    return LuaKV.set("workspace", key, collect(key))
 end
 
 --- 恢复当前 this_dir 工程的工作区：加回文件标签、选中活动文件并恢复光标。

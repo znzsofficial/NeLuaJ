@@ -14,7 +14,6 @@ local RunLauncher = require "mods.project.RunLauncher"
 local DecelerateInterpolator = luajava.newInstance "android.view.animation.DecelerateInterpolator"
 local loadlayout = loadlayout
 
-local INVISIBLE = 4
 local VISIBLE = 0
 local GONE = 8
 
@@ -38,7 +37,9 @@ local function showCompileResult(title, message)
 end
 
 local function requireOpenFile()
-  if mLuaEditor.getVisibility() == INVISIBLE then
+  local EditorUtil = package.loaded["mods.utils.EditorUtil"]
+  local shown = EditorUtil and EditorUtil.shownFile
+  if not shown or shown == "" then
     snack(res.string.no_file)
     return false
   end
@@ -110,6 +111,7 @@ function Actions.injectVConsole()
 end
 
 function Actions.formatCode()
+  if not requireOpenFile() then return end
   mLuaEditor.format()
 end
 
@@ -120,14 +122,17 @@ function Actions.toggleBlockComment()
 end
 
 function Actions.undo()
+  if not requireOpenFile() then return end
   mLuaEditor.undo()
 end
 
 function Actions.redo()
+  if not requireOpenFile() then return end
   mLuaEditor.redo()
 end
 
 function Actions.checkError()
+  if not requireOpenFile() then return end
   print(mLuaEditor.getError() or res.string.no_error)
 end
 

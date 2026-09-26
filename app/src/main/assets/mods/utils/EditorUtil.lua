@@ -238,19 +238,102 @@ local function getActionMode(view)
 end
 
 local function resetPageTitle(path)
-  --print"改变标题"
-  try
-    local pattern = Bean.Path.app_root_pro_dir .. "(.*)/"
-    local subfolder = string.match(path, pattern).."/"
-    local projectName = subfolder:match("/(.-)/")
-    Bean.Project.this_project = projectName
-    activity.setTitle(projectName)
-    catch
-    Bean.Project.this_project = ""
-    activity.setTitle("")
-    finally
-    activity.getSupportActionBar().setSubtitle(File(path).getName())
+  -- 解析失败时保留当前工程。以前 catch 里把 this_project 清成空，
+  -- 打开工程外文件或路径对不上时，构建/运行会突然变成「没有工程」。
+  local root = tostring(Bean.Path.app_root_pro_dir or "")
+  local subfolder = root ~= "" and string.match(path or "", root .. "(.*)/") or nil
+  if subfolder then
+    local projectName = (subfolder .. "/"):match("/(.-)/")
+    if projectName and projectName ~= "" then
+      Bean.Project.this_project = projectName
+      activity.setTitle(projectName)
+    end
   end
+  pcall(function()
+    activity.getSupportActionBar().setSubtitle(File(path).getName())
+  end)
+end
+
+-- 编辑器缓冲区当前对应的文件。save 只写这个路径：
+-- this_file 先被切走、文本还是上一个文件或尚未载入时，不能覆盖目标文件。
+_M.shownFile = nil
+-- 程序自己拨回标签时置位，避免 onTabSelected 再 load 一次
+_M.quietSelect = false
+
+--- 读入编辑用文本。读失败时 LuaFileUtil.read 返回 ""，非空文件绝不当成空内容。
+local function readFileForEdit(path)
+    local file = File(path)
+    if not file.isFile() then return nil end
+    local text = LuaFileUtil.read(path)
+    local len = file.length()
+    if text == "" and len and len > 0 then
+        return nil
+    end
+    return text
+end
+
+--- 把磁盘文件载入编辑器并绑定 shownFile。失败时不改 this_file / shownFile。
+local function bindFile(path)
+    local text = readFileForEdit(path)
+    if text == nil then return false end
+    PathManager.updateFile(path)
+    mLuaEditor.setText(text)
+    _M.shownFile = path
+    mLuaEditor.setVisibility(0)
+    resetPageTitle(path)
+    pcall(function()
+        local Init = package.loaded["activities.main.Init"]
+        if Init and Init.syncEditorEmptyState then Init.syncEditorEmptyState() end
+    end)
+    if mCodeMinimap and isMinimapEnabled() then
+        mCodeMinimap.scheduleCodeRefresh(60)
+        mCodeMinimap.syncVisibleRangeFromEditor(false)
+    end
+    return true
+end
+
+--- 关掉最后一个文件、或启动时还没有文件：清掉缓冲区，只留空状态。
+--- 不清除工程名——人还在工程里，只是没打开文件。
+function _M.enterEmptyState()
+    _M.shownFile = nil
+    PathManager.updateFile("")
+    pcall(function()
+        mLuaEditor.setText("")
+        mLuaEditor.setVisibility(4)
+        mLuaEditor.clearFocus()
+    end)
+    pcall(function()
+        local imm = activity.getSystemService(activity.INPUT_METHOD_SERVICE)
+        if imm and mLuaEditor then
+            imm.hideSoftInputFromWindow(mLuaEditor.getWindowToken(), 0)
+        end
+    end)
+    pcall(function()
+        if error_Text then error_Text.getParent().setVisibility(8) end
+    end)
+    local root = tostring(Bean.Path.app_root_pro_dir or ""):gsub("/+$", "")
+    local dir = tostring(Bean.Path.this_dir or ""):gsub("/+$", "")
+    local project = ""
+    if root ~= "" and dir ~= root and dir:sub(1, #root) == root and dir:sub(#root + 1, #root + 1) == "/" then
+        project = dir:sub(#root + 2):match("^([^/]+)") or ""
+        if project ~= "" and not File(root .. "/" .. project).isDirectory() then
+            project = ""
+        end
+    end
+    if project ~= "" then
+        Bean.Project.this_project = project
+        activity.setTitle(project)
+    else
+        Bean.Project.this_project = ""
+        activity.setTitle("NeLuaJ+")
+    end
+    pcall(function()
+        activity.getSupportActionBar().setSubtitle(res.string.no_file)
+    end)
+    pcall(function()
+        local Init = package.loaded["activities.main.Init"]
+        if Init and Init.syncEditorEmptyState then Init.syncEditorEmptyState() end
+    end)
 end
 
 local function initTab()
@@ -259,26 +342,26 @@ local function initTab()
         onTabUnselected = function(tab)
         end;
         onTabSelected = function(tab)
+            -- 读失败后把选中标签拨回去时不再次 load，避免来回重入
+            if _M.quietSelect then return end
+            if not tab.tag or not tab.tag.path then return end
             if not tab.tag.first then
-                --print("Tab选择事件")
-                _M.save()
-                local path = tab.tag.path
-                -- 更新当前文件
-                PathManager.updateFile(path)
-                -- 载入文件
-                _M.load(path)
+                -- load 会先把上一个 shownFile 落盘，再载入新文件
+                _M.load(tab.tag.path)
             else
                 tab.tag.first = nil
-                local path = tab.tag.path
-                -- 更新当前文件
-                PathManager.updateFile(path)
-                -- 载入文件
-                resetPageTitle(path)
-                --print"第一次被选择的tab，editor读取"
-                mLuaEditor.setText(LuaFileUtil.read(path))
-                if mCodeMinimap and isMinimapEnabled() then
-                    mCodeMinimap.scheduleCodeRefresh(60)
-                    mCodeMinimap.syncVisibleRangeFromEditor(false)
+                if not bindFile(tab.tag.path) then
+                    -- 新标签读失败：撤掉它，选回仍在编辑的文件
+                    local failed = tab.tag.path
+                    local prev = _M.shownFile
+                    _M.quietSelect = true
+                    pcall(function()
+                        TabUtil.remove(failed)
+                        if prev and prev ~= failed and TabUtil.Table[prev] and TabUtil.Table[prev].obj then
+                            TabUtil.Table[prev].obj.select()
+                        end
+                    end)
+                    _M.quietSelect = nil
                 end
             end
         end;
@@ -295,43 +378,50 @@ end
 
 function _M.save(path, str, editor)
     editor = editor or mLuaEditor
-    path = path or Bean.Path.this_file
-    -- 如果没有传入文本
+    path = path or _M.shownFile
+    if not path or path == "" or not editor then
+        return
+    end
+    -- 缓冲区不是这个文件时拒绝写入，避免把 A 的文本或空白写进 B
+    if _M.shownFile ~= path then
+        return
+    end
     if not str then
         str = tostring(editor.getText())
-        -- 如果编辑器文本为空
-        if #str == 0 then
-            local originTitle = this.supportActionBar.subtitle
-            -- 显示提示
-            this.supportActionBar.subtitle = res.string.empty_file_saved
-            this.delay(1000, function()
-                this.supportActionBar.subtitle = originTitle
-            end)
-        end
     end
 
-    if Bean.Path.this_file == "" then
+    local file = File(path)
+    local disk = LuaFileUtil.read(path)
+    local len = file.length()
+    -- 磁盘上明明有内容却读成空：读失败，绝不能继续覆盖
+    if disk == "" and file.isFile() and len and len > 0 then
         return
-    elseif str == LuaFileUtil.read(path) then
+    end
+    if str == disk then
         return "same"
+    end
+
+    if #str == 0 then
+        local originTitle = this.supportActionBar.subtitle
+        this.supportActionBar.subtitle = res.string.empty_file_saved
+        this.delay(1000, function()
+            this.supportActionBar.subtitle = originTitle
+        end)
     end
 
     local selectionEnd = editor.getSelectionEnd()
     _M.last_history[path] = selectionEnd
     this.setSharedData("lastFile", path)
     this.setSharedData("lastSelect", selectionEnd)
-    -- 检查备份文件夹
     checkBackup()
-    -- 保存备份
     local _path = path:gsub(Bean.Path.app_root_pro_dir, "")
     local backups = Bean.Path.backup_dir .. "/" .. os.date("%Y-%m-%d") .. "/" .. os.date("%H_%M") .. _path
     local backup_file = File(backups)
-    -- 每分钟保存一次
+    -- 每分钟一份，内容是覆盖前的磁盘文本，方便把误保存捞回来
     if not backup_file.exists() then
         File(backup_file.getParent()).mkdirs()
-        LuaFileUtil.create(backups, str)
+        LuaFileUtil.create(backups, disk)
     end
-    -- 返回写入结果
     return LuaFileUtil.write(path, str)
 end
 
@@ -522,42 +612,72 @@ function _M.init()
 end
 
 -- 加载文件请求
-function _M.load(path)
-    --显示编辑器
-    if mLuaEditor.getVisibility() == 4 then
-        mLuaEditor.setVisibility(0)
+local function rememberHistory(path)
+    local cursors = {}
+    for k, v in pairs(_M.last_history) do
+        if type(k) == "string" and type(v) == "number" then
+            cursors[k] = v
+        end
     end
-    pcall(function()
-        if editor_empty_state then editor_empty_state.setVisibility(8) end
-    end)
-    --更新当前文件
-    PathManager.updateFile(path)
+    local list = { path }
+    for i = 1, #_M.last_history do
+        local item = _M.last_history[i]
+        if type(item) == "string" and item ~= path and #list < 50 then
+            list[#list + 1] = item
+        end
+    end
+    _M.last_history = list
+    for k, v in pairs(cursors) do
+        _M.last_history[k] = v
+    end
+end
+
+function _M.load(path)
+    if not path or path == "" then return end
+    -- 已经在编辑这个文件：不要从磁盘重读，否则未保存的修改会被盖掉。
+    if _M.shownFile == path then
+        if _M.fromRecy and TabUtil.Table[path] and TabUtil.Table[path].obj then
+            _M.quietSelect = true
+            TabUtil.Table[path].obj.select()
+            _M.quietSelect = nil
+        end
+        _M.fromRecy = nil
+        return
+    end
+    -- 先落盘当前缓冲区，再切换 this_file。顺序反了会把上一个文件的文本写进新路径。
+    -- 编辑器要等 bindFile 成功才露出来，读失败时继续停在空状态。
+    if _M.shownFile and _M.shownFile ~= "" then
+        _M.save(_M.shownFile)
+    end
     --判断Tab操作
     if TabUtil.Table[path] == nil then
         -- 未打开的文件，添加tab，在onTabSelected里读取
         TabUtil.add(path)
     else
-        -- 已经存在的tab，editor读取
-        mLuaEditor.setText(LuaFileUtil.read(path))
-        resetPageTitle(path)
+        if not bindFile(path) then
+            _M.fromRecy = nil
+            local prev = _M.shownFile
+            if prev and prev ~= path and TabUtil.Table[prev] and TabUtil.Table[prev].obj then
+                _M.quietSelect = true
+                TabUtil.Table[prev].obj.select()
+                _M.quietSelect = nil
+            end
+            return
+        end
         -- 来自RecyclerView
         -- 如果是来自RV的加载就选择 tab
         if _M.fromRecy then
+            _M.quietSelect = true
             TabUtil.Table[path].obj.select()
+            _M.quietSelect = nil
         end
-        --载入指针位置
-        if _M.last_history[path] ~= nil then
-            mLuaEditor.setSelection(_M.last_history[path])
-        end
-    end
-    table.insert(_M.last_history, 1, path)
-    for n = 2, #_M.last_history do
-        if n > 50 then
-            _M.last_history[n] = nil
-        elseif _M.last_history[n] == path then
-            table.remove(_M.last_history, n)
+        --载入指针位置（last_history[path] 是光标，数组部分才是最近文件）
+        local cursor = _M.last_history[path]
+        if type(cursor) == "number" then
+            mLuaEditor.setSelection(cursor)
         end
     end
+    rememberHistory(path)
     -- 销毁来自RV的标识
     _M.fromRecy = nil
     if mCodeMinimap and isMinimapEnabled() then

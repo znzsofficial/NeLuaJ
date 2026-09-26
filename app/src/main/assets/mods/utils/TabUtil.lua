@@ -28,25 +28,16 @@ local function getProjectPathInfo(path)
 end
 
 local function saveCurrentEditor()
-    if Bean.Path.this_file ~= "" then
-        LuaFileUtil.write(Bean.Path.this_file, tostring(mLuaEditor.getText()))
-    end
+    -- 走 EditorUtil.save：只写已绑定文件，并在覆盖前备份旧内容。
+    -- 直接 write 会在编辑器空白或 this_file 已切走时把文件截掉。
+    pcall(function()
+        require("mods.utils.EditorUtil").save()
+    end)
 end
 
 local function resetEmptyState()
-    PathManager.updateFile("")
-    activity.setTitle("NeLuaJ+")
-    activity.getSupportActionBar().setSubtitle(res.string.no_file)
-    Bean.Project.this_project = ""
-    mLuaEditor.setVisibility(4)
     pcall(function()
-        local Init = package.loaded["activities.main.Init"]
-        if Init and Init.syncEditorEmptyState then
-            Init.syncEditorEmptyState()
-        elseif editor_empty_state then
-            editor_empty_state.setVisibility(0)
-            editor_empty_state.bringToFront()
-        end
+        require("mods.utils.EditorUtil").enterEmptyState()
     end)
 end
 
