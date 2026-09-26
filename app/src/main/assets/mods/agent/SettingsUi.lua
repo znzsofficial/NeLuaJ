@@ -16,8 +16,6 @@ local MaterialTextView = luajava.bindClass("com.google.android.material.textview
 local LinearLayout = luajava.bindClass("android.widget.LinearLayout")
 local ScrollView = luajava.bindClass("android.widget.ScrollView")
 local EditText = luajava.bindClass("android.widget.EditText")
-local GradientDrawable = luajava.bindClass("android.graphics.drawable.GradientDrawable")
-local Typeface = luajava.bindClass("android.graphics.Typeface")
 local Switch = luajava.bindClass("com.google.android.material.materialswitch.MaterialSwitch")
 
 local ColorUtil = this.themeUtil
@@ -35,6 +33,7 @@ local ColorOnErrorContainer = ColorUtil.error.onContainer
 
 local res = res
 local S = res.string
+local VISIBLE = 0
 
 local injected = {}
 local updateModelLabel = function() end
@@ -1103,66 +1102,100 @@ showSettings = function()
       local serverItem = server
       local sname = tostring(server.name or S.ai_unnamed)
       local surl = tostring(server.url or "")
-      local row = LinearLayout(activity)
-      row.setOrientation(1)
-      row.setPadding(dp(12), dp(10), dp(12), dp(10))
-      local lp = LinearLayout.LayoutParams(-1, -2)
-      lp.bottomMargin = dp(8)
-      row.setLayoutParams(lp)
-      local bg = GradientDrawable()
-      bg.setColor(ColorSurfaceContainerHigh)
-      bg.setCornerRadius(dp(12))
-      row.setBackground(bg)
+      local rowViews = {}
+      -- 第三个参数用 LinearLayout.LayoutParams，根视图的 margin 才会留下。
+      local row = loadlayout({
+        MaterialCardView,
+        layout_width = "match",
+        layout_height = "wrap",
+        layout_marginBottom = "8dp",
+        radius = "12dp",
+        CardElevation = 0,
+        strokeWidth = "0dp",
+        CardBackgroundColor = ColorSurfaceContainerHigh,
+        {
+          LinearLayout,
+          orientation = "vertical",
+          layout_width = "match",
+          layout_height = "wrap",
+          paddingLeft = "12dp",
+          paddingTop = "10dp",
+          paddingRight = "12dp",
+          paddingBottom = "10dp",
+          {
+            MaterialTextView,
+            text = sname,
+            textSize = "14sp",
+            textStyle = "bold",
+            textColor = ColorOnSurface,
+            singleLine = true,
+          },
+          {
+            MaterialTextView,
+            text = surl,
+            textSize = "12sp",
+            textColor = ColorText,
+            singleLine = true,
+          },
+          {
+            MaterialTextView,
+            id = "statusTv",
+            text = "",
+            textSize = "11sp",
+            textColor = ColorText,
+            visibility = "gone",
+          },
+          {
+            LinearLayout,
+            orientation = "horizontal",
+            gravity = "right",
+            layout_width = "match",
+            layout_height = "wrap",
+            layout_marginTop = "8dp",
+            {
+              MaterialButton,
+              id = "testBtn",
+              text = S.ai_test,
+              textSize = "12sp",
+              allCaps = false,
+              minWidth = "0dp",
+              minHeight = "0dp",
+              paddingLeft = "14dp",
+              paddingRight = "14dp",
+              paddingTop = "0dp",
+              paddingBottom = "0dp",
+              includeFontPadding = false,
+              layout_width = "wrap",
+              layout_height = "34dp",
+              layout_marginRight = "8dp",
+              BackgroundTintList = ColorStateList.valueOf(ColorSecondaryContainer),
+              textColor = ColorOnSecondaryContainer,
+            },
+            {
+              MaterialButton,
+              id = "delBtn",
+              text = S.ai_delete,
+              textSize = "12sp",
+              allCaps = false,
+              minWidth = "0dp",
+              minHeight = "0dp",
+              paddingLeft = "14dp",
+              paddingRight = "14dp",
+              paddingTop = "0dp",
+              paddingBottom = "0dp",
+              includeFontPadding = false,
+              layout_width = "wrap",
+              layout_height = "34dp",
+              BackgroundTintList = ColorStateList.valueOf(ColorErrorContainer),
+              textColor = ColorOnErrorContainer,
+            },
+          },
+        },
+      }, rowViews, LinearLayout.LayoutParams)
 
-      local txtCol = LinearLayout(activity)
-      txtCol.setOrientation(1)
-      txtCol.setLayoutParams(LinearLayout.LayoutParams(-1, -2))
-      local nameTv = MaterialTextView(activity)
-      nameTv.setText(sname)
-      nameTv.setTextSize(14)
-      nameTv.setTypeface(Typeface.DEFAULT, 1)
-      nameTv.setTextColor(ColorOnSurface)
-      nameTv.setSingleLine(true)
-      txtCol.addView(nameTv)
-      local urlTv = MaterialTextView(activity)
-      urlTv.setText(surl)
-      urlTv.setTextSize(12)
-      urlTv.setTextColor(ColorText)
-      urlTv.setSingleLine(true)
-      txtCol.addView(urlTv)
-      local statusTv = MaterialTextView(activity)
-      statusTv.setText("")
-      statusTv.setTextSize(11)
-      statusTv.setTextColor(ColorText)
-      statusTv.setVisibility(GONE)
-      txtCol.addView(statusTv)
-      row.addView(txtCol)
-
-      local function mcpBtn(text, bgColor, textColor)
-        local btn = MaterialButton(activity)
-        btn.setText(text)
-        btn.setTextSize(12)
-        btn.setAllCaps(false)
-        btn.setMinWidth(0)
-        btn.setMinHeight(0)
-        btn.setPadding(dp(14), 0, dp(14), 0)
-        btn.setBackgroundTintList(ColorStateList.valueOf(bgColor))
-        btn.setTextColor(textColor)
-        return btn
-      end
-
-      local actions = LinearLayout(activity)
-      actions.setOrientation(0)
-      actions.setGravity(5) -- Gravity.RIGHT
-      local actionsLp = LinearLayout.LayoutParams(-1, -2)
-      actionsLp.topMargin = dp(8)
-      actions.setLayoutParams(actionsLp)
-
-      local testBtn = mcpBtn(S.ai_test, ColorSecondaryContainer, ColorOnSecondaryContainer)
-      local testLp = LinearLayout.LayoutParams(-2, dp(34))
-      testLp.rightMargin = dp(8)
-      testBtn.setLayoutParams(testLp)
-      testBtn.setOnClickListener(function()
+      local statusTv = rowViews.statusTv
+      local testBtn = rowViews.testBtn
+      testBtn.onClick = function()
         testBtn.setEnabled(false)
         testBtn.setText(S.ai_mcp_testing)
         statusTv.setText(S.ai_mcp_testing)
@@ -1180,13 +1213,8 @@ showSettings = function()
             print(sname .. ": " .. feedback)
           end)
         end)
-      end)
-      actions.addView(testBtn)
-
-      local delBtn = mcpBtn(S.ai_delete, ColorErrorContainer, ColorOnErrorContainer)
-      local delLp = LinearLayout.LayoutParams(-2, dp(34))
-      delBtn.setLayoutParams(delLp)
-      delBtn.setOnClickListener(function()
+      end
+      rowViews.delBtn.onClick = function()
         local compact = {}
         for idx, s in ipairs(servers) do
           if idx ~= i then compact[#compact + 1] = s end
@@ -1194,9 +1222,7 @@ showSettings = function()
         MCPClient.setServers(compact)
         MCPClient.refreshToolsAsync()
         renderMcpList()
-      end)
-      actions.addView(delBtn)
-      row.addView(actions)
+      end
       mcpList.addView(row)
     end
   end

@@ -223,7 +223,9 @@ function _M.renderMessage(role, content, stateMessage, opts)
   local reasoning = stateMessage and tostring(stateMessage.reasoning_content or "") or ""
   if not isUser and reasoning ~= "" then
     local rViews = {}
-    loadlayout({
+    -- 加整块根布局。rToggle / rDetail 已经是它的子视图，再 addView 会抛
+    -- “The specified child already has a parent”。
+    local reasoningBlock = loadlayout({
       LinearLayout,
       orientation = "vertical",
       layout_width = "match",
@@ -257,8 +259,7 @@ function _M.renderMessage(role, content, stateMessage, opts)
       rViews.rDetail.setVisibility(reasoningExpanded and VISIBLE or GONE)
       rViews.rToggle.setText("🧠 " .. S.ai_thinking .. (reasoningExpanded and "  ▾" or "  ▸"))
     end
-    inner.addView(rViews.rToggle)
-    inner.addView(rViews.rDetail)
+    inner.addView(reasoningBlock)
   end
 
   local parts = splitCodeBlocks(content or "")

@@ -195,7 +195,7 @@ local function buildConvRow(conv, isCurrent, onClick)
       paddingTop = "3dp",
       paddingBottom = "3dp",
     },
-  }, rowViews)
+  }, rowViews, LinearLayout.LayoutParams)
 
   local bg = GradientDrawable()
   bg.setCornerRadius(dp(16))
@@ -332,7 +332,7 @@ local function buildManagerRow(conv, render)
         },
       },
     },
-  }, rowViews)
+  }, rowViews, LinearLayout.LayoutParams)
 
   rowViews.avatarSlot.addView(makeAvatar(name, 36))
   return row

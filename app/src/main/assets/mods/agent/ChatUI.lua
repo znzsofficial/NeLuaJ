@@ -1595,7 +1595,7 @@ function _M.show()
             },
             unpack(chipTables),
           },
-        })
+        }, {}, LinearLayout.LayoutParams)
         views.msgContainer.addView(hScroll, 0)
       end
     end
