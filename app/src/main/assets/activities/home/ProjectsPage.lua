@@ -10,6 +10,9 @@ local ScrollView = luajava.bindClass("android.widget.ScrollView")
 local MaterialTextView = luajava.bindClass("com.google.android.material.textview.MaterialTextView")
 local MaterialButton = luajava.bindClass("com.google.android.material.button.MaterialButton")
 local MaterialCardView = luajava.bindClass("com.google.android.material.card.MaterialCardView")
+local AppCompatImageView = luajava.bindClass("androidx.appcompat.widget.AppCompatImageView")
+local BitmapFactory = luajava.bindClass("android.graphics.BitmapFactory")
+local File = luajava.bindClass("java.io.File")
 local Toast = luajava.bindClass("android.widget.Toast")
 
 local ActivityUtil = require "mods.utils.ActivityUtil"
@@ -77,21 +80,86 @@ local function openProject(path)
   ActivityUtil.open("editor", path)
 end
 
+--- 只允许删 Projects 根下的一级目录，避免路径被拼错时扫到别的位置
+local function isProjectRoot(path)
+  local root = tostring(Bean.Path.app_root_pro_dir or ""):gsub("/+$", "")
+  path = tostring(path or ""):gsub("/+$", "")
+  if root == "" or path == "" or path == root then return false end
+  local prefix = root .. "/"
+  if path:sub(1, #prefix) ~= prefix then return false end
+  local name = path:sub(#prefix + 1)
+  return name ~= "" and not name:find("/", 1, true)
+end
+
+local function bindProjectIcon(imageView, path)
+  pcall(function()
+    local iconFile = File(path .. "/icon.png")
+    if iconFile.isFile() then
+      local bmp = BitmapFactory.decodeFile(iconFile.getAbsolutePath())
+      if bmp then
+        imageView.setImageBitmap(bmp)
+        return
+      end
+    end
+    local d = res.drawable("android_studio", onSurfaceVar)
+    if d then imageView.setImageDrawable(d) end
+  end)
+end
+
+local lastMenuAt = 0
+local lastConfirmAt = 0
+
 local function showProjectMenu(project)
+  -- 长按在这套 View 绑定里会进两次监听，400ms 内只开一个对话框
+  local now = os.clock()
+  if now - lastMenuAt < 0.4 then return end
+  lastMenuAt = now
   pcall(function()
     local MaterialAlertDialogBuilder = luajava.bindClass("com.google.android.material.dialog.MaterialAlertDialogBuilder")
+    local function confirmDelete()
+      local now = os.clock()
+      if now - lastConfirmAt < 0.4 then return end
+      lastConfirmAt = now
+      MaterialAlertDialogBuilder(activity)
+        .setTitle(res.string.delete)
+        .setMessage(string.format(res.string.confirm_delete, project.appName or project.name))
+        .setPositiveButton(res.string.delete, function()
+          if not isProjectRoot(project.path) then return end
+          local ok = pcall(function() return LuaFileUtil.removeTree(project.path) end)
+          if not ok or File(project.path).exists() then
+            pcall(function() Toast.makeText(activity, res.string.ai_delete_failed, Toast.LENGTH_SHORT).show() end)
+            return
+          end
+          initCache[project.path] = nil
+          pcall(function() Toast.makeText(activity, res.string.ai_deleted, Toast.LENGTH_SHORT).show() end)
+          _M.refresh()
+        end)
+        .setNegativeButton(android.R.string.cancel, nil)
+        .show()
+    end
     MaterialAlertDialogBuilder(activity)
-      .setTitle(project.name)
-      .setItems({ res.string.project_settings, res.string.open }, function(_, which)
+      .setTitle(project.appName or project.name)
+      .setItems({ res.string.project_settings, res.string.open, res.string.delete }, function(_, which)
+        which = tonumber(tostring(which)) or -1
         if which == 0 then
           ActivityUtil.open("project_settings", project.path)
-        else
+        elseif which == 1 then
           openProject(project.path)
+        elseif which == 2 then
+          confirmDelete()
         end
       end)
       .setNegativeButton(android.R.string.cancel, nil)
       .show()
   end)
+end
+
+local function bindProjectActions(view, project)
+  view.onClick = function() openProject(project.path) end
+  view.onLongClick = function()
+    showProjectMenu(project)
+    return true
+  end
 end
 
 --- 最近修改横向卡片
@@ -106,6 +174,7 @@ local function buildRecentCard(project)
     layout_height = "wrap",
     clickable = true,
     focusable = true,
+    longClickable = true,
     {
       LinearLayout,
       orientation = "vertical",
@@ -113,8 +182,16 @@ local function buildRecentCard(project)
       layout_height = "wrap",
       padding = "12dp",
       {
+        AppCompatImageView,
+        id = "icon",
+        layout_width = "40dp",
+        layout_height = "40dp",
+        scaleType = "centerCrop",
+      },
+      {
         MaterialTextView,
         text = project.appName or project.name,
+        layout_marginTop = "8dp",
         textSize = "15sp",
         textStyle = "bold",
         textColor = onSurface,
@@ -139,18 +216,14 @@ local function buildRecentCard(project)
       },
     },
   }, cardViews)
-  card.onClick = function() openProject(project.path) end
-  pcall(function()
-    card.setOnLongClickListener(function()
-      showProjectMenu(project)
-      return true
-    end)
-  end)
+  bindProjectIcon(cardViews.icon, project.path)
+  bindProjectActions(card, project)
   return card
 end
 
 --- 完整列表行
 local function buildListRow(project)
+  local rowViews = {}
   local row = loadlayout({
     MaterialCardView,
     radius = "14dp",
@@ -160,46 +233,58 @@ local function buildListRow(project)
     layout_height = "wrap",
     clickable = true,
     focusable = true,
+    longClickable = true,
     {
       LinearLayout,
-      orientation = "vertical",
+      orientation = "horizontal",
+      gravity = "center_vertical",
       layout_width = "match",
       layout_height = "wrap",
-      padding = "14dp",
+      padding = "12dp",
       {
-        MaterialTextView,
-        text = project.appName or project.name,
-        textSize = "15sp",
-        textStyle = "bold",
-        textColor = onSurface,
-        maxLines = 1,
-        ellipsize = "end",
+        AppCompatImageView,
+        id = "icon",
+        layout_width = "40dp",
+        layout_height = "40dp",
+        scaleType = "centerCrop",
       },
       {
-        MaterialTextView,
-        text = project.name .. (project.pkg and (" · " .. project.pkg) or ""),
-        textSize = "11sp",
-        textColor = onSurfaceVar,
-        maxLines = 1,
-        ellipsize = "end",
-        layout_marginTop = "2dp",
-      },
-      {
-        MaterialTextView,
-        text = formatTime(project.mtime),
-        textSize = "11sp",
-        textColor = primary,
-        layout_marginTop = "4dp",
+        LinearLayout,
+        orientation = "vertical",
+        layout_width = "0dp",
+        layout_weight = 1,
+        layout_height = "wrap",
+        layout_marginLeft = "12dp",
+        {
+          MaterialTextView,
+          text = project.appName or project.name,
+          textSize = "15sp",
+          textStyle = "bold",
+          textColor = onSurface,
+          maxLines = 1,
+          ellipsize = "end",
+        },
+        {
+          MaterialTextView,
+          text = project.name .. (project.pkg and (" · " .. project.pkg) or ""),
+          textSize = "11sp",
+          textColor = onSurfaceVar,
+          maxLines = 1,
+          ellipsize = "end",
+          layout_marginTop = "2dp",
+        },
+        {
+          MaterialTextView,
+          text = formatTime(project.mtime),
+          textSize = "11sp",
+          textColor = primary,
+          layout_marginTop = "4dp",
+        },
       },
     },
-  })
-  row.onClick = function() openProject(project.path) end
-  pcall(function()
-    row.setOnLongClickListener(function()
-      showProjectMenu(project)
-      return true
-    end)
-  end)
+  }, rowViews)
+  bindProjectIcon(rowViews.icon, project.path)
+  bindProjectActions(row, project)
   return row
 end
 
