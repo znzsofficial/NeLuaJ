@@ -23,14 +23,13 @@ local CATALOG = {
   { id = "project_settings", titleKey = "project_settings" },
   { id = "run", titleKey = "run_code" },
   { id = "logs", titleKey = "logs" },
-  { id = "setting", titleKey = "setting" },
   { id = "help", titleKey = "help" },
   { id = "ai_chat", titleKey = "ai_chat" },
 }
 
 local DEFAULT_IDS = {
   "save", "backup", "format", "analysis_import", "api", "resource",
-  "search", "build", "create_project", "project_settings", "setting", "help",
+  "search", "build", "create_project", "project_settings", "help",
 }
 
 local function catalogById()
