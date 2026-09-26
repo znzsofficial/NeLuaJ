@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="doc.css" />
+    <script src="doc.js" defer></script>
+    <title>LuaFileUtil</title>
+  </head>
+  <body>
+    <main class="markdown-export">
+      <h1>LuaFileUtil</h1>
+      <p>
+        <code>LuaFileUtil</code> 是 IDE 自己的文件工具（<code>com.nekolaska.io.LuaFileUtil</code>）。
+        启动后已是全局变量。它和 <code>file</code> 模块不是一回事：<code>file</code> 是脚本运行时的轻量接口，这里的方法给工程管理、代理和编辑器用。
+      </p>
+      <p>路径请传绝对路径。读写使用 UTF-8。底层是 <code>java.nio.file</code>，需要 Android 8（API 26）及以上。</p>
+      <pre><code class="language-lua">-- 一般直接用全局
+local text = LuaFileUtil.read("/sdcard/LuaJ/Projects/demo/main.lua")
+
+-- 不在 IDE 启动环境里时再自己取
+local LuaFileUtil = luajava.kotlinObject("com.nekolaska.io.LuaFileUtil")
+</code></pre>
+
+      <h2>读和写</h2>
+      <h3>read(path)</h3>
+      <p>读出整个文件。失败或不存在时返回空字符串 <code>""</code>，不抛错。因此空文件和读失败无法从返回值区分，调用方需要自己看文件是否存在、长度是否大于 0。</p>
+
+      <h3>write(path, content)</h3>
+      <p>覆盖已存在的文件。文件不存在返回 <code>false</code>，不会创建。成功返回 <code>true</code>。</p>
+
+      <h3>writeOrCreate(path, content)</h3>
+      <p>写入文件。不存在则连同父目录一起创建。失败返回 <code>false</code>。</p>
+
+      <h3>create(path, content)</h3>
+      <p>创建父目录后写入。失败会抛错，而不是返回 <code>false</code>。新代码优先用 <code>writeOrCreate</code>。</p>
+
+      <h2>删除</h2>
+      <h3>remove(path)</h3>
+      <p>只删除一个文件或空目录。非空目录会失败并返回 <code>false</code>。</p>
+
+      <h3>removeTree(path)</h3>
+      <p>递归删除文件或目录。路径本来就不存在也返回 <code>true</code>。列举子项失败，或其中有一个删不掉，返回 <code>false</code>。这时可能已经删掉一部分，父目录还在。</p>
+      <pre><code class="language-lua">if LuaFileUtil.removeTree(projectDir) and not File(projectDir).exists() then
+  print("已删除")
+end
+</code></pre>
+
+      <h2>复制和移动</h2>
+      <h3>copyFile(src, dest)</h3>
+      <p>复制单个文件，并创建目标的父目录。源不是普通文件、或源和目标是同一路径时返回 <code>false</code>。目标已存在则覆盖。</p>
+
+      <h3>copyTree(src, dest)</h3>
+      <p>递归复制文件或目录，不删除源。目标如果就是源，或者落在源目录里面，直接返回 <code>false</code>，避免复制到自己内部时无限递归。比较按路径段进行，<code>/proj</code> 不会被当成 <code>/proj2</code> 的前缀。</p>
+
+      <h3>rename(oldPath, newPath)</h3>
+      <p>移动或改名。目标已存在时失败，返回 <code>false</code>。不会自动创建缺失的中间目录。</p>
+
+      <h3>moveDirectory(src, dest)</h3>
+      <p>先 <code>copyTree</code>，成功后再 <code>removeTree</code> 删源。不是原子操作：复制成功但删除失败时，源和目标会同时存在。</p>
+
+      <h2>目录</h2>
+      <h3>checkDirectory(path)</h3>
+      <p>目录不存在则创建（含父目录）。已存在则什么都不做。无返回值。</p>
+
+      <h3>isEmpty(path)</h3>
+      <p>是空目录时返回 <code>true</code>。不是目录、或不存在，返回 <code>false</code>。</p>
+
+      <h3>lastModified(path)</h3>
+      <p>最近修改时间，单位毫秒。不存在返回 <code>0</code>。</p>
+
+      <h3>listMeta(path)</h3>
+      <p>列出目录的直接子项，返回数组。每一项是表：<code>name</code>、<code>isDir</code>、<code>mtime</code>（毫秒）、<code>size</code>（字节）。不是目录时返回空表。某个条目读不到属性时会跳过，不影响其余条目。</p>
+      <pre><code class="language-lua">for _, entry in ipairs(LuaFileUtil.listMeta(dir)) do
+  print(entry.name, entry.isDir, entry.mtime, entry.size)
+end
+</code></pre>
+
+      <h3>listDirs(path)</h3>
+      <p>只返回子目录名，按最近修改时间从新到旧排列。</p>
+
+      <h3>listTree(path, filter, maxItems, maxDepth)</h3>
+      <p>递归列出相对路径。目录名以 <code>/</code> 结尾，每一层按名称排序。<code>filter</code> 为空或 <code>nil</code> 时不过滤，否则保留路径或文件名包含该子串的条目。会跳过 <code>.git</code>、<code>build</code>、<code>node_modules</code> 等版本控制和构建目录，不再往下走。达到 <code>maxItems</code> 或 <code>maxDepth</code> 后停止。</p>
+
+      <h3>searchInFiles(root, pattern, ignoreCase, maxResults, maxFileKB)</h3>
+      <p>在目录树里做子串搜索，不是正则。返回表：</p>
+      <ul>
+        <li><code>matches</code>：数组，每项形如 <code>绝对路径:行号: 该行内容</code></li>
+        <li><code>scanned</code>：实际打开过的文件数</li>
+      </ul>
+      <p>跳过版本控制与构建目录、空文件、超过 <code>maxFileKB</code> 的文件，以及内容里含 NUL 的二进制文件。最多扫描 2000 个文件、8 层目录。</p>
+
+      <h2>压缩</h2>
+      <h3>compress(srcFolder, destZipDir, fileName)</h3>
+      <p>把目录打成 zip，仍使用运行时的 <code>LuaUtil.zip</code>，以保持备份包格式不变。</p>
+
+      <h3>extract</h3>
+      <p><code>extract(zipPath, outPath)</code> 在后台线程解压，没有进度。<code>extract(file, targetDir, callback)</code> 带进度回调，参数是已处理量和总大小。zip 无效或目标目录创建失败时抛错。</p>
+
+      <h2>和 file 模块怎么选</h2>
+      <ul>
+        <li>脚本里读一点文本、存一个结果：用 <code>file.readall</code> / <code>file.save</code>。</li>
+        <li>要复制目录、递归删除、列元数据或在工程里搜索：用 <code>LuaFileUtil</code>。</li>
+        <li>不要用 <code>LuaUtil.rmDir</code> / <code>copyFile</code> / <code>copyDir</code>。那些是旧运行时接口，新代码走上面的方法。</li>
+      </ul>
+    </main>
+  </body>
+</html>

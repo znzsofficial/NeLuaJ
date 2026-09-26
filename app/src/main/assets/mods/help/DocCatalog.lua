@@ -46,6 +46,7 @@ return {
       { title = "res", desc = "string / drawable / layout / raw", file = "module_res.html", tags = "资源 字符串 布局" },
       { title = "loadlayout", desc = "表驱动布局（style 见「布局 style / theme」）", file = "module_loadlayout.html", tags = "布局 loadlayout" },
       { title = "file", desc = "读写与目录", file = "module_file.html", tags = "文件 读写" },
+      { title = "LuaFileUtil", desc = "工程内文件复制、删除、搜索", file = "LuaFileUtil.html", tags = "文件 复制 删除 搜索 LuaFileUtil" },
       { title = "okhttp", desc = "同步 / 异步 HTTP", file = "module_okhttp.html", tags = "网络 http" },
       { title = "saf", desc = "存储访问框架", file = "module_saf.html", tags = "存储 SAF" },
       { title = "ext", desc = "二进制 pack / unpack", file = "module_ext.html", tags = "二进制 pack" },
