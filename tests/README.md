@@ -110,6 +110,7 @@ file = { readall = function(p) local h = io.open(p, "rb"); ... end }
 - **Kotlin 层**：`compileDebugKotlin` 通过不代表行为正确；尤其注意本仓库约束——
   **用户打包的 APK 会继承 Java/manifest 层，该层只允许 additive 改动**，动过必须真机回归
 - **集成路径**：权限门禁、编辑器↔首页跳转、AI 面板与 AgentTurn 的真实对话流
+- **override / dx**：`tests/bench_override.lua` 只在真机跑。桌面最多用 `DexMaker.generate()` 检查字节码能否生成，不能加载 dex，因此覆盖不了 ART 校验和 `superCall` 的实际返回值
 
 ## 已知注意事项
 

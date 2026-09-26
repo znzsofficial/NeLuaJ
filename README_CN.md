@@ -30,7 +30,7 @@
 
 ### ☕ 超越原版 LuaJ 的 Java 互操作
 
-- **行为像 Java 对象的代理** —— 单方法接口直接用函数实现（`Runnable(function() ... end)`）；`luajava.createProxy(...)` 一个代理组合多个接口；`override` 可继承 Java 类，被覆写方法的第一个参数是调用原实现的 `superCall`。代理默认获得 Java 语义的 `equals` / `hashCode` / `toString`，可安全放进 `HashMap` 等容器。
+- **行为像 Java 对象的代理** —— 单方法接口直接用函数实现（`Runnable(function() ... end)`）；`luajava.createProxy(...)` 一个代理组合多个接口；`override` 只继承 Java **类**（传入接口会直接报错，应改用 `createProxy`）。被覆写方法的第一个参数是调用原实现的 `superCall`。Java 成员用点调用，冒号会把 `self` 当成额外参数，重载会选错。原始返回值按种类拆箱（`Boolean` / `Character` / `Number`），Lua 返回 `nil` 时变成类型化零值，而不是错误的强制转换。代理默认获得 Java 语义的 `equals` / `hashCode` / `toString`，可安全放进 `HashMap` 等容器。
 - **确定性的成员选择** —— 重载评分有歧义时，`luajava.constructor` / `luajava.method` 按精确 public 参数类型选择成员；自动数值评分基于完整 64 位 Lua 整数判断范围，`byte` / `short` / `char` / `int` 重载按值而非截断结果胜出。
 - **Kotlin 优先的桥接，不依赖 kotlin-reflect** —— `luajava.kotlinObject` / `luajava.kotlinCompanion` 访问 Kotlin `object` 与 companion 单例；`@JvmStatic` 成员可从 `bindClass` 直接调用。Java 与 Kotlin 成员统一使用点调用。
 - **集合是一等公民** —— `luajava.iterate` 支持数组、`Map`、`Iterable` / `Iterator` 与 Kotlin `Sequence` 的泛型 `for` 遍历；`#` 对 Map 和所有集合生效；`luajava.toTable` / `toList` / `toSet` / `toMap` 在 Lua 表与 Java 容器间转换。
@@ -110,6 +110,8 @@ Lua 运行时保留了熟悉的声明式开发体验——`loadlayout`、`luajav
 - [构建器交接](./docs/BuilderHandoff.md) —— 打包用户工程
 - [Lua 运行时](./docs/LuaJRuntime.md) · [LuaActivity](./docs/LuaActivity.md) · [布局](./docs/LuaLayout.md)
 - [测试](./tests/README.md) —— 方法论、套件与新增方式
+
+`tests/bench_override.lua` 是仅真机可运行的 override/dx 基准。桌面 JVM 能生成 dex 字节，但不能加载。
 
 ## 📄 许可证
 

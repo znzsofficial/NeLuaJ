@@ -121,6 +121,18 @@ Lua Java bridge 通过 Kotlin 生成的 JVM API 工作，不依赖 `kotlin-refle
 - 这些 API 不猜测 table 的用途、不自动递归，也不引入 `kotlin-reflect`。
 - 回归测试：`JseBridgeTest.luaConvenienceCollectionConversionsKeepExpectedValues`、`JseBridgeTest.toTableUsesShallowConversionUnlessRecursionIsRequested`、`JseBridgeTest.explicitConstructorAndMethodSelectionBypassOverloadScoring`、`JseBridgeTest.javaIteratorSupportsMapsArraysIteratorsAndKotlinSequences` 与 `JseBridgeTest.collectionLengthIncludesSets`。
 
+## `override` 与运行时 dex
+
+`Class:override{ ... }` 由 `LuaEnhancer` → `dx.proxy.Enhancer` 在设备上生成子类并经 `DexClassLoader` 加载。维护约束：
+
+- 目标必须是类。接口在 `LuaEnhancer` 构造时直接 `LuaError`，并提示改用 `luajava.createProxy()`。生成类 `extends` 目标类，只额外 `implements EnhancerInterface`；父类已实现的接口随继承而来，不在子类上重列。
+- 桥接方法在签名去重之前跳过。否则它先占掉擦除后的签名，真正的方法不再生成。传给 `DexMaker.declare` 的标志只保留可见性、`static`、`final`、`synchronized`；`bridge` / `varargs` / `synthetic` / `abstract` 会让 declare 抛 `Unexpected flag`，而外层 catch 会把这个方法悄悄丢掉。
+- 抽象方法生成拦截体，不生成 `invoke-super`。抽象方法没有可调用的父类实现。
+- 原始返回值按种类拆箱：`boolean` → `Boolean.booleanValue`，`char` → `Character.charValue`，其余数值 → `Number.xxxValue()`。`jcall` 可能把数字装成 `Double`，硬 cast 到 `Integer` 会 `ClassCastException`。Lua 返回 `nil` 时走类型化零值（`false` / `0`）。
+- `Code.newLocal` 必须出现在任何指令之前。落在指令之后会抛 `IllegalStateException`，被吞掉后方法体停在分支上，`generate()` 表现为 `IndexOutOfBoundsException: n >= size()`。
+- Java 成员调用用点号。冒号会把 `self` 作为额外参数传入，重载解析失败。
+- 桌面 JVM 可以调用 `DexMaker.generate()` 检查字节码能否生成，不能 `DexClassLoader` 加载。真机基准是 `tests/bench_override.lua`。`generate()` 成功不等于 ART 肯加载。
+
 ## 本地单元测试
 
 遗留 Luaj++ JAR 缺少部分 `StackMapTable` 信息。ART 可以处理其 DEX 输出，但桌面 JDK 验证会失败，因此 Gradle 的本地 `Test` 任务使用 `-noverify`。该选项仅用于本地 JVM 单元测试；Android 构建仍可能出现来自遗留 JAR 的 D8 stack-map 警告。

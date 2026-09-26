@@ -1,6 +1,6 @@
 # 内置 AI Agent
 
-NeLuaJ+ 的内置 AI 助手是面向当前工程的编码 Agent。当前实现同时支持 OpenAI 兼容的 Chat Completions 和 Responses 流式接口，具备工程文件工具、隔离 Lua 沙盒、公开网页读取、MCP 工具、本地 Skill、上下文压缩和文件变更撤销能力；回合状态机（`AgentTurn`）驱动无硬上限的工具循环，只读工具批量并行，`run_subtask` 可派生隔离子代理，`update_todos` 维护任务计划，`run_project` / `build_project` 覆盖运行与打包交接。
+NeLuaJ+ 的内置 AI 助手是面向当前工程的编码 Agent。当前实现同时支持 OpenAI 兼容的 Chat Completions 和 Responses 流式接口，具备工程文件工具、隔离 Lua 沙盒、公开网页读取、MCP 工具、本地 Skill、上下文压缩和文件变更撤销能力；回合状态机（`AgentTurn`）驱动工具循环（默认不限轮数，设置项 `ai_max_rounds` 可封顶），只读工具批量并行，`run_subtask` 可派生隔离子代理，`update_todos` 维护任务计划，`run_project` / `build_project` 覆盖运行与打包交接。
 
 本文描述当前代码行为。用户可见说明位于：
 

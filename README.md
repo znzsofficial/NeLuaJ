@@ -30,7 +30,7 @@
 
 ### ☕ Java interop beyond stock LuaJ
 
-- **Proxies that behave like Java objects** — implement single-method interfaces with plain functions (`Runnable(function() ... end)`), combine multiple interfaces in one `luajava.createProxy(...)`, and subclass Java classes with `override`, where the first argument of an overridden method is a `superCall` into the original implementation. Proxies get Java-default `equals` / `hashCode` / `toString`, so they can safely live inside `HashMap` and friends.
+- **Proxies that behave like Java objects** — implement single-method interfaces with plain functions (`Runnable(function() ... end)`), combine multiple interfaces in one `luajava.createProxy(...)`, and subclass Java **classes** with `override` (interfaces are rejected and must use `createProxy`). The first argument of an overridden method is a `superCall` into the original implementation. Call Java members with a dot; a colon passes `self` and breaks overload resolution. Primitive returns are unboxed by kind (`Boolean`, `Character`, or `Number`), so a Lua `nil` becomes a typed zero instead of a bad cast. Proxies get Java-default `equals` / `hashCode` / `toString`, so they can safely live inside `HashMap` and friends.
 - **Deterministic member selection** — `luajava.constructor` / `luajava.method` pick members by exact public parameter types when overload scoring is ambiguous; automatic numeric scoring is range-aware over full 64-bit Lua integers, so `byte` / `short` / `char` / `int` overloads are chosen by value, not by truncation.
 - **Kotlin-first bridging, no kotlin-reflect** — `luajava.kotlinObject` / `luajava.kotlinCompanion` reach Kotlin `object` and companion singletons; `@JvmStatic` members are callable straight from `bindClass`. Java and Kotlin members share uniform dot-call semantics.
 - **Collections as first-class citizens** — generic-`for` iteration over arrays, `Map`, `Iterable` / `Iterator` and Kotlin `Sequence` via `luajava.iterate`; `#` works on maps and every collection; `luajava.toTable` / `toList` / `toSet` / `toMap` convert between Lua tables and Java containers.
@@ -111,7 +111,7 @@ The Lua runtime keeps the familiar declarative ergonomics — `loadlayout`, `lua
 - [Lua runtime](./docs/LuaJRuntime.md) · [LuaActivity](./docs/LuaActivity.md) · [Layout](./docs/LuaLayout.md)
 - [Testing](./tests/README.md) — methodology, suites, how to add one
 
-`tests/bench_override.lua` 是仅真机可运行的 override/dx 代理链路基准（运行时 dex 生成无法在桌面 JVM 执行）。
+`tests/bench_override.lua` is a device-only benchmark of the override/dx pipeline. A desktop JVM can generate the dex bytes, but it cannot load them.
 
 ## 📄 License
 
