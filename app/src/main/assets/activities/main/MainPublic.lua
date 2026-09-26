@@ -564,8 +564,10 @@ function _M.dexDialog(path)
             .setMessage(res.string.select_action)
     -- 分析类：跳转到 API 页面，传入 dex 路径
     dialog.setPositiveButton(res.string.api_title, function()
+        -- 路由锚定脚本根：编辑器环境的 getLuaPath 会锚到 activities/main
+        local ActivityUtil = require "mods.utils.ActivityUtil"
         activity.newActivity(
-            activity.getLuaPath("activities/api/ApiActivity.lua"),
+            ActivityUtil.path("api"),
             { "dex:" .. path }
         )
     end)

@@ -139,12 +139,15 @@ local function anyModsChip(binding)
 end
 
 local function copySelectedModules(binding, base_path, mainTpl)
+  local ActivityUtil = require("mods.utils.ActivityUtil")
   if chipChecked(binding, "module_vconsole") then
     local body = tostring(mainTpl or "")
     if body ~= "" and not body:find("\n$") then body = body .. "\n" end
     mainTpl = body .. 'require "vConsole"\n'
     pcall(function()
-      LuaUtil.copyFile(this.getLuaDir("vConsole.lua"), base_path .. "/vConsole.lua")
+      -- vConsole.lua 在脚本根（assets 根）；本页可能从编辑器环境打开，
+      -- getLuaDir 会锚到 activities/main 子目录导致复制失败
+      LuaUtil.copyFile(ActivityUtil.assetsRoot() .. "/vConsole.lua", base_path .. "/vConsole.lua")
     end)
   end
 
@@ -156,7 +159,7 @@ local function copySelectedModules(binding, base_path, mainTpl)
     if chipChecked(binding, m.id) then
       local dest = base_path .. "/mods/" .. m.file
       if m.fromLuaDir then
-        LuaUtil.copyFile(this.getLuaDir(m.file), dest)
+        LuaUtil.copyFile(ActivityUtil.assetsRoot() .. "/" .. m.file, dest)
       else
         LuaFileUtil.create(dest, res.string[m.codeKey])
       end

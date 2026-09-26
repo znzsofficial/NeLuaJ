@@ -86,7 +86,8 @@ function Actions.injectVConsole()
   end
   local projectDir = Bean.Path.app_root_pro_dir .. "/" .. Bean.Project.this_project
   local dest = projectDir .. "/vConsole.lua"
-  local src = this.getLuaDir("vConsole.lua")
+  -- vConsole.lua 在脚本根；编辑器环境的 getLuaDir 锚在 activities/main 子目录
+  local src = ActivityUtil.assetsRoot() .. "/vConsole.lua"
   if not src or src == "" or not File(src).isFile() then
     snack(res.string.vconsole_inject_no_src)
     return
