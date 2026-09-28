@@ -186,10 +186,36 @@ local function normalizePath(path)
   return "/" .. table.concat(parts, "/")
 end
 
+local function projectsRoot()
+  return normalizePath(Bean and Bean.Path and Bean.Path.app_root_pro_dir or "")
+end
+
+--- 工程名。文件列表停在子目录时，this_dir 不是工程根。
+local function currentProjectName()
+  local name = Bean and Bean.Project and tostring(Bean.Project.this_project or "") or ""
+  if name ~= "" then return name end
+  local dir = normalizePath(Bean and Bean.Path and Bean.Path.this_dir or "")
+  local root = projectsRoot()
+  if root ~= "" and #dir > #root and dir:sub(1, #root) == root and dir:sub(#root + 1, #root + 1) == "/" then
+    return dir:sub(#root + 2):match("^([^/]+)") or ""
+  end
+  return ""
+end
+
+local function projectRootPath()
+  local name = currentProjectName()
+  local root = projectsRoot()
+  if name == "" or root == "" then return "" end
+  return normalizePath(root .. "/" .. name)
+end
+
 -- 目标是否与项目根目录重合，或为项目根目录的上级目录（删它会连带删掉项目）
 local function isProjectRootOrAncestor(path)
   local normalized = normalizePath(path)
-  local root = normalizePath(Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir())
+  local root = projectRootPath()
+  if root == "" then
+    root = normalizePath(Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir())
+  end
   if normalized == "" or root == "" then return false end
   if normalized == root then return true end
   return root:sub(1, #normalized + 1) == normalized .. "/"
@@ -1150,6 +1176,8 @@ end
 
 -- ─── 多会话管理 ──
 local function currentProjectPath()
+  local project = projectRootPath()
+  if project ~= "" then return project end
   return normalizePath(Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir())
 end
 
@@ -1186,6 +1214,10 @@ end
 
 function _M.getCurrentProjectPath()
   return currentProjectPath()
+end
+
+function _M.currentProjectName()
+  return currentProjectName()
 end
 
 function _M.getCurrentConv()
@@ -1239,8 +1271,14 @@ function _M.buildContext()
     table.insert(parts, "当前文件: " .. this_file)
   end
 
+  local project = projectRootPath()
   local this_dir = Bean and Bean.Path and Bean.Path.this_dir
-  if this_dir and this_dir ~= "" then
+  if project ~= "" then
+    table.insert(parts, "项目路径: " .. project)
+    if this_dir and this_dir ~= "" and normalizePath(this_dir) ~= project then
+      table.insert(parts, "当前目录: " .. this_dir)
+    end
+  elseif this_dir and this_dir ~= "" then
     table.insert(parts, "项目路径: " .. this_dir)
   end
 

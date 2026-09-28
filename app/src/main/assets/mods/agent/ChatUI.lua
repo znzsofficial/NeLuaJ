@@ -98,6 +98,21 @@ local function updateModelLabel()
   views.modelLabel.setText(name ~= "" and name or S.ai_add_model)
 end
 
+local function currentProjectName()
+  if AgentChat.currentProjectName then return AgentChat.currentProjectName() end
+  return ""
+end
+
+updateProjectLabel = function()
+  if not views.aiProject then return end
+  local name = currentProjectName()
+  if name == "" then
+    views.aiProject.setText(S.ai_project_unknown)
+  else
+    views.aiProject.setText(S.ai_project:format(name))
+  end
+end
+
 local function isToolError(toolName, result)
   if not result then return false end
   local r = tostring(result):lower()

@@ -93,13 +93,15 @@ local function makeAvatar(name, sizeDp)
 end
 
 local function convMetaText(conv)
-  local project = tostring(conv.projectPath or ""):match("([^/]+)$") or S.ai_project_unknown
+  local path = tostring(conv.projectPath or ""):gsub("\\", "/"):gsub("/+$", "")
+  local project = path:match("([^/]+)$") or ""
   local meta = S.ai_conv_meta:format(tostring(conv.createdAt or ""), #(conv.messages or {}))
   local usage = type(conv.usage) == "table" and conv.usage or nil
   if usage and tonumber(usage.tokens) and tonumber(usage.tokens) > 0 then
     meta = meta .. "  ·  " .. S.ai_row_usage:format(TextUtil.fmtTokens(usage.tokens))
   end
-  return meta .. "  ·  " .. project
+  if project ~= "" then meta = meta .. "  ·  " .. project end
+  return meta
 end
 
 local function showRenameDialog(convId, oldName)
