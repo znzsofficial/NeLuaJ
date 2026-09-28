@@ -53,6 +53,14 @@ function Actions.requireOpenFile()
   return requireOpenFile()
 end
 
+local function savedForUse()
+  if EditorUtil.currentFile() == "" then return true end
+  local ok, saved = pcall(EditorUtil.save)
+  if ok and (saved == true or saved == "same") then return true end
+  snack(res.string.save_fail)
+  return false
+end
+
 function Actions.saveCurrentFile()
   if not requireOpenFile() then return end
   switch EditorUtil.save()
@@ -287,7 +295,7 @@ end
 
 function Actions.openLayoutHelper()
   if not requireOpenFile() then return end
-  EditorUtil.save()
+  if not savedForUse() then return end
   activity.newActivity(ActivityUtil.path("layouthelper"), {
     EditorUtil.currentFile(),
     Bean.Path.app_root_pro_dir .. "/" .. mToolBar.getTitle()
@@ -296,7 +304,7 @@ end
 
 function Actions.runCurrent()
   if not requireOpenFile() then return end
-  EditorUtil.save()
+  if not savedForUse() then return end
   RunLauncher.launchScript(this, EditorUtil.currentFile(), { snack = snack })
 end
 
@@ -305,7 +313,7 @@ function Actions.runProject()
     snack(res.string.noProject)
     return
   end
-  EditorUtil.save()
+  if not savedForUse() then return end
   RunLauncher.launchScript(
     this,
     Bean.Path.app_root_pro_dir .. "/" .. Bean.Project.this_project .. "/main.lua",
@@ -320,7 +328,7 @@ function Actions.runOnDebugApp()
     snack(res.string.noProject)
     return
   end
-  EditorUtil.save()
+  if not savedForUse() then return end
   RunLauncher.launchDebugApp(
     this,
     debugApp,

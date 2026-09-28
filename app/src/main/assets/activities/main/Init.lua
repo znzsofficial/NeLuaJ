@@ -117,8 +117,7 @@ _M.initCheck = function()
   errorTicker = luajava.newInstance "com.androlua.Ticker"
   errorTicker.Period = 250
   errorTicker.onTick = function()
-    local shown = EditorUtil.shownFile
-    if not shown or shown == "" then
+    if EditorUtil.currentFile() == "" then
       layout.visibility = GONE
       return
     end

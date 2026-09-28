@@ -1,6 +1,7 @@
 --- 代码缩略图。不负责打开或保存文件。
 local Color = bindClass "android.graphics.Color"
 local View = bindClass "android.view.View"
+local MotionEvent = bindClass "android.view.MotionEvent"
 local LuaCodeMinimapView = bindClass "com.androlua.LuaCodeMinimapView"
 
 local _M = {}
@@ -27,9 +28,8 @@ local function config(editor)
     cfg.charWidthAscii = 1.05
     cfg.verticalGap = 0.55
     cfg.paddingLeft = 3
-    cfg.backgroundColor = Color.argb(0, 0, 0, 0)
+    cfg.backgroundColor = color(data, "MinimapBg", Color.argb(0, 0, 0, 0))
     cfg.outsideDimColor = Color.argb(0, 0, 0, 0)
-    cfg.backgroundColor = color(data, "MinimapBg", cfg.backgroundColor)
     cfg.maskColor = color(data, "MinimapMask", Color.argb(0x28, 0x21, 0x96, 0xF3))
     cfg.codeAlpha = 200
     local raw = this.getSharedData("code_minimap_alpha", nil)
@@ -109,10 +109,10 @@ end
 function _M.onTouch(event)
     if not mCodeMinimap or not enabled() then return end
     local action = event.action
-    if action == 1 then
+    if action == MotionEvent.ACTION_UP then
         mCodeMinimap.scheduleCodeRefresh(350)
     end
-    if action == 2 or action == 1 then
+    if action == MotionEvent.ACTION_MOVE or action == MotionEvent.ACTION_UP then
         mCodeMinimap.syncVisibleRangeFromEditor(true)
     end
 end

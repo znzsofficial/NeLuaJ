@@ -280,7 +280,10 @@ function onOptionsItemSelected(item)
       return
     end
     if not drawer.isDrawerOpen(GravityCompat.START) then
-      EditorUtil.save()
+      if EditorUtil.currentFile() ~= "" then
+        local saved = EditorUtil.save()
+        if saved ~= true and saved ~= "same" then Actions.snack(res.string.save_fail) end
+      end
       drawer.openDrawer(GravityCompat.START)
     else
       drawer.closeDrawer(GravityCompat.START)
@@ -374,7 +377,7 @@ function onPause()
   pcall(function()
     require("activities.main.Workspace").saveFor(Bean.Path.this_dir)
   end)
-  if Bean.Path.this_file ~= "" then
+  if EditorUtil.currentFile() ~= "" then
     EditorUtil.save()
   end
   pcall(function()
@@ -398,8 +401,12 @@ this.addOnBackPressedCallback(function()
     return
   end
 
-  EditorUtil.save()
-  Snackbar.make(coordinatorLayout, res.string.confirm_exit, Snackbar.LENGTH_SHORT)
+  local leaveMessage = res.string.confirm_exit
+  if EditorUtil.currentFile() ~= "" then
+    local saved = EditorUtil.save()
+    if saved ~= true and saved ~= "same" then leaveMessage = res.string.save_fail end
+  end
+  Snackbar.make(coordinatorLayout, leaveMessage, Snackbar.LENGTH_SHORT)
     .setAnchorView(ps_bar)
     .setAction(res.string.exit, function()
       activity.finish(true)

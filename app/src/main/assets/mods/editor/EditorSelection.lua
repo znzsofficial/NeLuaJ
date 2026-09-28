@@ -6,7 +6,7 @@ local ActionMode = bindClass "androidx.appcompat.view.ActionMode"
 local MotionEvent = bindClass "android.view.MotionEvent"
 local _M = {}
 local clipboardActionMode = nil
-_M._analyseToken = 0
+local analyseToken = 0
 
 function _M.init()
     return SelectMain.init()
@@ -14,15 +14,15 @@ end
 
 function _M.javaClassAnalyse(view, status)
     local hintBar = select_hint_bar or ps_bar
-    local hintBarParent = hintBar.getParent() -- HorizontalScrollView
+    if not hintBar then return end
+    local hintBarParent = hintBar.getParent()
     if view.getSelectedText() and status then
-        -- 判断内容不为空，并且选中状态
-        local text = view.getSelectedText() -- 获取到选中文本
-        _M._analyseToken = (_M._analyseToken or 0) + 1
-        local analyseToken = _M._analyseToken
+        local text = view.getSelectedText()
+        analyseToken = analyseToken + 1
+        local token = analyseToken
         SelectMain.allMoveView(hintBar) -- 避免连续选择时重复堆叠旧结果
         SelectMain.new(text, function(content)
-            if analyseToken ~= _M._analyseToken then
+            if token ~= analyseToken then
                 return -- 过期请求，丢弃旧结果
             end
             if view.getSelectedText() ~= text then
@@ -36,14 +36,13 @@ function _M.javaClassAnalyse(view, status)
                 end
                 for _, v in pairs(classList) do
                     SelectMain.addView(v, nil, nil, hintBar)
-                    --print(v)
                 end
             else
                 print("error:" .. content) --出现错误
             end
         end)
     else
-        _M._analyseToken = (_M._analyseToken or 0) + 1 -- 使在途请求失效
+        analyseToken = analyseToken + 1 -- 使在途请求失效
         SelectMain.allMoveView(hintBar) -- 移除所有新增的控件
         if hintBarParent then
             hintBarParent.setVisibility(8) -- 无选中时隐藏

@@ -32,9 +32,16 @@ function onCreateOptionsMenu(menu)
 end
 
 mEditor.post(function()
-    if File(path).exists() then
-        mEditor.setText(LuaFileUtil.read(path))
-        activity.setTitle(File(path).getName())
+    local file = File(path)
+    local text = file.isFile() and tostring(LuaFileUtil.read(path) or "") or nil
+    if text == "" and file.length() > 0 then
+        text = nil
+    end
+    if text ~= nil then
+        mEditor.setText(text)
+        activity.setTitle(file.getName())
+    elseif file.isFile() then
+        activity.setTitle(file.getName())
     else
         mEditor.setText("")
         activity.setTitle(res.string.no_file)

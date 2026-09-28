@@ -3,25 +3,25 @@ local _M = {}
 
 local MAX_RECENT = 50
 local state = {
-  shownFile = nil,
+  current = nil,
   recent = {},
   cursors = {},
 }
 
 function _M.current()
-  return state.shownFile
+  return state.current
 end
 
 function _M.setCurrent(path)
   if path == nil or path == "" then
-    state.shownFile = nil
+    state.current = nil
   else
-    state.shownFile = path
+    state.current = path
   end
 end
 
 function _M.isCurrent(path)
-  return state.shownFile ~= nil and state.shownFile == path
+  return state.current ~= nil and state.current == path
 end
 
 function _M.cursor(path)

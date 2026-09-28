@@ -27,18 +27,34 @@ local function getProjectPathInfo(path)
     }
 end
 
+local function notifySaveFailed()
+    pcall(function()
+        local Actions = package.loaded["activities.main.Actions"]
+        if Actions and Actions.snack then Actions.snack(res.string.save_fail) end
+    end)
+end
+
+--- 关掉当前文件前先落盘。文件已经不在时不重建它。
+--- 文件还在但写不进去时返回 false，调用方必须留下缓冲区。
+local function currentCanClose()
+    local EditorUtil = require("mods.utils.EditorUtil")
+    local current = EditorUtil.currentFile()
+    if current == "" or not File(current).isFile() then return true end
+    local ok, result = pcall(function() return EditorUtil.save() end)
+    if ok and (result == true or result == "same") then return true end
+    notifySaveFailed()
+    return false
+end
+
 local function saveCurrentEditor()
     -- 走 EditorUtil.save：只写已绑定文件，并在覆盖前备份旧内容。
-    -- 直接 write 会在编辑器空白或 this_file 已切走时把文件截掉。
     pcall(function()
         require("mods.utils.EditorUtil").save()
     end)
 end
 
 local function resetEmptyState()
-    pcall(function()
-        require("mods.utils.EditorUtil").enterEmptyState()
-    end)
+    require("mods.utils.EditorUtil").enterEmptyState()
 end
 
 local function closeTabs(paths)
@@ -46,7 +62,20 @@ local function closeTabs(paths)
         return
     end
 
-    saveCurrentEditor()
+    local EditorUtil = require("mods.utils.EditorUtil")
+    local current = EditorUtil.currentFile()
+    local closingCurrent = false
+    for _, path in ipairs(paths) do
+        if path == current then
+            closingCurrent = true
+            break
+        end
+    end
+    if closingCurrent then
+        if not currentCanClose() then return end
+    else
+        saveCurrentEditor()
+    end
     for _, path in ipairs(paths) do
         local entry = tabTable[path]
         if entry and entry.obj then
@@ -144,7 +173,7 @@ function _M.remove(path)
     end
 
     local EditorUtil = require("mods.utils.EditorUtil")
-    if EditorUtil.shownFile == path then
+    if EditorUtil.currentFile() == path then
         saveCurrentEditor()
     end
 
