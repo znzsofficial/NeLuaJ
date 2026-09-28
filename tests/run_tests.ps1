@@ -66,7 +66,7 @@ if ($Check) {
 $suites = @(
   "TestTodo", "TestPatch", "TestRegistry", "TestSubagent",
   "TestParallel", "TestMarkdown", "TestTextUtil", "TestStoreIndex", "TestAgentUi",
-  "TestMcpNotifications", "TestAgentTurn", "TestSessionState"
+  "TestMcpNotifications", "TestAgentTurn", "TestSessionState", "TestEditorSession"
 )
 if ($Suite) { $suites = @($Suite) }
 

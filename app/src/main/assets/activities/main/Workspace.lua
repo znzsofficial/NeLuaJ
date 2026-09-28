@@ -8,6 +8,7 @@ local File = luajava.bindClass "java.io.File"
 local LuaKV = require "mods.utils.LuaKV"
 local TabUtil = require "mods.utils.TabUtil"
 local EditorUtil = require "mods.utils.EditorUtil"
+local Session = require "mods.editor.EditorSession"
 
 local _M = {}
 
@@ -42,7 +43,7 @@ end
 --- 收集当前工作区：只收该工程目录下的标签，避免切工程时把别的工程文件写进这份记录
 local function collect(key)
     local tabs, seen = {}, {}
-    for _, p in ipairs(EditorUtil.last_history or {}) do
+    for _, p in ipairs(Session.recent()) do
         p = normalize(p)
         if underProject(p, key) and not seen[p] and TabUtil.Table[p] and File(p).isFile() then
             seen[p] = true
@@ -56,16 +57,22 @@ local function collect(key)
             tabs[#tabs + 1] = p
         end
     end
-    local active = normalize(Bean.Path.this_file)
+    local active = normalize(EditorUtil.currentFile and EditorUtil.currentFile() or "")
     if not underProject(active, key) then active = "" end
     local select = nil
     if active ~= "" and mLuaEditor then
         pcall(function() select = mLuaEditor.getSelectionEnd() end)
     end
+    local cursors = {}
+    for path, position in pairs(Session.cursors()) do
+        path = normalize(path)
+        if underProject(path, key) then cursors[path] = position end
+    end
     return {
         tabs = tabs,
         active = active ~= "" and active or nil,
         select = select,
+        cursors = cursors,
     }
 end
 
@@ -88,12 +95,13 @@ function _M.restoreCurrent()
 
     local active = normalize(ws.active or "")
     local restored = false
+    if type(ws.cursors) == "table" then Session.importCursors(ws.cursors) end
 
-    -- 先加回其余标签
+    -- 非活动文件只挂标签，不读进唯一的缓冲区。
     for _, p in ipairs(ws.tabs or {}) do
         p = normalize(p)
         if p ~= "" and p ~= active and File(p).isFile() then
-            EditorUtil.load(p)
+            TabUtil.add(p, { select = false })
             restored = true
         end
     end

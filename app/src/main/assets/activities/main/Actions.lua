@@ -37,8 +37,8 @@ end
 
 local function requireOpenFile()
   local EditorUtil = package.loaded["mods.utils.EditorUtil"]
-  local shown = EditorUtil and EditorUtil.shownFile
-  if not shown or shown == "" then
+  local shown = EditorUtil and EditorUtil.currentFile and EditorUtil.currentFile() or ""
+  if shown == "" then
     snack(res.string.no_file)
     return false
   end
@@ -137,7 +137,7 @@ end
 
 function Actions.compileCurrentFile()
   if not requireOpenFile() then return end
-  local path = Bean.Path.this_file
+  local path = EditorUtil.currentFile()
   local saved = EditorUtil.save()
   if saved ~= true and saved ~= "same" then
     showCompileResult(res.string.compile_failed, res.string.compile_save_failed)
@@ -209,7 +209,7 @@ end
 
 function Actions.openJavaAnalysis()
   if not requireOpenFile() then return end
-  ActivityUtil.open("fix", Bean.Path.this_file)
+  ActivityUtil.open("fix", EditorUtil.currentFile())
 end
 
 function Actions.openBuild()
@@ -229,7 +229,7 @@ function Actions.openBuild()
     return
   end
 
-  if Bean.Path.this_file ~= "" then
+  if EditorUtil.currentFile() ~= "" then
     local saveCalled, saved = pcall(EditorUtil.save)
     if not saveCalled or (saved ~= true and saved ~= "same") then
       snack(res.string.save_fail)
@@ -282,14 +282,14 @@ function Actions.openJavaEditor()
     .setNegativeButton(android.R.string.cancel, nil)
     .show()
   file_name.setHint(res.string.path)
-  file_name.setText(Bean.Path.this_file).setSingleLine(false)
+  file_name.setText(EditorUtil.currentFile()).setSingleLine(false)
 end
 
 function Actions.openLayoutHelper()
   if not requireOpenFile() then return end
   EditorUtil.save()
   activity.newActivity(ActivityUtil.path("layouthelper"), {
-    Bean.Path.this_file,
+    EditorUtil.currentFile(),
     Bean.Path.app_root_pro_dir .. "/" .. mToolBar.getTitle()
   })
 end
@@ -297,7 +297,7 @@ end
 function Actions.runCurrent()
   if not requireOpenFile() then return end
   EditorUtil.save()
-  RunLauncher.launchScript(this, Bean.Path.this_file, { snack = snack })
+  RunLauncher.launchScript(this, EditorUtil.currentFile(), { snack = snack })
 end
 
 function Actions.runProject()

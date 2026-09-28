@@ -64,9 +64,11 @@ local function closeTabs(paths)
     end)
 end
 
-function _M.add(path)
+function _M.add(path, opts)
+    opts = opts or {}
+    local shouldSelect = opts.select ~= false
     if tabTable[path] and tabTable[path].obj then
-        tabTable[path].obj.select()
+        if shouldSelect then tabTable[path].obj.select() end
         return tabTable[path].obj
     end
 
@@ -129,10 +131,8 @@ function _M.add(path)
     tabTable[path].obj = tab
     tabTable[path].obj.tag = tabTable[path].obj.tag or {}
     tabTable[path].obj.tag.path = path
-    tabTable[path].obj.tag.first = path
 
-    mTab.addTab(tab, mTab.getTabCount())
-    tab.select()
+    mTab.addTab(tab, mTab.getTabCount(), shouldSelect)
 
     return tab
 end
@@ -143,7 +143,8 @@ function _M.remove(path)
         return
     end
 
-    if Bean.Path.this_file == path then
+    local EditorUtil = require("mods.utils.EditorUtil")
+    if EditorUtil.shownFile == path then
         saveCurrentEditor()
     end
 

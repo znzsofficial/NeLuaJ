@@ -172,8 +172,8 @@ function _M.syncEditorEmptyState()
   pcall(function()
     if not editor_empty_state then return end
     local EditorUtil = package.loaded["mods.utils.EditorUtil"]
-    local shown = EditorUtil and EditorUtil.shownFile
-    local noFile = not shown or shown == ""
+    local shown = EditorUtil and EditorUtil.currentFile and EditorUtil.currentFile() or ""
+    local noFile = shown == ""
     if noFile then
       editor_empty_state.setVisibility(VISIBLE)
       editor_empty_state.bringToFront()
