@@ -29,12 +29,10 @@ function _M.rootPath()
 end
 
 local function encodeValue(value)
-  if cfg.encode then
-    local ok, encoded = pcall(cfg.encode, value)
-    if ok and encoded ~= nil then return encoded end
-    return nil
-  end
-  if json and json.encode then return json.encode(value) end
+  local encode = cfg.encode or (json and json.encode)
+  if not encode then return nil end
+  local ok, encoded = pcall(encode, value)
+  if ok and type(encoded) == "string" then return encoded end
   return nil
 end
 
@@ -77,39 +75,79 @@ local function ensureDir(dir)
   return false
 end
 
---- 原子读：文件缺失/为空返回 nil（LuaJ 的 io.open 对缺失文件会抛错，须 pcall）
-function _M.read(path)
+--- 外置存储上 close() 会抛 EIO。io.open / read / write 也会抛。这些才需要 pcall。
+--- os.remove 和 os.rename 失败时返回 nil 加错误信息，不会抛错；再用 pcall 会把失败看成成功。
+local function closeQuietly(handle)
+  if not handle then return end
+  pcall(function() handle:close() end)
+end
+
+local function renamed(from, to)
+  return os.rename(from, to) == true
+end
+
+local function removed(path)
+  return os.remove(path) == true
+end
+
+local function readOnce(path)
   local ok, h = pcall(io.open, path, "rb")
   if not ok or not h then return nil end
-  local content = h:read("*a")
-  h:close()
-  if content == "" then return nil end
+  local okRead, content = pcall(function() return h:read("*a") end)
+  closeQuietly(h)
+  if not okRead or content == nil or content == "" then return nil end
   return content
 end
 
---- 原子写：tmp 落盘 → 旧文件让位 .bak → rename 就位；失败尝试回滚。
---- 自动 mkdirs 父目录（luajava 兜底或注入的 ensureDir）。
+--- 原子读：文件缺失、为空或读失败返回 nil。
+--- 正式文件不在、但 .bak 还在时，说明上次替换被打断，读备份并尽量放回原位。
+function _M.read(path)
+  local content = readOnce(path)
+  if content then return content end
+  local backup = readOnce(path .. ".bak")
+  if not backup then return nil end
+  renamed(path .. ".bak", path)
+  return backup
+end
+
+--- 设备上走 LuaFileUtil.replaceText：临时文件 fsync 后原子替换，不先挪走旧文件。
+--- 桌面测试没有这个类时，才退回 .bak 换名。
+local function replaceSynced(path, content)
+  if not (luajava and luajava.kotlinObject) then return nil end
+  local okUtil, util = pcall(luajava.kotlinObject, "com.nekolaska.io.LuaFileUtil")
+  if not okUtil or util == nil or util.replaceText == nil then return nil end
+  local ok, result = pcall(function() return util.replaceText(path, content) end)
+  if ok and result == true then return true end
+  return false
+end
+
+--- 原子写。设备上由 replaceText 完成；否则 tmp 落盘 → 旧文件让位 .bak → rename 就位。
 function _M.writeAtomic(path, content)
+  if type(content) ~= "string" then return false end
+  local synced = replaceSynced(path, content)
+  if synced ~= nil then return synced end
   ensureDir(path:match("^(.*)[/\\][^/\\]*$") or ".")
   local tmp = path .. ".tmp"
   local okOpen, h = pcall(io.open, tmp, "wb")
   if not okOpen or not h then return false end
-  local ok = h:write(content)
-  h:close()
-  if not ok then
-    pcall(os.remove, tmp)
+  local okWrite, wrote = pcall(function() return h:write(content) end)
+  local flushed = okWrite and wrote and pcall(function() h:flush() end)
+  closeQuietly(h)
+  if not flushed then
+    removed(tmp)
     return false
   end
-  pcall(os.remove, path .. ".bak")
-  pcall(os.rename, path, path .. ".bak")
-  if os.rename(tmp, path) then
-    pcall(os.remove, path .. ".bak")
+  removed(path .. ".bak")
+  if readOnce(path) and not renamed(path, path .. ".bak") then
+    removed(tmp)
+    return false
+  end
+  if renamed(tmp, path) then
+    removed(path .. ".bak")
     return true
   end
-  pcall(function()
-    os.rename(path .. ".bak", path)
-    os.remove(tmp)
-  end)
+  renamed(path .. ".bak", path)
+  removed(tmp)
   return false
 end
 
@@ -133,13 +171,14 @@ function _M.exists(ns, key)
   return _M.read(keyPath(ns, key)) ~= nil
 end
 
---- 删除键及其备份；键不存在视为已删除（返回 true）
+--- 删除键、备份和未完成的临时文件。键不存在视为已删除。
+--- 不先读内容：读失败不能被当成已经删掉。
 function _M.delete(ns, key)
   local path = keyPath(ns, key)
-  if not _M.read(path) then return true end
-  pcall(os.remove, path)
-  pcall(os.remove, path .. ".bak")
-  return not _M.read(path)
+  removed(path)
+  removed(path .. ".bak")
+  removed(path .. ".tmp")
+  return _M.read(path) == nil
 end
 
 return _M

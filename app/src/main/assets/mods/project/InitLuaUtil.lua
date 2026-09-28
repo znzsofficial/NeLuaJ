@@ -304,6 +304,15 @@ function _M.save(path, fields, fileUtil)
       raw = fileUtil.read(path) or ""
     end
   end)
+  -- 文件还在却读成空：不能按空文件重写，否则一次读失败会把 init.lua 换成只剩新字段。
+  if raw == "" then
+    local unreadable = false
+    pcall(function()
+      local file = File(path)
+      unreadable = file.isFile() and file.length() > 0
+    end)
+    if unreadable then return false end
+  end
   local body
   if raw == "" then
     body = _M.build(fields)

@@ -12,6 +12,7 @@ import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.StandardCopyOption
 import java.nio.file.attribute.BasicFileAttributes
 import kotlin.concurrent.thread
@@ -30,42 +31,29 @@ import kotlin.streams.toList as toKotlinList
 
 object LuaFileUtil {
     fun create(path: String, content: String) {
-        ensureParent(path)
-        Paths.get(path).writeText(content)
+        if (!replaceText(path, content)) {
+            throw java.io.IOException("Failed to create $path")
+        }
     }
 
     fun write(path: String, content: String): Boolean {
         return write(path, content, File(path))
     }
 
+    /** 只覆盖已经存在的文件。不存在时返回 false，避免把一次失败的保存写成新文件。 */
     fun write(path: String, content: String, file: File): Boolean {
-        if (!file.exists()) return false
-        return try {
-            file.toPath().writeText(content)
-            true
-        } catch (_: Exception) {
-            false
-        }
+        if (!file.isFile) return false
+        return replaceText(path, content)
     }
 
     /**
      * 写入文件；不存在则创建（含父目录）。
-     * 解决 write() 在文件不存在时直接返回 false 的问题。
+     * 内容和复制都先落到同目录临时文件，完成后再替换，避免写到一半把原文件截断。
      */
-    fun writeOrCreate(path: String, content: String): Boolean {
-        return try {
-            ensureParent(path)
-            Paths.get(path).writeText(content)
-            true
-        } catch (_: Exception) {
-            false
-        }
-    }
+    fun writeOrCreate(path: String, content: String): Boolean = replaceText(path, content)
 
-    private fun ensureParent(path: String) {
-        val parent = Paths.get(path).parent ?: return
-        if (!parent.exists()) parent.createDirectories()
-    }
+    /** 同一目录 fsync 后原子替换。 */
+    fun replaceText(path: String, content: String): Boolean = AtomicFile.replaceText(path, content)
 
     fun read(path: String): String {
         return try {
@@ -114,9 +102,7 @@ object LuaFileUtil {
             if (!input.isRegularFile()) return false
             val output = Paths.get(dest)
             if (samePath(input, output)) return false
-            output.parent?.createDirectories()
-            input.copyTo(output, overwrite = true)
-            true
+            AtomicFile.copyReplacing(input, output)
         } catch (_: Exception) {
             false
         }
@@ -134,6 +120,34 @@ object LuaFileUtil {
             // 用真实路径比较。只看绝对路径时，/sdcard 和 /storage/emulated/0 对不上，
             // 复制到自己内部的检查会漏掉。
             if (isSameOrInside(source, target)) return false
+            if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
+                return copyInto(source, target)
+            }
+            val parent = target.parent ?: return false
+            Files.createDirectories(parent)
+            val staging = Files.createTempDirectory(parent, ".copy-")
+            try {
+                if (!copyInto(source, staging)) {
+                    removeTree(staging.toString())
+                    return false
+                }
+                try {
+                    Files.move(staging, target, StandardCopyOption.ATOMIC_MOVE)
+                } catch (_: AtomicMoveNotSupportedException) {
+                    Files.move(staging, target)
+                }
+                true
+            } catch (failure: Exception) {
+                removeTree(staging.toString())
+                throw failure
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun copyInto(source: Path, target: Path): Boolean {
+        return try {
             Files.walk(source).use { stream ->
                 stream.asSequence().forEach { child ->
                     val out = target.resolve(source.relativize(child))
@@ -205,7 +219,15 @@ object LuaFileUtil {
 
     fun rename(oldPath: String, newPath: String): Boolean {
         return try {
-            Files.move(Paths.get(oldPath), Paths.get(newPath))
+            val source = Paths.get(oldPath)
+            val target = Paths.get(newPath)
+            if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) return false
+            target.parent?.createDirectories()
+            try {
+                Files.move(source, target, StandardCopyOption.ATOMIC_MOVE)
+            } catch (_: AtomicMoveNotSupportedException) {
+                Files.move(source, target)
+            }
             true
         } catch (_: Exception) {
             false

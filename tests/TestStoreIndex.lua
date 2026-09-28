@@ -189,6 +189,41 @@ check("kv delete removes", (function()
   return LuaKV.get("ns", "k1", "gone") == "gone"
 end)())
 check("kv no tmp residue", LuaKV.read(kvTestRoot .. "/ns/k1.json.tmp") == nil)
+check("kv read restores a bak left by an interrupted replace", (function()
+  local path = kvTestRoot .. "/ns/recover.json"
+  assert(LuaKV.writeAtomic(path, "good"))
+  assert(os.rename(path, path .. ".bak"))
+  local first = LuaKV.read(path)
+  local second = LuaKV.read(path)
+  return first == "good" and second == "good"
+end)())
+check("kv encode failure does not throw", (function()
+  local previous = {
+    root = function() return kvTestRoot end,
+    encode = kvSer,
+    decode = kvDeser,
+  }
+  LuaKV.configure({
+    root = previous.root,
+    encode = function() error("boom") end,
+    decode = kvDeser,
+  })
+  local ok, result = pcall(LuaKV.set, "ns", "explode", "x")
+  LuaKV.configure(previous)
+  return ok and result == false
+end)())
+check("kv read survives close EIO", (function()
+  local realOpen = io.open
+  io.open = function()
+    return {
+      read = function() return "kept" end,
+      close = function() error("close failed: EIO") end,
+    }
+  end
+  local ok, content = pcall(LuaKV.read, "ignored")
+  io.open = realOpen
+  return ok and content == "kept"
+end)())
 
 -- ── 8. 旧整包 → 按记录 KV 迁移（独立根 + 独立 Store 实例）──
 local legacyRoot = ((os.getenv("TEMP") or "/tmp"):gsub("\\", "/")) .. "/test_conv_legacy_kv"

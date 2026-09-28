@@ -50,7 +50,7 @@ NeLuaJ+ 的内置 AI 助手是面向当前工程的编码 Agent。当前实现�
 | `mods/agent/AgentStorage.lua` | 工程级 Agent 外部存储、工程哈希、锁和临时文件/备份原子写入 |
 | `mods/agent/SkillManager.lua` | 本地 `SKILL.md` 扫描、优先级合并、关键词匹配和提示词注入 |
 | `mods/agent/TextUtil.lua` | UTF-8 安全截断、token 数格式化等共享文本工具 |
-| `mods/utils/LuaKV.lua` | 目录型 KV 存储引擎：每键一文件、tmp+rename 原子写、键名白名单编码；会话记录的存储底座 |
+| `mods/utils/LuaKV.lua` | 目录型 KV 存储引擎：每键一文件、键名白名单编码；设备上经 `LuaFileUtil.replaceText` 同目录 fsync 后原子替换，桌面测试退回 tmp + `.bak` 换名。会话记录的存储底座 |
 
 ### 装配与流式状态边界
 
@@ -151,7 +151,7 @@ name, url, key, model, responses, contextLength, maxTokens
 | `ai_mcp_servers` | 首次写入预设 | MCP 服务器 JSON；默认预设 `context7` 和 `deepwiki` |
 | `ai_aux_provider_id` / `ai_aux_model_id` | `""` | 辅助模型（标题生成、上下文压缩、轻量子代理）按 provider + model 身份持久化；模型列表重排不影响指向，模型被删除时自动清除 |
 | `ai_max_rounds` | `"0"` | 每回合工具轮数上限；`0` = 不限制（默认）。仅计数自动工具续环，用户发送新消息即重置；超出后回合结束并提示，子代理轮次同用此上限 |
-| `ai_conversations` | SharedData 旧键（迁移源，迁移后清除） | 会话已按记录迁至 LuaKV 文件存储：`<agents 根>/kv/conversations/`，每会话一个记录文件（tmp+rename 原子写），`_index.json` 保存元数据索引（首页列表只读索引即可）。每条记录含 `usage`、`todos`、`seq`（稳定排序） |
+| `ai_conversations` | SharedData 旧键（迁移源，迁移后清除） | 会话已按记录迁至 LuaKV 文件存储：`<agents 根>/kv/conversations/`，每会话一个记录文件（设备上同目录 fsync 后原子替换），`_index.json` 保存元数据索引（首页列表只读索引即可）。每条记录含 `usage`、`todos`、`seq`（稳定排序） |
 | `ai_current_conv_by_project` | `{}` | 工程 → 会话 ID 映射；会话列表与恢复按工程读取 |
 | `ai_current_conv_id` | `""` | 最近选择的会话 ID |
 | `ai_current_conv` | `"0"` | 旧版会话索引导入源，读取时迁移 |
@@ -312,7 +312,7 @@ frontmatter 支持 `name`、`description`、`triggers`、`keywords`。匹配使�
 
 ## 会话与生命周期
 
-- 会话按记录存于 `<agents 根>/kv/conversations/`（LuaKV：每会话一个记录文件，tmp+rename 原子写，崩溃只影响正在写的那个会话），`_index.json` 保存元数据索引（首页跨工程列表只读索引，无需解析消息体），每条包含 `projectPath`；会话列表和当前选择按工程过滤。SharedData 旧 `ai_conversations` 键是迁移源，迁移成功后清除。
+- 会话按记录存于 `<agents 根>/kv/conversations/`（LuaKV：每会话一个记录文件。设备上由 `LuaFileUtil.replaceText` 在同目录 fsync 后原子替换，替换完成前旧内容保持原样；桌面测试退回 tmp + `.bak` 换名。读成功后 `close` 的 EIO 不丢内容，正式文件缺失时仍可读 `.bak`）。`_index.json` 保存元数据索引（首页跨工程列表只读索引，无需解析消息体），每条包含 `projectPath`；会话列表和当前选择按工程过滤。SharedData 旧 `ai_conversations` 键是迁移源，迁移成功后清除。
 - 会话保存用户/assistant/tool 消息、结构化工具调用和结果、reasoning、Responses 原始 output/origin、continuation state 和请求错误。
 - 新会话默认以首条用户消息去换行后的前 30 个字符命名；首轮问答完成后由辅助模型异步生成简短标题（不超过 16 字、与对话同语言）替换默认名，生成失败时保留默认名。
 - 重开会话时按记录的 `skills` 名单恢复激活技能（`SkillManager.findByName` 重查正文；同名技能内容已变更则为新内容，找不到则不恢复）。后续发送仍按消息重新匹配。

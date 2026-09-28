@@ -125,8 +125,8 @@ local function showProjectMenu(project)
         .setMessage(string.format(res.string.confirm_delete, project.appName or project.name))
         .setPositiveButton(res.string.delete, function()
           if not isProjectRoot(project.path) then return end
-          local ok = pcall(function() return LuaFileUtil.removeTree(project.path) end)
-          if not ok or File(project.path).exists() then
+          local called, removed = pcall(function() return LuaFileUtil.removeTree(project.path) end)
+          if not called or removed ~= true or File(project.path).exists() then
             pcall(function() Toast.makeText(activity, res.string.ai_delete_failed, Toast.LENGTH_SHORT).show() end)
             return
           end
