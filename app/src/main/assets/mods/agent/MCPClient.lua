@@ -2,6 +2,7 @@
 --- 配置存于 shared data "ai_mcp_servers"（JSON 数组）
 local _M = {}
 local Protocol = require("mods.agent.MCPProtocol")
+local McpTransport = require("mods.agent.McpTransport")
 local ReentrantLock = luajava.bindClass("java.util.concurrent.locks.ReentrantLock")
 local McpHttpClient = luajava.bindClass("com.nekolaska.mcp.McpHttpClient")
 local initLock = ReentrantLock()
@@ -134,117 +135,7 @@ transportHeaders = {
   ["mcp-session-id"] = true,
 }
 
-local function rpcRequest(server, method, params, id, extraHeaders)
-  local url = server.url or ""
-  if url == "" then return nil, "服务器地址为空" end
-  local valid, validationError = validateServer(server)
-  if not valid then return nil, validationError end
-  -- 恢复持久化的会话状态（getServers 每次返回新表，不能只存 server 字段）
-  local key = serverKey(server)
-  local st = serverState(key)
-  st.server = server
-  if st and method ~= "initialize" then
-    if not server.sessionId and st.sessionId then server.sessionId = st.sessionId end
-    if not server.protocolVersion and st.protocolVersion then server.protocolVersion = st.protocolVersion end
-  end
-  local headers = {}
-  if type(server.headers) == "table" then
-    for k, v in pairs(server.headers) do
-      -- Transport headers come from the negotiated request state. Let custom
-      -- configuration supply authentication and vendor headers only.
-      if not transportHeaders[tostring(k):lower()] then headers[k] = tostring(v) end
-    end
-  end
-  -- 注意：不要在此手动设置 Content-Type，okhttp.postJson 会从请求体自动附带
-  -- application/json; charset=utf-8，重复添加会导致部分服务器返回 400
-  headers["Accept"] = "application/json, text/event-stream"
-  local proto = server.protocolVersion or DEFAULT_PROTO
-  -- 2026-07-28 removed Streamable HTTP sessions. Keep the legacy session
-  -- path only for older servers that explicitly still use it.
-  if usesLegacySession(proto) and server.sessionId and server.sessionId ~= "" then
-    headers["Mcp-Session-Id"] = server.sessionId
-  end
-  for key, value in pairs(extraHeaders or {}) do headers[key] = tostring(value) end
-  local sentSessionId = server.sessionId
-  headers["MCP-Protocol-Version"] = proto
-  headers["Mcp-Method"] = method
-  if params and (params.name or params.uri) then
-    headers["Mcp-Name"] = encodeHeaderValue(params.name or params.uri)
-  end
-  -- 不要向调用方的 arguments 表写入协议元数据。
-  local paramsObj = {}
-  for k, v in pairs(params or {}) do paramsObj[k] = v end
-  paramsObj._meta = {
-    ["io.modelcontextprotocol/protocolVersion"] = proto,
-  }
-  if isModernProtocol(proto) then
-    paramsObj._meta["io.modelcontextprotocol/clientInfo"] = {
-      name = "NeLuaJ+",
-      version = "1.0",
-    }
-    paramsObj._meta["io.modelcontextprotocol/clientCapabilities"] = {}
-  end
-  local payload = {
-    jsonrpc = "2.0",
-    method = method,
-    params = paramsObj,
-  }
-  local requestId = id == false and nil or (id or nextRequestId())
-  if requestId then payload.id = requestId end
-  local body = json.encode(payload)
-  if not body or body == "" then return nil, "请求体编码失败" end
-  local okCall, res = pcall(function()
-    return agentMcpHttp.postJson(url, body, headers, requestId or -1)
-  end)
-  if not okCall then return nil, "请求异常: " .. tostring(res) end
-  if res == nil then return nil, "无响应" end
-  -- Legacy servers may mint a session ID. New Streamable HTTP servers do not.
-  local okSid, sid = pcall(function() return res.header("Mcp-Session-Id") end)
-  if usesLegacySession(proto) and okSid and sid and sid ~= "" then
-    local st2 = _M._serverState[key]
-    if not sentSessionId or not st2 or not st2.sessionId or st2.sessionId == sentSessionId then
-      server.sessionId = sid
-      st2.sessionId = sid
-      st2.server = server
-    end
-  end
-  local okCode, code = pcall(function() return res.code() end)
-  if okCode and type(code) == "number" and code >= 400 then
-    -- 读取错误响应体，便于定位（如协议版本不支持、缺少会话等）
-    local errDetail = ""
-    local okErrBody, errBody = pcall(function()
-      return res.body()
-    end)
-    if okErrBody and errBody and errBody ~= "" then
-      local e = errBody:gsub("%s+", " ")
-      if #e > 500 then e = e:sub(1, 500) .. "…" end
-      errDetail = "：" .. e
-    end
-    if code == 404 and usesLegacySession(proto) and sentSessionId and sentSessionId ~= "" then
-      local currentState = _M._serverState[key]
-      if currentState and currentState.sessionId and currentState.sessionId ~= sentSessionId then
-        server.sessionId = currentState.sessionId
-      else
-        if server.sessionId == sentSessionId then server.sessionId = nil end
-        _M._serverState[key] = nil
-        _M._initCache[key] = nil
-      end
-      _M._toolsCache[key] = nil
-      return nil, "MCP_SESSION_EXPIRED"
-    end
-    return nil, "HTTP " .. tostring(code) .. "（" .. tostring(method) .. "）" .. errDetail
-  end
-  -- 通知没有响应体，2xx 即视为成功，不进入 JSON 解析。
-  if id == false then
-    return true, nil
-  end
-  local okBody, respBody = pcall(function() return res.body() end)
-  if not okBody then return nil, "读取响应失败: " .. tostring(respBody) end
-  local data = respBody or ""
-  local okJ, decoded = pcall(json.decode, data)
-  if not okJ then return nil, "JSON 解析失败: " .. data:sub(1, 200) end
-  return decoded, nil
-end
+local rpcRequest, legacySseRequest
 
 local function legacySseHeaders(server)
   local headers = { Accept = "text/event-stream" }
@@ -259,62 +150,6 @@ local function shouldTryLegacySse(err)
   return message:match("^HTTP 400") ~= nil
     or message:match("^HTTP 404") ~= nil
     or message:match("^HTTP 405") ~= nil
-end
-
-local function legacySseRequest(server, method, params, id)
-  local key = serverKey(server)
-  local state = serverState(key)
-  local connection = state.sseConnection
-  if not connection then return nil, "旧版 MCP SSE 连接未建立" end
-  if not connection.isUsable() then
-    pcall(function() connection.close() end)
-    state.sseConnection = nil
-    state.mode = nil
-    state.sseAttempted = nil
-    _M._initCache[key] = nil
-    return nil, "旧版 MCP SSE 连接已断开: " .. tostring(connection.getError() or "")
-  end
-  local endpoint = connection.awaitEndpoint(10000)
-  if not endpoint or endpoint == "" then
-    return nil, "旧版 MCP SSE 未提供消息端点: " .. tostring(connection.getError() or "超时")
-  end
-  local requestId = id == false and nil or (id or nextRequestId())
-  local payload = { jsonrpc = "2.0", method = method, params = params or {} }
-  if requestId then payload.id = requestId end
-  local okBody, body = pcall(json.encode, payload)
-  if not okBody or not body or body == "" then return nil, "请求体编码失败" end
-  if requestId then connection.prepareResponse(tostring(requestId)) end
-  local okPost, response = pcall(function()
-    return agentMcpHttp.postJson(endpoint, body, legacySseHeaders(server), -1)
-  end)
-  if not okPost or not response then
-    if requestId then connection.cancelResponse(tostring(requestId)) end
-    return nil, "旧版 MCP POST 失败: " .. tostring(response)
-  end
-  local code = tonumber(response.code()) or 0
-  if code < 200 or code >= 300 then
-    local detail = ""
-    pcall(function() detail = tostring(response.body() or "") end)
-    if requestId then connection.cancelResponse(tostring(requestId)) end
-    return nil, "HTTP " .. tostring(code) .. "（" .. method .. "）"
-      .. (detail ~= "" and "：" .. detail:sub(1, 500) or "")
-  end
-  if not requestId then return true, nil end
-  local raw = connection.awaitResponse(tostring(requestId), LEGACY_SSE_TIMEOUT_MS)
-  if not raw then
-    if not connection.isUsable() then
-      pcall(function() connection.close() end)
-      state.sseConnection = nil
-      state.mode = nil
-      state.sseAttempted = nil
-      _M._initCache[key] = nil
-      return nil, "旧版 MCP SSE 连接已断开: " .. tostring(connection.getError() or "")
-    end
-    return nil, "旧版 MCP SSE 等待响应超时"
-  end
-  local okJson, decoded = pcall(json.decode, raw)
-  if not okJson then return nil, "旧版 MCP SSE JSON 解析失败: " .. tostring(decoded) end
-  return decoded, nil
 end
 
 local function requestForServer(server)
@@ -336,6 +171,25 @@ serverState = function(key)
   end
   return st
 end
+
+local transport = McpTransport.create({
+  client = _M,
+  http = agentMcpHttp,
+  protocol = Protocol,
+  validateServer = validateServer,
+  serverKey = serverKey,
+  serverState = serverState,
+  nextRequestId = nextRequestId,
+  transportHeaders = transportHeaders,
+  usesLegacySession = usesLegacySession,
+  isModernProtocol = isModernProtocol,
+  encodeHeaderValue = encodeHeaderValue,
+  defaultProtocol = DEFAULT_PROTO,
+  legacySseHeaders = legacySseHeaders,
+  sseTimeout = LEGACY_SSE_TIMEOUT_MS,
+})
+rpcRequest = transport.http
+legacySseRequest = transport.sse
 
 function _M.ensureInitialized(server)
   local key = serverKey(server)

@@ -6,6 +6,7 @@ local _M = {}
 local AgentChat = require("mods.agent.AgentChat")
 local TodoManager = require("mods.agent.TodoManager")
 local SubagentRunner = require("mods.agent.SubagentRunner")
+local Contracts = require("mods.agent.Contracts")
 local S = res.string
 
 -- 编辑器刷新依赖 EditorUtil 全局；自行 import，不依赖 ChatUI 的副作用
@@ -28,6 +29,22 @@ local state = {
   retryPayloads = setmetatable({}, { __mode = "k" }),
   failedToolCalls = {},
 }
+local nextStreamId = 0
+
+local function streamSnapshot()
+  local stream = state.activeStream
+  if not stream then return nil end
+  return { id = stream.id, generation = stream.generation, text = stream.text }
+end
+
+local function publishStream()
+  if hooks.onStreamChanged then hooks.onStreamChanged(streamSnapshot()) end
+end
+
+local function clearStream()
+  state.activeStream = nil
+  publishStream()
+end
 
 local function getMessages() return hooks.getMessages() end
 
@@ -76,12 +93,12 @@ function _M.isActive() return state.loading end
 
 function _M.generation() return state.generation end
 
-function _M.activeStream() return state.activeStream end
+function _M.activeStream() return streamSnapshot() end
 
 function _M.rerenderStream()
   local stream = state.activeStream
-  if stream and stream.generation == state.generation and stream.render then
-    stream.render()
+  if stream and stream.generation == state.generation then
+    publishStream()
   end
 end
 
@@ -112,7 +129,7 @@ function _M.invalidate()
   if hooks.cancelToolConfirm then hooks.cancelToolConfirm() end
   state.generation = state.generation + 1
   state.stopRequested = false
-  state.activeStream = nil
+  clearStream()
   AgentChat.cancelPendingRequest()
   if AgentChat.cancelPendingTools then AgentChat.cancelPendingTools() end
   local stopTool = state.activeToolStop
@@ -328,7 +345,7 @@ executeToolCalls = function(toolCalls, index, results, onAllDone, generation)
     hooks.refreshMessageList()
     if stopAfterResult then
       _M.hideLoading()
-      state.activeStream = nil
+      clearStream()
       local messages2 = getMessages()
       messages2[#messages2 + 1] = {
         role = "assistant",
@@ -420,12 +437,10 @@ function _M.sendRaw(apiMessages, isContinue)
   end
 
   local fullResponse = ""
-  local streamState = { generation = generation, text = "" }
+  nextStreamId = nextStreamId + 1
+  local streamState = { id = nextStreamId, generation = generation, text = "" }
   state.activeStream = streamState
-  if hooks.makeStreamRender then
-    streamState.render = hooks.makeStreamRender(streamState)
-  end
-  streamState.render()
+  publishStream()
 
   AgentChat.sendStream(apiMessages, {
     onPrepared = function(usage)
@@ -439,7 +454,7 @@ function _M.sendRaw(apiMessages, isContinue)
       _M.setLoadingStatus(S.ai_generating)
       fullResponse = fullResponse .. chunk
       streamState.text = fullResponse
-      streamState.render()
+      publishStream()
     end,
     -- 自动重试前清空已流出的内容，避免失败段落重复拼接
     onRetry = function()
@@ -447,7 +462,7 @@ function _M.sendRaw(apiMessages, isContinue)
       fullResponse = ""
       streamState.text = ""
       _M.setLoadingStatus(S.ai_retrying)
-      streamState.render()
+      publishStream()
     end,
     onToolCalls = function(toolCalls, text, reasoningContent, responseOutput, responseOrigin)
       if not isCurrentRequest() or state.stopRequested then return end
@@ -485,7 +500,7 @@ function _M.sendRaw(apiMessages, isContinue)
       local messages = getMessages()
       messages[#messages + 1] = assistantMsg
       hooks.saveHistory()
-      state.activeStream = nil
+      clearStream()
       hooks.refreshMessageList()
 
       -- 执行工具调用
@@ -515,7 +530,7 @@ function _M.sendRaw(apiMessages, isContinue)
     onEmptyAfterTools = function()
       if not isCurrentRequest() then return end
       _M.hideLoading()
-      state.activeStream = nil
+      clearStream()
       -- The tool result is already in history. Do not add a blank assistant
       -- message, otherwise the next continuation may lose the tool context.
       local messages = getMessages()
@@ -529,7 +544,7 @@ function _M.sendRaw(apiMessages, isContinue)
     onDone = function(text, incomplete, responseOutput, responseOrigin, reasoningContent)
       if not isCurrentRequest() then return end
       _M.hideLoading()
-      state.activeStream = nil
+      clearStream()
       local assistantMsg = { role = "assistant", content = text }
       if type(responseOutput) == "table" and #responseOutput > 0 and responseOrigin and responseOrigin ~= "" then
         assistantMsg.response_output = responseOutput
@@ -547,7 +562,7 @@ function _M.sendRaw(apiMessages, isContinue)
     onError = function(err)
       if not isCurrentRequest() then return end
       _M.hideLoading()
-      state.activeStream = nil
+      clearStream()
       -- 用户主动停止：保留已生成部分，不显示错误
       if tostring(err):lower():match("cancel") then
         local messages = getMessages()
@@ -648,7 +663,15 @@ end
 -- 其余为渲染与确认钩子。
 
 function _M.configure(options)
-  hooks = options or {}
+  hooks = Contracts.callbacks("AgentTurn", options, {
+    "getMessages", "setMessages", "resetTurnHistory", "saveHistory",
+    "refreshMessageList", "isToolError", "showToolConfirm",
+  }, {
+    "showViews", "hideViews", "setLoadingStatusView", "isPanelVisible",
+    "scrollDown", "updateContextUsage", "addToolBubble", "cancelToolConfirm",
+    "toolDisplayName", "reportUsage", "onTurnSettled",
+    "setConversationRunning", "onRequestError", "onStreamChanged",
+  })
 end
 
 return _M

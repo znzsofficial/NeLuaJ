@@ -6,6 +6,16 @@ _M.DEFAULT_PROTOCOL = "2026-07-28"
 _M.LEGACY_DEFAULT_PROTOCOL = "2025-11-25"
 _M.LEGACY_PROTOCOLS = { "2025-11-25", "2025-06-18", "2025-03-26" }
 
+--- Shared envelope for both HTTP transports. false explicitly means notification.
+function _M.newRequest(method, params, id, allocateId)
+  local payload = { jsonrpc = "2.0", method = method, params = params or {} }
+  if id ~= false then
+    if id == nil then id = allocateId() end
+    payload.id = id
+  end
+  return payload
+end
+
 function _M.serverKey(server)
   local parts = { tostring(server.url or "") }
   local headers = server.headers

@@ -65,7 +65,8 @@ if ($Check) {
 # ── 行为测试模式 ──
 $suites = @(
   "TestTodo", "TestPatch", "TestRegistry", "TestSubagent",
-  "TestParallel", "TestMarkdown", "TestTextUtil", "TestStoreIndex"
+  "TestParallel", "TestMarkdown", "TestTextUtil", "TestStoreIndex", "TestAgentUi",
+  "TestMcpNotifications", "TestAgentTurn", "TestSessionState"
 )
 if ($Suite) { $suites = @($Suite) }
 

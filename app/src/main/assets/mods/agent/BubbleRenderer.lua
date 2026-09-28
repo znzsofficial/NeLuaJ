@@ -6,6 +6,7 @@ local _M = {}
 local AgentChat = require("mods.agent.AgentChat")
 local AgentTurn = require("mods.agent.AgentTurn")
 local Markdown = require("mods.agent.Markdown")
+local Contracts = require("mods.agent.Contracts")
 
 local renderMarkdown = Markdown.renderMarkdown
 local splitCodeBlocks = Markdown.splitCodeBlocks
@@ -48,7 +49,10 @@ local GONE = 8
 local hooks = {}
 
 function _M.configure(options)
-  hooks = options or {}
+  hooks = Contracts.callbacks("BubbleRenderer", options, {
+    "getContainer", "getMessages", "saveHistory", "isToolError",
+    "toolDisplayName", "insertCode", "onRegenerate", "onEditRequest",
+  }, { "scrollDown", "isPanelVisible" })
 end
 
 local function scrollDown()

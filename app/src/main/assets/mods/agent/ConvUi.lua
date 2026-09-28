@@ -7,6 +7,7 @@ local _M = {}
 local AgentChat = require("mods.agent.AgentChat")
 local AgentTurn = require("mods.agent.AgentTurn")
 local TextUtil = require("mods.utils.TextUtil")
+local Contracts = require("mods.agent.Contracts")
 
 local ColorStateList = luajava.bindClass("android.content.res.ColorStateList")
 local MaterialAlertDialogBuilder = luajava.bindClass("com.google.android.material.dialog.MaterialAlertDialogBuilder")
@@ -41,7 +42,9 @@ local GONE = 8
 local hooks = {}
 
 function _M.configure(options)
-  hooks = options or {}
+  hooks = Contracts.callbacks("ConvUi", options, {
+    "onSwitch", "onNew", "onAfterDelete", "onRenamed",
+  })
 end
 
 local function onSwitch(conv) return hooks.onSwitch and hooks.onSwitch(conv) end

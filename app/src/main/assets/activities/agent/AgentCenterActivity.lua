@@ -102,7 +102,9 @@ local function refresh()
   for _, record in ipairs(all) do
     local same = normPath(record.projectPath) == currentProject
     if scope == "all" or same then
-      rows[#rows + 1] = { conv = record, projectName = same and nil or record.projectPath }
+      local projectName
+      if not same then projectName = record.projectPath end
+      rows[#rows + 1] = { conv = record, projectName = projectName }
     end
   end
   ConvList.renderList(ui.centerList, rows, onOpen)

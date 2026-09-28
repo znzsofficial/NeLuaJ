@@ -22,6 +22,7 @@ local DialogInterface = luajava.bindClass("android.content.DialogInterface")
 import "androidx.core.graphics.ColorUtils"
 
 local AgentChat = require("mods.agent.AgentChat")
+local Session = require("mods.agent.SessionState")
 local AgentTurn = require("mods.agent.AgentTurn")
 local MCPClient = require("mods.agent.MCPClient")
 local TodoManager = require("mods.agent.TodoManager")
@@ -54,19 +55,16 @@ local function dp(n) return this.dpToPx(n) end
 local VISIBLE = 0
 local GONE = 8
 
-local messages = {}
+-- 消息数组只存在于 Session。每次读取都取当前表，避免替换后还拿着旧别名。
+local function messages()
+  return Session.messages()
+end
 local dialog = nil
 local views = {}
+-- View ownership stays here; AgentTurn only publishes plain stream snapshots.
+local streamView = {}
 local activeToolConfirm = nil
 local editingMessageIndex = nil
-local undoTurns = {}
-local redoTurns = {}
-local activeConversationId = nil
-local conversationLoaded = false
-local activeConversationProjectPath = nil
-local activeConversationHadMessages = false
--- 会话累计用量（主请求次数与估算输入 token），随会话记录持久化
-local convUsage = { requests = 0, tokens = 0 }
 local titleInFlight = false
 -- 消息 → 气泡视图索引（loadHistory 重建），供会话内搜索跳转定位
 local bubbleByMessage = {}
@@ -76,6 +74,7 @@ local bubbleByMessage = {}
 
 -- 前向声明
 local saveHistory, loadHistory, showModelManager, showModelPicker, showConvManager, showConvList, showSettings, addMessageBubble, addToolBubble, updateProjectLabel, sendMessage, addRequestErrorBubble
+local regenerateLastTurn, editUserMessage
 
 -- 任务计划随会话记录的 todos 字段持久化：saveHistory 每次落盘都镜像
 -- TodoManager 的当前状态，因此工具更新只需在主线程 commit 状态即可。
@@ -197,18 +196,6 @@ end
 -- 容器/消息表/回调节点经 configure 注入；渲染入口保持原局部名转发，
 -- loadHistory / AgentTurn 钩子 / SubagentRunner 进度等调用点零改动。
 local BubbleRenderer = require("mods.agent.BubbleRenderer")
-BubbleRenderer.configure({
-  scrollDown = scrollDown,
-  isPanelVisible = isPanelVisible,
-  getContainer = function() return views.msgContainer end,
-  getMessages = function() return messages end,
-  saveHistory = function(updates) saveHistory(updates) end,
-  isToolError = isToolError,
-  toolDisplayName = toolDisplayName,
-  insertCode = function(code) _M.insertCode(code) end,
-  onRegenerate = regenerateLastTurn,
-  onEditRequest = editUserMessage,
-})
 addMessageBubble = BubbleRenderer.renderMessage
 addToolBubble = BubbleRenderer.renderTool
 
@@ -303,8 +290,9 @@ local function updateContextUsage(usage)
   end
   views.ctxUsage.setTextColor(color)
   local text = label .. " · " .. used .. "/" .. budget
-  if convUsage.requests > 0 then
-    text = text .. " · " .. S.ai_usage_total:format(convUsage.requests, fmtTokens(convUsage.tokens))
+  local usage = Session.usage()
+  if usage.requests > 0 then
+    text = text .. " · " .. S.ai_usage_total:format(usage.requests, fmtTokens(usage.tokens))
   end
   views.ctxUsage.setText(text)
 end
@@ -312,13 +300,13 @@ end
 --- 首轮问答完成后用辅助模型异步生成简短会话标题（替换“首条消息前 30 字”默认名）。
 --- 生成成功后落盘 name 与 titled 标记；失败保持默认名，下个回合结束时重试。
 local function maybeGenerateTitle()
-  if titleInFlight or AgentTurn.isActive() or not conversationLoaded then return end
+  if titleInFlight or AgentTurn.isActive() or not Session.loaded() then return end
   local conv = AgentChat.getCurrentConv()
   if not conv or conv.titled then return end
   if #AgentChat.loadModels() == 0 then return end
-  local convId = activeConversationId
+  local convId = Session.id()
   local firstUser, firstAssistant
-  for _, msg in ipairs(messages) do
+  for _, msg in ipairs(messages()) do
     if not firstUser and msg.role == "user" and not msg.compressed_summary
         and tostring(msg.content or "") ~= "" then
       firstUser = tostring(msg.content)
@@ -368,7 +356,7 @@ local function maybeGenerateTitle()
     onDone = function(title)
       titleInFlight = false
       -- 会话已切换时不落盘，避免写错对象
-      if not conversationLoaded or activeConversationId ~= convId then return end
+      if not Session.loaded() or Session.id() ~= convId then return end
       title = settleTitle(title)
       if title == "" then return end
       saveHistory({ name = title, titled = true })
@@ -389,26 +377,15 @@ end
 
 local function undoLastTurn()
   if AgentTurn.isActive() then return false end
-  local start
-  for i = #messages, 1, -1 do
-    if messages[i].role == "user" then start = i break end
-  end
-  if not start then return false end
-  local removed = {}
-  for i = start, #messages do removed[#removed + 1] = messages[i] end
-  for i = #messages, start, -1 do table.remove(messages, i) end
-  undoTurns[#undoTurns + 1] = removed
-  table.insert(redoTurns, 1, removed)
-  saveHistory(#messages == 0 and { __allow_empty = true } or nil)
+  if not Session.undoTurn() then return false end
+  saveHistory(#Session.messages() == 0 and { __allow_empty = true } or nil)
   refreshMessageList()
   return true
 end
 
 local function redoLastTurn()
-  if AgentTurn.isActive() or #redoTurns == 0 then return false end
-  local restored = table.remove(redoTurns, 1)
-  for _, message in ipairs(restored) do messages[#messages + 1] = message end
-  undoTurns[#undoTurns + 1] = restored
+  if AgentTurn.isActive() or not Session.canRedo() then return false end
+  if not Session.redoTurn() then return false end
   saveHistory()
   refreshMessageList()
   return true
@@ -456,9 +433,9 @@ end
 --- 导出当前会话为 Markdown，经系统分享面板发出
 local function exportConversation()
   local conv = AgentChat.getCurrentConv()
-  if not conv or #messages == 0 then return end
+  if not conv or #messages() == 0 then return end
   local out = { "# " .. convName(conv), "" }
-  for _, msg in ipairs(messages) do
+  for _, msg in ipairs(messages()) do
     if msg.role == "user" then
       out[#out + 1] = "## " .. S.ai_you
       out[#out + 1] = ""
@@ -495,7 +472,7 @@ end
 
 --- 会话内搜索：实时过滤消息内容，点击结果跳到对应气泡
 local function showConvSearch()
-  if #messages == 0 then return end
+  if #messages() == 0 then return end
   local searchViews = {}
   local searchDlg
   local content = loadlayout({
@@ -548,7 +525,7 @@ local function showConvSearch()
     if query == "" then return end
     local lowerQuery = query:lower()
     local count = 0
-    for _, msg in ipairs(messages) do
+    for _, msg in ipairs(messages()) do
       if count >= 30 then break end
       local text = tostring(msg.content or "")
       local lowerText = text:lower()
@@ -664,15 +641,15 @@ local function showCommandMenu()
   end
 
   local hasTurn = false
-  for _, message in ipairs(messages) do
+  for _, message in ipairs(messages()) do
     if message.role == "user" then hasTurn = true break end
   end
   addSection(S.ai_command_conversation)
-  addAction(S.ai_compress_context, not AgentTurn.isActive() and #messages > 0, compressCurrentContext)
+  addAction(S.ai_compress_context, not AgentTurn.isActive() and #messages() > 0, compressCurrentContext)
   addAction(S.ai_undo_turn, not AgentTurn.isActive() and hasTurn, undoLastTurn)
-  addAction(S.ai_redo_turn, not AgentTurn.isActive() and #redoTurns > 0, redoLastTurn)
-  addAction(S.ai_search_conv, #messages > 0, showConvSearch)
-  addAction(S.ai_export_conv, #messages > 0, exportConversation)
+  addAction(S.ai_redo_turn, not AgentTurn.isActive() and Session.canRedo(), redoLastTurn)
+  addAction(S.ai_search_conv, #messages() > 0, showConvSearch)
+  addAction(S.ai_export_conv, #messages() > 0, exportConversation)
   addSection(S.ai_command_files)
   addAction(S.ai_undo_file, not AgentTurn.isActive() and AgentChat.hasFileUndo(), undoFileChange)
   addAction(S.ai_redo_file, not AgentTurn.isActive() and AgentChat.hasFileRedo(), redoFileChange)
@@ -809,15 +786,8 @@ end
 -- ─── 会话持久化 ──
 
 saveHistory = function(updates)
-  if not conversationLoaded or not activeConversationId or activeConversationId == "" then
-    return false
-  end
   local projectPath = AgentChat.getCurrentProjectPath()
-  if activeConversationProjectPath ~= projectPath then return false end
-  local allowEmpty = type(updates) == "table" and updates.__allow_empty == true
-  if #messages == 0 and activeConversationHadMessages and not allowEmpty then
-    return false
-  end
+  if not Session.canPersist(projectPath, updates) then return false end
   -- 镜像同步会话级状态：任务计划与累计用量随每次落盘持久化，
   -- 与工具回合的状态提交合并为同一次写入
   local merged = updates
@@ -827,17 +797,16 @@ saveHistory = function(updates)
       for key, value in pairs(updates) do merged[key] = value end
     end
     merged.todos = TodoManager.get() or {}
-    merged.usage = { requests = convUsage.requests, tokens = convUsage.tokens }
+    merged.usage = Session.usageRecord()
   end
-  local saved = AgentChat.saveConversation(activeConversationId, messages, merged)
-  if saved then activeConversationHadMessages = #messages > 0 end
+  local saved = AgentChat.saveConversation(Session.id(), Session.messages(), merged)
+  if saved then Session.syncHadMessages() end
   return saved
 end
 
 loadHistory = function(resetTurnHistory)
   if resetTurnHistory ~= false then
-    undoTurns = {}
-    redoTurns = {}
+    Session.resetTurns()
     if AgentChat.clearActiveSkill then AgentChat.clearActiveSkill() end
   end
   local conv = AgentChat.getCurrentConv()
@@ -845,30 +814,21 @@ loadHistory = function(resetTurnHistory)
     local created = AgentChat.createConversation()
     conv = created or AgentChat.getCurrentConv()
   end
-  activeConversationId = conv and conv.id or nil
-  activeConversationProjectPath = conv and AgentChat.getCurrentProjectPath() or nil
-  messages = conv and conv.messages or {}
+  Session.activate(conv, AgentChat.getCurrentProjectPath())
   -- 会话的任务计划随会话切换整体注入（空/缺失即清空）
   TodoManager.set(conv and conv.todos or nil)
-  -- 累计用量随会话载入
-  local savedUsage = type(conv and conv.usage) == "table" and conv.usage or nil
-  convUsage = {
-    requests = tonumber(savedUsage and savedUsage.requests) or 0,
-    tokens = tonumber(savedUsage and savedUsage.tokens) or 0,
-  }
   -- 会话激活技能恢复：按记录的技能名重查正文（无记录/找不到即保持清空）
   if conv and type(conv.skills) == "table" and next(conv.skills) ~= nil then
     pcall(function() AgentChat.restoreSkillFromConv(conv) end)
   end
-  conversationLoaded = conv ~= nil
   -- 上次会话的任务可能被应用退出打断：注入提示并清除标记
-  -- （必须在 conversationLoaded 置位之后，saveHistory 才会真正落盘）
+  -- （必须在 activate 置位之后，saveHistory 才会真正落盘）
   if conv and conv.running and not AgentTurn.isActive() then
     conv.running = false
-    messages[#messages + 1] = { role = "assistant", content = S.ai_task_interrupted }
+    messages()[#messages() + 1] = { role = "assistant", content = S.ai_task_interrupted }
     saveHistory({ running = false })
   end
-  activeConversationHadMessages = #messages > 0
+  Session.syncHadMessages()
   if updateProjectLabel then updateProjectLabel() end
   if views.aiTitle and conv then views.aiTitle.setText(convName(conv)) end
   updatePlanStrip()
@@ -877,17 +837,17 @@ loadHistory = function(resetTurnHistory)
   if container then
     -- 最新用户/AI 消息索引：渲染“编辑重发 / 重新生成”操作行用
     local lastUserIndex, lastAssistantIndex
-    for i = #messages, 1, -1 do
-      if not lastUserIndex and messages[i].role == "user" then lastUserIndex = i end
-      if not lastAssistantIndex and messages[i].role == "assistant"
-          and tostring(messages[i].content or "") ~= "" then
+    for i = #messages(), 1, -1 do
+      if not lastUserIndex and messages()[i].role == "user" then lastUserIndex = i end
+      if not lastAssistantIndex and messages()[i].role == "assistant"
+          and tostring(messages()[i].content or "") ~= "" then
         lastAssistantIndex = i
       end
       if lastUserIndex and lastAssistantIndex then break end
     end
     bubbleByMessage = {}
     local consumedTools = {}
-    for messageIndex, msg in ipairs(messages) do
+    for messageIndex, msg in ipairs(messages()) do
       if msg.role == "user" then
         local row = addMessageBubble("user", msg.content or "", msg,
           { isLastUser = messageIndex == lastUserIndex })
@@ -904,8 +864,8 @@ loadHistory = function(resetTurnHistory)
         if msg.tool_calls then
           local resultById, resultWithoutId = {}, {}
           local scanIndex = messageIndex + 1
-          while scanIndex <= #messages and messages[scanIndex].role == "tool" do
-            local candidate = messages[scanIndex]
+          while scanIndex <= #messages() and messages()[scanIndex].role == "tool" do
+            local candidate = messages()[scanIndex]
             if candidate.tool_call_id and candidate.tool_call_id ~= "" then
               resultById[candidate.tool_call_id] = { index = scanIndex, content = candidate.content or "" }
             else
@@ -938,8 +898,8 @@ loadHistory = function(resetTurnHistory)
         if msg.continuation_state then addMessageBubble("assistant", "", msg) end
       end
     end
-    for messageIndex = #messages, 1, -1 do
-      local message = messages[messageIndex]
+    for messageIndex = #messages(), 1, -1 do
+      local message = messages()[messageIndex]
       if message.role == "user" and message.request_error then
         addRequestErrorBubble(tostring(message.request_error), messageIndex)
         break
@@ -950,7 +910,7 @@ loadHistory = function(resetTurnHistory)
   BubbleRenderer.syncSubtask(SubagentRunner.isRunning() and SubagentRunner.progressInfo() or nil)
   BubbleRenderer.renderSubtaskCard()
   AgentTurn.rerenderStream()
-  return #messages
+  return #messages()
 end
 
 -- ─── 发送消息核心 ──
@@ -1019,7 +979,7 @@ addRequestErrorBubble = function(err, messageIndex)
 
   errorViews.recoverButton.onClick = function()
     if AgentTurn.isActive() then return end
-    local message = messages[messageIndex]
+    local message = messages()[messageIndex]
     if not message or message.role ~= "user" or not message.request_error then
       print(S.ai_request_expired)
       return
@@ -1043,7 +1003,7 @@ addRequestErrorBubble = function(err, messageIndex)
 
   errorViews.editButton.onClick = function()
     if AgentTurn.isActive() then return end
-    local message = messages[messageIndex]
+    local message = messages()[messageIndex]
     if not message or message.role ~= "user" or not views.msgInput then
       print(S.ai_request_expired)
       return
@@ -1069,21 +1029,21 @@ sendMessage = function()
 
   local skill = AgentChat.selectSkill(text)
 
-  for _, message in ipairs(messages) do
+  for _, message in ipairs(messages()) do
     if message.role == "user" then message.request_error = nil end
   end
 
   local editedIndex = editingMessageIndex
   editingMessageIndex = nil
-  if editedIndex and messages[editedIndex] and messages[editedIndex].role == "user" then
-    messages[editedIndex].content = text
-    messages[editedIndex].request_error = nil
-    for index = #messages, editedIndex + 1, -1 do table.remove(messages, index) end
+  if editedIndex and messages()[editedIndex] and messages()[editedIndex].role == "user" then
+    messages()[editedIndex].content = text
+    messages()[editedIndex].request_error = nil
+    for index = #messages(), editedIndex + 1, -1 do table.remove(messages(), index) end
     if views.msgContainer then views.msgContainer.removeAllViews() end
     loadHistory(false)
   else
     addMessageBubble("user", text)
-    messages[#messages + 1] = { role = "user", content = text }
+    messages()[#messages() + 1] = { role = "user", content = text }
   end
   if skill then
     local conv = AgentChat.getCurrentConv()
@@ -1093,7 +1053,7 @@ sendMessage = function()
   else
     saveHistory()
   end
-  redoTurns = {}
+  Session.clearRedo()
 
   if not AgentChat.hasApiKey() then
     addMessageBubble("assistant", S.ai_need_config)
@@ -1118,18 +1078,18 @@ sendMessage = function()
 end
 
 --- 最新一轮“重新生成”：撤销整轮后用原文本重发（上下文按当前编辑器重建）
-local function regenerateLastTurn()
+regenerateLastTurn = function()
   if AgentTurn.isActive() then return false end
   local lastUser
-  for i = #messages, 1, -1 do
-    if messages[i].role == "user" then lastUser = messages[i]; break end
+  for i = #messages(), 1, -1 do
+    if messages()[i].role == "user" then lastUser = messages()[i]; break end
   end
   if not lastUser then return false end
   if not undoLastTurn() then return false end
   local text = tostring(lastUser.content or "")
   addMessageBubble("user", text)
-  messages[#messages + 1] = { role = "user", content = text }
-  redoTurns = {}
+  messages()[#messages() + 1] = { role = "user", content = text }
+  Session.clearRedo()
   saveHistory()
   if not AgentChat.hasApiKey() then
     addMessageBubble("assistant", S.ai_need_config)
@@ -1150,10 +1110,10 @@ local function regenerateLastTurn()
 end
 
 --- 编辑重发：把该用户消息回填输入框并进入编辑态（发送时原地替换并截断后续）
-local function editUserMessage(stateMessage)
+editUserMessage = function(stateMessage)
   if AgentTurn.isActive() then return end
   local index
-  for i, msg in ipairs(messages) do
+  for i, msg in ipairs(messages()) do
     if msg == stateMessage then index = i; break end
   end
   if not index or not views.msgInput then return end
@@ -1166,7 +1126,6 @@ end
 -- 全部供应商/模型/AI 设置对话框原样迁出，模型标签刷新经 configure 注入；
 -- 保留 ChatUI 侧的转发声明，调用点零改动。
 local SettingsUi = require("mods.agent.SettingsUi")
-SettingsUi.configure({ updateModelLabel = updateModelLabel })
 showModelPicker = SettingsUi.showModelPicker
 showModelManager = SettingsUi.showModelManager
 showSettings = SettingsUi.showSettings
@@ -1178,11 +1137,7 @@ local function switchToConversation(conv)
   saveHistory()
   AgentTurn.invalidate()
   AgentChat.setCurrentConv(conv.id)
-  activeConversationId = conv.id
-  activeConversationProjectPath = AgentChat.getCurrentProjectPath()
-  conversationLoaded = true
-  activeConversationHadMessages = false
-  messages = {}
+  Session.beginSwitch(conv.id, AgentChat.getCurrentProjectPath())
   if views.msgContainer then views.msgContainer.removeAllViews() end
   loadHistory()
   if views.aiTitle then views.aiTitle.setText(convName(conv)) end
@@ -1195,13 +1150,8 @@ local function newConversation()
   saveHistory()
   AgentTurn.invalidate()
   local created = AgentChat.createConversation()
-  activeConversationId = created and created.id or nil
-  activeConversationProjectPath = created and AgentChat.getCurrentProjectPath() or nil
-  conversationLoaded = created ~= nil
-  activeConversationHadMessages = false
-  messages = created and created.messages or {}
+  Session.beginCreated(created, AgentChat.getCurrentProjectPath())
   TodoManager.set(nil)
-  convUsage = { requests = 0, tokens = 0 }
   if views.msgContainer then views.msgContainer.removeAllViews() end
   if views.aiTitle then views.aiTitle.setText(S.ai_new_conv) end
   if updateProjectLabel then updateProjectLabel() end
@@ -1210,25 +1160,6 @@ local function newConversation()
 end
 
 local ConvUi = require("mods.agent.ConvUi")
-ConvUi.configure({
-  onSwitch = switchToConversation,
-  onNew = newConversation,
-  onAfterDelete = function(convId)
-    messages = {}
-    if views.msgContainer then views.msgContainer.removeAllViews() end
-    loadHistory()
-    if views.aiTitle then
-      local c = AgentChat.getCurrentConv()
-      if c then views.aiTitle.setText(convName(c)) end
-    end
-  end,
-  onRenamed = function(convId)
-    local c = AgentChat.getCurrentConv()
-    if views.aiTitle and c and c.id == convId then
-      views.aiTitle.setText(convName(c))
-    end
-  end,
-})
 showConvList = ConvUi.showConvList
 showConvManager = ConvUi.showConvManager
 local function addWelcomeCard(title, body)
@@ -1313,12 +1244,12 @@ end
 
 local function clearChat()
   AgentTurn.invalidate()
-  messages = {}
-  activeConversationHadMessages = false
-  if conversationLoaded and activeConversationId and activeConversationId ~= ""
-      and activeConversationProjectPath == AgentChat.getCurrentProjectPath()
-      and AgentChat.clearConversation then
-    AgentChat.clearConversation(activeConversationId)
+  local conversationId = Session.id()
+  local sameProject = Session.loaded() and conversationId and conversationId ~= ""
+      and Session.projectPath() == AgentChat.getCurrentProjectPath()
+  Session.clearMessages()
+  if sameProject and AgentChat.clearConversation then
+    AgentChat.clearConversation(conversationId)
   end
   if views.msgContainer then
     views.msgContainer.removeAllViews()
@@ -1407,6 +1338,7 @@ function _M.show()
   -- 关闭面板只保存会话，不取消后台请求；停止按钮和上下文切换负责取消。
   dialog.setOnDismissListener(function()
     saveHistory()
+    streamView = {}
   end)
 
   if views.btnSend then
@@ -1544,7 +1476,7 @@ function _M.show()
     if not AgentTurn.isActive() then
       local others = {}
       for _, item in ipairs(AgentChat.listConversations()) do
-        if item.id ~= activeConversationId then others[#others + 1] = item.conversation end
+        if item.id ~= Session.id() then others[#others + 1] = item.conversation end
       end
       table.sort(others, function(a, b)
         return tostring(a.updatedAt or "") > tostring(b.updatedAt or "")
@@ -1621,19 +1553,12 @@ end
 function _M.onBeforeProjectChange()
   saveHistory()
   AgentTurn.invalidate()
-  conversationLoaded = false
-  activeConversationId = nil
-  activeConversationProjectPath = nil
-  activeConversationHadMessages = false
+  Session.suspend()
 end
 
 function _M.refreshProjectContext()
   AgentTurn.invalidate()
-  messages = {}
-  activeConversationId = nil
-  activeConversationProjectPath = nil
-  activeConversationHadMessages = false
-  conversationLoaded = false
+  Session.reset()
   if not dialog or not dialog.isShowing() then return end
   if views.msgContainer then views.msgContainer.removeAllViews() end
   loadHistory()
@@ -1661,10 +1586,7 @@ function _M.openConversation(id)
   else
     AgentTurn.invalidate()
     AgentChat.setCurrentConv(target.id)
-    activeConversationId = target.id
-    activeConversationProjectPath = AgentChat.getCurrentProjectPath()
-    conversationLoaded = true
-    activeConversationHadMessages = false
+    Session.select(target.id, AgentChat.getCurrentProjectPath())
     _M.show()
   end
   return true
@@ -1689,6 +1611,37 @@ end
 
 -- ─── 回合状态机装配 ──
 -- 编排逻辑全部位于 AgentTurn；此处注入视图钩子。
+-- All action functions are defined before wiring; missing callbacks fail here.
+BubbleRenderer.configure({
+  scrollDown = scrollDown,
+  isPanelVisible = isPanelVisible,
+  getContainer = function() return views.msgContainer end,
+  getMessages = function() return Session.messages() end,
+  saveHistory = saveHistory,
+  isToolError = isToolError,
+  toolDisplayName = toolDisplayName,
+  insertCode = _M.insertCode,
+  onRegenerate = regenerateLastTurn,
+  onEditRequest = editUserMessage,
+})
+SettingsUi.configure({ updateModelLabel = updateModelLabel })
+ConvUi.configure({
+  onSwitch = switchToConversation,
+  onNew = newConversation,
+  onAfterDelete = function(convId)
+    Session.setMessages({})
+    if views.msgContainer then views.msgContainer.removeAllViews() end
+    loadHistory()
+    if views.aiTitle then
+      local c = AgentChat.getCurrentConv()
+      if c then views.aiTitle.setText(convName(c)) end
+    end
+  end,
+  onRenamed = function(convId)
+    local c = AgentChat.getCurrentConv()
+    if views.aiTitle and c and c.id == convId then views.aiTitle.setText(convName(c)) end
+  end,
+})
 
 -- 子代理的 UI 侧钩子：工具确认复用全局确认对话框，
 -- 状态条实时显示子任务进度，模型请求计入会话用量统计
@@ -1699,10 +1652,7 @@ SubagentRunner.configure({
   setStatus = function(text)
     AgentTurn.setLoadingStatus(text)
   end,
-  reportUsage = function(used)
-    convUsage.requests = convUsage.requests + 1
-    convUsage.tokens = convUsage.tokens + math.max(0, tonumber(used) or 0)
-  end,
+  reportUsage = function(used) Session.addUsage(used) end,
   onProgress = function(info)
     BubbleRenderer.syncSubtask(info)
     BubbleRenderer.renderSubtaskCard()
@@ -1710,12 +1660,9 @@ SubagentRunner.configure({
 })
 
 AgentTurn.configure({
-  getMessages = function() return messages end,
-  setMessages = function(nextMessages) messages = nextMessages end,
-  resetTurnHistory = function()
-    undoTurns = {}
-    redoTurns = {}
-  end,
+  getMessages = function() return Session.messages() end,
+  setMessages = function(nextMessages) Session.setMessages(nextMessages) end,
+  resetTurnHistory = Session.resetTurns,
   showViews = showLoadingViews,
   hideViews = hideLoadingViews,
   setLoadingStatusView = setLoadingStatusView,
@@ -1731,19 +1678,27 @@ AgentTurn.configure({
   end,
   isToolError = function(name, result) return isToolError(name, result) end,
   toolDisplayName = function(name) return toolDisplayName(name) end,
-  reportUsage = function(used)
-    convUsage.requests = convUsage.requests + 1
-    convUsage.tokens = convUsage.tokens + math.max(0, tonumber(used) or 0)
-  end,
+  reportUsage = function(used) Session.addUsage(used) end,
   onTurnSettled = function() maybeGenerateTitle() end,
   setConversationRunning = function(running)
-    if conversationLoaded then saveHistory({ running = running == true }) end
+    if Session.loaded() then saveHistory({ running = running == true }) end
   end,
-  makeStreamRender = function(streamState)
-    return function()
-      if AgentTurn.activeStream() ~= streamState or not isPanelVisible() or not views.msgContainer then return end
-      if streamState.container ~= views.msgContainer or not streamState.bubble
-          or not streamState.bubble.getParent() then
+  onStreamChanged = function(streamState)
+      if not streamState then
+        if streamView.bubble then
+          local parent = streamView.bubble.getParent()
+          if parent then parent.removeView(streamView.bubble) end
+        end
+        streamView = {}
+        return
+      end
+      if not isPanelVisible() or not views.msgContainer then return end
+      if streamView.id ~= streamState.id or streamView.container ~= views.msgContainer
+          or not streamView.bubble or not streamView.bubble.getParent() then
+        if streamView.bubble then
+          local parent = streamView.bubble.getParent()
+          if parent then parent.removeView(streamView.bubble) end
+        end
         local streamViews = {}
         local bubble = loadlayout({
           LinearLayout,
@@ -1758,16 +1713,14 @@ AgentTurn.configure({
             lineSpacingMultiplier = 1.4,
           },
         }, streamViews)
-        streamState.container = views.msgContainer
-        streamState.bubble = bubble
-        streamState.textView = streamViews.aiStreamText
+        streamView = { id = streamState.id, container = views.msgContainer,
+          bubble = bubble, textView = streamViews.aiStreamText }
         local streamLp = LinearLayout.LayoutParams(-1, -2)
         streamLp.bottomMargin = dp(14)
-        streamState.container.addView(bubble, streamLp)
+        streamView.container.addView(bubble, streamLp)
       end
-      if streamState.textView then streamState.textView.setText(streamState.text) end
+      if streamView.textView then streamView.textView.setText(streamState.text) end
       scrollDown()
-    end
   end,
 })
 

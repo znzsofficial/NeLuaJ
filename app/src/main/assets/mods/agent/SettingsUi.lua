@@ -7,6 +7,7 @@ local _M = {}
 
 local AgentChat = require("mods.agent.AgentChat")
 local MCPClient = require("mods.agent.MCPClient")
+local Contracts = require("mods.agent.Contracts")
 
 local ColorStateList = luajava.bindClass("android.content.res.ColorStateList")
 local MaterialAlertDialogBuilder = luajava.bindClass("com.google.android.material.dialog.MaterialAlertDialogBuilder")
@@ -35,12 +36,11 @@ local res = res
 local S = res.string
 local VISIBLE = 0
 
-local injected = {}
 local updateModelLabel = function() end
 
 function _M.configure(options)
-  options = options or {}
-  if options.updateModelLabel then updateModelLabel = options.updateModelLabel end
+  local checked = Contracts.callbacks("SettingsUi", options, { "updateModelLabel" })
+  updateModelLabel = checked.updateModelLabel
 end
 
 local showProviderEditor, showModelEditor, showFetchedModels, showProviderManager
@@ -1269,7 +1269,7 @@ showSettings = function()
       .setNegativeButton(S.ai_cancel, nil)
       .create()
     addDialog.setOnShowListener(function()
-      local positive = addDialog.getButton(DialogInterface.BUTTON_POSITIVE)
+      local positive = addDialog.getButton(-1) -- BUTTON_POSITIVE；校验失败时保留表单
       if not positive then return end
       positive.onClick = function()
         local sname = tostring(inViews.nameInput.getText() or ""):gsub("^%s*(.-)%s*$", "%1")
