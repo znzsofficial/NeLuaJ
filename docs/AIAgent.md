@@ -28,7 +28,8 @@ NeLuaJ+ 的内置 AI 助手是面向当前工程的编码 Agent。当前实现�
 | `mods/agent/AgentTurn.lua` | 回合状态机：generation 守卫、加载状态、keepalive、压缩触发、请求生命周期与工具循环；只读白名单工具组成并行批 |
 | `mods/agent/ChatUI.lua` | 聊天面板装配、流式渲染入口、确认对话框、会话/模型/MCP/设置管理入口 |
 | `mods/agent/SessionState.lua` | 当前会话工作集：消息、用量、身份、持久化保护、回合撤销/重做；不持有视图或存储 |
-| `mods/agent/McpTransport.lua` | MCP Streamable HTTP 与旧版 HTTP+SSE 请求传输；协商和缓存仍在 MCPClient |
+| `mods/agent/McpHttpTransport.lua` / `McpSseTransport.lua` | MCP Streamable HTTP 与旧版 HTTP+SSE 请求传输；协商和缓存仍在 MCPClient |
+| `mods/agent/AsyncScope.lua` | 异步结果归属：同时核对工程、会话和回合 |
 | `mods/agent/Contracts.lua` | UI/回合模块回调契约：检查必需项、类型和未知键；校验通过后才替换依赖 |
 | `mods/agent/BubbleRenderer.lua` | 消息、待办计划、子代理进度、工具调用气泡的构建 |
 | `mods/agent/Markdown.lua` | 气泡 Markdown 渲染（标题、列表、表格、任务列表、分隔线、行内代码等） |
@@ -58,8 +59,9 @@ NeLuaJ+ 的内置 AI 助手是面向当前工程的编码 Agent。当前实现�
 - `AgentTurn` 的流式状态只保存 `id`、`generation` 和 `text`。`activeStream()` 与可选的 `onStreamChanged(snapshot)` 返回副本；结束或作废流时发布 `nil`。不再支持旧的 `makeStreamRender` 钩子。
 - `ChatUI` 独占流式气泡、容器及 TextView 引用，面板关闭时释放本地渲染缓存，重开时通过 `rerenderStream()` 恢复。无渲染钩子时回合仍可运行与保存历史；这不等于已经脱离 Activity/平台依赖。
 - 停止任务保留当前 generation，允许取消回调保存部分输出；切换会话/工程则作废 generation，旧回调不能修改新会话。
-- HTTP 与旧版 SSE 的请求实现在 `McpTransport`。两者共用 `MCPProtocol.newRequest`：显式 `false` 表示通知，不分配 ID。协议协商、会话缓存和工具路由仍由 `MCPClient` 负责。
-- 消息数组、累计用量、当前会话身份和撤销/重做栈只由 `SessionState` 持有。`ChatUI` 每次都读取当前数组，不保留会被替换操作甩开的本地别名，并负责视图与 `AgentChat` 落盘。历史存储格式、MCP 免确认策略和默认无限回合不变。
+- HTTP 与旧版 SSE 分别在 `McpHttpTransport` 和 `McpSseTransport`。两者共用 `MCPProtocol.newRequest`：显式 `false` 表示通知，不分配 ID。协议协商、会话缓存和工具路由仍由 `MCPClient` 负责。
+- 消息数组、累计用量、当前会话身份和撤销/重做栈只由 `SessionState` 持有。`AgentTurn` 直接读写这份状态，不再经界面回调取消息。`ChatUI` 每次都读取当前数组，并负责视图与 `AgentChat` 落盘。
+- 模型请求和工具回调除了 `generation`，还用 `AsyncScope` 核对请求开始时的工程和会话。停止不改变 generation，仍可保存部分结果；只切换会话或工程也会丢弃旧回调。历史存储格式、MCP 免确认策略和默认无限回合不变。
 
 桌面回归：`tests/TestAgentUi.lua` 覆盖装配、新增 MCP 和会话中心；`TestAgentTurn.lua` 覆盖快照隔离、无渲染执行、重试、停止保存与旧回调失效；`TestMcpNotifications.lua` 覆盖两种传输的通知语义。宿主模拟不替代 Android 真机生命周期和布局验证。
 

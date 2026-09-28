@@ -43,7 +43,8 @@ luajava = { bindClass = function(name)
 end }
 local protocol = assert(loadfile(assets .. "mods/agent/MCPProtocol.lua"))()
 package.loaded["mods.agent.MCPProtocol"] = protocol
-package.loaded["mods.agent.McpTransport"] = assert(loadfile(assets .. "mods/agent/McpTransport.lua"))()
+package.loaded["mods.agent.McpHttpTransport"] = assert(loadfile(assets .. "mods/agent/McpHttpTransport.lua"))()
+package.loaded["mods.agent.McpSseTransport"] = assert(loadfile(assets .. "mods/agent/McpSseTransport.lua"))()
 local allocated = 0
 local function allocateId() allocated = allocated + 1; return allocated end
 assert(protocol.newRequest("notification", {}, false, allocateId).id == nil)

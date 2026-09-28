@@ -13,6 +13,8 @@ local function widget()
       return function() dialogs[#dialogs + 1] = v; if v.onShow then v.onShow() end; return v end
     elseif key == "setVisibility" then
       return function(value) assert(type(value) == "number"); v.visibility = value end
+    elseif key == "setText" then
+      return function(text) v.text = text; return v end
     end
     return function() return v end
   end })
@@ -104,6 +106,23 @@ settingsViews.btnAddMcp.onClick()
 assert(dialogs[#dialogs].button, "Add MCP did not bind the positive button")
 assert(type(dialogs[#dialogs].button.onClick) == "function")
 print("PASS Add MCP opens without a global DialogInterface")
+local pendingTest
+mcp.getServers = function()
+  return { { name = "demo", url = "https://example.com/mcp" } }
+end
+mcp.testServerAsync = function(_, callback) pendingTest = callback end
+mcp.setServers = function() end
+mcp.refreshToolsAsync = function() end
+settings.showSettings()
+local mcpRow
+for _, ids in ipairs(layouts) do if ids.testBtn then mcpRow = ids end end
+assert(mcpRow, "MCP row missing")
+mcpRow.testBtn.onClick()
+assert(mcpRow.statusTv.text == "ai_mcp_testing")
+mcpRow.delBtn.onClick()
+pendingTest(true, "late")
+assert(mcpRow.statusTv.text == "ai_mcp_testing", "stale MCP callback updated a replaced row")
+print("PASS replaced MCP rows ignore stale test callbacks")
 
 -- Execute the real standalone activity with two projects and click both rows.
 local centerRows, openCenterRow, finished

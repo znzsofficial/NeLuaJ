@@ -4,6 +4,8 @@
 local _M = {}
 
 local AgentChat = require("mods.agent.AgentChat")
+local Session = require("mods.agent.SessionState")
+local AsyncScope = require("mods.agent.AsyncScope")
 local TodoManager = require("mods.agent.TodoManager")
 local SubagentRunner = require("mods.agent.SubagentRunner")
 local Contracts = require("mods.agent.Contracts")
@@ -46,9 +48,17 @@ local function clearStream()
   publishStream()
 end
 
-local function getMessages() return hooks.getMessages() end
+local function getMessages() return Session.messages() end
 
-local function isCurrent(generation) return generation == state.generation end
+local function captureScope()
+  state.scope = AsyncScope.capture(Session.projectPath(), Session.id(), state.generation)
+end
+
+-- generation 相同只说明没有被 invalidate。还要核对请求开始时的工程和会话。
+local function isCurrent(generation)
+  return generation == state.generation
+    and AsyncScope.matches(state.scope, Session.projectPath(), Session.id(), generation)
+end
 
 -- ─── 前台保活服务：回合进行中提升进程优先级并持有唤醒锁，息屏也能继续。
 -- pcall 兜底：旧安装或类缺失时静默降级，绝不影响对话本身。
@@ -191,7 +201,7 @@ local function executeToolCallsParallel(calls, toolCalls, results, onAllDone, ge
     local toolCallKey = call.name .. "\n"
       .. (argsEncoded and tostring(encodedArgs) or tostring(tc.arguments or ""))
     AgentChat.executeToolAsync(call.name, call.args, function(resultStr, toolOk)
-      if generation and not isCurrent(generation) then return end
+      if collected[i] or (generation and not isCurrent(generation)) then return end
       collected[i] = { id = call.id, result = resultStr, ok = toolOk, key = toolCallKey }
       pending = pending - 1
       if pending > 0 then return end
@@ -306,6 +316,7 @@ executeToolCalls = function(toolCalls, index, results, onAllDone, generation)
 
   _M.setLoadingStatus(S.ai_tool_pending .. " · " .. (hooks.toolDisplayName and hooks.toolDisplayName(tc.name) or tc.name))
   local stopped = false
+  local accepted = false
   local stopHandle
   local function finish()
     if not stopped then
@@ -317,7 +328,8 @@ executeToolCalls = function(toolCalls, index, results, onAllDone, generation)
   local function proceedWithResult(resultStr, stopAfterResult, toolOk)
     -- 仅清属于自己的停止句柄：过期回调不得抹掉当前回合的句柄
     if state.activeToolStop == stopHandle then state.activeToolStop = nil end
-    if generation and not isCurrent(generation) then return end
+    if accepted or (generation and not isCurrent(generation)) then return end
+    accepted = true
     results[#results + 1] = {
       tool_call_id = tc.id,
       content = resultStr,
@@ -413,6 +425,7 @@ end
 
 function _M.sendRaw(apiMessages, isContinue)
   local generation = state.generation
+  captureScope()
   local messages = getMessages()
   local requestUserIndex
   -- 跳过压缩摘要合成的 user 消息，错误与重试要挂到真实的用户消息上
@@ -589,6 +602,7 @@ end
 
 function _M.send(isContinue, userMsg)
   local generation = state.generation
+  captureScope()
   -- 与旧 sendMessage/继续按钮的显式清位一致：上一回合的停止标记不能拦截新请求
   state.stopRequested = false
   if not isContinue then state.roundsThisTurn = 0 end
@@ -621,8 +635,8 @@ function _M.send(isContinue, userMsg)
         or not messages[1]
         or tostring(compressedHistory[1].content) ~= tostring(messages[1].content)
       if changed then
-        hooks.setMessages(compressedHistory)
-        hooks.resetTurnHistory()
+        Session.setMessages(compressedHistory)
+        Session.resetTurns()
         hooks.saveHistory()
         hooks.refreshMessageList()
         print(S.ai_compress_auto_done:format(#compressedHistory))
@@ -636,6 +650,7 @@ function _M.compress(onDone)
   if state.loading then return false end
   state.generation = state.generation + 1
   local generation = state.generation
+  captureScope()
   _M.showLoading()
   keepAliveAcquire()
   AgentChat.buildCompressedApiMessages(getMessages(), function(apiMessages, compressed)
@@ -647,25 +662,22 @@ function _M.compress(onDone)
     end
     local compacted = {}
     for i = 2, #apiMessages do compacted[#compacted + 1] = apiMessages[i] end
-    hooks.setMessages(compacted)
-    hooks.resetTurnHistory()
+    Session.setMessages(compacted)
+    Session.resetTurns()
     hooks.saveHistory()
     hooks.refreshMessageList()
-    print(S.ai_compress_done:format(#hooks.getMessages()))
+    print(S.ai_compress_done:format(#Session.messages()))
     if onDone then pcall(onDone) end
   end, true)
   return true
 end
 
 -- ─── 配置 ──
--- getMessages/setMessages：会话数组归 ChatUI 所有，Turn 通过存取器访问。
--- resetTurnHistory：压缩替换历史后清除撤销/重做栈。
--- 其余为渲染与确认钩子。
+-- 消息、用量和撤销栈直接来自 SessionState。保存、刷新和确认仍由界面注入。
 
 function _M.configure(options)
   hooks = Contracts.callbacks("AgentTurn", options, {
-    "getMessages", "setMessages", "resetTurnHistory", "saveHistory",
-    "refreshMessageList", "isToolError", "showToolConfirm",
+    "saveHistory", "refreshMessageList", "isToolError", "showToolConfirm",
   }, {
     "showViews", "hideViews", "setLoadingStatusView", "isPanelVisible",
     "scrollDown", "updateContextUsage", "addToolBubble", "cancelToolConfirm",

@@ -2,7 +2,8 @@
 --- 配置存于 shared data "ai_mcp_servers"（JSON 数组）
 local _M = {}
 local Protocol = require("mods.agent.MCPProtocol")
-local McpTransport = require("mods.agent.McpTransport")
+local McpHttpTransport = require("mods.agent.McpHttpTransport")
+local McpSseTransport = require("mods.agent.McpSseTransport")
 local ReentrantLock = luajava.bindClass("java.util.concurrent.locks.ReentrantLock")
 local McpHttpClient = luajava.bindClass("com.nekolaska.mcp.McpHttpClient")
 local initLock = ReentrantLock()
@@ -172,7 +173,7 @@ serverState = function(key)
   return st
 end
 
-local transport = McpTransport.create({
+local transportDeps = {
   client = _M,
   http = agentMcpHttp,
   protocol = Protocol,
@@ -187,9 +188,9 @@ local transport = McpTransport.create({
   defaultProtocol = DEFAULT_PROTO,
   legacySseHeaders = legacySseHeaders,
   sseTimeout = LEGACY_SSE_TIMEOUT_MS,
-})
-rpcRequest = transport.http
-legacySseRequest = transport.sse
+}
+rpcRequest = McpHttpTransport.create(transportDeps)
+legacySseRequest = McpSseTransport.create(transportDeps)
 
 function _M.ensureInitialized(server)
   local key = serverKey(server)

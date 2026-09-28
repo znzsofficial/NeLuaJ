@@ -1564,7 +1564,7 @@ function _M.refreshProjectContext()
   loadHistory()
   local conv = AgentChat.getCurrentConv()
   if views.aiTitle then views.aiTitle.setText(conv and convName(conv) or S.ai_new_conv) end
-  updateProjectLabel()
+  if updateProjectLabel then updateProjectLabel() end
 end
 
 function _M.saveCurrentConversation()
@@ -1660,9 +1660,6 @@ SubagentRunner.configure({
 })
 
 AgentTurn.configure({
-  getMessages = function() return Session.messages() end,
-  setMessages = function(nextMessages) Session.setMessages(nextMessages) end,
-  resetTurnHistory = Session.resetTurns,
   showViews = showLoadingViews,
   hideViews = hideLoadingViews,
   setLoadingStatusView = setLoadingStatusView,
