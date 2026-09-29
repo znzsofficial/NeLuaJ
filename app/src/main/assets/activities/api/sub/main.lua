@@ -5,8 +5,6 @@ import "android.widget.LinearLayout"
 import "android.widget.RelativeLayout"
 import "android.widget.Toast"
 import "android.graphics.drawable.ColorDrawable"
-import "android.view.View"
-import "android.view.WindowManager"
 import "android.animation.ObjectAnimator"
 import "android.animation.AnimatorSet"
 import "com.androlua.adapter.LuaAdapter"
@@ -42,16 +40,10 @@ this.setContentView(loadlayout(res.layout.api_sub))
 .setDisplayShowHomeEnabled(true)
 .setDisplayHomeAsUpEnabled(true)
 
-local window = activity.getWindow()
-.setNavigationBarColor(0)
-.setStatusBarColor(ColorUtil.getColorBackground())
-.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
-.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
-if this.isNightMode() then
-  window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE)
- else
-  window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR)
-end
+require("mods.utils.SystemBars").apply(
+  activity.getWindow(),
+  ColorUtil.getColorBackground()
+)
 
 local classInfo, targetClass = assignClass(clazz)
 

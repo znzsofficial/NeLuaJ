@@ -80,17 +80,6 @@ local function openProject(path)
   ActivityUtil.open("editor", path)
 end
 
---- 只允许删 Projects 根下的一级目录，避免路径被拼错时扫到别的位置
-local function isProjectRoot(path)
-  local root = tostring(Bean.Path.app_root_pro_dir or ""):gsub("/+$", "")
-  path = tostring(path or ""):gsub("/+$", "")
-  if root == "" or path == "" or path == root then return false end
-  local prefix = root .. "/"
-  if path:sub(1, #prefix) ~= prefix then return false end
-  local name = path:sub(#prefix + 1)
-  return name ~= "" and not name:find("/", 1, true)
-end
-
 local function bindProjectIcon(imageView, path)
   pcall(function()
     local iconFile = File(path .. "/icon.png")
@@ -107,51 +96,21 @@ local function bindProjectIcon(imageView, path)
 end
 
 local lastMenuAt = 0
-local lastConfirmAt = 0
 
 local function showProjectMenu(project)
-  -- 长按在这套 View 绑定里会进两次监听，400ms 内只开一个对话框
+  -- 长按在这套 View 绑定里会进两次监听，400ms 内只开一个面板
   local now = os.clock()
   if now - lastMenuAt < 0.4 then return end
   lastMenuAt = now
-  pcall(function()
-    local MaterialAlertDialogBuilder = luajava.bindClass("com.google.android.material.dialog.MaterialAlertDialogBuilder")
-    local function confirmDelete()
-      local now = os.clock()
-      if now - lastConfirmAt < 0.4 then return end
-      lastConfirmAt = now
-      MaterialAlertDialogBuilder(activity)
-        .setTitle(res.string.delete)
-        .setMessage(string.format(res.string.confirm_delete, project.appName or project.name))
-        .setPositiveButton(res.string.delete, function()
-          if not isProjectRoot(project.path) then return end
-          local called, removed = pcall(function() return LuaFileUtil.removeTree(project.path) end)
-          if not called or removed ~= true or File(project.path).exists() then
-            pcall(function() Toast.makeText(activity, res.string.ai_delete_failed, Toast.LENGTH_SHORT).show() end)
-            return
-          end
-          initCache[project.path] = nil
-          pcall(function() Toast.makeText(activity, res.string.ai_deleted, Toast.LENGTH_SHORT).show() end)
-          _M.refresh()
-        end)
-        .setNegativeButton(android.R.string.cancel, nil)
-        .show()
-    end
-    MaterialAlertDialogBuilder(activity)
-      .setTitle(project.appName or project.name)
-      .setItems({ res.string.project_settings, res.string.open, res.string.delete }, function(_, which)
-        which = tonumber(tostring(which)) or -1
-        if which == 0 then
-          ActivityUtil.open("project_settings", project.path)
-        elseif which == 1 then
-          openProject(project.path)
-        elseif which == 2 then
-          confirmDelete()
-        end
-      end)
-      .setNegativeButton(android.R.string.cancel, nil)
-      .show()
-  end)
+  require("mods.project.ProjectMenu").show(project.path, project.name, {
+    snack = function(msg)
+      pcall(function() Toast.makeText(activity, tostring(msg), Toast.LENGTH_SHORT).show() end)
+    end,
+    refresh = function()
+      initCache[project.path] = nil
+      _M.refresh()
+    end,
+  })
 end
 
 local function bindProjectActions(view, project)

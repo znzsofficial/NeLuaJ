@@ -4,8 +4,6 @@
 --- 在此完成；打开工程跳转编辑器页（activities/main/MainActivity.lua）。
 require "mods.bootstrap"
 import "java.io.File"
-import "android.view.View"
-import "android.view.WindowManager"
 import "com.google.android.material.snackbar.Snackbar"
 import "com.google.android.material.dialog.MaterialAlertDialogBuilder"
 
@@ -63,18 +61,13 @@ local function refreshVisiblePage()
 end
 
 local function setupWindow()
-  local window = activity.getWindow() {
-    SoftInputMode = 0x10,
-    StatusBarColor = ColorUtil.getColorSurface()
-  }
-    .addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
-    .clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
-
-  if this.isNightMode() then
-    window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE)
-  else
-    window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR)
-  end
+  activity.getWindow().setSoftInputMode(0x10)
+  -- 底栏是 BottomNavigationView，默认色是 surfaceContainer，不是页面的 surface。
+  require("mods.utils.SystemBars").apply(
+    activity.getWindow(),
+    ColorUtil.getColorSurface(),
+    ColorUtil.getColorSurfaceContainer()
+  )
 end
 
 --- 桌面动态快捷方式：AI 助手。目标仍是根 main.lua（即本页），

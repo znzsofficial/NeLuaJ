@@ -23,6 +23,7 @@ return {
   layout_width = "match",
   layout_height = "match",
   orientation = "vertical",
+  backgroundColor = ColorUtil.surface.main,
   -- 作用域筛选 + 新建
   {
     HorizontalScrollView,

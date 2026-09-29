@@ -7,7 +7,6 @@ import "com.google.android.material.dialog.MaterialAlertDialogBuilder"
 local BottomSheetDialog = bindClass "com.google.android.material.bottomsheet.BottomSheetDialog"
 local BottomSheetBehavior = bindClass "com.google.android.material.bottomsheet.BottomSheetBehavior"
 local TabUtil = require "mods.utils.TabUtil"
-local InitReader = require "mods.project.InitReader"
 import "mods.utils.EditorUtil"
 import "mods.utils.PathManager"
 local res = res
@@ -106,10 +105,8 @@ function _M.deleteFile(path)
     MainActivity.RecyclerView.update()
 end
 
-function _M.newDir(path)
-    swipeRefresh.setRefreshing(true)
-    File(path).mkdirs()
-    MainActivity.RecyclerView.update()
+local function nameResult(result)
+    return tostring(result or "failed")
 end
 
 function _M.createProject(name)
@@ -154,9 +151,10 @@ function _M.fileMenu(path, name)
                 .setTitle(res.string.file_name)
                 .setView(loadlayout(res.layout.dialog_fileinput, sublayout))
                 .setPositiveButton(android.R.string.ok, function()
-            local new_path = Bean.Path.this_dir .. "/" .. tostring(sublayout.file_name.getText())
-            if File(new_path).exists() then
-                _M.snack(res.string.have_same_name)
+            local text = sublayout.file_name.getText()
+            local new_path = LuaFileUtil.child(Bean.Path.this_dir, text)
+            if not new_path then
+                _M.snack(res.string.rename_fail)
                 return
             end
             local wasCurrent = EditorUtil.currentFile() == path
@@ -167,11 +165,17 @@ function _M.fileMenu(path, name)
                     return
                 end
             end
-            swipeRefresh.setRefreshing(true)
-            if LuaFileUtil.rename(path, new_path) ~= true then
+            local result = nameResult(LuaFileUtil.renameWithin(path, text))
+            if result == "same" then return end
+            if result == "exists" then
+                _M.snack(res.string.have_same_name)
+                return
+            end
+            if result ~= "ok" then
                 _M.snack(res.string.rename_fail)
                 return
             end
+            swipeRefresh.setRefreshing(true)
             if wasCurrent then
                 EditorUtil.rebindPath(new_path)
                 TabUtil.add(new_path, { select = false })
@@ -194,12 +198,15 @@ function _M.fileMenu(path, name)
                 .setTitle(res.string.new_dir)
                 .setView(loadlayout(res.layout.dialog_fileinput, sublayout))
                 .setPositiveButton(android.R.string.ok, function()
-            local new_path = Bean.Path.this_dir .. "/" .. tostring(sublayout.file_name.getText())
-            if File(new_path).exists() then
+            local result = nameResult(LuaFileUtil.mkdirChild(Bean.Path.this_dir, sublayout.file_name.getText()))
+            if result == "exists" then
                 _M.snack(res.string.have_same_name)
-            else
-                _M.newDir(new_path)
+            elseif result == "ok" then
+                swipeRefresh.setRefreshing(true)
+                MainActivity.RecyclerView.update()
                 _M.snack(res.string.create_success)
+            else
+                _M.snack(res.string.rename_fail)
             end
         end)
                 .setNegativeButton(android.R.string.cancel, nil)
@@ -212,14 +219,15 @@ function _M.fileMenu(path, name)
                 .setTitle(res.string.new_file)
                 .setView(loadlayout(res.layout.dialog_fileinput, sublayout))
                 .setPositiveButton(android.R.string.ok, function()
-            local new_path = Bean.Path.this_dir .. "/" .. tostring(sublayout.file_name.getText())
-            if File(new_path).exists() then
+            local result = nameResult(LuaFileUtil.createChild(Bean.Path.this_dir, sublayout.file_name.getText(), ""))
+            if result == "exists" then
                 _M.snack(res.string.have_same_name)
-            else
+            elseif result == "ok" then
                 swipeRefresh.setRefreshing(true)
-                LuaFileUtil.create(new_path, "")
                 _M.snack(res.string.create_success)
                 MainActivity.RecyclerView.update()
+            else
+                _M.snack(res.string.rename_fail)
             end
         end)
                 .setNegativeButton(android.R.string.cancel, nil)
@@ -237,116 +245,26 @@ local function isProjectFolder(path)
     return File(path .. "/init.lua").isFile() or File(path .. "/main.lua").isFile()
 end
 
-local function readProjectInit(path)
-    return InitReader.load(path)
-end
-
-local function initField(init, key, fallback)
-    return InitReader.field(init, key, fallback)
-end
-
-local function formatPermissions(init)
-    if not init then return nil end
-    local ok, perms = pcall(function() return init.user_permission end)
-    if not ok or type(perms) ~= "table" then return nil end
-    local list = {}
-    for k, v in pairs(perms) do
-        if type(k) == "number" then
-            list[#list + 1] = tostring(v)
-        elseif type(v) == "string" then
-            list[#list + 1] = v
-        elseif type(k) == "string" then
-            list[#list + 1] = k
-        end
-    end
-    table.sort(list)
-    if #list == 0 then return nil end
-    return table.concat(list, " · ")
-end
-
 function _M.projectMenu(path, name)
-    local layout = {}
-    local sublayout = {}
-    local dialog = BottomSheetDialog(activity)
-    local projectContent = loadlayout(res.layout.project_menu, layout)
-    showBottomSheet(dialog, projectContent)
-
-    local init = readProjectInit(path)
-    local appName = initField(init, "app_name", initField(init, "appname", name))
-    local packageName = initField(init, "package_name", "—")
-    local verName = initField(init, "ver_name", initField(init, "version_name", "—"))
-    local verCode = initField(init, "ver_code", initField(init, "version_code", "—"))
-    local minSdk = initField(init, "min_sdk", "—")
-    local targetSdk = initField(init, "target_sdk", "—")
-    -- 与 initENV 一致：NeLuaJ_Theme 优先
-    local theme = initField(init, "NeLuaJ_Theme", nil)
-    if not theme or theme == "" then
-      local t = initField(init, "theme", "—")
-      if type(t) == "string" and t:find("^Theme_NeLuaJ_") then
-        theme = t
-      else
-        theme = t or "—"
-      end
-    end
-    local debugMode = initField(init, "debug_mode", initField(init, "debugmode", "—"))
-    local perms = formatPermissions(init)
-
-    layout.nameText.setText(appName)
-    layout.packageText.setText(packageName)
-    layout.versionText.setText(string.format("%s  v%s (%s)", res.string.project_version, verName, verCode))
-    layout.pathText.setText(path)
-    layout.metaText.setText(string.format(
-        "minSdk %s  ·  targetSdk %s\n%s  ·  debug %s",
-        minSdk, targetSdk, theme, debugMode
-    ))
-    if perms and layout.permLabel and layout.permText then
-        layout.permLabel.setVisibility(0)
-        layout.permText.setText(perms)
-    end
-
-    -- 图标：项目 icon.png / 默认 AS 圆规
-    pcall(function()
-        local size = this.dpToPx(56)
-        local iconFile = File(path .. "/icon.png")
-        if iconFile.isFile() then
-            local BitmapFactory = luajava.bindClass "android.graphics.BitmapFactory"
-            local bmp = BitmapFactory.decodeFile(iconFile.getAbsolutePath())
-            if bmp then
-                layout.projectIcon.setImageBitmap(bmp)
-                return
-            end
-        end
-        local d = res.drawable("android_studio", this.themeUtil.getColorSecondary())
-        if d then
-            d.setBounds(0, 0, size, size)
-            layout.projectIcon.setImageDrawable(d)
-        end
-    end)
-
-    layout.button_open.onClick = function()
-        dialog.dismiss()
-        PathManager.updateDir(path)
-        filetab.setPath(path)
-        MainActivity.RecyclerView.update()
-    end
-
-    layout.button_settings.onClick = function()
-        dialog.dismiss()
-        pcall(function()
-            local Init = require "activities.main.Init"
-            if Init.Actions and Init.Actions.openProjectSettings then
-                Init.Actions.openProjectSettings(path)
-            else
-                local ActivityUtil = require "mods.utils.ActivityUtil"
-                ActivityUtil.open("project_settings", path)
-            end
-        end)
-    end
-
-    layout.button_open_init.onClick = function()
-        dialog.dismiss()
-        local initPath = path .. "/init.lua"
-        if File(initPath).isFile() then
+    require("mods.project.ProjectMenu").show(path, name, {
+        snack = function(msg) _M.snack(msg) end,
+        parentDir = Bean.Path.this_dir,
+        open = function(projectPath)
+            PathManager.updateDir(projectPath)
+            filetab.setPath(projectPath)
+            MainActivity.RecyclerView.update()
+        end,
+        openSettings = function(projectPath)
+            pcall(function()
+                local Init = require "activities.main.Init"
+                if Init.Actions and Init.Actions.openProjectSettings then
+                    Init.Actions.openProjectSettings(projectPath)
+                else
+                    require("mods.utils.ActivityUtil").open("project_settings", projectPath)
+                end
+            end)
+        end,
+        openInit = function(initPath)
             EditorUtil.fromRecy = true
             EditorUtil.load(initPath)
             pcall(function()
@@ -355,112 +273,33 @@ function _M.projectMenu(path, name)
                     drawer.closeDrawer(luajava.bindClass("androidx.core.view.GravityCompat").START)
                 end
             end)
-        else
-            _M.snack(res.string.project_no_init)
-        end
-    end
-
-    layout.button_run.onClick = function()
-        dialog.dismiss()
-        local mainPath = path .. "/main.lua"
-        if not File(mainPath).isFile() then
-            _M.snack(res.string.project_no_main)
-            return
-        end
-        pcall(function()
-            local Init = require "activities.main.Init"
-            if Init.Actions and Init.Actions.runProject then
-                -- 临时切到该工程再运行
-                Bean.Project.this_project = name
-                Init.Actions.runProject()
-            else
-                activity.newActivity(mainPath)
-            end
-        end)
-    end
-
-    layout.button_backup.onClick = function()
-        dialog.dismiss()
-        local initTbl = init or {}
-        local zipName = (initField(initTbl, "app_name", name)) .. "-" .. os.date("%Y-%m-%d-%H-%M-%S") .. ".zip"
-        pcall(function()
-            LuaFileUtil.compress(path, Bean.Path.app_root_dir .. "/Backup", zipName)
-            _M.snack(res.string.backup .. ": " .. zipName)
-        end)
-    end
-
-    layout.button_rename.onClick = function()
-        dialog.dismiss()
-        MaterialAlertDialogBuilder(activity)
-                .setTitle(res.string.dir_name)
-                .setView(loadlayout(res.layout.dialog_fileinput, sublayout))
-                .setPositiveButton(android.R.string.ok, function()
-            local new_path = Bean.Path.this_dir .. "/" .. tostring(sublayout.file_name.getText())
-            if File(new_path).exists() then
-                _M.snack(res.string.have_same_name)
-                return
-            end
+        end,
+        run = function(projectPath, projectName)
+            pcall(function()
+                local Init = require "activities.main.Init"
+                if Init.Actions and Init.Actions.runProject then
+                    Bean.Project.this_project = projectName
+                    Init.Actions.runProject()
+                else
+                    activity.newActivity(projectPath .. "/main.lua")
+                end
+            end)
+        end,
+        beforeRename = function()
             swipeRefresh.setRefreshing(true)
-            LuaFileUtil.rename(path, new_path)
+        end,
+        renameFailed = function()
+            swipeRefresh.setRefreshing(false)
+        end,
+        afterRename = function()
             MainActivity.RecyclerView.update()
             TabUtil.checkAll()
-        end)
-                .setNegativeButton(android.R.string.cancel, nil)
-                .show()
-        sublayout.file_name.setHint(res.string.rename)
-        sublayout.file_name.setText(name)
-    end
-
-    layout.button_cdir.onClick = function()
-        dialog.dismiss()
-        MaterialAlertDialogBuilder(activity)
-                .setTitle(res.string.new_dir)
-                .setView(loadlayout(res.layout.dialog_fileinput, sublayout))
-                .setPositiveButton(android.R.string.ok, function()
-            local new_path = path .. "/" .. tostring(sublayout.file_name.getText())
-            if File(new_path).exists() then
-                _M.snack(res.string.have_same_name)
-            else
-                File(new_path).mkdirs()
-                _M.snack(res.string.create_success)
-            end
-        end)
-                .setNegativeButton(android.R.string.cancel, nil)
-                .show()
-        sublayout.file_name.setHint(res.string.new_dir)
-    end
-
-    layout.button_cfile.onClick = function()
-        dialog.dismiss()
-        MaterialAlertDialogBuilder(activity)
-                .setTitle(res.string.new_file)
-                .setView(loadlayout(res.layout.dialog_fileinput, sublayout))
-                .setPositiveButton(android.R.string.ok, function()
-            local new_path = path .. "/" .. tostring(sublayout.file_name.getText())
-            if File(new_path).exists() then
-                _M.snack(res.string.have_same_name)
-            else
-                LuaFileUtil.create(new_path, "")
-                _M.snack(res.string.create_success)
-            end
-        end)
-                .setNegativeButton(android.R.string.cancel, nil)
-                .show()
-        sublayout.file_name.setHint(res.string.new_file)
-    end
-
-    layout.button_delete.onClick = function()
-        dialog.dismiss()
-        MaterialAlertDialogBuilder(activity)
-                .setTitle(appName)
-                .setMessage(res.string.sure_to_delete)
-                .setPositiveButton(android.R.string.ok, function()
-            _M.deleteFile(path)
+        end,
+        delete = function(projectPath)
+            _M.deleteFile(projectPath)
             TabUtil.checkAll()
-        end)
-                .setNegativeButton(android.R.string.cancel, nil)
-                .show()
-    end
+        end,
+    })
 end
 
 function _M.dirMenu(path, name)
@@ -501,13 +340,18 @@ function _M.dirMenu(path, name)
                 .setTitle(res.string.dir_name)
                 .setView(loadlayout(res.layout.dialog_fileinput, sublayout))
                 .setPositiveButton(android.R.string.ok, function()
-            local new_path = Bean.Path.this_dir .. "/" .. tostring(sublayout.file_name.getText())
-            if File(new_path).exists() then
+            local text = sublayout.file_name.getText()
+            local result = nameResult(LuaFileUtil.renameWithin(path, text))
+            if result == "same" then return end
+            if result == "exists" then
                 _M.snack(res.string.have_same_name)
                 return
             end
+            if result ~= "ok" then
+                _M.snack(res.string.rename_fail)
+                return
+            end
             swipeRefresh.setRefreshing(true)
-            LuaFileUtil.rename(path, new_path)
             MainActivity.RecyclerView.update()
             TabUtil.checkAll()
         end)
@@ -522,15 +366,16 @@ function _M.dirMenu(path, name)
                 .setTitle(res.string.new_dir)
                 .setView(loadlayout(res.layout.dialog_fileinput, sublayout))
                 .setPositiveButton(android.R.string.ok, function()
-            local new_path = path .. "/" .. tostring(sublayout.file_name.getText())
-            if File(new_path).exists() then
+            local result = nameResult(LuaFileUtil.mkdirChild(path, sublayout.file_name.getText()))
+            if result == "exists" then
                 _M.snack(res.string.have_same_name)
-            else
-                File(new_path).mkdirs()
+            elseif result == "ok" then
                 _M.snack(res.string.create_success)
                 if Bean.Path.this_dir == path then
                     MainActivity.RecyclerView.update()
                 end
+            else
+                _M.snack(res.string.rename_fail)
             end
         end)
                 .setNegativeButton(android.R.string.cancel, nil)
@@ -543,15 +388,16 @@ function _M.dirMenu(path, name)
                 .setTitle(res.string.new_file)
                 .setView(loadlayout(res.layout.dialog_fileinput, sublayout))
                 .setPositiveButton(android.R.string.ok, function()
-            local new_path = path .. "/" .. tostring(sublayout.file_name.getText())
-            if File(new_path).exists() then
+            local result = nameResult(LuaFileUtil.createChild(path, sublayout.file_name.getText(), ""))
+            if result == "exists" then
                 _M.snack(res.string.have_same_name)
-            else
-                LuaFileUtil.create(new_path, "")
+            elseif result == "ok" then
                 _M.snack(res.string.create_success)
                 if Bean.Path.this_dir == path then
                     MainActivity.RecyclerView.update()
                 end
+            else
+                _M.snack(res.string.rename_fail)
             end
         end)
                 .setNegativeButton(android.R.string.cancel, nil)

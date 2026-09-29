@@ -2,8 +2,6 @@
 require "mods.bootstrap"
 import "java.io.File"
 import "java.io.FileOutputStream"
-import "android.view.View"
-import "android.view.WindowManager"
 import "android.content.Intent"
 import "android.app.Activity"
 import "android.graphics.Bitmap"
@@ -48,16 +46,12 @@ activity {
     DisplayHomeAsUpEnabled = true,
   }
 
-local window = activity.getWindow()
-  .setStatusBarColor(barColor)
-  .setNavigationBarColor(barColor)
-  .addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
-  .clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
-if this.isNightMode() then
-  window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE)
-else
-  window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR)
-end
+-- 顶栏是 background，底部保存条是 surface。
+require("mods.utils.SystemBars").apply(
+  activity.getWindow(),
+  barColor,
+  ColorUtil.getColorSurface()
+)
 
 function onOptionsItemSelected(m)
   if m.getItemId() == android.R.id.home then

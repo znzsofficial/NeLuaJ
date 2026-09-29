@@ -172,13 +172,17 @@ function _M.exists(ns, key)
 end
 
 --- 删除键、备份和未完成的临时文件。键不存在视为已删除。
---- 不先读内容：读失败不能被当成已经删掉。
+--- 不用 read()：正式文件已经删掉、备份还在时，read 会把 .bak 改回原名。
 function _M.delete(ns, key)
   local path = keyPath(ns, key)
   removed(path)
   removed(path .. ".bak")
   removed(path .. ".tmp")
-  return _M.read(path) == nil
+  if readOnce(path) ~= nil then return false end
+  if readOnce(path .. ".bak") ~= nil then
+    removed(path .. ".bak")
+  end
+  return readOnce(path) == nil and readOnce(path .. ".bak") == nil
 end
 
 return _M

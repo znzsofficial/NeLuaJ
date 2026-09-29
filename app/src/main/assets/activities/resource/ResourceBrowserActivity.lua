@@ -4,8 +4,6 @@ import "android.widget.LinearLayout"
 import "android.widget.ImageView"
 import "android.widget.Toast"
 import "android.graphics.drawable.ColorDrawable"
-import "android.view.View"
-import "android.view.WindowManager"
 import "com.google.android.material.textview.MaterialTextView"
 import "com.google.android.material.card.MaterialCardView"
 import "com.google.android.material.dialog.MaterialAlertDialogBuilder"
@@ -33,16 +31,10 @@ this.setContentView(loadlayout(res.layout.resource_browser))
 .setDisplayShowHomeEnabled(true)
 .setDisplayHomeAsUpEnabled(true)
 
-local window = activity.getWindow()
-.setNavigationBarColor(0)
-.setStatusBarColor(ColorUtil.getColorBackground())
-.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
-.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
-if this.isNightMode() then
-  window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE)
- else
-  window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR)
-end
+require("mods.utils.SystemBars").apply(
+  activity.getWindow(),
+  ColorUtil.getColorBackground()
+)
 
 -- 自动扫描所有可用的 R 类
 local knownRClasses = {

@@ -13,19 +13,26 @@ if not path or path == "" then
     return
 end
 
--- 全屏沉浸
-pcall(function()
+local ColorUtils = luajava.bindClass("androidx.core.graphics.ColorUtils")
+
+-- 图片铺满系统栏。导航栏透明，露出当前背景色。
+local function applyPhotoBars(color)
     local window = activity.getWindow()
     window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
+    window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION)
     window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
-    window.setStatusBarColor(Color.TRANSPARENT)
     window.addFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS)
-    window.getDecorView().setSystemUiVisibility(
-        View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-        | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
-    )
-end)
+    window.setStatusBarColor(Color.TRANSPARENT)
+    window.setNavigationBarColor(Color.TRANSPARENT)
+    pcall(function() window.setNavigationBarContrastEnforced(false) end)
+    local flags = View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+    if ColorUtils.calculateLuminance(color) > 0.5 then
+        flags = flags | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+    end
+    window.getDecorView().setSystemUiVisibility(flags)
+end
+
+pcall(function() applyPhotoBars(0xff000000) end)
 
 local binding = {}
 activity.setContentView(loadlayout(res.layout.photo_layout, binding))
@@ -48,6 +55,8 @@ local bgColors = {
 local bgIndex = 1
 
 binding.switchBg.onClick = function()
-    binding.bg.setBackgroundColor(bgColors[bgIndex])
+    local color = bgColors[bgIndex]
+    binding.bg.setBackgroundColor(color)
+    pcall(function() applyPhotoBars(color) end)
     bgIndex = bgIndex % #bgColors + 1
 end

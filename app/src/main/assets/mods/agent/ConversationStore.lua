@@ -195,15 +195,63 @@ local function normalizeRecord(value, fallbackProject, used)
   return record, changed
 end
 
---- 按记录持久化：每个会话一个 KV 记录 + 重写元数据索引；
---- removedIds 携带本次被删除的会话 id（记录文件随之移除）。
-local function persistConversations(value, removedIds)
+--- 磁盘索引是成员名单。别的界面已经删掉的 id 不能再写回去；
+--- 磁盘上有、这份内存里没有的会话要留在索引里，避免整表覆盖把它们抹掉。
+local function readDiskIndex()
+  if not ensureKV() then return nil end
+  local raw = KV.read(KV.nsPath(CONV_KV_NS) .. "/_index.json")
+  if type(raw) ~= "string" or raw == "" then return nil end
+  local decoded = decode(raw)
+  if type(decoded) ~= "table" then return nil end
+  local ids = {}
+  local entries = {}
+  for _, entry in ipairs(decoded) do
+    if type(entry) == "table" and entry.id ~= nil and tostring(entry.id) ~= "" then
+      local id = tostring(entry.id)
+      if not ids[id] then
+        ids[id] = true
+        entries[#entries + 1] = entry
+      end
+    end
+  end
+  return { ids = ids, entries = entries }
+end
+
+local function idSet(list)
+  local set = {}
+  for _, id in ipairs(list or {}) do
+    set[tostring(id)] = true
+  end
+  return set
+end
+
+--- 按记录持久化：每个会话一个 KV 记录 + 重写元数据索引。
+--- removedIds 会删记录文件；createdIds 是这次新出现、磁盘索引里还没有的 id。
+local function persistConversations(value, removedIds, createdIds)
   if not ensureKV() then return false end
   local root = KV.nsPath(CONV_KV_NS)
-  local ok = true
-  local alive = {}
-  local indexEntries = {}
+  local removedSet = idSet(removedIds)
+  local createdSet = idSet(createdIds)
+  local disk = readDiskIndex()
+  local kept = {}
+  local seen = {}
   for _, record in ipairs(value) do
+    local id = tostring(record.id)
+    if not removedSet[id] and not seen[id] then
+      -- 索引还留着、记录文件已经没了：这是一次没写完的删除，不要从内存恢复。
+      local fileGone = disk and disk.ids[id] and not createdSet[id] and not KV.exists(CONV_KV_NS, id)
+      if not fileGone and (not disk or disk.ids[id] or createdSet[id]) then
+        seen[id] = true
+        kept[#kept + 1] = record
+      end
+    end
+  end
+
+  local ok = true
+  local written = {}
+  local indexEntries = {}
+  local preserved = {}
+  for _, record in ipairs(kept) do
     if record.seq == nil then
       maxSeq = maxSeq + 1
       record.seq = maxSeq
@@ -211,7 +259,7 @@ local function persistConversations(value, removedIds)
     if record.seq > maxSeq then maxSeq = record.seq end
     local id = tostring(record.id)
     if KV.set(CONV_KV_NS, id, record) then
-      alive[id] = true
+      written[id] = true
       indexEntries[#indexEntries + 1] = {
         id = id,
         name = record.name,
@@ -226,17 +274,39 @@ local function persistConversations(value, removedIds)
       ok = false
     end
   end
+  if disk then
+    for _, entry in ipairs(disk.entries) do
+      local id = tostring(entry.id)
+      -- 内存没写上的，沿用磁盘索引。已删除的不再列入。
+      if not written[id] and not removedSet[id] and KV.exists(CONV_KV_NS, id) then
+        indexEntries[#indexEntries + 1] = entry
+        local record = KV.get(CONV_KV_NS, id)
+        if type(record) == "table" then
+          preserved[#preserved + 1] = record
+        end
+      end
+    end
+  end
+  -- 记录文件还在时不能先改索引，否则列表里没了、json 还留在目录里。
   for _, id in ipairs(removedIds or {}) do
-    KV.delete(CONV_KV_NS, tostring(id))
+    if not KV.delete(CONV_KV_NS, tostring(id)) then
+      return false
+    end
   end
-  -- 元数据索引：首页跨工程列表只读索引即可，无需解析消息体
   local encodedIndex = encode(indexEntries)
-  if encodedIndex and KV.writeAtomic(root .. "/_index.json", encodedIndex) then
-    -- index 与记录文件间允许短暂陈旧（自愈型）：记录先行、索引紧随
-  else
-    ok = false
+  if not (ok and encodedIndex and KV.writeAtomic(root .. "/_index.json", encodedIndex)) then
+    return false
   end
-  if ok then conversations = value end
+  local cached = {}
+  for _, record in ipairs(kept) do
+    if written[tostring(record.id)] then
+      cached[#cached + 1] = record
+    end
+  end
+  for _, record in ipairs(preserved) do
+    cached[#cached + 1] = record
+  end
+  conversations = cached
   return ok
 end
 
@@ -373,7 +443,20 @@ function _M.load(force)
   if migrateLegacySelection(conversations, currentByProject) then
     persistCurrentMap(currentByProject)
   end
-  if migrated or fromLegacy then persistConversations(normalized) end
+  if migrated or fromLegacy then
+    -- 规范化时新分配的 id 还不在磁盘索引里，要明确标成新建，避免被当成“别的界面已删除”。
+    local created = nil
+    local diskNow = readDiskIndex()
+    if diskNow then
+      created = {}
+      for _, record in ipairs(normalized) do
+        if not diskNow.ids[tostring(record.id)] then
+          created[#created + 1] = record.id
+        end
+      end
+    end
+    persistConversations(normalized, nil, created)
+  end
   if fromLegacy then
     -- 记录已落 KV，清除 SharedData 旧整包（迁移完成标记）
     setData(CONVERSATIONS_KEY, nil)
@@ -471,7 +554,7 @@ function _M.create(name, path)
     updatedAt = now(),
   }
   candidate[#candidate + 1] = record
-  if not persistConversations(candidate) then return nil, 0 end
+  if not persistConversations(candidate, nil, { record.id }) then return nil, 0 end
 
   local _, index = recordById(record.id, expectedPath, candidate)
   _M.setCurrent(record.id, expectedPath)

@@ -1,5 +1,5 @@
 --- 跨工程会话列表共享渲染：AgentCenter 独立页与首页「会话」tab 共用。
---- 行为差异（点击打开方式）由调用方经 onOpen 回调注入；
+--- 行为差异（点击打开、长按菜单）由调用方经回调注入；
 --- 本模块只负责行构建、排序与空态，不持有容器与数据。
 local _M = {}
 
@@ -16,7 +16,7 @@ function _M.shortProject(p)
 end
 
 --- projectName 非空时在元信息中追加工程名（跨工程场景）
-function _M.buildRow(conv, projectName, onOpen)
+function _M.buildRow(conv, projectName, onOpen, onLongPress)
   local ColorUtil = this.themeUtil
   local ColorPrimaryContainer = ColorUtil.primary.container
   local ColorOnPrimaryContainer = ColorUtil.primary.onContainer
@@ -134,6 +134,13 @@ function _M.buildRow(conv, projectName, onOpen)
   card.setOnClickListener(function()
     if onOpen then onOpen(conv, projectName) end
   end)
+  if onLongPress then
+    card.setLongClickable(true)
+    card.setOnLongClickListener(function()
+      onLongPress(conv, projectName)
+      return true
+    end)
+  end
 
   local cardLp = LinearLayout.LayoutParams(-1, -2)
   cardLp.bottomMargin = dp(8)
@@ -143,10 +150,22 @@ end
 
 --- 渲染整个列表到 container：rows = { { conv = 记录, projectName = 路径或 nil } }，
 --- 按 updatedAt 降序排序；空列表显示占位提示。
-function _M.renderList(container, rows, onOpen)
+function _M.renderList(container, rows, onOpen, onLongPress)
   container.removeAllViews()
   local sorted = {}
-  for i, item in ipairs(rows) do sorted[i] = item end
+  for i, item in ipairs(rows) do
+    local conv = item.conv
+    local count = conv and conv.messageCount
+    if count == nil and type(conv and conv.messages) == "table" then
+      count = #conv.messages
+    end
+    count = tonumber(count) or 0
+    local name = tostring(conv and conv.name or "")
+    local placeholder = count == 0 and (
+      name == "" or name == "新对话" or name == S.ai_new_conv or name == S.ai_unnamed_conv
+    )
+    if not placeholder then sorted[#sorted + 1] = item end
+  end
   table.sort(sorted, function(a, b)
     return tostring(a.conv.updatedAt or "") > tostring(b.conv.updatedAt or "")
   end)
@@ -164,7 +183,7 @@ function _M.renderList(container, rows, onOpen)
   end
 
   for _, item in ipairs(sorted) do
-    container.addView(_M.buildRow(item.conv, item.projectName, onOpen))
+    container.addView(_M.buildRow(item.conv, item.projectName, onOpen, onLongPress))
   end
 end
 

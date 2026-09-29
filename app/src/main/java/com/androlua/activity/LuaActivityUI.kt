@@ -50,8 +50,12 @@ class LuaActivityUI(private val activity: LuaActivity) {
         activity.findViewById<View>(android.R.id.content)?.setBackgroundColor(surfaceColor)
         activity.window.statusBarColor = surfaceColor
         activity.window.navigationBarColor = surfaceColor
-        val systemUiFlags = if (MaterialColors.isColorLight(surfaceColor)) {
-            View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            activity.window.isNavigationBarContrastEnforced = false
+        }
+        val lightBars = MaterialColors.isColorLight(surfaceColor)
+        val systemUiFlags = if (lightBars) {
+            View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
         } else {
             View.SYSTEM_UI_FLAG_VISIBLE
         }

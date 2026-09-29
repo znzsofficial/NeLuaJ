@@ -438,6 +438,7 @@ return {
             HorizontalScrollView,
             horizontalScrollBarEnabled = false,
             layout_width = "match",
+            backgroundColor = ColorBackground,
             {
               LinearLayout,
               layout_width = "match",

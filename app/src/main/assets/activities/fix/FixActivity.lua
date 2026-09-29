@@ -9,6 +9,7 @@ import "com.androlua.adapter.ArrayListAdapter"
 import "java.io.File"
 import "java.lang.String"
 this.dynamicColor()
+require("mods.utils.SystemBars").apply(activity.getWindow(), this.themeUtil.getColorBackground())
 
 local clazzList
 local path = ...

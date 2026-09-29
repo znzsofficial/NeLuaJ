@@ -222,15 +222,81 @@ object LuaFileUtil {
             val source = Paths.get(oldPath)
             val target = Paths.get(newPath)
             if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) return false
-            target.parent?.createDirectories()
-            try {
-                Files.move(source, target, StandardCopyOption.ATOMIC_MOVE)
-            } catch (_: AtomicMoveNotSupportedException) {
-                Files.move(source, target)
-            }
-            true
+            if (target.parent == null || !Files.isDirectory(target.parent)) return false
+            moveReplacing(source, target)
         } catch (_: Exception) {
             false
+        }
+    }
+
+    /**
+     * 父目录下的直接子路径。只接受单级名字，拒绝空、`.`、`..` 和分隔符。
+     * 结果若不是 parent 的直接子项则返回 null。不创建任何目录。
+     */
+    fun child(parent: String, name: String): String? {
+        val leaf = leafName(name) ?: return null
+        if (parent.isBlank()) return null
+        val base = Paths.get(parent).toAbsolutePath().normalize()
+        val resolved = base.resolve(leaf).normalize()
+        if (resolved.parent != base) return null
+        return resolved.toString()
+    }
+
+    /** 在已存在的父目录里改名。不创建父目录。返回 ok / same / exists / bad_name / failed。 */
+    fun renameWithin(source: String, newName: String): String {
+        val leaf = leafName(newName) ?: return "bad_name"
+        val from = Paths.get(source).toAbsolutePath().normalize()
+        val parent = from.parent ?: return "failed"
+        val to = parent.resolve(leaf).normalize()
+        if (to.parent != parent) return "bad_name"
+        if (from == to) return "same"
+        if (!Files.exists(from, LinkOption.NOFOLLOW_LINKS)) return "failed"
+        if (Files.exists(to, LinkOption.NOFOLLOW_LINKS)) return "exists"
+        return if (rename(from.toString(), to.toString())) "ok" else "failed"
+    }
+
+    /** 在已存在的父目录里新建一级目录。不创建父目录。返回 ok / exists / bad_name / failed。 */
+    fun mkdirChild(parent: String, name: String): String {
+        val path = directChild(parent, name) ?: return "bad_name"
+        if (Files.exists(path, LinkOption.NOFOLLOW_LINKS)) return "exists"
+        if (!Files.isDirectory(path.parent)) return "failed"
+        return try {
+            Files.createDirectory(path)
+            "ok"
+        } catch (_: Exception) {
+            "failed"
+        }
+    }
+
+    /** 在已存在的父目录里新建文件。不创建父目录。返回 ok / exists / bad_name / failed。 */
+    @JvmOverloads
+    fun createChild(parent: String, name: String, content: String = ""): String {
+        val path = directChild(parent, name) ?: return "bad_name"
+        if (Files.exists(path, LinkOption.NOFOLLOW_LINKS)) return "exists"
+        if (!Files.isDirectory(path.parent)) return "failed"
+        return if (replaceText(path.toString(), content) && Files.isRegularFile(path)) "ok" else "failed"
+    }
+
+    private fun directChild(parent: String, name: String): Path? {
+        val text = child(parent, name) ?: return null
+        return Paths.get(text)
+    }
+
+    /** nio 会把分隔符和 .. 当成路径分量，所以单级文件名要先拒绝。空白不是路径语法，仍要 trim。 */
+    private fun leafName(raw: String): String? {
+        val name = raw.trim()
+        if (name.isEmpty() || name == "." || name == "..") return null
+        if (name.indexOf('/') >= 0 || name.indexOf('\\') >= 0 || name.indexOf('\u0000') >= 0) return null
+        return name
+    }
+
+    private fun moveReplacing(source: Path, target: Path): Boolean {
+        return try {
+            Files.move(source, target, StandardCopyOption.ATOMIC_MOVE)
+            true
+        } catch (_: AtomicMoveNotSupportedException) {
+            Files.move(source, target)
+            true
         }
     }
 

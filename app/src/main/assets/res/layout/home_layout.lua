@@ -27,6 +27,7 @@ local tabMeta = {
 }
 
 local background = ColorUtil.getColorSurface()
+local navColor = ColorUtil.getColorSurfaceContainer()
 
 local shellViews = {}
 local view = loadlayout({
@@ -49,6 +50,7 @@ local view = loadlayout({
     id = "homeNav",
     layout_width = "match",
     layout_height = "wrap",
+    backgroundColor = navColor,
   },
 }, shellViews)
 

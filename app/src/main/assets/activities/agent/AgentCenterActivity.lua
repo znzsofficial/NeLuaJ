@@ -8,8 +8,6 @@ local ConversationStore = require("mods.agent.ConversationStore")
 local ConvList = require("mods.agent.ConvList")
 
 local MaterialAlertDialogBuilder = bindClass "com.google.android.material.dialog.MaterialAlertDialogBuilder"
-local View = bindClass "android.view.View"
-local WindowManager = bindClass "android.view.WindowManager"
 local ColorDrawable = bindClass "android.graphics.drawable.ColorDrawable"
 
 this.dynamicColor()
@@ -45,16 +43,7 @@ activity.setTitle(S.ai_center_title)
     DisplayHomeAsUpEnabled = true
   }
 
-local window = activity.getWindow()
-  .setNavigationBarColor(barColor)
-  .setStatusBarColor(barColor)
-  .addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
-  .clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
-if this.isNightMode() then
-  window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE)
-else
-  window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR)
-end
+require("mods.utils.SystemBars").apply(activity.getWindow(), barColor)
 
 function onOptionsItemSelected(item)
   if item.getItemId() == android.R.id.home then

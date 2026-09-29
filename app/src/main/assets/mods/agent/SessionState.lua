@@ -136,6 +136,19 @@ function _M.clearMessages()
   return state.messages
 end
 
+--- 未保存的新会话。loaded 为 false，因此关闭面板或切换工程都不会落盘。
+function _M.beginDraft(projectPath)
+  state.messages = {}
+  state.undo = {}
+  state.redo = {}
+  state.id = nil
+  state.projectPath = projectPath
+  state.loaded = false
+  state.hadMessages = false
+  state.usage = freshUsage(nil)
+  return state.messages
+end
+
 --- 工程切换前只解除身份，消息表留到下一次 activate 替换。
 function _M.suspend()
   state.loaded = false

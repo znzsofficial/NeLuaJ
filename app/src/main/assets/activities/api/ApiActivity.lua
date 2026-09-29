@@ -4,8 +4,6 @@ import "android.widget.Toast"
 import "android.content.Context"
 import "android.graphics.drawable.ColorDrawable"
 import "com.google.android.material.dialog.MaterialAlertDialogBuilder"
-import "android.view.View"
-import "android.view.WindowManager"
 this.dynamicColor()
 local res = res
 local ColorUtil = this.themeUtil
@@ -28,16 +26,10 @@ activity
 .setDisplayShowHomeEnabled(true)
 .setDisplayHomeAsUpEnabled(true)
 
-local window = activity.getWindow()
-.setNavigationBarColor(0)
-.setStatusBarColor(ColorUtil.getColorBackground())
-.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
-.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
-if this.isNightMode() then
-  window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE)
- else
-  window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR)
-end
+require("mods.utils.SystemBars").apply(
+  activity.getWindow(),
+  ColorUtil.getColorBackground()
+)
 
 function onCreateOptionsMenu(menu)
   if not isDexMode then

@@ -1,8 +1,6 @@
 ---@diagnostic disable: undefined-global
 require "environment"
 import "java.io.File"
-import "android.view.View"
-import "android.view.WindowManager"
 import "androidx.core.view.GravityCompat"
 import "androidx.appcompat.widget.PopupMenu"
 import "com.google.android.material.snackbar.Snackbar"
@@ -32,18 +30,12 @@ local INVISIBLE = Init.INVISIBLE
 local GONE = Init.GONE
 
 local function setupWindow()
-  local window = activity.getWindow() {
-    SoftInputMode = 0x10,
-    StatusBarColor = ColorUtil.getColorBackground()
-  }
-    .addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
-    .clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
-
-  if this.isNightMode() then
-    window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE)
-  else
-    window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR)
-  end
+  activity.getWindow().setSoftInputMode(0x10)
+  -- 顶栏和底部符号栏都是 background。
+  require("mods.utils.SystemBars").apply(
+    activity.getWindow(),
+    ColorUtil.getColorBackground()
+  )
 end
 
 local function addAction(menu, title, icon, onClick, flags)
@@ -211,8 +203,7 @@ local function handleNavAction(action, path)
         filetab.setPath(path)
         MainActivity.RecyclerView.update()
       end
-      require("mods.agent.AgentChat").createConversation()
-      require("mods.agent.ChatUI").show()
+      require("mods.agent.ChatUI").show(true)
     end)
     return true
   end
@@ -225,6 +216,10 @@ function onEditorPrefsChanged()
 end
 
 function onResume()
+  -- 首页可能在编辑器还活着时删过会话。清掉内存表，下次读写以磁盘索引为准。
+  pcall(function()
+    require("mods.agent.ConversationStore").invalidate()
+  end)
   Init.initBar()
   Init.initFunctionTab()
   Init.applyTabletMode()

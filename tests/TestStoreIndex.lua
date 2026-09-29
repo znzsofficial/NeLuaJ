@@ -188,6 +188,29 @@ check("kv delete removes", (function()
   LuaKV.delete("ns", "k1")
   return LuaKV.get("ns", "k1", "gone") == "gone"
 end)())
+check("kv delete does not restore a leftover bak", (function()
+  local path = kvTestRoot .. "/ns/stuck.json"
+  assert(LuaKV.writeAtomic(path, "main"))
+  local bakFile = io.open(path .. ".bak", "wb")
+  bakFile:write("backup")
+  bakFile:close()
+  local realRemove = os.remove
+  os.remove = function(target)
+    if target == path .. ".bak" then return nil, "busy" end
+    return realRemove(target)
+  end
+  local deleted = LuaKV.delete("ns", "stuck")
+  os.remove = realRemove
+  local opened, main = pcall(io.open, path, "rb")
+  local restored = opened and main ~= nil
+  if restored then main:close() end
+  local bakOpened, bak = pcall(io.open, path .. ".bak", "rb")
+  local bakLeft = bakOpened and bak ~= nil
+  if bakLeft then bak:close() end
+  realRemove(path)
+  realRemove(path .. ".bak")
+  return deleted == false and not restored and bakLeft
+end)())
 check("kv no tmp residue", LuaKV.read(kvTestRoot .. "/ns/k1.json.tmp") == nil)
 check("kv read restores a bak left by an interrupted replace", (function()
   local path = kvTestRoot .. "/ns/recover.json"

@@ -819,15 +819,59 @@ saveHistory = function(updates)
   return saved
 end
 
+local function conversationMessageCount(conv)
+  if not conv then return 0 end
+  if type(conv.messages) == "table" then return #conv.messages end
+  return tonumber(conv.messageCount) or 0
+end
+
+--- 打开面板时自动建出来的空会话：没有消息，名字也还是占位。
+local function isPlaceholderConversation(conv)
+  if conversationMessageCount(conv) > 0 then return false end
+  local name = tostring(conv and conv.name or "")
+  return name == "" or name == "新对话" or name == S.ai_new_conv or name == S.ai_unnamed_conv
+end
+
+--- 打开面板时回到最近一条真正有内容的会话；没有就留空，不写记录。
+local function resumeConversation()
+  local guard = 0
+  while guard < 20 do
+    guard = guard + 1
+    local conv = AgentChat.getCurrentConv()
+    if not conv then return nil end
+    if not isPlaceholderConversation(conv) then return conv end
+    if not AgentChat.deleteConversation(conv.id) then return nil end
+  end
+  return nil
+end
+
+--- 草稿在第一条消息发出时才创建。失败则保留输入框里的文字。
+local function ensureConversation()
+  local projectPath = AgentChat.getCurrentProjectPath()
+  if Session.loaded() and Session.id() and Session.id() ~= ""
+      and Session.projectPath() == projectPath then
+    return true
+  end
+  local created = AgentChat.createConversation()
+  if not created then return false end
+  Session.beginCreated(created, projectPath)
+  if views.aiTitle then views.aiTitle.setText(S.ai_new_conv) end
+  return true
+end
+
 loadHistory = function(resetTurnHistory)
   if resetTurnHistory ~= false then
     Session.resetTurns()
     if AgentChat.clearActiveSkill then AgentChat.clearActiveSkill() end
   end
-  local conv = AgentChat.getCurrentConv()
+  local conv = resumeConversation()
   if not conv then
-    local created = AgentChat.createConversation()
-    conv = created or AgentChat.getCurrentConv()
+    Session.beginDraft(AgentChat.getCurrentProjectPath())
+    TodoManager.set(nil)
+    if views.aiTitle then views.aiTitle.setText(S.ai_new_conv) end
+    if updateProjectLabel then updateProjectLabel() end
+    updatePlanStrip()
+    return 0
   end
   Session.activate(conv, AgentChat.getCurrentProjectPath())
   -- 会话的任务计划随会话切换整体注入（空/缺失即清空）
@@ -1039,6 +1083,8 @@ sendMessage = function()
 
   local text = tostring(input.getText() or ""):match("^%s*(.-)%s*$")
   if text == "" then return end
+  -- 草稿没有 id，不能在清空输入框之后再发现创建失败。
+  if not ensureConversation() then return end
 
   input.setText("")
 
@@ -1159,18 +1205,15 @@ local function switchToConversation(conv)
   if updateProjectLabel then updateProjectLabel() end
 end
 
--- 统一的新建会话序列：原先在 4 处各写一份，顺带修复其中两处
--- 遗漏的任务计划清理与陈旧用量统计未复位的问题
+-- 新会话先只留在内存里。第一条消息发出时才创建记录，避免列表里堆未命名空会话。
 local function newConversation()
   saveHistory()
   AgentTurn.invalidate()
-  local created = AgentChat.createConversation()
-  Session.beginCreated(created, AgentChat.getCurrentProjectPath())
+  Session.beginDraft(AgentChat.getCurrentProjectPath())
   TodoManager.set(nil)
   if views.msgContainer then views.msgContainer.removeAllViews() end
   if views.aiTitle then views.aiTitle.setText(S.ai_new_conv) end
   if updateProjectLabel then updateProjectLabel() end
-  -- 新会话清空计划后同步置顶条（loadHistory 不在此路径上）
   updatePlanStrip()
 end
 
@@ -1316,7 +1359,7 @@ end
 
 -- ─── 显示聊天面板 ──
 
-function _M.show()
+function _M.show(startDraft)
   if dialog and dialog.isShowing() then
     saveHistory()
     dialog.dismiss()
@@ -1338,6 +1381,7 @@ function _M.show()
 
   dialog = BottomSheetDialog(activity)
   dialog.setContentView(content)
+  local savedNav = nil
 
   -- 去掉底部间距
   pcall(function()
@@ -1345,6 +1389,16 @@ function _M.show()
     if window then
       window.getAttributes().gravity = 80  -- Gravity.BOTTOM
       window.setBackgroundDrawableResource(android.R.color.transparent)
+      pcall(function()
+        local nav = ColorUtil.surface.main
+        window.setNavigationBarColor(nav)
+        -- 底栏露在 Activity 窗口上，对话打开时跟输入区同一色。
+        local host = activity.getWindow()
+        savedNav = host.getNavigationBarColor()
+        host.setNavigationBarColor(nav)
+      end)
+      pcall(function() window.setNavigationBarContrastEnforced(false) end)
+      pcall(function() activity.getWindow().setNavigationBarContrastEnforced(false) end)
       window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN
         | WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
     end
@@ -1354,6 +1408,11 @@ function _M.show()
   dialog.setOnDismissListener(function()
     saveHistory()
     streamView = {}
+    if savedNav ~= nil then
+      pcall(function()
+        activity.getWindow().setNavigationBarColor(savedNav)
+      end)
+    end
   end)
 
   if views.btnSend then
@@ -1477,21 +1536,30 @@ function _M.show()
     end)
   end
 
-  -- 恢复上次会话
+  -- 恢复上次会话。显式新建只进入草稿，第一条消息才落盘。
   if views.msgContainer then
     views.msgContainer.removeAllViews()  -- 先移除默认欢迎消息
-    local historyCount = loadHistory(not AgentTurn.isActive())
+    local historyCount = 0
+    if startDraft then
+      newConversation()
+      historyCount = 0
+    else
+      historyCount = loadHistory(not AgentTurn.isActive())
+    end
     -- 上下文 chip 只在面板打开时重建：loadHistory 在每个工具结果后都会触发，
     -- buildContext（读编辑器全文 + 列目录）在那里跑是显著浪费
     updateContextChip()
     if historyCount == 0 then
-      addWelcomeCard(S.ai_welcome_title, S.ai_welcome_body)
+      addWelcomeCard(startDraft and S.ai_new_conv or S.ai_welcome_title,
+        startDraft and S.ai_start_chat or S.ai_welcome_body)
     end
     -- 首屏最近会话快捷切换（不占用当前会话、回合空闲时显示）
     if not AgentTurn.isActive() then
       local others = {}
       for _, item in ipairs(AgentChat.listConversations()) do
-        if item.id ~= Session.id() then others[#others + 1] = item.conversation end
+        if item.id ~= Session.id() and not isPlaceholderConversation(item.conversation) then
+          others[#others + 1] = item.conversation
+        end
       end
       table.sort(others, function(a, b)
         return tostring(a.updatedAt or "") > tostring(b.updatedAt or "")

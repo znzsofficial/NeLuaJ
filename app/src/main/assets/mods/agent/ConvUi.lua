@@ -36,6 +36,16 @@ local res = res
 local S = res.string
 local dp = function(n) return this.dpToPx(n) end
 
+local function isPlaceholderConversation(conv)
+  if not conv then return true end
+  local count = conv.messageCount
+  if count == nil and type(conv.messages) == "table" then count = #conv.messages end
+  count = tonumber(count) or 0
+  if count > 0 then return false end
+  local name = tostring(conv.name or "")
+  return name == "" or name == "新对话" or name == S.ai_new_conv or name == S.ai_unnamed_conv
+end
+
 local VISIBLE = 0
 local GONE = 8
 
@@ -323,10 +333,6 @@ local function buildManagerRow(conv, render)
                   print(S.ai_delete_failed)
                   return
                 end
-                local current = AgentChat.getCurrentConv()
-                if not current then
-                  AgentChat.createConversation()
-                end
                 onAfterDelete(convId)
                 print(S.ai_deleted)
                 render()
@@ -353,7 +359,11 @@ function _M.showConvList()
     return tostring(a.conversation.updatedAt or "") > tostring(b.conversation.updatedAt or "")
   end)
 
-  if #list == 0 then
+  local visibleCount = 0
+  for _, item in ipairs(list) do
+    if not isPlaceholderConversation(item.conversation) then visibleCount = visibleCount + 1 end
+  end
+  if visibleCount == 0 then
     onNew()
     return
   end
@@ -434,11 +444,13 @@ function _M.showConvList()
   container.removeAllViews()
   for _, item in ipairs(list) do
     local conv = item.conversation
-    local row = buildConvRow(conv, conv.id == currentId, function()
-      onSwitch(conv)
-      if dlg then dlg.dismiss() end
-    end)
-    container.addView(row)
+    if not isPlaceholderConversation(conv) then
+      local row = buildConvRow(conv, conv.id == currentId, function()
+        onSwitch(conv)
+        if dlg then dlg.dismiss() end
+      end)
+      container.addView(row)
+    end
   end
 
   dlgViews.btnManage.onClick = function()
@@ -519,10 +531,14 @@ function _M.showConvManager()
   local function render()
     local currentList = AgentChat.listConversations()
     container.removeAllViews()
+    local visible = 0
     for _, item in ipairs(currentList) do
-      container.addView(buildManagerRow(item.conversation, render))
+      if not isPlaceholderConversation(item.conversation) then
+        container.addView(buildManagerRow(item.conversation, render))
+        visible = visible + 1
+      end
     end
-    if dlgViews.convCount then dlgViews.convCount.setText(S.ai_conv_count:format(#currentList)) end
+    if dlgViews.convCount then dlgViews.convCount.setText(S.ai_conv_count:format(visible)) end
   end
 
   dlgViews.btnNew.onClick = function()

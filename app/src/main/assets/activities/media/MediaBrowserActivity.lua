@@ -4,7 +4,6 @@ require "mods.bootstrap"
 import "java.io.File"
 import "android.os.Environment"
 import "android.view.View"
-import "android.view.WindowManager"
 import "android.widget.Toast"
 import "android.content.Context"
 import "android.content.ClipData"
@@ -32,16 +31,11 @@ this.setContentView(loadlayout(res.layout.media_browser))
   .setDisplayShowHomeEnabled(true)
   .setDisplayHomeAsUpEnabled(true)
 
-local window = activity.getWindow()
-  .setNavigationBarColor(0)
-  .setStatusBarColor(ColorUtil.getColorBackground())
-  .addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
-  .clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
-if this.isNightMode() then
-  window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE)
-else
-  window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR)
-end
+require("mods.utils.SystemBars").apply(
+  activity.getWindow(),
+  ColorUtil.getColorBackground(),
+  ColorUtil.getColorSurface()
+)
 
 -- ─── 路径 ───────────────────────────────────────────────
 local function mediaRoot()

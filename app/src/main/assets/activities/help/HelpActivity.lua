@@ -1,6 +1,5 @@
 require "mods.bootstrap"
 local initialDoc = ...
-import "android.view.WindowManager"
 import "android.view.View"
 import "android.graphics.drawable.ColorDrawable"
 import "android.widget.LinearLayout"
@@ -27,16 +26,9 @@ activity.setTitle(homeTitle)
     DisplayHomeAsUpEnabled = true
   }
 
-local window = activity.getWindow()
-  .setNavigationBarColor(barColor)
-  .setStatusBarColor(barColor)
-  .addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
-  .clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
-if this.isNightMode() then
-  window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE)
-else
-  window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR)
-end
+local SystemBars = require "mods.utils.SystemBars"
+local docColor = ColorUtil.getColorSurface()
+SystemBars.apply(activity.getWindow(), barColor)
 
 local ui = __helpUi
 local searchQuery = ""
@@ -95,6 +87,8 @@ local function openDoc(item)
   activity.setTitle(item.title)
   setWebLoading(true)
   vpg.setCurrentItem(1)
+  -- 文档页底是 surface，目录页底是 background。
+  SystemBars.apply(activity.getWindow(), barColor, docColor)
   webView.loadUrl("file://" .. activity.getLuaPath("res/doc", item.file))
   -- 兜底：client 回调缺失时也能关掉 loading
   pcall(function()
@@ -106,6 +100,7 @@ end
 
 local function backToHome()
   vpg.setCurrentItem(0)
+  SystemBars.apply(activity.getWindow(), barColor)
   activity.setTitle(homeTitle)
   setWebLoading(false)
   -- 清掉文档历史，避免下次误走 goBack

@@ -873,20 +873,23 @@ local function promptCreate(isDir)
         .setTitle(title)
         .setView(loadlayout(res.layout.dialog_fileinput, sublayout))
         .setPositiveButton(android.R.string.ok, function()
-            local name = tostring(sublayout.file_name.getText())
-            if name == "" then return end
-            local new_path = Bean_Path.this_dir .. "/" .. name
-            if File(new_path).exists() then
+            local text = sublayout.file_name.getText()
+            local result
+            if isDir then
+                result = tostring(LuaFileUtil.mkdirChild(Bean_Path.this_dir, text) or "failed")
+            else
+                result = tostring(LuaFileUtil.createChild(Bean_Path.this_dir, text, "") or "failed")
+            end
+            if result == "exists" then
                 MainActivity.Public.snack(res.string.have_same_name)
                 return
             end
-            if isDir then
-                MainActivity.Public.newDir(new_path)
-            else
-                swipeRefresh.setRefreshing(true)
-                LuaFileUtil.create(new_path, "")
-                _M.update()
+            if result ~= "ok" then
+                MainActivity.Public.snack(res.string.rename_fail)
+                return
             end
+            swipeRefresh.setRefreshing(true)
+            _M.update()
             MainActivity.Public.snack(res.string.create_success)
         end)
         .setNegativeButton(android.R.string.cancel, nil)
