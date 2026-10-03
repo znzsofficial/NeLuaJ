@@ -70,50 +70,6 @@ local function setupWindow()
   )
 end
 
---- 桌面动态快捷方式：AI 助手。目标仍是根 main.lua（即本页），
---- open_agent extra 由下方 consumeIntent 处理。纯 Lua 创建，不会进入用户打包的应用。
-local function createAgentShortcut()
-  pcall(function()
-    local Intent = luajava.bindClass("android.content.Intent")
-    local Uri = luajava.bindClass("android.net.Uri")
-    local ShortcutInfo = luajava.bindClass("android.content.pm.ShortcutInfo")
-    local ShortcutManager = luajava.bindClass("android.content.pm.ShortcutManager")
-    local ArrayList = luajava.bindClass("java.util.ArrayList")
-    local Icon = luajava.bindClass("android.graphics.drawable.Icon")
-    local sm = activity.getSystemService("shortcut")
-    if not sm then return end
-    local mainPath = activity.getLuaDir() .. "/main.lua"
-    local intent = Intent(Intent.ACTION_VIEW)
-    intent.setClassName(activity, "com.androlua.LuaActivity")
-    intent.setData(Uri.parse("file://" .. mainPath))
-    intent.putExtra("name", mainPath)
-    intent.putExtra("open_agent", true)
-    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    local builder = ShortcutInfo.Builder(activity, "agent")
-      .setShortLabel(res.string.shortcut_agent_short)
-      .setLongLabel(res.string.shortcut_agent_long)
-      .setIntent(intent)
-    pcall(function()
-      local iconId = activity.getResources().getIdentifier("icon", "drawable", activity.getPackageName())
-      if iconId ~= 0 then builder.setIcon(Icon.createWithResource(activity, iconId)) end
-    end)
-    local list = ArrayList()
-    list.add(builder.build())
-    sm.setDynamicShortcuts(list)
-  end)
-end
-
---- 桌面快捷方式/外部进入时的启动意图消费：直接唤起 AI 助手面板。
---- AI 面板不依赖编辑器视图，无工程上下文时也可打开。
-local function consumeIntent()
-  pcall(function()
-    local intent = activity.getIntent()
-    if intent and intent.getBooleanExtra("open_agent", false) then
-      require("mods.agent.ChatUI").show()
-    end
-  end)
-end
-
 function onCreate()
   activity.setTheme(R.style.Theme_NeLuaJ_Material3_DynamicColors_NoActionBar)
   activity.dynamicColor()
@@ -134,9 +90,6 @@ function onCreate()
       .setCancelable(false)
       .show()
   end
-
-  createAgentShortcut()
-  consumeIntent()
 end
 
 function onStorageRequestResult(isGranted)
