@@ -138,6 +138,7 @@ convList.shortProject = function(path) return path end
 env.require("mods.utils.ActivityUtil").finishWith = function(action, value)
   finished = { action, value }
 end
+env.require("mods.utils.SystemBars").apply = function() end
 package.loaded["mods.bootstrap"] = true
 env.this.dynamicColor = function() end
 env.this.isNightMode = function() return true end

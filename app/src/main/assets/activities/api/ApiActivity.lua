@@ -51,7 +51,7 @@ function onOptionsItemSelected(m)
     .setTitle(res.string.input_class)
     .setView(loadlayout(res.layout.dialog_fileinput, sublayout))
     .setPositiveButton(android.R.string.ok, function()
-      activity.newActivity(activity.getLuaPath("activities/api/sub/main"), { tostring(sublayout.file_name.getText()) })
+      activity.newActivity(activity.getLuaPath("activities/api/sub/main"), { sublayout.file_name.text })
     end)
     .setNegativeButton(android.R.string.cancel, nil)
     .show();
@@ -177,4 +177,3 @@ function onResult(name, text)
   edit.Text = text
   edit.setSelection(text:len())
 end
-

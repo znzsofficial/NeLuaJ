@@ -281,7 +281,7 @@ onSubClassChipChanged = function(group, checkedIds)
   for i = 0, group.getChildCount() - 1 do
     local child = group.getChildAt(i)
     if child.getId() == checkedId then
-      currentSubClassName = tostring(child.getText())
+      currentSubClassName = child.text
       searchEdit.Text = ""
       refreshFieldList()
       break
@@ -343,7 +343,7 @@ searchEdit.addTextChangedListener {
 -- 列表点击
 resourceList.onItemClick = function(listView, itemView, position, id)
   -- 从当前过滤后的列表中找到对应的 fieldInfo
-  local displayText = itemView.Text or tostring(itemView.getText())
+  local displayText = itemView.text
   -- 去掉可能的 Spannable 格式，用纯文本匹配
   local plainText = tostring(displayText)
   for _, field in ipairs(currentFields) do
@@ -357,7 +357,7 @@ end
 
 -- 长按复制
 resourceList.onItemLongClick = function(listView, itemView)
-  local plainText = tostring(itemView.Text or itemView.getText())
+  local plainText = tostring(itemView.text)
   for _, field in ipairs(currentFields) do
     if field.name == plainText then
       copyText(field.fullRef)

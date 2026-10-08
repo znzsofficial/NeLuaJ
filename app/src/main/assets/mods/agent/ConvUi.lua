@@ -136,7 +136,7 @@ local function showRenameDialog(convId, oldName)
     .setTitle(S.ai_rename)
     .setView(content)
     .setPositiveButton(S.ai_ok, function()
-      local name = tostring(dlgViews.nameInput.getText() or ""):gsub("^%s*(.-)%s*$", "%1")
+      local name = dlgViews.nameInput.text:gsub("^%s*(.-)%s*$", "%1")
       if name ~= "" and convId then
         AgentChat.renameConversation(convId, name)
         onRenamed(convId)

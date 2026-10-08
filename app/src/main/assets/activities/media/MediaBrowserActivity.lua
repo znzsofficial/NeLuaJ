@@ -220,7 +220,7 @@ local function showPreview(path, name)
     .setNeutralButton(res.string.media_copy_content, function()
       local t = body
       if binding.previewBody then
-        t = tostring(binding.previewBody.getText())
+        t = binding.previewBody.text
       end
       copyText(t)
     end)

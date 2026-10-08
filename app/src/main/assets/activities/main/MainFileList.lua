@@ -873,7 +873,7 @@ local function promptCreate(isDir)
         .setTitle(title)
         .setView(loadlayout(res.layout.dialog_fileinput, sublayout))
         .setPositiveButton(android.R.string.ok, function()
-            local text = sublayout.file_name.getText()
+            local text = sublayout.file_name.text
             local result
             if isDir then
                 result = tostring(LuaFileUtil.mkdirChild(Bean_Path.this_dir, text) or "failed")

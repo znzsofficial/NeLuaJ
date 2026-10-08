@@ -536,7 +536,7 @@ local function showConvSearch()
     local container = searchViews.searchResults
     if not container then return end
     container.removeAllViews()
-    local query = tostring(searchViews.searchInput.getText() or ""):match("^%s*(.-)%s*$")
+    local query = searchViews.searchInput.text:match("^%s*(.-)%s*$")
     if query == "" then return end
     local lowerQuery = query:lower()
     local count = 0
@@ -1081,7 +1081,7 @@ sendMessage = function()
   local input = views.msgInput
   if not input then return end
 
-  local text = tostring(input.getText() or ""):match("^%s*(.-)%s*$")
+  local text = input.text:match("^%s*(.-)%s*$")
   if text == "" then return end
   -- 草稿没有 id，不能在清空输入框之后再发现创建失败。
   if not ensureConversation() then return end

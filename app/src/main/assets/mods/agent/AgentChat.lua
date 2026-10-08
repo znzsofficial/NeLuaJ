@@ -1300,7 +1300,7 @@ function _M.buildContext()
   end
 
   if error_Text and error_Text.getVisibility and error_Text.getVisibility() == 0 then
-    local err = tostring(error_Text.getText() or "")
+    local err = error_Text.text
     if err ~= "" then
       table.insert(parts, "编译错误: " .. err)
     end

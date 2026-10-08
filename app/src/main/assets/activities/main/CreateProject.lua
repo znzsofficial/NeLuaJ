@@ -264,7 +264,7 @@ function _M.show(deps)
       afterTextChanged = function(s)
         local appname = tostring(s or "")
         refreshProjectPathPreview(binding, appname)
-        local curPkg = tostring(binding.project_packageName.getText() or "")
+        local curPkg = binding.project_packageName.text
         if curPkg == lastAutoPkg or curPkg == "" then
           local seg = sanitizePackageSegment(appname)
           lastAutoPkg = "com.neluaj." .. seg
@@ -278,8 +278,8 @@ function _M.show(deps)
     local btn = dialog.getButton(luajava.bindClass("android.content.DialogInterface").BUTTON_POSITIVE)
     if not btn then return end
     btn.onClick = function()
-      local appname = tostring(binding.project_appName.getText() or ""):match("^%s*(.-)%s*$") or ""
-      local packagename = tostring(binding.project_packageName.getText() or ""):match("^%s*(.-)%s*$") or ""
+      local appname = binding.project_appName.text:match("^%s*(.-)%s*$") or ""
+      local packagename = binding.project_packageName.text:match("^%s*(.-)%s*$") or ""
       if appname == "" then
         snack(res.string.project_name_empty)
         return

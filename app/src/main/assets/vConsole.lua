@@ -1864,7 +1864,7 @@ end
 function api.viewBriefExtra(v)
   local extra = ""
   if v.getText then
-    local ok, t = pcall(function() return tostring(v.getText() or "") end)
+    local ok, t = pcall(function() return tostring(v.text or "") end)
     if ok and t ~= "" then
       return '"' .. api.truncate(t:gsub("%s+", " "), 28) .. '"'
     end
@@ -1998,7 +1998,7 @@ function api.viewNodeDetail(node)
       v.getPaddingRight(), v.getPaddingBottom())
   end)
   if v.getText then
-    local ok, t = pcall(function() return tostring(v.getText() or "") end)
+    local ok, t = pcall(function() return tostring(v.text or "") end)
     if ok and t ~= "" then lines[#lines + 1] = "Text: " .. t end
   end
   if v.getContentDescription then
@@ -2674,7 +2674,7 @@ function api.ensureVarAdp()
   end
   ui.varList.onItemLongClick = function(_, v)
     local path = table.concat(S.variableNode, "/")
-    local key = tostring(v.getText()):match("(.+)%s=>")
+      local key = tostring(v.text or ""):match("(.+)%s=>")
     if ui.textEdit then
       ui.textEdit.setText(string.format("%s/%s", path, key or ""))
     end
@@ -2693,7 +2693,7 @@ function api.ensureVarAdp()
     }))
     -- 回车：精确匹配 table 则进入该节点；否则只收起键盘（筛选已实时生效）
     ui.varSearch.onEditorAction = function(v, actionId)
-      local q = tostring(v.getText() or ""):match("^%s*(.-)%s*$") or ""
+      local q = tostring(v.text or ""):match("^%s*(.-)%s*$") or ""
       local key = S.variablePath[q]
       if key == nil then
         local ql = q:lower()
@@ -2846,7 +2846,7 @@ function api.paintLogcatBadges()
     if row and row.getChildCount and row.getChildCount() > 0 then
       local badge = row.getChildAt(0)
       if badge and badge.getText then
-        local t = tostring(badge.getText() or "")
+        local t = tostring(badge.text or "")
         if t ~= "" then
           api.applyRound(badge, api.logcatLevelFill(t), 6)
           badge.setTextColor(api.logcatLevelColor(t))
@@ -3048,12 +3048,12 @@ S.actionSpecs = {
   },
   [3] = {
     { "copy", function()
-      api.clipboardSet(ui.textEdit.getText())
+      api.clipboardSet(ui.textEdit.text)
       api.toast(api.t("copied"))
     end },
     { "paste", function() ui.textEdit.setText(api.clipboardGet()) end },
     { "share", function()
-      local body = tostring(ui.textEdit.getText() or "")
+      local body = tostring(ui.textEdit.text or "")
       if body == "" then api.toast(api.t("empty")); return end
       pcall(function()
         local intent = J.Intent(J.Intent.ACTION_SEND)
@@ -3063,7 +3063,7 @@ S.actionSpecs = {
       end)
     end },
     { "save", function()
-      local body = tostring(ui.textEdit.getText() or "")
+      local body = tostring(ui.textEdit.text or "")
       if body == "" then api.toast(api.t("empty")); return end
       local stamp = "text"
       pcall(function() stamp = S.fileStampFmt.format(J.System.currentTimeMillis()) end)
@@ -3362,7 +3362,7 @@ function api.wireSheet()
   end
   bindClick(ui.ctrlRun, function()
     if not ui.ctrlCode then return end
-    local src = tostring(ui.ctrlCode.getText() or "")
+    local src = tostring(ui.ctrlCode.text or "")
     local f, e = load(src)
     if f then
       local ok, ret = pcall(f)

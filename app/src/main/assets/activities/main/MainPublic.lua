@@ -151,7 +151,7 @@ function _M.fileMenu(path, name)
                 .setTitle(res.string.file_name)
                 .setView(loadlayout(res.layout.dialog_fileinput, sublayout))
                 .setPositiveButton(android.R.string.ok, function()
-            local text = sublayout.file_name.getText()
+            local text = sublayout.file_name.text
             local new_path = LuaFileUtil.child(Bean.Path.this_dir, text)
             if not new_path then
                 _M.snack(res.string.rename_fail)
@@ -198,7 +198,7 @@ function _M.fileMenu(path, name)
                 .setTitle(res.string.new_dir)
                 .setView(loadlayout(res.layout.dialog_fileinput, sublayout))
                 .setPositiveButton(android.R.string.ok, function()
-            local result = nameResult(LuaFileUtil.mkdirChild(Bean.Path.this_dir, sublayout.file_name.getText()))
+            local result = nameResult(LuaFileUtil.mkdirChild(Bean.Path.this_dir, sublayout.file_name.text))
             if result == "exists" then
                 _M.snack(res.string.have_same_name)
             elseif result == "ok" then
@@ -219,7 +219,7 @@ function _M.fileMenu(path, name)
                 .setTitle(res.string.new_file)
                 .setView(loadlayout(res.layout.dialog_fileinput, sublayout))
                 .setPositiveButton(android.R.string.ok, function()
-            local result = nameResult(LuaFileUtil.createChild(Bean.Path.this_dir, sublayout.file_name.getText(), ""))
+            local result = nameResult(LuaFileUtil.createChild(Bean.Path.this_dir, sublayout.file_name.text, ""))
             if result == "exists" then
                 _M.snack(res.string.have_same_name)
             elseif result == "ok" then
@@ -340,7 +340,7 @@ function _M.dirMenu(path, name)
                 .setTitle(res.string.dir_name)
                 .setView(loadlayout(res.layout.dialog_fileinput, sublayout))
                 .setPositiveButton(android.R.string.ok, function()
-            local text = sublayout.file_name.getText()
+            local text = sublayout.file_name.text
             local result = nameResult(LuaFileUtil.renameWithin(path, text))
             if result == "same" then return end
             if result == "exists" then
@@ -366,7 +366,7 @@ function _M.dirMenu(path, name)
                 .setTitle(res.string.new_dir)
                 .setView(loadlayout(res.layout.dialog_fileinput, sublayout))
                 .setPositiveButton(android.R.string.ok, function()
-            local result = nameResult(LuaFileUtil.mkdirChild(path, sublayout.file_name.getText()))
+            local result = nameResult(LuaFileUtil.mkdirChild(path, sublayout.file_name.text))
             if result == "exists" then
                 _M.snack(res.string.have_same_name)
             elseif result == "ok" then
@@ -388,7 +388,7 @@ function _M.dirMenu(path, name)
                 .setTitle(res.string.new_file)
                 .setView(loadlayout(res.layout.dialog_fileinput, sublayout))
                 .setPositiveButton(android.R.string.ok, function()
-            local result = nameResult(LuaFileUtil.createChild(path, sublayout.file_name.getText(), ""))
+            local result = nameResult(LuaFileUtil.createChild(path, sublayout.file_name.text, ""))
             if result == "exists" then
                 _M.snack(res.string.have_same_name)
             elseif result == "ok" then

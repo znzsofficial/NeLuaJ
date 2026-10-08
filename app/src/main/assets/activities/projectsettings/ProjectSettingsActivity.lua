@@ -471,7 +471,7 @@ showAddPermission = function()
     .setTitle(res.string.project_permissions_add)
     .setView(dialogView)
     .setPositiveButton(android.R.string.ok, function()
-      local name = tostring(binding.perm_input.getText() or "")
+      local name = binding.perm_input.text
       if permListAdd(name) then
         refreshPermSummary()
         snack(res.string.project_permissions_added)
@@ -591,12 +591,12 @@ ps_open_init.onClick = function()
 end
 
 ps_save.onClick = function()
-  local appname = tostring(ps_app_name.getText() or ""):match("^%s*(.-)%s*$") or ""
-  local packagename = tostring(ps_package.getText() or ""):match("^%s*(.-)%s*$") or ""
-  local vName = tostring(ps_ver_name.getText() or ""):match("^%s*(.-)%s*$") or "1.0"
-  local vCode = tostring(ps_ver_code.getText() or ""):match("^%s*(.-)%s*$") or "1"
-  local minS = tostring(ps_min_sdk.getText() or ""):match("^%s*(.-)%s*$") or "26"
-  local tgtS = tostring(ps_target_sdk.getText() or ""):match("^%s*(.-)%s*$") or "33"
+  local appname = ps_app_name.text:match("^%s*(.-)%s*$") or ""
+  local packagename = ps_package.text:match("^%s*(.-)%s*$") or ""
+  local vName = ps_ver_name.text:match("^%s*(.-)%s*$") or "1.0"
+  local vCode = ps_ver_code.text:match("^%s*(.-)%s*$") or "1"
+  local minS = ps_min_sdk.text:match("^%s*(.-)%s*$") or "26"
+  local tgtS = ps_target_sdk.text:match("^%s*(.-)%s*$") or "33"
 
   if appname == "" then
     snack(res.string.project_name_empty)

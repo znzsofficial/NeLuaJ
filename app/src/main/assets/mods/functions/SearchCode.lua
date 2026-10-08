@@ -102,7 +102,7 @@ return function()
       updateCount()
       return
     end
-    local key = tostring(mSearchEdit.getText() or "")
+    local key = mSearchEdit.text
     state.keyword = key
     if key == "" then
       state.results = {}
@@ -133,7 +133,7 @@ return function()
       toast(res.string.no_file)
       return
     end
-    local key = tostring(mSearchEdit.getText() or "")
+    local key = mSearchEdit.text
     if key == "" then
       toast(res.string.search_empty)
       return
@@ -158,7 +158,7 @@ return function()
       toast(res.string.no_file)
       return
     end
-    local key = tostring(mSearchEdit.getText() or "")
+    local key = mSearchEdit.text
     if key == "" then
       toast(res.string.search_empty)
       return
@@ -192,7 +192,7 @@ return function()
       state.index = 1
     end
     local item = state.results[state.index]
-    local repl = tostring(mReplaceEdit and mReplaceEdit.getText() or "")
+    local repl = mReplaceEdit and mReplaceEdit.text or ""
     local jFull = JString(tostring(mLuaEditor.getText()))
     local start = item[1]
     local len = item[2]
@@ -209,7 +209,7 @@ return function()
       toast(res.string.no_file)
       return
     end
-    local key = tostring(mSearchEdit.getText() or "")
+    local key = mSearchEdit.text
     if key == "" then
       toast(res.string.search_empty)
       return
@@ -220,7 +220,7 @@ return function()
       toast(res.string.search_no_result)
       return
     end
-    local repl = tostring(mReplaceEdit and mReplaceEdit.getText() or "")
+    local repl = mReplaceEdit and mReplaceEdit.text or ""
     local jFull = JString(tostring(mLuaEditor.getText()))
     local jRepl = JString(repl)
     for i = n, 1, -1 do

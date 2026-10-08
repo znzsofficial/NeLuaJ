@@ -48,7 +48,7 @@ local showProviderEditor, showModelEditor, showFetchedModels, showProviderManage
 local showModelPicker, showModelManager, showSettings
 
 local function fieldText(view)
-  return tostring(view and view.getText() or ""):gsub("^%s*(.-)%s*$", "%1")
+  return (view and view.text or ""):gsub("^%s*(.-)%s*$", "%1")
 end
 
 local function fetchError(kind, detail)
@@ -279,7 +279,7 @@ showProviderEditor = function(existing, onSaved)
     local url = fieldText(dialogViews.urlInput)
     local key = fieldText(dialogViews.keyInput)
     local button = dialogViews.fetchButton
-    local previous = tostring(button.getText())
+    local previous = button.text
     button.setEnabled(false)
     button.setText(S.ai_fetching)
     fetchModels(url, key, function()
@@ -295,7 +295,7 @@ showProviderEditor = function(existing, onSaved)
     local url = fieldText(dialogViews.urlInput)
     local key = fieldText(dialogViews.keyInput)
     local button = dialogViews.balanceButton
-    local previous = tostring(button.getText())
+    local previous = button.text
     button.setEnabled(false)
     button.setText(S.ai_fetching)
     queryBalance(url, key, function()
@@ -518,7 +518,7 @@ showModelEditor = function(existingIndex)
       return
     end
     local button = dialogViews.fetchButton
-    local previous = tostring(button.getText())
+    local previous = button.text
     button.setEnabled(false)
     button.setText(S.ai_fetching)
     fetchModels(provider.url, provider.key, function()
@@ -1273,9 +1273,9 @@ showSettings = function()
       local positive = addDialog.getButton(-1) -- BUTTON_POSITIVE；校验失败时保留表单
       if not positive then return end
       positive.onClick = function()
-        local sname = tostring(inViews.nameInput.getText() or ""):gsub("^%s*(.-)%s*$", "%1")
-        local surl = tostring(inViews.urlInput.getText() or ""):gsub("^%s*(.-)%s*$", "%1")
-        local sheaders = tostring(inViews.headerInput.getText() or "")
+        local sname = inViews.nameInput.text:gsub("^%s*(.-)%s*$", "%1")
+        local surl = inViews.urlInput.text:gsub("^%s*(.-)%s*$", "%1")
+        local sheaders = inViews.headerInput.text
         if sname == "" or surl == "" then
           print(S.ai_name_url_required)
           return
@@ -1371,10 +1371,10 @@ showSettings = function()
       this.setSharedData("ai_auto_approve_network", dlgViews.autoApproveNetworkSwitch.isChecked() and "1" or "0")
       this.setSharedData("ai_auto_run_sandbox", dlgViews.autoRunSandboxSwitch.isChecked() and "1" or "0")
       this.setSharedData("ai_allow_selfsigned", dlgViews.selfSignedSwitch.isChecked() and "1" or "0")
-      local tempVal = tostring(dlgViews.tempInput.getText() or ""):gsub("^%s*(.-)%s*$", "%1")
-      local retryVal = tostring(dlgViews.retryInput.getText() or ""):gsub("^%s*(.-)%s*$", "%1")
-      local roundsVal = tostring(dlgViews.maxRoundsInput.getText() or ""):gsub("^%s*(.-)%s*$", "%1")
-      local promptVal = tostring(dlgViews.promptInput.getText() or "")
+      local tempVal = dlgViews.tempInput.text:gsub("^%s*(.-)%s*$", "%1")
+      local retryVal = dlgViews.retryInput.text:gsub("^%s*(.-)%s*$", "%1")
+      local roundsVal = dlgViews.maxRoundsInput.text:gsub("^%s*(.-)%s*$", "%1")
+      local promptVal = dlgViews.promptInput.text
       if tempVal ~= "" then this.setSharedData("ai_temperature", tempVal) end
       if retryVal ~= "" then this.setSharedData("ai_retry_count", retryVal) end
       -- 回合上限：留空/非数字 = 不限制（存 "0"）
@@ -1384,7 +1384,7 @@ showSettings = function()
       this.setSharedData("ai_system_prompt", promptVal)
       if dlgViews.policyRestrictSwitch and dlgViews.policyHostsInput then
         local hosts = {}
-        local hostsRaw = tostring(dlgViews.policyHostsInput.getText() or "")
+        local hostsRaw = dlgViews.policyHostsInput.text
         for token in hostsRaw:gmatch("[^,;%s]+") do hosts[#hosts + 1] = token end
         pcall(function()
           AgentChat.saveProjectPolicy({
