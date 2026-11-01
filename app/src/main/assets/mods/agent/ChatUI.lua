@@ -595,12 +595,16 @@ local function showConvSearch()
       end
     end
     if count == 0 then
-      local empty = MaterialTextView(activity)
-      empty.setText(S.ai_search_empty)
-      empty.setTextSize(13)
-      empty.setTextColor(ColorText)
-      empty.setPadding(0, dp(24), 0, dp(24))
-      container.addView(empty)
+      container.addView(loadlayout({
+        MaterialTextView,
+        text = S.ai_search_empty,
+        textSize = "13sp",
+        textColor = ColorText,
+        paddingTop = "24dp",
+        paddingBottom = "24dp",
+        layout_width = "match",
+        layout_height = "wrap",
+      }))
     end
   end
 
@@ -620,39 +624,47 @@ local function showConvSearch()
 end
 
 local function showCommandMenu()
-  local content = LinearLayout(activity)
-  content.setOrientation(1)
-  content.setPadding(dp(8), dp(4), dp(8), dp(4))
+  local items = {}
   local menuDialog
 
   local function addSection(label)
-    local title = MaterialTextView(activity)
-    title.setText(label)
-    title.setTextSize(12)
-    title.setTypeface(Typeface.DEFAULT, 1)
-    title.setTextColor(ColorPrimary)
-    title.setPadding(dp(16), dp(12), dp(16), dp(4))
-    content.addView(title)
+    items[#items + 1] = {
+      MaterialTextView,
+      text = label,
+      textSize = "12sp",
+      textStyle = "bold",
+      textColor = ColorPrimary,
+      paddingLeft = "16dp",
+      paddingTop = "12dp",
+      paddingRight = "16dp",
+      paddingBottom = "4dp",
+      layout_width = "match",
+      layout_height = "wrap",
+    }
   end
 
   local function addAction(label, enabled, action)
-    local row = MaterialTextView(activity)
-    row.setText(label)
-    row.setTextSize(15)
-    row.setTextColor(ColorOnSurface)
-    row.setGravity(16)
-    row.setPadding(dp(16), 0, dp(16), 0)
-    row.setMinHeight(dp(48))
-    row.setEnabled(enabled)
-    row.setAlpha(enabled and 1 or 0.42)
-    if enabled then
-      row.setClickable(true)
-      row.setOnClickListener(function()
+    local actionIndex = #items + 1
+    items[actionIndex] = {
+      MaterialTextView,
+      id = "cmd_" .. actionIndex,
+      text = label,
+      textSize = "15sp",
+      textColor = ColorOnSurface,
+      gravity = "center_vertical",
+      paddingLeft = "16dp",
+      paddingRight = "16dp",
+      minHeight = "48dp",
+      enabled = enabled,
+      alpha = enabled and 1 or 0.42,
+      clickable = enabled,
+      layout_width = "match",
+      layout_height = "wrap",
+      onClick = enabled and function()
         if menuDialog then menuDialog.dismiss() end
         action()
-      end)
-    end
-    content.addView(row)
+      end or nil,
+    }
   end
 
   local hasTurn = false
@@ -676,12 +688,32 @@ local function showCommandMenu()
   addAction(S.ai_settings, true, showSettings)
   addAction(S.ai_agent_help, true, showAgentHelp)
 
-  local scroll = ScrollView(activity)
-  scroll.setFillViewport(true)
-  scroll.addView(content)
+  local contentTree = {
+    ScrollView,
+    layout_width = "match",
+    layout_height = "wrap",
+    fillViewport = true,
+    {
+      LinearLayout,
+      orientation = "vertical",
+      layout_width = "match",
+      layout_height = "wrap",
+      paddingLeft = "8dp",
+      paddingTop = "4dp",
+      paddingRight = "8dp",
+      paddingBottom = "4dp",
+    },
+  }
+  local innerLayout = contentTree[2]
+  for _, item in ipairs(items) do
+    innerLayout[#innerLayout + 1] = item
+  end
+
+  local dialogViews = {}
+  local view = loadlayout(contentTree, dialogViews)
   menuDialog = MaterialAlertDialogBuilder(activity)
     .setTitle(S.ai_commands)
-    .setView(scroll)
+    .setView(view)
     .setNegativeButton(S.ai_close, nil)
     .show()
 end

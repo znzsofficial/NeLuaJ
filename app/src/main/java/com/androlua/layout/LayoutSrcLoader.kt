@@ -10,9 +10,11 @@ import androidx.core.content.ContextCompat
 import coil3.ImageLoader
 import coil3.asDrawable
 import coil3.imageLoader
+import coil3.request.Disposable
 import coil3.request.ImageRequest
 import coil3.target.ImageViewTarget
 import com.androlua.LuaContext
+import github.znzsofficial.neluaj.R
 import org.luaj.LuaError
 import org.luaj.LuaValue
 import java.io.File
@@ -160,17 +162,26 @@ internal class LayoutSrcLoader(
             )
             return
         }
-        imageLoader.enqueue(
+        (hostView.getTag(R.id.tag_layout_src_disposable) as? Disposable)?.dispose()
+        var currentDisposable: Disposable? = null
+        val disposable = imageLoader.enqueue(
             ImageRequest.Builder(context)
                 .data(data)
                 .target { image ->
+                    if (hostView.getTag(R.id.tag_layout_src_disposable) !== currentDisposable) return@target
                     val d = image.asDrawable(context.resources)
-                    val apply = Runnable { viewLua.jset("ImageDrawable", d) }
+                    val apply = Runnable {
+                        if (hostView.getTag(R.id.tag_layout_src_disposable) === currentDisposable) {
+                            viewLua.jset("ImageDrawable", d)
+                        }
+                    }
                     if (hostView.isAttachedToWindow) apply.run()
                     else hostView.post(apply)
                 }
                 .build()
         )
+        currentDisposable = disposable
+        hostView.setTag(R.id.tag_layout_src_disposable, disposable)
     }
 
     private fun applyDrawable(hostView: View, viewLua: LuaValue, d: Drawable) {

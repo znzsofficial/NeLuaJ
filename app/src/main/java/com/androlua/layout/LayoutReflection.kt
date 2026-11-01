@@ -101,15 +101,14 @@ internal object LayoutReflection {
             if (method != null) return method
             methods.remove(key, hit)
         }
-        var c: Class<*>? = clazz
-        while (c != null && c != Any::class.java) {
-            try {
-                val m = c.getMethod(name, *paramTypes)
-                methods[key] = WeakReference(m)
-                return m
-            } catch (_: NoSuchMethodException) {
-                c = c.superclass
-            }
+        val m = try {
+            clazz.getMethod(name, *paramTypes)
+        } catch (_: NoSuchMethodException) {
+            null
+        }
+        if (m != null) {
+            methods[key] = WeakReference(m)
+            return m
         }
         methods[key] = NO_METHOD
         return null

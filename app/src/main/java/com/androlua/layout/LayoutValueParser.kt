@@ -45,7 +45,9 @@ internal class LayoutValueParser(
                     while (b > a && str[b - 1] <= ' ') b--
                     if (a < b) {
                         val s = str.substring(a, b)
-                        val v = enumMap?.get(s) ?: LayoutEnums.sizeTokens[s] ?: fallback?.get(s)
+                        val v = resolveEnum(s, enumMap)
+                            ?: LayoutEnums.sizeTokens[s]
+                            ?: resolveEnum(s, fallback)
                         if (v != null) {
                             ret = ret or v
                         } else {
@@ -65,7 +67,7 @@ internal class LayoutValueParser(
             return ret
         }
 
-        enumMap?.get(str)?.let { return it }
+        resolveEnum(str, enumMap)?.let { return it }
         LayoutEnums.sizeTokens[str]?.let { return it }
         if (enumMap != null && str.toLongOrNull() == null && str.toDoubleOrNull() == null &&
             !str.startsWith("#") && !str.startsWith("?") && !str.endsWith("dp") &&
@@ -165,13 +167,13 @@ internal class LayoutValueParser(
         if (s[0] == '#') {
             return runCatching { s.toColorInt() }.getOrElse {
                 val hex = s.substring(1)
-                when (hex.length) {
+                val colorLong: Long? = when (hex.length) {
                     3 -> {
                         // #RGB → #FFRRGGBB
                         val r = hex[0].toString().repeat(2)
                         val g = hex[1].toString().repeat(2)
                         val b = hex[2].toString().repeat(2)
-                        ("FF$r$g$b").toLong(16).toInt()
+                        ("FF$r$g$b").toLongOrNull(16)
                     }
                     4 -> {
                         // #ARGB
@@ -179,16 +181,27 @@ internal class LayoutValueParser(
                         val r = hex[1].toString().repeat(2)
                         val g = hex[2].toString().repeat(2)
                         val b = hex[3].toString().repeat(2)
-                        ("$a$r$g$b").toLong(16).toInt()
+                        ("$a$r$g$b").toLongOrNull(16)
                     }
-                    6 -> (hex.toLong(16) or 0xFF000000L).toInt()
-                    8 -> hex.toLong(16).toInt()
-                    else -> throw LuaError("无法解析颜色: $s")
+                    6 -> hex.toLongOrNull(16)?.let { it or 0xFF000000L }
+                    8 -> hex.toLongOrNull(16)
+                    else -> null
                 }
+                colorLong?.toInt() ?: throw LuaError("无法解析颜色: $s")
             }
         }
         s.toLongOrNull()?.let { return it.toInt() }
         throw LuaError("无法解析颜色: $s")
+    }
+
+    private fun resolveEnum(key: String, map: Map<String, Int>?): Int? {
+        if (map == null) return null
+        map[key]?.let { return it }
+        val lower = key.lowercase(Locale.ROOT)
+        if (lower != key) {
+            map[lower]?.let { return it }
+        }
+        return null
     }
 
     fun toColorIntValue(value: LuaValue): Int {

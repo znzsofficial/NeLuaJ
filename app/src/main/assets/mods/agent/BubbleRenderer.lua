@@ -210,16 +210,27 @@ function _M.renderMessage(role, content, stateMessage, opts)
   if isUser and opts.isLastUser and canAct and stateMessage then
     local userRow = rowViews.actionRow
     userRow.setVisibility(VISIBLE)
-    local editBtn = MaterialButton(activity)
-    editBtn.setText(S.ai_edit_request)
-    editBtn.setTextSize(12)
-    editBtn.setAllCaps(false)
-    editBtn.setTextColor(actionColor)
-    editBtn.setBackgroundTintList(ColorStateList.valueOf(0))
-    editBtn.setLayoutParams(LinearLayout.LayoutParams(-2, dp(30)))
-    editBtn.setOnClickListener(function()
-      onEditRequest(stateMessage)
-    end)
+    local editBtn = loadlayout({
+      MaterialButton,
+      text = S.ai_edit_request,
+      textSize = "12sp",
+      allCaps = false,
+      textColor = actionColor,
+      BackgroundTintList = ColorStateList.valueOf(0),
+      layout_width = "wrap",
+      layout_height = "30dp",
+      minWidth = 0,
+      minHeight = 0,
+      paddingLeft = "8dp",
+      paddingRight = "8dp",
+      paddingTop = "0dp",
+      paddingBottom = "0dp",
+      insetTop = 0,
+      insetBottom = 0,
+      onClick = function()
+        onEditRequest(stateMessage)
+      end,
+    })
     userRow.addView(editBtn)
   end
 
@@ -354,37 +365,64 @@ function _M.renderMessage(role, content, stateMessage, opts)
       actionRow.setVisibility(VISIBLE)
     end
     if content and content ~= "" then
-      local copyReply = MaterialButton(activity)
-      copyReply.setText(S.ai_copy)
-      copyReply.setTextSize(12)
-      copyReply.setAllCaps(false)
-      copyReply.setTextColor(actionColor)
-      copyReply.setBackgroundTintList(ColorStateList.valueOf(0))
-      copyReply.setLayoutParams(LinearLayout.LayoutParams(-2, dp(30)))
-      copyReply.setOnClickListener(function(v) copyText(content, v) end)
+      local copyReply = loadlayout({
+        MaterialButton,
+        text = S.ai_copy,
+        textSize = "12sp",
+        allCaps = false,
+        textColor = actionColor,
+        BackgroundTintList = ColorStateList.valueOf(0),
+        layout_width = "wrap",
+        layout_height = "30dp",
+        minWidth = 0,
+        minHeight = 0,
+        paddingLeft = "8dp",
+        paddingRight = "8dp",
+        paddingTop = "0dp",
+        paddingBottom = "0dp",
+        insetTop = 0,
+        insetBottom = 0,
+        onClick = function(v) copyText(content, v) end,
+      })
       actionRow.addView(copyReply)
     end
     -- 最新一条 AI 回复（且无进行中任务）：一键重新生成
     if opts.isLastAssistant and canAct and content and content ~= "" then
-      local regenBtn = MaterialButton(activity)
-      regenBtn.setText(S.ai_regenerate)
-      regenBtn.setTextSize(12)
-      regenBtn.setAllCaps(false)
-      regenBtn.setTextColor(actionColor)
-      regenBtn.setBackgroundTintList(ColorStateList.valueOf(0))
-      regenBtn.setLayoutParams(LinearLayout.LayoutParams(-2, dp(30)))
-      regenBtn.setOnClickListener(function(v)
-        regenBtn.setEnabled(false)
-        onRegenerate()
-      end)
+      local regenBtn = loadlayout({
+        MaterialButton,
+        text = S.ai_regenerate,
+        textSize = "12sp",
+        allCaps = false,
+        textColor = actionColor,
+        BackgroundTintList = ColorStateList.valueOf(0),
+        layout_width = "wrap",
+        layout_height = "30dp",
+        minWidth = 0,
+        minHeight = 0,
+        paddingLeft = "8dp",
+        paddingRight = "8dp",
+        paddingTop = "0dp",
+        paddingBottom = "0dp",
+        insetTop = 0,
+        insetBottom = 0,
+        onClick = function(v)
+          v.setEnabled(false)
+          onRegenerate()
+        end,
+      })
       actionRow.addView(regenBtn)
     end
     if continuation then
-      local marker = MaterialTextView(activity)
-      marker.setText(continuation)
-      marker.setTextSize(12)
-      marker.setTextColor(ColorText)
-      marker.setPadding(dp(8), 0, dp(8), 0)
+      local marker = loadlayout({
+        MaterialTextView,
+        text = continuation,
+        textSize = "12sp",
+        textColor = ColorText,
+        paddingLeft = "8dp",
+        paddingRight = "8dp",
+        layout_width = "wrap",
+        layout_height = "wrap",
+      })
       actionRow.addView(marker)
       local continueBtn = createContinueButton()
       continueBtn.setOnClickListener(function()
