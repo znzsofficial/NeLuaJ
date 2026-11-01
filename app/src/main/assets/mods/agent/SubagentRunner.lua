@@ -24,9 +24,14 @@ function _M.isRunning()
   return current ~= nil
 end
 
---- 用户停止/回合作废时由 AgentTurn 调用：当前子代理在完成手头请求后中止
+--- 用户停止/回合作废时由 AgentTurn 调用：立即中止当前子代理并唤醒阻塞等待
 function _M.cancel()
-  if current then current.cancelled = true end
+  if current and not current.done then
+    current.cancelled = true
+    if current.finish then
+      pcall(function() current.finish("子任务已被用户停止", false) end)
+    end
+  end
 end
 
 --- 当前子代理运行快照；无运行中子代理返回 nil。
@@ -68,6 +73,29 @@ local function sleepMs(ms)
   pcall(function()
     luajava.bindClass("java.lang.Thread").sleep(ms)
   end)
+end
+
+--- 创建轻量同步等待/唤醒原语：
+--- 优先使用 JSE 原生标准的 java.util.concurrent.CountDownLatch(1)，出让 CPU 挂起，零忙等消耗；
+--- 若在无并发类环境中，优雅降级为轮询。
+local function createSyncEvent()
+  local ok, LatchClass = pcall(function()
+    return luajava.bindClass("java.util.concurrent.CountDownLatch")
+  end)
+  local latch = ok and LatchClass and LatchClass(1)
+  return {
+    notify = function()
+      if latch then pcall(function() latch.countDown() end) end
+    end,
+    await = function(timeoutSec)
+      if latch then
+        pcall(function()
+          local TimeUnit = luajava.bindClass("java.util.concurrent.TimeUnit")
+          latch.await(timeoutSec or 180, TimeUnit.SECONDS)
+        end)
+      end
+    end,
+  }
 end
 
 --- 子代理可用工具：完整内置工具，但排除委派与任务计划（防递归、计划归主代理）
@@ -123,15 +151,26 @@ function _M.run(task, lightweight)
     { role = "user", content = task },
   }
 
+  -- 跟踪当前子代理派发的活跃网络请求句柄与工具 Job，取消或超时时联动中止底层任务
+  local activeStreamCall = nil
+  local activeToolJob = nil
+
+  local syncEvent = createSyncEvent()
+
   local function finish(result, ok)
     if state.done then return end
     state.done = true
     state.result = result
     state.ok = ok == true
     state.currentTool = nil
+    -- 中止可能仍在后台狂奔的网络请求或工具任务
+    if activeStreamCall and activeStreamCall.cancel then pcall(function() activeStreamCall.cancel() end) end
+    if activeToolJob and activeToolJob.cancel then pcall(function() activeToolJob.cancel() end) end
     notifyProgress(state)
     if current == state then current = nil end
+    syncEvent.notify()
   end
+  state.finish = finish
 
   local function setStatus(text)
     local report = c().setStatus
@@ -162,7 +201,7 @@ function _M.run(task, lightweight)
     notifyProgress(state)
     local override = lightweight and c().getAuxModelConfig and c().getAuxModelConfig() or nil
     setStatus("子任务 #" .. subSerial .. " · 第 " .. state.rounds .. " 轮")
-    c().sendStream(messages, {
+    activeStreamCall = c().sendStream(messages, {
       builtinTools = subTools(),
       modelOverride = override,
       onPrepared = function(usage)
@@ -229,7 +268,7 @@ function _M.run(task, lightweight)
     local function execute()
       state.currentTool = tc.name
       notifyProgress(state)
-      c().executeToolAsync(tc.name, args, proceedWithResult)
+      activeToolJob = c().executeToolAsync(tc.name, args, proceedWithResult)
     end
     -- 确认策略与主代理一致：自动批准直通；需确认的走全局确认钩子
     if c().shouldAutoApprove(tc.name, args) then
@@ -245,9 +284,13 @@ function _M.run(task, lightweight)
 
   postToMain(step)
 
-  -- 工具线程同步等待；被取消时等当前请求的回调落定后退出
-  while not state.done do
-    sleepMs(200)
+  -- 若单测等环境已同步完成，直接返回；否则通过 CountDownLatch 挂起出让 CPU，直到主线程 finish() 精准唤醒
+  if not state.done then
+    syncEvent.await(180)
+  end
+  -- 若等待超时仍未完成，主动收口为超时状态，杜绝死锁与无谓轮询
+  if not state.done then
+    finish("子任务执行超时（180秒），已被自动终止", false)
   end
   if current == state then current = nil end
   return capResult(state.result, 4000), state.ok

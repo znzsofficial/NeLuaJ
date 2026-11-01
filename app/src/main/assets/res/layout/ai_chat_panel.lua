@@ -5,6 +5,7 @@ local MaterialCardView = bindClass "com.google.android.material.card.MaterialCar
 local MaterialDivider = bindClass "com.google.android.material.divider.MaterialDivider"
 local LinearLayout = bindClass "android.widget.LinearLayout"
 local ScrollView = bindClass "android.widget.ScrollView"
+local RecyclerView = bindClass "androidx.recyclerview.widget.RecyclerView"
 local EditText = bindClass "android.widget.EditText"
 local FrameLayout = bindClass "android.widget.FrameLayout"
 local ProgressBar = bindClass "android.widget.ProgressBar"
@@ -42,9 +43,22 @@ return {
     layout_height = "wrap",
     orientation = "horizontal",
     gravity = "center_vertical",
-    padding = "10dp",
-    paddingLeft = "16dp",
+    padding = "8dp",
+    paddingLeft = "8dp",
     paddingRight = "8dp",
+    {
+      MaterialButton,
+      id = "btnClose",
+      contentDescription = res.string.ai_close,
+      styleAttr = "?attr/materialIconButtonStyle",
+      layout_width = "wrap",
+      layout_height = "wrap",
+      BackgroundTintList = ColorStateList.valueOf(0),
+      icon = res.drawable("s_down"),
+      iconTint = ColorStateList.valueOf(ColorText),
+      RippleColor = ColorStateList.valueOf(ColorRipple),
+      layout_marginRight = "2dp",
+    },
     {
       LinearLayout,
       orientation = "vertical",
@@ -146,7 +160,7 @@ return {
       {
         MaterialTextView,
         id = "planLabel",
-        text = res.string.ai_todo,
+        text = res.string.ai_todo or res.string.ai_tool_todo or "任务计划",
         textSize = "12sp", textStyle = "bold", textColor = ColorPrimary,
       },
       {
@@ -171,20 +185,13 @@ return {
     layout_height = "0dp",
     layout_weight = 1,
     {
-      ScrollView,
-      id = "msgScroll",
+      RecyclerView,
+      id = "msgRecycler",
       layout_width = "match",
       layout_height = "match",
-      fillViewport = true,
-      {
-        LinearLayout,
-        id = "msgContainer",
-        layout_width = "match",
-        layout_height = "wrap",
-      orientation = "vertical",
       padding = "12dp",
       paddingBottom = "4dp",
-    },
+      clipToPadding = false,
     },
     {
       MaterialButton,

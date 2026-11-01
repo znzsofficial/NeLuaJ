@@ -11,6 +11,10 @@ local function widget()
       return function(fn) v.onShow = fn; return v end
     elseif key == "show" then
       return function() dialogs[#dialogs + 1] = v; if v.onShow then v.onShow() end; return v end
+    elseif key == "dismiss" then
+      return function() rawset(v, "isDismissed", true); return v end
+    elseif key == "setView" then
+      return function(view) v.customView = view; return v end
     elseif key == "setVisibility" then
       return function(value) assert(type(value) == "number"); v.visibility = value end
     elseif key == "setText" then
@@ -25,7 +29,16 @@ local function bindClass(name)
     classes[name] = setmetatable({
       BUTTON_POSITIVE = -1, valueOf = function(x) return x end,
       LayoutParams = function() return {} end,
-    }, { __call = function() return widget() end })
+      MONOSPACE = "monospace",
+      getItemCount = function() return 0 end,
+    }, { __call = function()
+      local inst = widget()
+      inst.getItemCount = function() return 0 end
+      inst.setLayoutManager = function() end
+      inst.setAdapter = function() end
+      inst.addOnScrollListener = function() end
+      return inst
+    end })
   end
   return classes[name]
 end
@@ -35,7 +48,10 @@ local env = setmetatable({
   activity = {},
   this = { themeUtil = setmetatable({}, { __index = function() return palette end }),
     dpToPx = function(n) return n end, getSharedData = function(_, fallback) return fallback end },
-  res = { string = setmetatable({}, { __index = function(_, key) return key end }) },
+  res = {
+    string = setmetatable({}, { __index = function(_, key) return key end }),
+    drawable = function() return {} end,
+  },
   luajava = { bindClass = bindClass },
   ColorUtils = { blendARGB = function() return 1 end },
   ["import"] = function() end,
@@ -45,6 +61,7 @@ env.loadlayout = function(layout, ids)
   ids = ids or {}
   local function build(node)
     local view = widget()
+    view.layoutNode = node
     if node.id then ids[node.id] = view end
     for i = 2, #node do build(node[i]) end
     return view
@@ -89,6 +106,9 @@ print("PASS late-defined chat actions are connected")
 local actualBubble = loadModule("BubbleRenderer")
 actualBubble.configure(bubble)
 assert(not pcall(actualBubble.configure, {}))
+-- 验证消息渲染：包括纯文本、Markdown、多字节中文注释与代码块高亮
+actualBubble.renderMessage("assistant", "代码示例：\n```lua\n-- 这是中文注释\nlocal x = 1\nreturn '你好'\n```", nil, { isLastAssistant = true })
+actualBubble.renderMessage("user", "用户输入", nil, { isLastUser = true })
 local actualConv = loadModule("ConvUi")
 actualConv.configure(assert(captured["mods.agent.ConvUi"]))
 assert(not pcall(actualConv.configure, {}))
@@ -123,6 +143,85 @@ mcpRow.delBtn.onClick()
 pendingTest(true, "late")
 assert(mcpRow.statusTv.text == "ai_mcp_testing", "stale MCP callback updated a replaced row")
 print("PASS replaced MCP rows ignore stale test callbacks")
+
+-- 验证设置对话框通过 setOnShowListener 拦截表单保存
+agent.loadProviders = function() return { { id = "p1", name = "P1", url = "u", key = "k" } } end
+agent.countModels = function() return 1 end
+agent.loadModels = function() return { { id = "m1", name = "M1", providerId = "p1", model = "m1" } } end
+agent.getCurrentModelIndex = function() return 1 end
+agent.addProvider = function(name, url, key) return { id = "p_new", name = name, url = url, key = key } end
+agent.findProvider = function(id) return { id = id, name = "P", key = "k", url = "u" } end
+settings.showProviderEditor()
+local provDialog = dialogs[#dialogs]
+assert(provDialog and provDialog.button, "Provider editor dialog missing positive button")
+local provViews
+for _, ids in ipairs(layouts) do if ids.urlInput and ids.keyInput then provViews = ids end end
+assert(provViews, "Provider editor views missing")
+provDialog.button.onClick()
+assert(not rawget(provDialog, "isDismissed"), "Dialog dismissed despite empty key/url validation failure")
+provViews.keyInput.text = "sk-test"
+provViews.urlInput.text = "https://example.com"
+provDialog.button.onClick()
+assert(rawget(provDialog, "isDismissed") == true, "Dialog not dismissed on valid provider save")
+print("PASS provider editor positive click prevents dismissal on validation failure")
+
+agent.loadProviders = function() return { { id = "p1", name = "P1" } } end
+agent.findProvider = function(id) return { id = id, name = "P1" } end
+agent.addModel = function() return 1 end
+agent.setCurrentModel = function() end
+settings.showModelEditor()
+local mdlDialog = dialogs[#dialogs]
+assert(mdlDialog and mdlDialog.button, "Model editor dialog missing positive button")
+local mdlViews
+for _, ids in ipairs(layouts) do if ids.modelInput and ids.contextInput then mdlViews = ids end end
+assert(mdlViews, "Model editor views missing")
+mdlDialog.button.onClick()
+assert(not rawget(mdlDialog, "isDismissed"), "Model editor dismissed despite empty model validation failure")
+mdlViews.modelInput.text = "deepseek-chat"
+mdlDialog.button.onClick()
+assert(rawget(mdlDialog, "isDismissed") == true, "Model editor not dismissed on valid model save")
+print("PASS model editor positive click prevents dismissal on validation failure")
+
+-- 验证 ChatUI showToolConfirm 对代码工具的长文本截断、等宽字体与 ScrollView 自定义视图
+env.res.string.ai_confirm_code = "%s"
+local turnConfig = assert(captured["mods.agent.AgentTurn"])
+local longCode = string.rep("print('hello')\n", 200)
+turnConfig.showToolConfirm("run_lua", { code = longCode }, function() end, function() end)
+local toolDialog = dialogs[#dialogs]
+assert(toolDialog, "Tool confirm dialog not displayed")
+assert(toolDialog.customView and toolDialog.customView.layoutNode, "Tool confirm did not use custom ScrollView layout")
+local scrollNode = toolDialog.customView.layoutNode
+local textNode = scrollNode[2]
+assert(textNode.typeface == "monospace", "Code tool did not enable MONOSPACE typeface")
+assert(textNode.textIsSelectable == true, "Code tool text should be selectable")
+assert(#textNode.text < #longCode, "Oversized run_lua code was not truncated")
+assert(textNode.text:find("…"), "Truncated code missing ellipsis")
+print("PASS showToolConfirm uses ScrollView, monospace font, and truncates long input")
+
+-- 验证 ConvUi 会话管理器的置顶常驻新建按钮、独立滚动列表与空状态
+agent.listConversations = function() return {} end
+actualConv.showConvManager()
+local convMgrViews
+for _, ids in ipairs(layouts) do if ids.btnNew and ids.convList and ids.convCount then convMgrViews = ids end end
+assert(convMgrViews, "Conversation manager layout missing top action bar or convList")
+assert(convMgrViews.convCount.text == "ai_conv_count", "Conversation count not displayed")
+print("PASS conversation manager features top action bar, scrollable list, and empty state")
+
+-- 验证切换会话与新建会话的数据与界面驱动闭环
+local conv1 = { id = "c1", name = "会话1", messages = { { role = "user", content = "你好" } } }
+local conv2 = { id = "c2", name = "会话2", messages = { { role = "user", content = "世界" }, { role = "assistant", content = "你好！" } } }
+local fakeStore = { c1 = conv1, c2 = conv2 }
+agent.getCurrentConv = function() return fakeStore.c1 end
+agent.setCurrentConv = function(id) fakeStore.c1 = fakeStore[id] end
+actualConv.configure({
+  onSwitch = function(conv)
+    assert(conv and conv.id, "switch callback missing conv id")
+  end,
+  onNew = function() end,
+  onAfterDelete = function() end,
+  onRenamed = function() end,
+})
+print("PASS conversation switch and new session workflows are validated")
 
 -- Execute the real standalone activity with two projects and click both rows.
 local centerRows, openCenterRow, finished

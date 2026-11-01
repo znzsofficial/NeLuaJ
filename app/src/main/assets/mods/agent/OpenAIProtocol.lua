@@ -21,6 +21,79 @@ local function isAzureOpenAiHost(host)
   return host:match("^[%w%-]+%.openai%.azure%.com$") ~= nil
 end
 
+local function normalizeJsonArguments(args)
+  if type(args) == "table" then
+    if #args > 0 and next(args, #args) == nil then
+      return "{}"
+    end
+    if type(json) == "table" and type(json.encode) == "function" then
+      local ok, encoded = pcall(json.encode, args)
+      if ok and type(encoded) == "string" and encoded:match("^%s*%{") then
+        return encoded
+      end
+    end
+    return "{}"
+  end
+  local s = tostring(args or ""):gsub("^%s*(.-)%s*$", "%1")
+  if s == "" or s == "null" or s == "nil" then return "{}" end
+  if s:sub(1, 1) ~= "{" or s:sub(-1) ~= "}" then return "{}" end
+  local ok, decoded = false, nil
+  if type(json) == "table" and type(json.decode) == "function" then
+    ok, decoded = pcall(json.decode, s)
+  else
+    ok, decoded = pcall(function() return JSON:decode(s) end)
+  end
+  if ok and type(decoded) == "table" and not (#decoded > 0 and next(decoded, #decoded) == nil) then
+    return s
+  end
+  if not ok then
+    -- 若运行环境中无 json 库或解析报错，但在语法上是合法大括号包裹的对象，兜底放行
+    if s:find(":", 1, true) then return s end
+  end
+  return "{}"
+end
+
+local function sanitizeToolParameters(params)
+  local p = type(params) == "table" and cloneValue(params) or { type = "object", properties = {} }
+  if p.type ~= "object" then
+    p.type = "object"
+  end
+  if type(p.properties) ~= "table" then
+    p.properties = {}
+  end
+  return p
+end
+
+local function sanitizeTools(tools)
+  if type(tools) ~= "table" then return {} end
+  local cleaned = {}
+  for _, tool in ipairs(tools) do
+    if type(tool) == "table" then
+      local t = cloneValue(tool)
+      local fn = t["function"] or t
+      if t.type == "function" and fn.name and fn.name ~= "" then
+        local params = sanitizeToolParameters(fn.parameters)
+        if t["function"] then
+          t["function"].name = tostring(fn.name)
+          t["function"].description = tostring(fn.description or "")
+          t["function"].parameters = params
+        else
+          t = {
+            type = "function",
+            ["function"] = {
+              name = tostring(fn.name),
+              description = tostring(fn.description or ""),
+              parameters = params,
+            },
+          }
+        end
+        cleaned[#cleaned + 1] = t
+      end
+    end
+  end
+  return cleaned
+end
+
 local function isDashscopeHost(host)
   return host:match("^dashscope[%w%-]*%.aliyuncs%.com$") ~= nil
 end
@@ -252,20 +325,23 @@ function _M.parseBalance(kind, body)
 end
 
 local function supportsTemperature(apiUrl, model)
-  -- GPT-5 and o-series models reject temperature. Only OpenAI requires this
-  -- omission here; Azure deployments can use opaque model names and publish
-  -- their own parameter support, so they remain permissive.
-  local host = apiHost(apiUrl)
+  -- GPT-5, GPT-6 and o-series models reject temperature.
+  -- 某些通过中转站代理的模型（如 o1, o3, o4, gpt-5, gpt-6 等）如果附带 temperature 会直接报 400：
+  -- "The request could not be processed. Please check the request parameters."
+  -- 因此对所有以 o1, o3, o4, gpt-5, gpt-6 开头的模型名称全面禁用 temperature。
   model = tostring(model or ""):lower()
+  local mName = model:match("[^/]+$") or model
+  if mName:match("^o[134]") or mName:match("^gpt%-[56]") then
+    return false
+  end
+
+  local host = apiHost(apiUrl)
   if host == "api.x.ai" then
     return not model:match("^grok%-4")
       and not model:match("^grok%-3%-mini")
       and not model:match("^grok%-code")
   end
-  if host ~= "api.openai.com" then return true end
-  return not model:match("^o[134]$")
-    and not model:match("^o[134]%-")
-    and not model:match("^gpt%-5")
+  return true
 end
 
 local function retainsResponsesReasoning(apiUrl, model)
@@ -316,9 +392,16 @@ local function repairToolHistory(messages)
   while index <= #messages do
     local message = messages[index]
     if message.role == "assistant" and message.tool_calls then
-      local pending, callOrder = {}, {}
+      local pending, callOrder, callNames = {}, {}, {}
       for _, call in ipairs(message.tool_calls) do
         call.id = call.id and call.id ~= "" and call.id or fallbackId()
+        local fn = call["function"] or call
+        if fn then
+          fn.arguments = normalizeJsonArguments(fn.arguments)
+          if fn.name and fn.name ~= "" then
+            callNames[call.id] = tostring(fn.name)
+          end
+        end
         pending[call.id] = true
         callOrder[#callOrder + 1] = call.id
       end
@@ -330,6 +413,12 @@ local function repairToolHistory(messages)
           toolMessage.tool_call_id = callOrder[missingIndex]
         end
         if toolMessage.tool_call_id and pending[toolMessage.tool_call_id] then
+          if (not toolMessage.name or toolMessage.name == "") and callNames[toolMessage.tool_call_id] then
+            toolMessage.name = callNames[toolMessage.tool_call_id]
+          end
+          if not toolMessage.content or toolMessage.content == "" then
+            toolMessage.content = "{}"
+          end
           pending[toolMessage.tool_call_id] = nil
           group[#group + 1] = toolMessage
         end
@@ -345,7 +434,7 @@ local function repairToolHistory(messages)
       end
       index = nextIndex
     else
-      if message.role ~= "tool" then repaired[#repaired + 1] = message end
+      repaired[#repaired + 1] = message
       index = index + 1
     end
   end
@@ -368,7 +457,7 @@ local function encodeLegacyFunctionHistory(messages)
           content = tostring(message.content or ""),
           function_call = {
             name = name,
-            arguments = tostring(fn.arguments or "{}"),
+            arguments = normalizeJsonArguments(fn.arguments),
           },
         }
         local result = messages[index + 1]
@@ -414,28 +503,17 @@ local function prepareMessages(messages, toolsEnabled, retainReasoning, stripIte
       message.response_origin = nil
     end
   end
+  if toolsEnabled then
+    prepared = repairToolHistory(prepared)
+  end
   if not retainReasoning then
     -- Ordinary Chat Completions turns must not send provider reasoning.
     for _, message in ipairs(prepared) do message.reasoning_content = nil end
   end
-  if toolsEnabled then
-    prepared = repairToolHistory(prepared)
-    return stripItemIds and encodeLegacyFunctionHistory(prepared) or prepared
+  if toolsEnabled and stripItemIds then
+    return encodeLegacyFunctionHistory(prepared)
   end
-  local filtered = {}
-  for _, message in ipairs(prepared) do
-    if message.role ~= "tool" then
-      if message.role ~= "assistant" or not message.tool_calls then
-        filtered[#filtered + 1] = message
-      elseif message.content and message.content ~= "" then
-        message.tool_calls = nil
-        message.response_output = nil
-        message.response_origin = nil
-        filtered[#filtered + 1] = message
-      end
-    end
-  end
-  return filtered
+  return prepared
 end
 
 local function copyResponseItems(items)
@@ -496,7 +574,7 @@ local function responsesInput(messages, includeReasoning, includeNativeOutput, n
           type = "function_call",
           call_id = tostring(call.id or ""),
           name = tostring(fn.name or ""),
-          arguments = tostring(fn.arguments or "{}"),
+          arguments = normalizeJsonArguments(fn.arguments),
         }
         -- Older conversations predate persisted raw output. Preserve their
         -- known function item id for strict endpoints as the best fallback.
@@ -528,7 +606,14 @@ local function responsesTools(tools)
   local out = {}
   for _, tool in ipairs(tools) do
     local fn = tool["function"] or tool
-    if tool.type == "function" and fn.name then out[#out + 1] = { type = "function", name = fn.name, description = fn.description, parameters = fn.parameters } end
+    if tool.type == "function" and fn.name then
+      out[#out + 1] = {
+        type = "function",
+        name = fn.name,
+        description = fn.description,
+        parameters = sanitizeToolParameters(fn.parameters),
+      }
+    end
   end
   return out
 end
@@ -541,7 +626,7 @@ local function legacyFunctions(tools)
       out[#out + 1] = {
         name = fn.name,
         description = fn.description,
-        parameters = fn.parameters,
+        parameters = sanitizeToolParameters(fn.parameters),
       }
     end
   end
@@ -555,7 +640,111 @@ local function hasLegacyFunctionHistory(messages)
   return false
 end
 
+local function sanitizeMessagesForOpenAI(messages, retainReasoning)
+  local cleaned = {}
+  local pendingToolCalls = {} -- call_id -> { name = "..." }
+
+  for _, msg in ipairs(messages or {}) do
+    local role = msg.role
+    local item = { role = role }
+    local include = true
+
+    if role == "assistant" then
+      if type(msg.content) == "table" then
+        item.content = cloneValue(msg.content)
+      elseif msg.content and msg.content ~= "" then
+        item.content = tostring(msg.content)
+      elseif msg.tool_calls and #msg.tool_calls > 0 then
+        -- 官方 OpenAI 规范：当包含 tool_calls 时，content 可以为 null，但部分转发中转站
+        --（如 OneAPI / NewAPI）在反序列化时若 content 为 null 或空可能会校验失败；
+        -- 对此给出标准空串保证 schema 兼容性
+        item.content = ""
+      else
+        item.content = ""
+      end
+
+      if msg.tool_calls and #msg.tool_calls > 0 then
+        local validCalls = {}
+        for _, tc in ipairs(msg.tool_calls) do
+          local fn = tc["function"] or tc
+          local name = fn.name or tc.name
+          if name and name ~= "" then
+            local callId = tc.id and tc.id ~= "" and tc.id or ("call_" .. tostring(#validCalls + 1))
+            validCalls[#validCalls + 1] = {
+              id = callId,
+              type = "function",
+              ["function"] = {
+                name = tostring(name),
+                arguments = normalizeJsonArguments(fn.arguments),
+              }
+            }
+            pendingToolCalls[callId] = { name = tostring(name) }
+          end
+        end
+        if #validCalls > 0 then
+          item.tool_calls = validCalls
+        end
+      end
+
+      if retainReasoning and msg.reasoning_content and msg.reasoning_content ~= "" then
+        item.reasoning_content = tostring(msg.reasoning_content)
+      end
+
+      -- 如果既无文本也无 tool_calls，不产生空 assistant
+      if (item.content == "" or item.content == nil) and not item.tool_calls then
+        include = false
+      end
+
+    elseif role == "tool" then
+      local callId = msg.tool_call_id
+      -- 孤立 tool 消息如果找不到对应 assistant.tool_calls，将其转为 user 提示信息以满足 OpenAI/Gemini 校验
+      local content = tostring(msg.content or "")
+      if content == "" then content = "{}" end
+      if callId and pendingToolCalls[callId] then
+        item.tool_call_id = tostring(callId)
+        item.content = content
+        local callInfo = pendingToolCalls[callId]
+        if type(callInfo) == "table" and callInfo.name and callInfo.name ~= "" then
+          item.name = tostring(callInfo.name)
+        elseif msg.name and tostring(msg.name) ~= "" then
+          item.name = tostring(msg.name)
+        end
+        pendingToolCalls[callId] = nil
+      else
+        item.role = "user"
+        item.content = "[Tool Output]\n" .. content
+      end
+
+    elseif role == "user" or role == "system" or role == "developer" then
+      if type(msg.content) == "table" then
+        item.content = cloneValue(msg.content)
+      else
+        item.content = tostring(msg.content or "")
+        if item.content == "" then
+          -- OpenAI / Gemini 要求 user/system content 不能为空
+          item.content = "..."
+        end
+      end
+    else
+      -- 未知 role 统一当作 user
+      item.role = "user"
+      if type(msg.content) == "table" then
+        item.content = cloneValue(msg.content)
+      else
+        item.content = tostring(msg.content or "...")
+      end
+    end
+
+    if include then
+      cleaned[#cleaned + 1] = item
+    end
+  end
+
+  return cleaned
+end
+
 function _M.buildRequest(cfg, messages, callbacks)
+  callbacks = callbacks or {}
   local model, apiUrl = cfg.getModel(), cfg.getApiUrl()
   local toolsEnabled = not callbacks.disableTools
   local useResponses = cfg.useResponses and cfg.useResponses() == true
@@ -564,13 +753,70 @@ function _M.buildRequest(cfg, messages, callbacks)
   local responseOrigin = _M.responsesOrigin(apiUrl)
   local retainReasoning = useResponses and retainsResponsesReasoning(apiUrl, model) or retainsChatReasoning(apiUrl, model)
   local prepared = prepareMessages(messages, toolsEnabled, retainReasoning, not useResponses)
+
+  local function isGeminiTarget(url, m)
+    local host = apiHost(url)
+    return host:find("googleapis%.com") ~= nil or tostring(m or ""):lower():find("gemini", 1, true) ~= nil
+  end
+
+  local isGemini = isGeminiTarget(apiUrl, model)
+  local function isPrunableAssistant(msg)
+    if not msg or msg.role ~= "assistant" then return false end
+    -- 若助手消息带有未完成或挂起的工具调用，末尾必须裁剪
+    if msg.tool_calls and #msg.tool_calls > 0 then return true end
+    local content = tostring(msg.content or "")
+    if content == "" then return true end
+    -- 仅当是非延续态（非续写请求）且面向 Gemini 时才裁剪末尾非空 assistant
+    if isGemini and not msg.continuation_state then return true end
+    return false
+  end
+
+  -- Gemini / Google 官方 OpenAI 兼容层规范：请求消息列表末尾必须是用户 (user) 或工具结果 (tool/function) 轮次，
+  -- 绝不允许以模型助手 (assistant) 轮次作为请求结尾。若末尾有残留的空 assistant 或未完结 assistant，将其裁剪以符合规范。
+  while #prepared > 0 and isPrunableAssistant(prepared[#prepared]) do
+    table.remove(prepared, #prepared)
+  end
+
+  -- 对兼容层（非 Responses API）的消息序列进行深度清洗：
+  -- 1. 过滤内部扩展字段（如 request_error、response_origin、continuation_state 等）
+  -- 2. 补齐孤立/丢失对应的 tool 消息，将其降级包装为普通用户消息
+  -- 3. 避免空文本导致 Gemini 或某些转发中转站硬性抛 400
+  if not useResponses and not legacyFunctionMode then
+    prepared = sanitizeMessagesForOpenAI(prepared, retainReasoning)
+    -- 再次确保末尾不以非法 assistant 结尾
+    while #prepared > 0 and isPrunableAssistant(prepared[#prepared]) do
+      table.remove(prepared, #prepared)
+    end
+  end
+
+  -- Gemini / CPA 规范：请求 contents 数组绝不可为空。
+  -- 当中转站把开头的 system / developer 消息提取为 systemInstruction 后，
+  -- 若剩余消息中无任何对话轮次（user 或 tool/function），Gemini 会报：
+  -- "Gemini requires a non-empty contents array; provide user content and complete tool history"
+  -- 因此在所有剪裁和清洗之后，若不存在对话轮次，追加一个兜底 user 消息保证 contents 非空。
+  local hasConversationTurn = false
+  for _, m in ipairs(prepared) do
+    if m.role == "user" or m.role == "tool" or m.role == "function" then
+      hasConversationTurn = true
+      break
+    end
+  end
+  if not hasConversationTurn then
+    prepared[#prepared + 1] = {
+      role = "user",
+      content = "...",
+    }
+  end
+
   local body = useResponses and {
     model = model, stream = true, max_output_tokens = callbacks.maxTokens or cfg.getMaxTokens(),
   } or {
     model = model, messages = prepared, stream = true, max_tokens = callbacks.maxTokens or cfg.getMaxTokens(),
   }
   if supportsTemperature(apiUrl, model) then body.temperature = cfg.getTemperature() end
-  if not useResponses and isMiMoHost(apiHost(apiUrl)) then
+  local mName = tostring(model or ""):lower():match("[^/]+$") or tostring(model or ""):lower()
+  local isReasoningModel = mName:match("^o[134]") or mName:match("^gpt%-[56]")
+  if not useResponses and (isMiMoHost(apiHost(apiUrl)) or isReasoningModel) then
     body.max_completion_tokens = body.max_tokens
     body.max_tokens = nil
   end
@@ -592,6 +838,7 @@ function _M.buildRequest(cfg, messages, callbacks)
   if toolsEnabled then
     -- callbacks.builtinTools：单请求工具集覆盖（子代理排除部分工具时使用）
     local tools = type(callbacks.builtinTools) == "table" and callbacks.builtinTools or collectTools(cfg)
+    tools = sanitizeTools(tools)
     if legacyFunctionMode then
       body.functions = legacyFunctions(tools)
       if #body.functions > 0 then body.function_call = "auto" end
@@ -623,7 +870,7 @@ function _M.parseToolCalls(encoded, normalizeToolName)
         id = call.id and call.id ~= "" and call.id or "call_" .. tostring(index),
         item_id = call.item_id,
         name = name,
-        arguments = type(args) == "table" and json.encode(args) or (args or "{}"),
+        arguments = normalizeJsonArguments(type(args) == "table" and json.encode(args) or args),
         legacy_function_call = call.legacy_function_call == true,
       }
     end

@@ -471,58 +471,76 @@ end
 --- 会话管理器（重命名 / 删除 / 新建）
 function _M.showConvManager()
   local list = AgentChat.listConversations()
-  if #list == 0 then return end
 
   local dlgViews = {}
   local content = loadlayout({
-    ScrollView,
+    LinearLayout,
+    orientation = "vertical",
     layout_width = "match",
-    layout_height = "match",
-    fillViewport = true,
+    layout_height = "wrap",
+    padding = "16dp",
+    paddingBottom = "8dp",
     {
+      -- 顶栏：标题 + 计数 + 新建按钮（常驻置顶，长列表无需滑到底）
       LinearLayout,
-      orientation = "vertical",
+      orientation = "horizontal",
+      gravity = "center_vertical",
       layout_width = "match",
       layout_height = "wrap",
-      padding = "12dp",
+      paddingBottom = "8dp",
       {
-        LinearLayout,
-        orientation = "horizontal",
-        gravity = "center_vertical",
-        layout_width = "match",
-        layout_height = "wrap",
-        padding = "8dp",
-        paddingBottom = "2dp",
-        {
-          MaterialTextView,
-          text = S.ai_manage_convs,
-          textSize = "18sp", textStyle = "bold", textColor = ColorOnSurface,
-          layout_width = "0dp", layout_weight = 1,
-        },
-        {
-          MaterialTextView,
-          id = "convCount",
-          text = S.ai_conv_count:format(#list),
-          textSize = "13sp", textColor = ColorText,
-        },
+        MaterialTextView,
+        text = S.ai_manage_convs,
+        textSize = "18sp",
+        textStyle = "bold",
+        textColor = ColorOnSurface,
+        layout_width = "0dp",
+        layout_weight = 1,
       },
+      {
+        MaterialTextView,
+        id = "convCount",
+        text = S.ai_conv_count:format(#list),
+        textSize = "13sp",
+        textColor = ColorText,
+        layout_marginRight = "8dp",
+      },
+      {
+        MaterialButton,
+        id = "btnNew",
+        text = S.ai_new_conv_btn,
+        textSize = "12sp",
+        icon = res.drawable("add"),
+        iconSize = dp(14),
+        iconTint = ColorStateList.valueOf(ColorOnPrimary),
+        iconPadding = dp(4),
+        layout_width = "wrap",
+        layout_height = "32dp",
+        minWidth = 0,
+        minHeight = 0,
+        paddingLeft = "8dp",
+        paddingRight = "8dp",
+        paddingTop = "0dp",
+        paddingBottom = "0dp",
+        insetTop = 0,
+        insetBottom = 0,
+        BackgroundTintList = ColorStateList.valueOf(ColorPrimary),
+        textColor = ColorOnPrimary,
+      },
+    },
+    {
+      -- 列表独立包裹滚动视图
+      ScrollView,
+      layout_width = "match",
+      layout_height = "wrap",
+      fillViewport = true,
       {
         LinearLayout,
         id = "convList",
         orientation = "vertical",
         layout_width = "match",
         layout_height = "wrap",
-        layout_marginTop = "2dp",
-      },
-      {
-        MaterialButton,
-        id = "btnNew",
-        text = S.ai_new_conv_btn,
-        textSize = "14sp",
-        layout_width = "match",
         layout_marginTop = "4dp",
-        BackgroundTintList = ColorStateList.valueOf(ColorPrimary),
-        textColor = ColorOnPrimary,
       },
     },
   }, dlgViews)
@@ -537,6 +555,20 @@ function _M.showConvManager()
         container.addView(buildManagerRow(item.conversation, render))
         visible = visible + 1
       end
+    end
+    if visible == 0 then
+      local empty = loadlayout({
+        MaterialTextView,
+        text = S.ai_search_empty or "暂无历史会话",
+        textSize = "13sp",
+        textColor = ColorText,
+        gravity = "center",
+        paddingTop = "32dp",
+        paddingBottom = "32dp",
+        layout_width = "match",
+        layout_height = "wrap",
+      })
+      container.addView(empty)
     end
     if dlgViews.convCount then dlgViews.convCount.setText(S.ai_conv_count:format(visible)) end
   end

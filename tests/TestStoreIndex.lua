@@ -3,6 +3,7 @@ local ASSETS = ASSETS or "app/src/main/assets/"
 -- ConversationStore.loadIndex + getData 回退 + InitReader.readFields 行为测试
 package.preload["mods.agent.ConversationStore"] = assert(loadfile(ASSETS .. "mods/agent/ConversationStore.lua"))
 package.preload["mods.utils.LuaKV"] = assert(loadfile(ASSETS .. "mods/utils/LuaKV.lua"))
+package.preload["mods.utils.TextUtil"] = assert(loadfile(ASSETS .. "mods/utils/TextUtil.lua"))
 local LuaKV = require("mods.utils.LuaKV")
 local CS = assert(loadfile(ASSETS .. "mods/agent/ConversationStore.lua"))()
 local IR = assert(loadfile(ASSETS .. "mods/project/InitReader.lua"))()

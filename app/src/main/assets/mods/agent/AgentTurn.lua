@@ -54,6 +54,10 @@ local function captureScope()
   state.scope = AsyncScope.capture(Session.projectPath(), Session.id(), state.generation)
 end
 
+local function isCurrentScope(scope)
+  return scope and AsyncScope.matches(scope, Session.projectPath(), Session.id(), state.generation)
+end
+
 -- generation 相同只说明没有被 invalidate。还要核对请求开始时的工程和会话。
 local function isCurrent(generation)
   return generation == state.generation
@@ -153,7 +157,9 @@ end
 
 local executeToolCalls
 
-local function finishStopped(toolCalls, index, args)
+local function finishStopped(toolCalls, index, args, turnScope)
+  -- 严格时空守卫：Fail-Closed 原则，未携带有效当前会话作用域一律禁止落盘
+  if not isCurrentScope(turnScope) then return end
   local messages = getMessages()
   -- Responses API 要求每个 function_call 都有配对的 function_call_output，
   -- 即使中途停止也要为剩余调用补上结果。
@@ -188,7 +194,7 @@ end
 -- 并行批次执行：整批只读工具并发调度，结果全部回调后按调用顺序落盘，
 -- 产生的历史与串行路径完全一致（配对顺序确定）。只读批次无确认间隙，
 -- 无需 activeToolStop；用户停止时所有真实结果照常记录并标记 stopped。
-local function executeToolCallsParallel(calls, toolCalls, results, onAllDone, generation)
+local function executeToolCallsParallel(calls, toolCalls, results, onAllDone, generation, turnScope)
   local total = #calls
   local pending = total
   local collected = {}
@@ -201,10 +207,12 @@ local function executeToolCallsParallel(calls, toolCalls, results, onAllDone, ge
     local toolCallKey = call.name .. "\n"
       .. (argsEncoded and tostring(encodedArgs) or tostring(tc.arguments or ""))
     AgentChat.executeToolAsync(call.name, call.args, function(resultStr, toolOk)
-      if collected[i] or (generation and not isCurrent(generation)) then return end
+      -- 严格时空守卫：世代或会话作用域已失效时，绝对禁止向活跃会话追加数据
+      if collected[i] or (generation and not isCurrent(generation)) or not isCurrentScope(turnScope) then return end
       collected[i] = { id = call.id, result = resultStr, ok = toolOk, key = toolCallKey }
       pending = pending - 1
       if pending > 0 then return end
+      if not isCurrentScope(turnScope) then return end
       -- 全部回调已到：按调用顺序落盘
       local messages = getMessages()
       for j = 1, total do
@@ -247,7 +255,8 @@ executeToolCalls = function(toolCalls, index, results, onAllDone, generation)
   if index == 1 and AgentChat.classifyParallelBatch then
     local calls = AgentChat.classifyParallelBatch(toolCalls, state.failedToolCalls)
     if calls then
-      executeToolCallsParallel(calls, toolCalls, results, onAllDone, generation)
+      local parallelScope = AsyncScope.capture(Session.projectPath(), Session.id(), generation or state.generation)
+      executeToolCallsParallel(calls, toolCalls, results, onAllDone, generation, parallelScope)
       return
     end
   end
@@ -318,17 +327,18 @@ executeToolCalls = function(toolCalls, index, results, onAllDone, generation)
   local stopped = false
   local accepted = false
   local stopHandle
+  local turnScope = AsyncScope.capture(Session.projectPath(), Session.id(), generation or state.generation)
   local function finish()
     if not stopped then
       stopped = true
-      finishStopped(toolCalls, index, args)
+      finishStopped(toolCalls, index, args, turnScope)
     end
   end
 
   local function proceedWithResult(resultStr, stopAfterResult, toolOk)
     -- 仅清属于自己的停止句柄：过期回调不得抹掉当前回合的句柄
     if state.activeToolStop == stopHandle then state.activeToolStop = nil end
-    if accepted or (generation and not isCurrent(generation)) then return end
+    if stopped or accepted or state.stopRequested or not isCurrentScope(turnScope) then return end
     accepted = true
     results[#results + 1] = {
       tool_call_id = tc.id,
@@ -371,7 +381,7 @@ executeToolCalls = function(toolCalls, index, results, onAllDone, generation)
       -- 当前调用的真实结果已在上文落盘，补齐从下一条开始的停止占位
       if not stopped then
         stopped = true
-        finishStopped(toolCalls, index + 1, args)
+        finishStopped(toolCalls, index + 1, nil, turnScope)
       end
       return
     end
@@ -589,6 +599,14 @@ function _M.sendRaw(apiMessages, isContinue)
       end
       local messages = getMessages()
       local requestMessage = requestUserIndex and messages[requestUserIndex]
+      if not requestMessage or requestMessage.role ~= "user" then
+        for i = #messages, 1, -1 do
+          if messages[i].role == "user" then
+            requestMessage = messages[i]
+            break
+          end
+        end
+      end
       if requestMessage and requestMessage.role == "user" then
         requestMessage.request_error = tostring(err)
         state.retryPayloads[requestMessage] = apiMessages

@@ -14,8 +14,17 @@ local SkillManager = require("mods.agent.SkillManager")
 local TodoManager = require("mods.agent.TodoManager")
 local PatchEngine = require("mods.agent.PatchEngine")
 local SubagentRunner = require("mods.agent.SubagentRunner")
-local AiHttpClient = luajava.bindClass("com.nekolaska.ai.AiHttpClient")
-local agentHttp = AiHttpClient(activity)
+local AiHttpClient = nil
+local agentHttp = nil
+local function getAgentHttp()
+  if not agentHttp then
+    pcall(function()
+      AiHttpClient = luajava.bindClass("com.nekolaska.ai.AiHttpClient")
+      agentHttp = AiHttpClient(activity)
+    end)
+  end
+  return agentHttp
+end
 local activeSkill = nil
 
 local SYSTEM_PROMPT = [[
@@ -120,8 +129,9 @@ function _M.getSystemPrompt()
 end
 
 function _M.configureSkills()
-  local project = Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir()
-  local root = Bean and Bean.Path and Bean.Path.agent_root_dir or (activity.getLuaDir() .. "/agents")
+  local luaDir = activity and activity.getLuaDir and activity.getLuaDir() or ""
+  local project = Bean and Bean.Path and Bean.Path.this_dir or luaDir
+  local root = Bean and Bean.Path and Bean.Path.agent_root_dir or (luaDir .. "/agents")
   activeSkill = nil
   SkillManager.configure(root, project)
 end
@@ -1119,11 +1129,12 @@ _M.removeModel = ModelRegistry.removeModel
 
 -- 自签名证书开关：开启时用忽略证书校验的客户端
 local function getHttpClient()
-  if this.getSharedData("ai_allow_selfsigned", "0") == "1" then
-    local ok, client = pcall(function() return agentHttp.unsafe end)
+  local http = getAgentHttp()
+  if this.getSharedData("ai_allow_selfsigned", "0") == "1" and http then
+    local ok, client = pcall(function() return http.unsafe end)
     if ok and client then return client end
   end
-  return agentHttp
+  return http
 end
 
 local function readHttp(code, body, onResult, accept)

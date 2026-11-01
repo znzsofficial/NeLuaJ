@@ -28,15 +28,20 @@ local MCPClient = require("mods.agent.MCPClient")
 local TodoManager = require("mods.agent.TodoManager")
 local SubagentRunner = require("mods.agent.SubagentRunner")
 local TextUtil = require("mods.utils.TextUtil")
-local ActivityUtil = require("mods.utils.ActivityUtil")
+-- 延迟或按需加载，避免在主界面启动加载 Actions 时提前触发非必要的深度依赖
+local ActivityUtil = nil
+local function getActivityUtil()
+  if not ActivityUtil then ActivityUtil = require("mods.utils.ActivityUtil") end
+  return ActivityUtil
+end
 import "mods.utils.EditorUtil"
 local ColorUtil = this.themeUtil
 local ColorPrimary = ColorUtil.primary.main
 local ColorOnPrimary = ColorUtil.primary.on
 local ColorPrimaryContainer = ColorUtil.primary.container
 local ColorOnPrimaryContainer = ColorUtil.primary.onContainer
-local ColorSecondaryContainer = ColorUtil.secondary.container
-local ColorOnSecondaryContainer = ColorUtil.secondary.onContainer
+local ColorSecondaryContainer = ColorUtil.secondary and ColorUtil.secondary.container or ColorPrimaryContainer
+local ColorOnSecondaryContainer = ColorUtil.secondary and ColorUtil.secondary.onContainer or ColorOnPrimaryContainer
 local ColorSurface = ColorUtil.surface.container
 local ColorSurfaceContainerLow = ColorUtil.surface.containerLow
 local ColorSurfaceContainerHigh = ColorUtil.surface.containerHigh
@@ -44,6 +49,7 @@ local ColorOnSurface = ColorUtil.surface.on
 local ColorText = ColorUtil.surface.onVariant
 local ColorOutline = ColorUtil.outline.variant
 local ColorError = ColorUtil.error.main
+local ColorOnError = ColorUtil.error.on
 local ColorErrorContainer = ColorUtil.error.container
 local ColorOnErrorContainer = ColorUtil.error.onContainer
 local ColorRipple = ColorUtils.blendARGB(ColorPrimary, 0x00ffffff, 0.4)
@@ -66,14 +72,15 @@ local streamView = {}
 local activeToolConfirm = nil
 local editingMessageIndex = nil
 local titleInFlight = false
--- 消息 → 气泡视图索引（loadHistory 重建），供会话内搜索跳转定位
-local bubbleByMessage = {}
-
 -- 回合状态（loading/generation/stopRequested/activeStream/failedToolCalls/
 -- retryPayloads/activeToolStop）已迁至 AgentTurn；此处仅保留会话与视图状态。
 
 -- 前向声明
-local saveHistory, loadHistory, showModelManager, showModelPicker, showConvManager, showConvList, showSettings, addMessageBubble, addToolBubble, updateProjectLabel, sendMessage, addRequestErrorBubble
+local MessageItemFlattener = require("mods.agent.MessageItemFlattener")
+local chatAdapter = nil
+local currentVisualCards = {}
+
+local saveHistory, loadHistory, renderCards, showModelManager, showModelPicker, showConvManager, showConvList, showSettings, addMessageBubble, addToolBubble, updateProjectLabel, sendMessage, addRequestErrorBubble
 local regenerateLastTurn, editUserMessage
 
 -- 任务计划随会话记录的 todos 字段持久化：saveHistory 每次落盘都镜像
@@ -172,13 +179,15 @@ end
 --- 智能滚动：仅当用户停留在底部附近时自动跟随；回看历史时不再打扰，
 --- 并显示“跳到最新”悬浮按钮。
 local function isNearBottom()
-  local sv = views.msgScroll
-  if not sv then return true end
-  local child = sv.getChildAt(0)
-  if not child then return true end
-  -- 距底部阈值 240dp：流式增量之外的滚动都视为“在跟读”
-  local distFromBottom = child.getBottom() - sv.getScrollY() - sv.getHeight()
-  return distFromBottom <= dp(240)
+  if not views.msgRecycler or not chatAdapter then return true end
+  local count = chatAdapter.getItemCount()
+  if count <= 1 then return true end
+  local lm = views.msgRecycler.getLayoutManager()
+  if lm and lm.findLastVisibleItemPosition then
+    local last = lm.findLastVisibleItemPosition()
+    return (count - 1 - last) <= 2
+  end
+  return true
 end
 
 local function updateJumpLatest(visible)
@@ -186,21 +195,26 @@ local function updateJumpLatest(visible)
   views.btnJumpLatest.setVisibility(visible and VISIBLE or GONE)
 end
 
-local function scrollDown()
-  local sv = views.msgScroll
-  if not sv then return end
-  sv.post(function()
-    if isNearBottom() then
-      sv.fullScroll(130)
-      updateJumpLatest(false)
-    else
-      updateJumpLatest(true)
-    end
-  end)
+local function scrollDown(force)
+  if not views.msgRecycler or not chatAdapter then return end
+  if not force and not isNearBottom() then return end
+  local count = chatAdapter.getItemCount()
+  if count > 0 then
+    views.msgRecycler.post(function()
+      pcall(function()
+        if force then
+          views.msgRecycler.smoothScrollToPosition(count - 1)
+        else
+          views.msgRecycler.scrollToPosition(count - 1)
+        end
+        updateJumpLatest(false)
+      end)
+    end)
+  end
 end
 
 local function showAgentHelp()
-  ActivityUtil.open("help", "agent")
+  getActivityUtil().open("help", "agent")
 end
 
 -- ─── Markdown 渲染辅助（已抽到 mods/agent/Markdown）──
@@ -212,7 +226,12 @@ end
 -- loadHistory / AgentTurn 钩子 / SubagentRunner 进度等调用点零改动。
 local BubbleRenderer = require("mods.agent.BubbleRenderer")
 addMessageBubble = BubbleRenderer.renderMessage
-addToolBubble = BubbleRenderer.renderTool
+  addToolBubble = function(name, args, result)
+    if AgentChat.normalizeToolName(name) == "update_todos" then
+      updatePlanStrip()
+    end
+    refreshMessageList()
+  end
 
 --- 任务计划置顶条：显示当前计划的完成进度，点击弹出完整清单。
 --- 数据源就是 TodoManager 的实时状态（系统提示注入的同一份）。
@@ -227,8 +246,10 @@ local function updatePlanStrip()
   for _, item in ipairs(todos) do
     if item.status == "completed" then done = done + 1 end
   end
-  views.planLabel.setText(S.ai_todo)
-  views.planProgress.setText(S.ai_plan_progress:format(done, #todos))
+  local todoTitle = S.ai_todo or S.ai_tool_todo or "任务计划"
+  views.planLabel.setText(tostring(todoTitle))
+  local progressPattern = S.ai_plan_progress or "%d/%d 已完成"
+  views.planProgress.setText(string.format(progressPattern, done, #todos))
   views.planStrip.setVisibility(VISIBLE)
 end
 
@@ -248,14 +269,14 @@ local function updateContextChip()
   local name = thisFile ~= "" and tostring(thisFile):gsub("^.*/", "") or S.ai_ctx_env
   local label
   if skipContext then
-    label = "📎 " .. S.ai_ctx_skipped
+    label = S.ai_ctx_skipped
   else
     local tokens = 0
     pcall(function()
       local ContextManager = require("mods.agent.ContextManager")
       tokens = ContextManager.estimateTokens(context)
     end)
-    label = "📎 " .. S.ai_ctx_chip:format(name) .. " · ~" .. tokens .. " tokens"
+    label = S.ai_ctx_chip:format(name) .. " · ~" .. tokens .. " tokens"
   end
   views.ctxChip.setText(label)
   views.ctxChip.setVisibility(VISIBLE)
@@ -334,8 +355,9 @@ local function maybeGenerateTitle()
   if not firstUser or not firstAssistant then return end
 
   local function clip(text, limit)
-    if #text > limit then return text:sub(1, limit) .. "…" end
-    return text
+    local capped = TextUtil.utf8Cap(text, limit)
+    if #capped < #text then return capped .. "…" end
+    return capped
   end
   local function settleTitle(raw)
     raw = tostring(raw or ""):gsub("[\r\n]+", " ")
@@ -376,7 +398,7 @@ local function maybeGenerateTitle()
       if title == "" then return end
       saveHistory({ name = title, titled = true })
       if views.aiTitle then views.aiTitle.setText(title) end
-      print(S.ai_title_generated)
+      -- 静默更新标题栏即可，无需弹出全局 Toast 打断用户当前正在做的事情
     end,
     onError = function()
       titleInFlight = false
@@ -384,10 +406,27 @@ local function maybeGenerateTitle()
   })
 end
 
+local isRefreshing = false
+local pendingRefresh = false
+
 local function refreshMessageList()
   if not isPanelVisible() then return end
-  if views.msgContainer then views.msgContainer.removeAllViews() end
-  loadHistory(false)
+  if isRefreshing then
+    pendingRefresh = true
+    return
+  end
+  isRefreshing = true
+  repeat
+    pendingRefresh = false
+    pcall(function()
+      if renderCards then
+        renderCards()
+      else
+        loadHistory(false)
+      end
+    end)
+  until not pendingRefresh
+  isRefreshing = false
 end
 
 local function undoLastTurn()
@@ -422,8 +461,7 @@ local function applyFileChange(action)
         return
       end
       if MainActivity and MainActivity.RecyclerView then MainActivity.RecyclerView.update() end
-      if views.msgContainer then views.msgContainer.removeAllViews() end
-      loadHistory()
+      refreshMessageList()
       print(tostring(result.error or "文件变更已恢复"))
     end, "io")
   end)
@@ -445,7 +483,7 @@ local function compressCurrentContext(onDone)
   return AgentTurn.compress(onDone)
 end
 
---- 导出当前会话为 Markdown，经系统分享面板发出
+--- 导出当前会话为 Markdown：写成真实本地文件并以文件流分享，零字符截断、无大小限制
 local function exportConversation()
   local conv = AgentChat.getCurrentConv()
   if not conv or #messages() == 0 then return end
@@ -459,7 +497,6 @@ local function exportConversation()
     elseif msg.role == "assistant" then
       local reasoning = tostring(msg.reasoning_content or "")
       if reasoning ~= "" then
-        reasoning = TextUtil.utf8Cap(reasoning, 2000)
         out[#out + 1] = "> " .. S.ai_thinking .. ": " .. reasoning:gsub("\n", "\n> ")
         out[#out + 1] = ""
       end
@@ -471,18 +508,66 @@ local function exportConversation()
       local text = tostring(msg.content or "")
       if text ~= "" then
         out[#out + 1] = "```"
-        out[#out + 1] = "[tool] " .. text:sub(1, 2000)
+        out[#out + 1] = "[tool] " .. text
         out[#out + 1] = "```"
         out[#out + 1] = ""
       end
     end
   end
-  local Intent = luajava.bindClass("android.content.Intent")
-  local intent = Intent(Intent.ACTION_SEND)
-  intent.setType("text/plain")
-  intent.putExtra(Intent.EXTRA_TEXT, table.concat(out, "\n"))
-  intent.putExtra(Intent.EXTRA_TITLE, convName(conv) .. ".md")
-  activity.startActivity(Intent.createChooser(intent, S.ai_export_conv))
+  local fullMarkdown = table.concat(out, "\n")
+  local fileName = (convName(conv):gsub("[^%w%._%-]+", "_")) .. ".md"
+  if fileName == ".md" or fileName == "_.md" then fileName = "conversation.md" end
+
+  -- 尝试通过真实文件 + FileProvider 分享（无任何 Binder 内存与字数限制）
+  local sharedByFile = false
+  pcall(function()
+    local File = luajava.bindClass("java.io.File")
+    local FileOutputStream = luajava.bindClass("java.io.FileOutputStream")
+    local FileProvider = luajava.bindClass("androidx.core.content.FileProvider")
+    local Intent = luajava.bindClass("android.content.Intent")
+
+    -- 写入外部缓存目录（受 FileProvider 授权保护，系统完全可读）
+    local cacheDir = activity.getExternalCacheDir() or activity.getCacheDir()
+    local exportDir = File(cacheDir, "exports")
+    if not exportDir.exists() then exportDir.mkdirs() end
+    local targetFile = File(exportDir, fileName)
+
+    local fos = FileOutputStream(targetFile)
+    local javaBytes = luajava.newInstance("java.lang.String", fullMarkdown).getBytes("UTF-8")
+    fos.write(javaBytes)
+    fos.flush()
+    fos.close()
+
+    local authority = activity.getPackageName() .. ".fileprovider"
+    local uri = FileProvider.getUriForFile(activity, authority, targetFile)
+
+    local intent = Intent(Intent.ACTION_SEND)
+    intent.setType("text/markdown")
+    intent.putExtra(Intent.EXTRA_STREAM, uri)
+    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    intent.putExtra(Intent.EXTRA_TITLE, fileName)
+
+    local chooser = Intent.createChooser(intent, S.ai_export_conv)
+    chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    activity.startActivity(chooser)
+    sharedByFile = true
+  end)
+
+  if sharedByFile then return end
+
+  -- 极端回退（如单元测试或环境异常未配置 FileProvider）
+  pcall(function()
+    local fallbackText = fullMarkdown
+    if #fallbackText > 100000 then
+      fallbackText = fallbackText:sub(1, 100000) .. "\n\n...(内容过长已截断)"
+    end
+    local Intent = luajava.bindClass("android.content.Intent")
+    local intent = Intent(Intent.ACTION_SEND)
+    intent.setType("text/plain")
+    intent.putExtra(Intent.EXTRA_TEXT, fallbackText)
+    intent.putExtra(Intent.EXTRA_TITLE, fileName)
+    activity.startActivity(Intent.createChooser(intent, S.ai_export_conv))
+  end)
 end
 
 --- 会话内搜索：实时过滤消息内容，点击结果跳到对应气泡
@@ -522,13 +607,22 @@ local function showConvSearch()
   }, searchViews)
 
   local function jumpToMessage(msg)
-    local row = bubbleByMessage[msg]
-    if row and views.msgScroll then
-      views.msgScroll.post(function()
-        pcall(function()
-          views.msgScroll.smoothScrollTo(0, math.max(0, row.getTop() - dp(16)))
-        end)
-      end)
+    if views.msgRecycler and chatAdapter and currentVisualCards then
+      for pos, card in ipairs(currentVisualCards) do
+        if card.message == msg then
+          views.msgRecycler.post(function()
+            pcall(function()
+              local lm = views.msgRecycler.getLayoutManager()
+              if lm and lm.scrollToPositionWithOffset then
+                lm.scrollToPositionWithOffset(pos - 1, dp(16))
+              else
+                views.msgRecycler.scrollToPosition(pos - 1)
+              end
+            end)
+          end)
+          return
+        end
+      end
     end
   end
 
@@ -608,11 +702,21 @@ local function showConvSearch()
     end
   end
 
+  local pendingSearch = nil
   pcall(function()
     searchViews.searchInput.addTextChangedListener({
       beforeTextChanged = function() end,
       onTextChanged = function() end,
-      afterTextChanged = function() doSearch() end,
+      afterTextChanged = function()
+        -- 250ms 防抖，避免中文输入法连续击键时频繁重新构建 30 个 CardView
+        if pendingSearch then searchViews.searchInput.removeCallbacks(pendingSearch) end
+        pendingSearch = Runnable({
+          run = function()
+            doSearch()
+          end
+        })
+        searchViews.searchInput.postDelayed(pendingSearch, 250)
+      end,
     })
   end)
 
@@ -763,6 +867,7 @@ local function showToolConfirm(toolName, args, onAllow, onDeny)
   elseif toolName == "run_lua" then
     title = S.ai_run_code
     local preview = args.code or args.content or ""
+    if #preview > 2000 then preview = preview:sub(1, 2000) .. "\n…" end
     message = S.ai_confirm_code:format(preview)
     local hosts = args.network_hosts or args.networkHosts
     if type(hosts) == "string" then hosts = { hosts } end
@@ -813,9 +918,31 @@ local function showToolConfirm(toolName, args, onAllow, onDeny)
     activeToolConfirm = nil
     if onDeny then onDeny() end
   end
+
+  local isCodeTool = (toolName == "run_lua" or toolName == "apply_patch")
+  local dialogView = loadlayout({
+    ScrollView,
+    layout_width = "match",
+    layout_height = "wrap",
+    fillViewport = true,
+    paddingLeft = "24dp",
+    paddingRight = "24dp",
+    paddingTop = "8dp",
+    paddingBottom = "8dp",
+    {
+      MaterialTextView,
+      text = message,
+      textSize = "14sp",
+      textColor = ColorOnSurface,
+      lineSpacingMultiplier = 1.3,
+      typeface = isCodeTool and Typeface.MONOSPACE or nil,
+      textIsSelectable = true,
+    },
+  })
+
   local confirm = MaterialAlertDialogBuilder(activity)
     .setTitle(title)
-    .setMessage(message)
+    .setView(dialogView)
     .setPositiveButton(S.ai_allow, function()
       if decided then return end
       decided = true
@@ -903,6 +1030,7 @@ loadHistory = function(resetTurnHistory)
     if views.aiTitle then views.aiTitle.setText(S.ai_new_conv) end
     if updateProjectLabel then updateProjectLabel() end
     updatePlanStrip()
+    renderCards(true)
     return 0
   end
   Session.activate(conv, AgentChat.getCurrentProjectPath())
@@ -923,186 +1051,38 @@ loadHistory = function(resetTurnHistory)
   if updateProjectLabel then updateProjectLabel() end
   if views.aiTitle and conv then views.aiTitle.setText(convName(conv)) end
   updatePlanStrip()
-  -- 重建气泡
-  local container = views.msgContainer
-  if container then
-    -- 最新用户/AI 消息索引：渲染“编辑重发 / 重新生成”操作行用
-    local lastUserIndex, lastAssistantIndex
-    for i = #messages(), 1, -1 do
-      if not lastUserIndex and messages()[i].role == "user" then lastUserIndex = i end
-      if not lastAssistantIndex and messages()[i].role == "assistant"
-          and tostring(messages()[i].content or "") ~= "" then
-        lastAssistantIndex = i
-      end
-      if lastUserIndex and lastAssistantIndex then break end
-    end
-    bubbleByMessage = {}
-    local consumedTools = {}
-    for messageIndex, msg in ipairs(messages()) do
-      if msg.role == "user" then
-        local row = addMessageBubble("user", msg.content or "", msg,
-          { isLastUser = messageIndex == lastUserIndex })
-        if row then bubbleByMessage[msg] = row end
-      elseif msg.role == "assistant" then
-        -- 跳过纯工具调用（无文本内容）的空 assistant 消息
-        local content = msg.content or ""
-        if content ~= "" or msg.continuation_state then
-          local row = addMessageBubble("assistant", content, msg,
-            { isLastAssistant = messageIndex == lastAssistantIndex })
-          if row then bubbleByMessage[msg] = row end
-        end
-        -- 显示工具调用气泡，并记录 id 供 tool 结果回填
-        if msg.tool_calls then
-          local resultById, resultWithoutId = {}, {}
-          local scanIndex = messageIndex + 1
-          while scanIndex <= #messages() and messages()[scanIndex].role == "tool" do
-            local candidate = messages()[scanIndex]
-            if candidate.tool_call_id and candidate.tool_call_id ~= "" then
-              resultById[candidate.tool_call_id] = { index = scanIndex, content = candidate.content or "" }
-            else
-              resultWithoutId[#resultWithoutId + 1] = { index = scanIndex, content = candidate.content or "" }
-            end
-            scanIndex = scanIndex + 1
-          end
-          local missingIndex = 1
-          for _, tc in ipairs(msg.tool_calls) do
-            local fn = tc["function"]
-            local toolName = fn and fn.name or tc.name or ""
-            local args = {}
-            pcall(function() args = json.decode(fn and fn.arguments or tc.arguments or "{}") end)
-            local tid = tc.id or ""
-            local matched = tid ~= "" and resultById[tid] or nil
-            if not matched then
-              matched = resultWithoutId[missingIndex]
-              if matched then missingIndex = missingIndex + 1 end
-            end
-            local result = matched and matched.content or nil
-            if matched then consumedTools[matched.index] = true end
-            addToolBubble(toolName, args, result)
-          end
-        end
-      elseif msg.role == "tool" then
-        local result = msg.content or ""
-        if not consumedTools[messageIndex] and result ~= "" then
-          addToolBubble("tool_result", {}, result)
-        end
-        if msg.continuation_state then addMessageBubble("assistant", "", msg) end
-      end
-    end
-    for messageIndex = #messages(), 1, -1 do
-      local message = messages()[messageIndex]
-      if message.role == "user" and message.request_error then
-        addRequestErrorBubble(tostring(message.request_error), messageIndex)
-        break
-      end
-    end
-  end
-  -- 子代理仍在运行时恢复实时卡片；已完成的清除（结果气泡已由历史重建呈现）
-  BubbleRenderer.syncSubtask(SubagentRunner.isRunning() and SubagentRunner.progressInfo() or nil)
-  BubbleRenderer.renderSubtaskCard()
-  AgentTurn.rerenderStream()
+  renderCards(not Session.loaded())
   return #messages()
+end
+
+renderCards = function(isDraft)
+  -- 重建气泡：统一由 RecyclerView 虚拟化 Adapter 数据驱动更新
+  local welcomeData = nil
+  if #messages() == 0 then
+    welcomeData = {
+      title = isDraft and S.ai_new_conv or S.ai_welcome_title,
+      body = isDraft and S.ai_start_chat or S.ai_welcome_body,
+    }
+  end
+  local cards = MessageItemFlattener.flatten(messages(), {
+    activeStream = AgentTurn.activeStream(),
+    subtask = SubagentRunner.isRunning() and SubagentRunner.progressInfo() or nil,
+    welcome = welcomeData,
+  })
+  currentVisualCards = cards
+  if chatAdapter then
+    chatAdapter.submitMessages(cards)
+  end
+  scrollDown()
+
+  -- 子代理仍在运行时恢复实时卡片；已完成的清除（结果气泡已由卡片流统一呈现）
+  BubbleRenderer.syncSubtask(SubagentRunner.isRunning() and SubagentRunner.progressInfo() or nil)
 end
 
 -- ─── 发送消息核心 ──
 
 addRequestErrorBubble = function(err, messageIndex)
-  if not views.msgContainer then return end
-  local lowerError = tostring(err):lower()
-  local action = S.ai_retry
-  local opensSettings = lowerError:find("http 401", 1, true) or lowerError:find("http 403", 1, true)
-    or lowerError:find("api key", 1, true) or lowerError:find("unauthorized", 1, true)
-  local compresses = lowerError:find("context", 1, true) or lowerError:find("token", 1, true)
-    or lowerError:find("too large", 1, true)
-  if opensSettings then action = S.ai_open_settings
-  elseif compresses then action = S.ai_compress_retry end
-
-  local errorViews = {}
-  local errorCard = loadlayout({
-    MaterialCardView,
-    radius = "14dp",
-    CardElevation = 0,
-    strokeWidth = "0dp",
-    CardBackgroundColor = ColorErrorContainer,
-    layout_width = "match",
-    layout_height = "wrap",
-    {
-      LinearLayout,
-      orientation = "vertical",
-      padding = "12dp",
-      {
-        MaterialTextView,
-        text = tostring(err),
-        textSize = "13sp",
-        textColor = ColorOnErrorContainer,
-        lineSpacingMultiplier = 1.3,
-        textIsSelectable = true,
-      },
-      {
-        LinearLayout,
-        orientation = "horizontal",
-        layout_marginTop = "8dp",
-        {
-          MaterialButton,
-          id = "recoverButton",
-          text = action,
-          layout_width = "wrap",
-          textSize = "12sp",
-          BackgroundTintList = ColorStateList.valueOf(ColorError),
-          textColor = ColorOnError,
-        },
-        {
-          MaterialButton,
-          id = "editButton",
-          text = S.ai_edit_request,
-          layout_width = "wrap",
-          layout_marginLeft = "8dp",
-          textSize = "12sp",
-          BackgroundTintList = ColorStateList.valueOf(0),
-          textColor = ColorOnErrorContainer,
-        },
-      },
-    },
-  }, errorViews)
-  local errorLp = LinearLayout.LayoutParams(-1, -2)
-  errorLp.bottomMargin = dp(10)
-  views.msgContainer.addView(errorCard, errorLp)
-
-  errorViews.recoverButton.onClick = function()
-    if AgentTurn.isActive() then return end
-    local message = messages()[messageIndex]
-    if not message or message.role ~= "user" or not message.request_error then
-      print(S.ai_request_expired)
-      return
-    end
-    if opensSettings then
-      showSettings()
-      return
-    end
-    local retryPayload = AgentTurn.retryPayloadFor(message)
-    message.request_error = nil
-    saveHistory()
-    refreshMessageList()
-    if compresses then
-      AgentTurn.compress(function() AgentTurn.send(false) end)
-    else
-      AgentTurn.bumpGeneration()
-      if retryPayload then AgentTurn.sendRaw(retryPayload, false)
-      else AgentTurn.send(false) end
-    end
-  end
-
-  errorViews.editButton.onClick = function()
-    if AgentTurn.isActive() then return end
-    local message = messages()[messageIndex]
-    if not message or message.role ~= "user" or not views.msgInput then
-      print(S.ai_request_expired)
-      return
-    end
-    editingMessageIndex = messageIndex
-    views.msgInput.setText(tostring(message.content or ""))
-    views.msgInput.requestFocus()
-  end
+  refreshMessageList()
 end
 
 -- ─── 发送消息 ──
@@ -1132,11 +1112,10 @@ sendMessage = function()
     messages()[editedIndex].content = text
     messages()[editedIndex].request_error = nil
     for index = #messages(), editedIndex + 1, -1 do table.remove(messages(), index) end
-    if views.msgContainer then views.msgContainer.removeAllViews() end
-    loadHistory(false)
+    refreshMessageList()
   else
-    addMessageBubble("user", text)
     messages()[#messages() + 1] = { role = "user", content = text }
+    refreshMessageList()
   end
   if skill then
     local conv = AgentChat.getCurrentConv()
@@ -1149,7 +1128,8 @@ sendMessage = function()
   Session.clearRedo()
 
   if not AgentChat.hasApiKey() then
-    addMessageBubble("assistant", S.ai_need_config)
+    messages()[#messages() + 1] = { role = "assistant", content = S.ai_need_config }
+    refreshMessageList()
     return
   end
 
@@ -1180,12 +1160,13 @@ regenerateLastTurn = function()
   if not lastUser then return false end
   if not undoLastTurn() then return false end
   local text = tostring(lastUser.content or "")
-  addMessageBubble("user", text)
   messages()[#messages() + 1] = { role = "user", content = text }
+  refreshMessageList()
   Session.clearRedo()
   saveHistory()
   if not AgentChat.hasApiKey() then
-    addMessageBubble("assistant", S.ai_need_config)
+    messages()[#messages() + 1] = { role = "assistant", content = S.ai_need_config }
+    refreshMessageList()
     return true
   end
   local context = AgentChat.buildContext()
@@ -1227,110 +1208,32 @@ showSettings = SettingsUi.showSettings
 
 -- 统一的会话切换序列（面板内列表、首屏 chips 与对外 openConversation 共用）
 local function switchToConversation(conv)
+  editingMessageIndex = nil -- 强制清空编辑状态，防止跨会话截断
   saveHistory()
   AgentTurn.invalidate()
   AgentChat.setCurrentConv(conv.id)
   Session.beginSwitch(conv.id, AgentChat.getCurrentProjectPath())
-  if views.msgContainer then views.msgContainer.removeAllViews() end
-  loadHistory()
+  loadHistory(true)
   if views.aiTitle then views.aiTitle.setText(convName(conv)) end
   if updateProjectLabel then updateProjectLabel() end
 end
 
 -- 新会话先只留在内存里。第一条消息发出时才创建记录，避免列表里堆未命名空会话。
 local function newConversation()
+  editingMessageIndex = nil -- 强制清空编辑状态
   saveHistory()
   AgentTurn.invalidate()
   Session.beginDraft(AgentChat.getCurrentProjectPath())
   TodoManager.set(nil)
-  if views.msgContainer then views.msgContainer.removeAllViews() end
   if views.aiTitle then views.aiTitle.setText(S.ai_new_conv) end
   if updateProjectLabel then updateProjectLabel() end
   updatePlanStrip()
+  renderCards(true)
 end
 
 local ConvUi = require("mods.agent.ConvUi")
 showConvList = ConvUi.showConvList
 showConvManager = ConvUi.showConvManager
-local function addWelcomeCard(title, body)
-  if not views.msgContainer then return end
-  local welcomeViews = {}
-  local welcome = {
-    MaterialCardView,
-    radius = "16dp",
-    CardElevation = 0,
-    strokeWidth = "0dp",
-    CardBackgroundColor = ColorSurfaceContainerLow,
-    layout_width = "match",
-    layout_height = "wrap",
-    {
-      LinearLayout,
-      orientation = "vertical",
-      padding = "16dp",
-      {
-        MaterialTextView,
-        text = title,
-        textSize = "14sp",
-        textStyle = "bold",
-        textColor = ColorOnSurface,
-      },
-      {
-        MaterialTextView,
-        text = body,
-        textSize = "13sp",
-        textColor = ColorText,
-        layout_marginTop = "5dp",
-        lineSpacingMultiplier = 1.3,
-      },
-      {
-        MaterialButton,
-        id = "btnWelcomeHelp",
-        text = S.ai_agent_help,
-        layout_width = "wrap",
-        layout_marginTop = "8dp",
-      },
-      {
-        LinearLayout,
-        orientation = "horizontal",
-        layout_width = "match",
-        layout_marginTop = "4dp",
-        {
-          MaterialButton,
-          id = "btnWelcomeExplain",
-          text = S.ai_welcome_explain,
-          layout_width = "0dp", layout_weight = 1,
-          layout_marginRight = "4dp",
-        },
-        {
-          MaterialButton,
-          id = "btnWelcomeCheck",
-          text = S.ai_welcome_check,
-          layout_width = "0dp", layout_weight = 1,
-          layout_marginLeft = "4dp",
-        },
-      },
-    },
-  }
-  local welcomeCard = loadlayout(welcome, welcomeViews)
-  local welcomeLp = LinearLayout.LayoutParams(-1, -2)
-  welcomeLp.bottomMargin = dp(12)
-  views.msgContainer.addView(welcomeCard, welcomeLp)
-  welcomeViews.btnWelcomeHelp.onClick = function() showAgentHelp() end
-  welcomeViews.btnWelcomeExplain.onClick = function()
-    if not (Bean and Bean.Path and Bean.Path.this_file) then
-      print(S.ai_need_open_file)
-    elseif views.msgInput then
-      views.msgInput.setText(S.ai_welcome_explain_prompt)
-      sendMessage()
-    end
-  end
-  welcomeViews.btnWelcomeCheck.onClick = function()
-    if views.msgInput then
-      views.msgInput.setText(S.ai_welcome_check_prompt)
-      sendMessage()
-    end
-  end
-end
 
 local function clearChat()
   AgentTurn.invalidate()
@@ -1341,10 +1244,7 @@ local function clearChat()
   if sameProject and AgentChat.clearConversation then
     AgentChat.clearConversation(conversationId)
   end
-  if views.msgContainer then
-    views.msgContainer.removeAllViews()
-    addWelcomeCard(S.ai_welcome_title, S.ai_welcome_body)
-  end
+  refreshMessageList()
 end
 
 -- ─── 展开 BottomSheet ──
@@ -1381,6 +1281,7 @@ local function expandSheet(dlg, content)
 end
 
 local function hideEditorKeyboard()
+  if not activity or not activity.getCurrentFocus then return end
   local focused = activity.getCurrentFocus()
   if not focused then return end
   pcall(function()
@@ -1408,6 +1309,233 @@ function _M.show(startDraft)
   pcall(function()
     if MCPClient and MCPClient.refreshToolsAsync then
       MCPClient.refreshToolsAsync()
+    end
+  end)
+
+  -- 初始化 RecyclerView 适配器（真机环境加载，单测环境自动降级）
+  pcall(function()
+    if views.msgRecycler and not chatAdapter then
+      local RecyclerView = luajava.bindClass("androidx.recyclerview.widget.RecyclerView")
+      local LinearLayoutManager = luajava.bindClass("androidx.recyclerview.widget.LinearLayoutManager")
+      local AgentChatAdapter = luajava.bindClass("com.nekolaska.agent.adapter.AgentChatAdapter")
+      local SimpleItemAnimator = luajava.bindClass("androidx.recyclerview.widget.SimpleItemAnimator")
+
+      local layoutManager = LinearLayoutManager(activity)
+      views.msgRecycler.setLayoutManager(layoutManager)
+
+      -- 禁用默认条目闪烁动画，确保打字流与更新平滑稳定
+      pcall(function()
+        local animator = views.msgRecycler.getItemAnimator()
+        if animator then animator.setSupportsChangeAnimations(false) end
+      end)
+
+      local delegate = {
+        getItemViewType = function(item, position)
+          return item.viewType or 0
+        end,
+        onCreateViewHolder = function(parent, viewType)
+          local LuaCustRecyclerHolder = luajava.bindClass("github.znzsofficial.adapter.LuaCustRecyclerHolder")
+          local dummy = loadlayout({
+            LinearLayout,
+            layout_width = "match",
+            layout_height = "wrap",
+            orientation = "vertical",
+          })
+          local lp = RecyclerView.LayoutParams(-1, -2)
+          dummy.setLayoutParams(lp)
+          return LuaCustRecyclerHolder(dummy)
+        end,
+        onBindViewHolder = function(holder, item, position)
+          local itemView = holder.itemView
+          itemView.removeAllViews()
+          local vt = item.viewType or 0
+          local cardView
+          if vt == 0 then
+            cardView = BubbleRenderer.createMessageView("user", item.content, item.message, { isLastUser = item.isLastUser })
+          elseif vt == 1 then
+            cardView = BubbleRenderer.createMessageView("assistant", item.content, item.message, { isLastAssistant = item.isLastAssistant })
+          elseif vt == 2 then
+            cardView = BubbleRenderer.createToolView(item.toolName, item.args or {}, item.result)
+          elseif vt == 4 then
+            -- 流式动态卡片
+            local streamViews = {}
+            cardView = loadlayout({
+              LinearLayout,
+              layout_width = "match",
+              layout_height = "wrap",
+              orientation = "vertical",
+              paddingBottom = "14dp",
+              {
+                MaterialTextView,
+                id = "aiStreamText",
+                text = item.text or "",
+                textSize = "14sp",
+                textColor = ColorOnSurface,
+                lineSpacingMultiplier = 1.4,
+              },
+            }, streamViews)
+            streamView = { bubble = cardView, textView = streamViews.aiStreamText, id = item.streamId }
+          elseif vt == 5 then
+            -- 完整保留错误重试卡片（包含一键重试、打开设置、压缩上下文与编辑请求）
+            local err = tostring(item.error or "")
+            local lowerError = err:lower()
+            local action = S.ai_retry
+            local opensSettings = lowerError:find("http 401", 1, true) or lowerError:find("http 403", 1, true)
+              or lowerError:find("api key", 1, true) or lowerError:find("unauthorized", 1, true)
+            local compresses = lowerError:find("context", 1, true) or lowerError:find("token", 1, true)
+              or lowerError:find("too large", 1, true)
+            if opensSettings then action = S.ai_open_settings
+            elseif compresses then action = S.ai_compress_retry end
+
+            local errViews = {}
+            cardView = loadlayout({
+              MaterialCardView,
+              radius = "14dp",
+              CardElevation = 0,
+              strokeWidth = "0dp",
+              CardBackgroundColor = ColorErrorContainer,
+              layout_width = "match",
+              layout_height = "wrap",
+              {
+                LinearLayout,
+                orientation = "vertical",
+                padding = "12dp",
+                {
+                  MaterialTextView,
+                  text = err,
+                  textSize = "13sp",
+                  textColor = ColorOnErrorContainer,
+                  lineSpacingMultiplier = 1.3,
+                  textIsSelectable = true,
+                },
+                {
+                  LinearLayout,
+                  orientation = "horizontal",
+                  layout_marginTop = "8dp",
+                  {
+                    MaterialButton,
+                    id = "recoverButton",
+                    text = action,
+                    layout_width = "wrap",
+                    textSize = "12sp",
+                    BackgroundTintList = ColorStateList.valueOf(ColorError),
+                    textColor = ColorOnError,
+                  },
+                  {
+                    MaterialButton,
+                    id = "editButton",
+                    text = S.ai_edit_request,
+                    layout_width = "wrap",
+                    layout_marginLeft = "8dp",
+                    textSize = "12sp",
+                    BackgroundTintList = ColorStateList.valueOf(0),
+                    textColor = ColorOnErrorContainer,
+                  },
+                },
+              },
+            }, errViews)
+
+            errViews.recoverButton.onClick = function()
+              if AgentTurn.isActive() then return end
+              local message = messages()[item.messageIndex]
+              if not message or message.role ~= "user" or not message.request_error then
+                print(S.ai_request_expired)
+                return
+              end
+              if opensSettings then
+                showSettings()
+                return
+              end
+              local retryPayload = AgentTurn.retryPayloadFor(message)
+              message.request_error = nil
+              saveHistory()
+              refreshMessageList()
+              if compresses then
+                AgentTurn.compressAndRetry(retryPayload)
+              else
+                AgentTurn.retry(retryPayload)
+              end
+            end
+
+            errViews.editButton.onClick = function()
+              local message = messages()[item.messageIndex]
+              if not message or message.role ~= "user" then return end
+              message.request_error = nil
+              saveHistory()
+              refreshMessageList()
+              if views.msgInput then
+                views.msgInput.setText(message.content or "")
+                views.msgInput.requestFocus()
+                pcall(function()
+                  local imm = activity.getSystemService("input_method")
+                  if imm then imm.showSoftInput(views.msgInput, 0) end
+                end)
+              end
+            end
+          elseif vt == 6 then
+            -- 空会话首屏欢迎卡片
+            cardView = loadlayout({
+              MaterialCardView,
+              radius = "16dp",
+              CardElevation = 0,
+              strokeWidth = "0dp",
+              CardBackgroundColor = ColorSurfaceContainerLow,
+              layout_width = "match",
+              layout_height = "wrap",
+              {
+                LinearLayout,
+                orientation = "vertical",
+                padding = "16dp",
+                {
+                  MaterialTextView,
+                  text = tostring(item.title or S.ai_welcome_title),
+                  textSize = "16sp",
+                  textStyle = "bold",
+                  textColor = ColorOnSurface,
+                },
+                {
+                  MaterialTextView,
+                  text = tostring(item.body or S.ai_welcome_body),
+                  textSize = "13sp",
+                  textColor = ColorText,
+                  lineSpacingMultiplier = 1.3,
+                  layout_marginTop = "8dp",
+                },
+              },
+            })
+          elseif vt == 7 then
+            -- 子代理实时任务进度卡片
+            cardView = BubbleRenderer.createSubtaskView(item.subtask)
+          end
+          if cardView then
+            itemView.addView(cardView)
+          end
+        end,
+        areItemsTheSame = function(oldItem, newItem)
+          return oldItem.stableId == newItem.stableId
+        end,
+        areContentsTheSame = function(oldItem, newItem)
+          return oldItem.content == newItem.content and oldItem.text == newItem.text
+        end,
+        getChangePayload = function(oldItem, newItem)
+          if oldItem.viewType == 4 and newItem.viewType == 4 then
+            return AgentChatAdapter.PAYLOAD_STREAMING_TEXT
+          end
+          return nil
+        end,
+      }
+      chatAdapter = AgentChatAdapter(activity, delegate)
+      views.msgRecycler.setAdapter(chatAdapter)
+
+      -- 监听 RecyclerView 滚动，动态切换“跳到最新”悬浮按钮
+      pcall(function()
+        local listener = luajava.createProxy("androidx.recyclerview.widget.RecyclerView$OnScrollListener", {
+          onScrolled = function(recyclerView, dx, dy)
+            updateJumpLatest(not isNearBottom())
+          end,
+        })
+        views.msgRecycler.addOnScrollListener(listener)
+      end)
     end
   end)
 
@@ -1440,6 +1568,9 @@ function _M.show(startDraft)
   dialog.setOnDismissListener(function()
     saveHistory()
     streamView = {}
+    activeToolConfirm = nil
+    chatAdapter = nil
+    views = {}
     if savedNav ~= nil then
       pcall(function()
         activity.getWindow().setNavigationBarColor(savedNav)
@@ -1490,7 +1621,7 @@ function _M.show(startDraft)
         items[index] = mark .. "  " .. tostring(item.content or "")
       end
       MaterialAlertDialogBuilder(activity)
-        .setTitle(S.ai_todo)
+        .setTitle(S.ai_todo or S.ai_tool_todo or "任务计划")
         .setItems(items, nil)
         .setPositiveButton(S.ai_close, nil)
         .show()
@@ -1519,26 +1650,20 @@ function _M.show(startDraft)
   if views.btnClear then
     views.btnClear.onClick = function()
       newConversation()
-      addWelcomeCard(S.ai_new_conv, S.ai_start_chat)
     end
   end
 
-  -- 智能滚动：手动回滚到顶部时显示“跳到最新”，滚回底部自动隐藏
-  if views.msgScroll then
-    pcall(function()
-      views.msgScroll.setOnScrollChangeListener({
-        onScrollChange = function()
-          updateJumpLatest(not isNearBottom())
-        end,
-      })
-    end)
-  end
   if views.btnJumpLatest then
     views.btnJumpLatest.onClick = function()
-      if views.msgScroll then
-        views.msgScroll.fullScroll(130)
-      end
+      scrollDown(true)
       updateJumpLatest(false)
+    end
+  end
+
+  -- 标题栏关闭/收起按钮
+  if views.btnClose then
+    views.btnClose.onClick = function()
+      if dialog then dialog.dismiss() end
     end
   end
 
@@ -1558,7 +1683,9 @@ function _M.show(startDraft)
     pcall(function()
       views.msgInput.setOnEditorActionListener({
         onEditorAction = function(v, actionId, event)
-          if actionId == 0 or actionId == 5 or actionId == 6 then
+          -- 仅在明确的 IME 动作（如“发送/完成”）时触发发送；
+          -- 不再拦截 actionId == 0 (IME_NULL)，保留多行输入框按 Enter 键换行的原生语义
+          if actionId == 4 or actionId == 6 then
             sendMessage()
             return true
           end
@@ -1569,84 +1696,14 @@ function _M.show(startDraft)
   end
 
   -- 恢复上次会话。显式新建只进入草稿，第一条消息才落盘。
-  if views.msgContainer then
-    views.msgContainer.removeAllViews()  -- 先移除默认欢迎消息
-    local historyCount = 0
-    if startDraft then
-      newConversation()
-      historyCount = 0
-    else
-      historyCount = loadHistory(not AgentTurn.isActive())
-    end
-    -- 上下文 chip 只在面板打开时重建：loadHistory 在每个工具结果后都会触发，
-    -- buildContext（读编辑器全文 + 列目录）在那里跑是显著浪费
-    updateContextChip()
-    if historyCount == 0 then
-      addWelcomeCard(startDraft and S.ai_new_conv or S.ai_welcome_title,
-        startDraft and S.ai_start_chat or S.ai_welcome_body)
-    end
-    -- 首屏最近会话快捷切换（不占用当前会话、回合空闲时显示）
-    if not AgentTurn.isActive() then
-      local others = {}
-      for _, item in ipairs(AgentChat.listConversations()) do
-        if item.id ~= Session.id() and not isPlaceholderConversation(item.conversation) then
-          others[#others + 1] = item.conversation
-        end
-      end
-      table.sort(others, function(a, b)
-        return tostring(a.updatedAt or "") > tostring(b.updatedAt or "")
-      end)
-      if #others > 0 then
-        local chipTables = {}
-        for i = 1, math.min(5, #others) do
-          local conv = others[i]
-          local prefix = conv.running and "● " or ""
-          local label = conv.name ~= "" and conv.name or S.ai_unnamed_conv
-          chipTables[#chipTables + 1] = {
-            MaterialButton,
-            text = prefix .. label,
-            textSize = "12sp",
-            layout_width = "wrap",
-            layout_height = "wrap",
-            layout_marginRight = "8dp",
-            allCaps = false,
-            BackgroundTintList = ColorStateList.valueOf(conv.running and ColorErrorContainer or ColorSecondaryContainer),
-            textColor = conv.running and ColorOnErrorContainer or ColorOnSecondaryContainer,
-            onClick = function() switchToConversation(conv) end,
-          }
-        end
-        local hScroll = loadlayout({
-          HorizontalScrollView,
-          layout_width = "match",
-          layout_height = "wrap",
-          horizontalScrollBarEnabled = false,
-          layout_marginBottom = "8dp",
-          clipToPadding = false,
-          paddingTop = "2dp",
-          paddingBottom = "4dp",
-          {
-            LinearLayout,
-            layout_width = "wrap",
-            layout_height = "wrap",
-            orientation = "horizontal",
-            gravity = "center_vertical",
-            paddingLeft = "4dp",
-            paddingRight = "4dp",
-            {
-              MaterialTextView,
-              text = S.ai_recent_convs,
-              textSize = "11sp",
-              textStyle = "bold",
-              textColor = ColorText,
-              layout_marginRight = "8dp",
-            },
-            unpack(chipTables),
-          },
-        }, {}, LinearLayout.LayoutParams)
-        views.msgContainer.addView(hScroll, 0)
-      end
-    end
+  local historyCount = 0
+  if startDraft then
+    newConversation()
+    historyCount = 0
+  else
+    historyCount = loadHistory(not AgentTurn.isActive())
   end
+  updateContextChip()
 
   dialog.setOnShowListener(function()
     expandSheet(dialog, content)
@@ -1675,8 +1732,7 @@ function _M.refreshProjectContext()
   AgentTurn.invalidate()
   Session.reset()
   if not dialog or not dialog.isShowing() then return end
-  if views.msgContainer then views.msgContainer.removeAllViews() end
-  loadHistory()
+  loadHistory(true)
   local conv = AgentChat.getCurrentConv()
   if views.aiTitle then views.aiTitle.setText(conv and convName(conv) or S.ai_new_conv) end
   if updateProjectLabel then updateProjectLabel() end
@@ -1715,11 +1771,9 @@ function _M.insertCode(code)
     return
   end
 
-  local startPos = mLuaEditor.getSelectionStart()
-  local text = tostring(mLuaEditor.getText() or "")
-  local newText = text:sub(1, startPos) .. code .. text:sub(startPos + 1)
-  mLuaEditor.setText(newText)
-  mLuaEditor.setSelection(startPos + #code)
+  pcall(function()
+    mLuaEditor.paste(tostring(code or ""))
+  end)
 
   print(S.ai_inserted)
 end
@@ -1730,7 +1784,7 @@ end
 BubbleRenderer.configure({
   scrollDown = scrollDown,
   isPanelVisible = isPanelVisible,
-  getContainer = function() return views.msgContainer end,
+  getContainer = function() return (views.msgRecycler and views.msgRecycler.getParent()) or views.msgRecycler end,
   getMessages = function() return Session.messages() end,
   saveHistory = saveHistory,
   isToolError = isToolError,
@@ -1744,12 +1798,14 @@ ConvUi.configure({
   onSwitch = switchToConversation,
   onNew = newConversation,
   onAfterDelete = function(convId)
-    Session.setMessages({})
-    if views.msgContainer then views.msgContainer.removeAllViews() end
-    loadHistory()
-    if views.aiTitle then
-      local c = AgentChat.getCurrentConv()
-      if c then views.aiTitle.setText(convName(c)) end
+    -- 只有删除的是当前活跃会话时，才重置当前会话内存状态与视图
+    if convId == Session.id() then
+      Session.setMessages({})
+      loadHistory(true)
+      if views.aiTitle then
+        local c = AgentChat.getCurrentConv()
+        if c then views.aiTitle.setText(convName(c)) end
+      end
     end
   end,
   onRenamed = function(convId)
@@ -1770,7 +1826,9 @@ SubagentRunner.configure({
   reportUsage = function(used) Session.addUsage(used) end,
   onProgress = function(info)
     BubbleRenderer.syncSubtask(info)
-    BubbleRenderer.renderSubtaskCard()
+    if not isRefreshing then
+      refreshMessageList()
+    end
   end,
 })
 
@@ -1795,44 +1853,37 @@ AgentTurn.configure({
   setConversationRunning = function(running)
     if Session.loaded() then saveHistory({ running = running == true }) end
   end,
+  onRequestError = function(err)
+    if not isRefreshing then
+      refreshMessageList()
+    end
+    print(tostring(err or "请求失败"))
+  end,
   onStreamChanged = function(streamState)
       if not streamState then
-        if streamView.bubble then
-          local parent = streamView.bubble.getParent()
-          if parent then parent.removeView(streamView.bubble) end
-        end
         streamView = {}
+        if isPanelVisible() and not isRefreshing then
+          refreshMessageList()
+        end
         return
       end
-      if not isPanelVisible() or not views.msgContainer then return end
-      if streamView.id ~= streamState.id or streamView.container ~= views.msgContainer
-          or not streamView.bubble or not streamView.bubble.getParent() then
-        if streamView.bubble then
-          local parent = streamView.bubble.getParent()
-          if parent then parent.removeView(streamView.bubble) end
+      if not isPanelVisible() then return end
+
+      -- 真机 RecyclerView 模式下流式更新：
+      -- 1. 更新持有中的 TextView；
+      -- 2. 若当前持有者未准备好（如初始进入流式），通过 refreshMessageList 将流式卡片提交并挂载
+      if streamView.textView then
+        streamView.textView.setText(streamState.text)
+        local now = (os.clock and os.clock()) or os.time()
+        if not streamView.lastScroll or (now - streamView.lastScroll) >= 0.1 then
+          streamView.lastScroll = now
+          scrollDown()
         end
-        local streamViews = {}
-        local bubble = loadlayout({
-          LinearLayout,
-          layout_width = "match",
-          layout_height = "wrap",
-          orientation = "vertical",
-          {
-            MaterialTextView,
-            id = "aiStreamText",
-            textSize = "14sp",
-            textColor = ColorOnSurface,
-            lineSpacingMultiplier = 1.4,
-          },
-        }, streamViews)
-        streamView = { id = streamState.id, container = views.msgContainer,
-          bubble = bubble, textView = streamViews.aiStreamText }
-        local streamLp = LinearLayout.LayoutParams(-1, -2)
-        streamLp.bottomMargin = dp(14)
-        streamView.container.addView(bubble, streamLp)
+      else
+        if not isRefreshing then
+          refreshMessageList()
+        end
       end
-      if streamView.textView then streamView.textView.setText(streamState.text) end
-      scrollDown()
   end,
 })
 

@@ -71,6 +71,11 @@ android {
             targetCompatibility = JavaVersion.VERSION_17
         }
     }
+    testOptions {
+        unitTests {
+            isReturnDefaultValues = true
+        }
+    }
     configurations.all {
         exclude(group = "androidx.asynclayoutinflater", module = "asynclayoutinflater")
         exclude(group = "androidx.localbroadcastmanager", module = "localbroadcastmanager")

@@ -12,8 +12,9 @@ class AgentToolExecutorVerificationTest {
         val assets = sequenceOf(File("src/main/assets"), File("app/src/main/assets"))
             .first { it.isDirectory }
         val source = File(assets, "mods/agent/AgentChat.lua").readText()
+        val schemas = File(assets, "mods/agent/ToolSchemas.lua").readText()
         val systemPrompt = source.substringBefore("function _M.getSystemPrompt")
-        val runLuaTool = source.substringAfter("name = \"run_lua\"")
+        val runLuaTool = schemas.substringAfter("name = \"run_lua\"")
             .substringBefore("name = \"fetch_url\"")
 
         for (section in listOf(systemPrompt, runLuaTool)) {
@@ -62,6 +63,9 @@ class AgentToolExecutorVerificationTest {
                 return path == "res/doc/agent_docs.md"
                   or path == "/app/res/doc/agent_docs.md"
               end,
+              isSandboxDocPath = function(path)
+                return path == "res/doc/sandbox_zh.html"
+              end,
               getSharedData = function(key, defaultValue)
                 if key == "ai_auto_approve_network" then return networkAutoApprove end
                 if key == "ai_auto_run_sandbox" and sandboxAutoRun ~= nil then
@@ -74,6 +78,7 @@ class AgentToolExecutorVerificationTest {
             local doc = { path = "res/doc/agent_docs.md" }
             assert(ToolExecutor.shouldAutoApprove("read_file", doc))
             assert(not ToolExecutor.requiresConfirmation("read_file", doc))
+            ToolExecutor.setSandboxDocRead(true)
             assert(ToolExecutor.shouldAutoApprove("read_files", {
               paths = { "/app/res/doc/agent_docs.md", "/project/main.lua" },
             }))
@@ -143,8 +148,8 @@ class AgentToolExecutorVerificationTest {
             assert(ToolExecutor.requiresConfirmation("run_lua", networkedLua))
             assert(ToolExecutor.shouldAutoApprove("run_lua", localLua))
             assert(not ToolExecutor.requiresConfirmation("run_lua", localLua))
-            assert(not ToolExecutor.shouldAutoApprove(mcp, {}))
-            assert(ToolExecutor.requiresConfirmation(mcp, {}))
+            assert(ToolExecutor.shouldAutoApprove(mcp, {}))
+            assert(not ToolExecutor.requiresConfirmation(mcp, {}))
 
             sandboxAutoRun = "0"
             networkAutoApprove = "1"

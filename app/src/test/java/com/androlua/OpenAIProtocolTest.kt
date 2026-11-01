@@ -221,4 +221,119 @@ class OpenAIProtocolTest {
         ).call()
     }
 
+    @Test
+    fun cpaGeminiCompatAndSchemaSanitization() {
+        val assets = sequenceOf(File("src/main/assets"), File("app/src/main/assets"))
+            .first { it.isDirectory }
+        val globals = JsePlatform.standardGlobals()
+        globals.load(json())
+        val protocol = globals.load(
+            File(assets, "mods/agent/OpenAIProtocol.lua").readText(),
+            "@OpenAIProtocol.lua"
+        ).call()
+        globals.set("OpenAIProtocol", protocol)
+
+        globals.load(
+            """
+            -- 1. 只有 system 消息时，必须自动补齐 user 消息，避免 Gemini 映射为 system_instruction 后 contents 变成空数组报 400
+            local cfgGemini = {
+              getModel = function() return "gemini-2.5-flash" end,
+              getApiUrl = function() return "https://api.relay.example/v1" end,
+              getMaxTokens = function() return 2048 end,
+              getTemperature = function() return 0.7 end,
+              getBuiltinTools = function() return {} end,
+              getMcpTools = function() return {} end,
+              useResponses = function() return false end,
+            }
+            local req1 = OpenAIProtocol.buildRequest(cfgGemini, {
+              { role = "system", content = "You are a helpful assistant" },
+            }, {})
+            assert(#req1.messages == 2, "req1 size: " .. tostring(#req1.messages))
+            assert(req1.messages[1].role == "system")
+            assert(req1.messages[2].role == "user")
+            assert(req1.messages[2].content == "...")
+
+            -- 2. system 消息 + 尾随 assistant（在 Gemini 目标下被裁剪）后，仍然保证有 user 消息
+            local req2 = OpenAIProtocol.buildRequest(cfgGemini, {
+              { role = "system", content = "You are a helpful assistant" },
+              { role = "assistant", content = "previous reply" },
+            }, {})
+            assert(#req2.messages == 2, "req2 size: " .. tostring(#req2.messages))
+            assert(req2.messages[1].role == "system")
+            assert(req2.messages[2].role == "user")
+            assert(req2.messages[2].content == "...")
+
+            -- 3. tool_calls 中的 arguments 无论为空串、nil、空白或非 object，均规整化为合法的 "{}" JSON 字符串
+            local req3 = OpenAIProtocol.buildRequest(cfgGemini, {
+              { role = "user", content = "run" },
+              {
+                role = "assistant",
+                tool_calls = {
+                  { id = "c1", type = "function", ["function"] = { name = "t1", arguments = "" } },
+                  { id = "c2", type = "function", ["function"] = { name = "t2", arguments = "   " } },
+                  { id = "c4", type = "function", ["function"] = { name = "t4", arguments = "{\"k\":\"v\"}" } },
+                }
+              },
+              { role = "tool", tool_call_id = "c1", content = "" },
+              { role = "tool", tool_call_id = "c2", content = "res2" },
+              { role = "tool", tool_call_id = "c4", content = "res4" },
+            }, {})
+            local tcs = req3.messages[2].tool_calls
+            assert(tcs[1]["function"].arguments == "{}", "tc1 args: " .. tostring(tcs[1]["function"].arguments))
+            assert(tcs[2]["function"].arguments == "{}", "tc2 args: " .. tostring(tcs[2]["function"].arguments))
+            assert(tcs[3]["function"].arguments == "{\"k\":\"v\"}", "tc3 args: " .. tostring(tcs[3]["function"].arguments))
+            -- 验证 role="tool" 自动关联了函数名 name，空 content 规整为 "{}"
+            assert(req3.messages[3].role == "tool" and req3.messages[3].name == "t1" and req3.messages[3].content == "{}")
+            assert(req3.messages[4].role == "tool" and req3.messages[4].name == "t2" and req3.messages[4].content == "res2")
+
+            -- 4. tools 定义中缺少 properties 或 parameters 为空 table 时，自动加固为包含 type="object" 和 properties={}
+            local cfgTools = {
+              getModel = function() return "gpt-4o" end,
+              getApiUrl = function() return "https://api.relay.example/v1" end,
+              getMaxTokens = function() return 2048 end,
+              getTemperature = function() return 0.7 end,
+              getBuiltinTools = function()
+                return {
+                  { type = "function", ["function"] = { name = "tool_no_params" } },
+                  { type = "function", ["function"] = { name = "tool_empty_params", parameters = {} } },
+                  { type = "function", ["function"] = { name = "tool_no_props", parameters = { type = "object" } } },
+                }
+              end,
+              getMcpTools = function() return {} end,
+              useResponses = function() return false end,
+            }
+            local req4 = OpenAIProtocol.buildRequest(cfgTools, {
+              { role = "user", content = "hi" }
+            }, {})
+            assert(#req4.tools == 3)
+            for i = 1, 3 do
+              local fn = req4.tools[i]["function"]
+              assert(fn.parameters ~= nil)
+              assert(fn.parameters.type == "object")
+              assert(type(fn.parameters.properties) == "table")
+            end
+
+            -- 5. 孤立 tool 消息（无对应 assistant tool_calls）平滑降级为 user 消息避免上游 400
+            local req5 = OpenAIProtocol.buildRequest(cfgGemini, {
+              { role = "tool", tool_call_id = "orphan_call", content = "orphan result" },
+            }, {})
+            local orphanFound = false
+            for _, m in ipairs(req5.messages) do
+              if m.role == "user" and tostring(m.content):find("orphan result") ~= nil then
+                orphanFound = true
+                break
+              end
+            end
+            if not orphanFound then
+              local dump = ""
+              for i, m in ipairs(req5.messages) do
+                dump = dump .. "[" .. i .. "] role=" .. tostring(m.role) .. " content=" .. tostring(m.content) .. "; "
+              end
+              error("req5 dump: " .. dump)
+            end
+            assert(orphanFound, "orphan tool message should be downgraded to user turn")
+            """.trimIndent(),
+            "@cpa_gemini_compat_test"
+        ).call()
+    }
 }

@@ -1,21 +1,26 @@
---- 气泡渲染层：消息气泡、任务计划卡片、子代理实时卡片与工具气泡的构建。
---- 从 ChatUI 原样抽出；容器/消息表/回调节点经 configure 注入，
---- 本模块不引用 ChatUI。AgentChat / AgentTurn / Markdown 直接 require。
+--- 复合卡片渲染器：支持直接构建独立 View，兼容传统模式与 RecyclerView ViewHolder 复用。
 local _M = {}
 
-local AgentChat = require("mods.agent.AgentChat")
-local AgentTurn = require("mods.agent.AgentTurn")
 local Markdown = require("mods.agent.Markdown")
 local Contracts = require("mods.agent.Contracts")
+local TextUtil = require("mods.utils.TextUtil")
+local AgentChat = require("mods.agent.AgentChat")
+local AgentTurn = require("mods.agent.AgentTurn")
+
+local TableComponent = nil
+pcall(function()
+  TableComponent = require("mods.agent.markdown.TableComponent")
+end)
 
 local renderMarkdown = Markdown.renderMarkdown
-local splitCodeBlocks = Markdown.splitCodeBlocks
+local parseBlocks = Markdown.parseBlocks or Markdown.splitCodeBlocks
 
 local ColorStateList = luajava.bindClass("android.content.res.ColorStateList")
 local MaterialButton = luajava.bindClass("com.google.android.material.button.MaterialButton")
 local MaterialCardView = luajava.bindClass("com.google.android.material.card.MaterialCardView")
 local MaterialTextView = luajava.bindClass("com.google.android.material.textview.MaterialTextView")
 local LinearLayout = luajava.bindClass("android.widget.LinearLayout")
+local HorizontalScrollView = luajava.bindClass("android.widget.HorizontalScrollView")
 local LinkMovementMethod = luajava.bindClass("android.text.method.LinkMovementMethod")
 local Typeface = luajava.bindClass("android.graphics.Typeface")
 local ProgressBar = luajava.bindClass("android.widget.ProgressBar")
@@ -24,8 +29,10 @@ import "androidx.core.graphics.ColorUtils"
 
 local ColorUtil = this.themeUtil
 local ColorPrimary = ColorUtil.primary.main
+local ColorOnPrimary = ColorUtil.primary.on
 local ColorOnPrimaryContainer = ColorUtil.primary.onContainer
 local ColorPrimaryContainer = ColorUtil.primary.container
+local ColorSurface = ColorUtil.surface.container
 local ColorOnSurface = ColorUtil.surface.on
 local ColorText = ColorUtil.surface.onVariant
 local ColorSurfaceContainerLow = ColorUtil.surface.containerLow
@@ -44,8 +51,6 @@ local dp = function(n) return this.dpToPx(n) end
 local VISIBLE = 0
 local GONE = 8
 
--- ─── 注入点（ChatUI 在 configure 时提供）──
-
 local hooks = {}
 
 function _M.configure(options)
@@ -57,10 +62,6 @@ end
 
 local function scrollDown()
   if hooks.scrollDown then hooks.scrollDown() end
-end
-
-local function isPanelVisible()
-  return hooks.isPanelVisible and hooks.isPanelVisible() or false
 end
 
 local function getContainer()
@@ -96,8 +97,6 @@ end
 local onEditRequest = function(stateMessage)
   if hooks.onEditRequest then hooks.onEditRequest(stateMessage) end
 end
-
--- ─── 复制与续写辅助 ──
 
 local function copyText(text, button)
   pcall(function()
@@ -145,21 +144,14 @@ local function clearContinuationState(stateMessage)
   saveHistory()
 end
 
--- ─── 消息气泡 ──
-
-function _M.renderMessage(role, content, stateMessage, opts)
-  local container = getContainer()
-  if not container then return end
+--- 构建单条消息气泡 View
+function _M.createMessageView(role, content, stateMessage, opts)
   opts = opts or {}
   local canAct = not AgentTurn.isActive()
-
   local isUser = (role == "user")
   local textColor = isUser and ColorOnPrimaryContainer or ColorOnSurface
   local actionColor = isUser and ColorOnPrimaryContainer or ColorPrimary
 
-  -- 用户消息：主色容器气泡右缩进；AI 消息：无气泡平铺全宽（现代 AI 客户端范式）
-  -- 边距不写入布局表：独立加载的根视图拿到的是基类 LayoutParams，margin 会被静默丢弃，
-  -- 必须在 addView 时显式传 LinearLayout.LayoutParams。
   local rowViews = {}
   local row = loadlayout({
     LinearLayout,
@@ -206,7 +198,6 @@ function _M.renderMessage(role, content, stateMessage, opts)
 
   local inner = isUser and rowViews.bubbleInner or rowViews.plainInner
 
-  -- 用户消息（最新一条）操作行：编辑重发
   if isUser and opts.isLastUser and canAct and stateMessage then
     local userRow = rowViews.actionRow
     userRow.setVisibility(VISIBLE)
@@ -216,6 +207,10 @@ function _M.renderMessage(role, content, stateMessage, opts)
       textSize = "12sp",
       allCaps = false,
       textColor = actionColor,
+      icon = res.drawable("rename"),
+      iconSize = dp(14),
+      iconTint = ColorStateList.valueOf(actionColor),
+      iconPadding = dp(4),
       BackgroundTintList = ColorStateList.valueOf(0),
       layout_width = "wrap",
       layout_height = "30dp",
@@ -234,12 +229,9 @@ function _M.renderMessage(role, content, stateMessage, opts)
     userRow.addView(editBtn)
   end
 
-  -- 思考过程折叠块：推理模型存的 reasoning_content，默认收起
   local reasoning = stateMessage and tostring(stateMessage.reasoning_content or "") or ""
   if not isUser and reasoning ~= "" then
     local rViews = {}
-    -- 加整块根布局。rToggle / rDetail 已经是它的子视图，再 addView 会抛
-    -- “The specified child already has a parent”。
     local reasoningBlock = loadlayout({
       LinearLayout,
       orientation = "vertical",
@@ -248,7 +240,7 @@ function _M.renderMessage(role, content, stateMessage, opts)
       {
         MaterialTextView,
         id = "rToggle",
-        text = "🧠 " .. S.ai_thinking .. "  ▸",
+        text = S.ai_thinking .. "  ▾",
         textSize = "12sp",
         textStyle = "bold",
         textColor = ColorText,
@@ -272,33 +264,65 @@ function _M.renderMessage(role, content, stateMessage, opts)
     rViews.rToggle.onClick = function()
       reasoningExpanded = not reasoningExpanded
       rViews.rDetail.setVisibility(reasoningExpanded and VISIBLE or GONE)
-      rViews.rToggle.setText("🧠 " .. S.ai_thinking .. (reasoningExpanded and "  ▾" or "  ▸"))
+      rViews.rToggle.setText(S.ai_thinking .. (reasoningExpanded and "  ▴" or "  ▾"))
     end
     inner.addView(reasoningBlock)
   end
 
-  local parts = splitCodeBlocks(content or "")
+  local parts = parseBlocks(content or "")
   for _, part in ipairs(parts) do
     if part.type == "text" then
+      local userCodeBg = ColorUtils.blendARGB(ColorPrimaryContainer, ColorOnPrimaryContainer, 0.12)
+      local aiCodeBg = ColorUtils.blendARGB(ColorSurface, ColorOnSurface, 0.08)
+      local userTableBg = ColorUtils.blendARGB(ColorPrimaryContainer, ColorOnPrimaryContainer, 0.08)
+      local aiTableBg = ColorUtils.blendARGB(ColorSurface, ColorOnSurface, 0.06)
       local markdownView = loadlayout({
         MaterialTextView,
         text = renderMarkdown(part.text, {
+          isUser = isUser,
+          codeBg = isUser and userCodeBg or aiCodeBg,
+          tableBg = isUser and userTableBg or aiTableBg,
           codeColor = isUser and ColorOnPrimaryContainer or ColorPrimary,
           linkColor = isUser and ColorOnPrimaryContainer or ColorPrimary,
+          accentColor = isUser and ColorOnPrimaryContainer or ColorPrimary,
+          quoteColor = isUser and ColorOnPrimaryContainer or ColorPrimary,
         }),
         textSize = "14sp",
         textColor = textColor,
         lineSpacingMultiplier = 1.4,
-        textIsSelectable = true,
       })
       if not isUser then
-        markdownView.setMovementMethod(LinkMovementMethod.getInstance())
-        markdownView.setLinksClickable(true)
+        pcall(function()
+          markdownView.setMovementMethod(LinkMovementMethod.getInstance())
+          markdownView.setLinksClickable(true)
+        end)
       end
       inner.addView(markdownView)
-    else
-      -- 代码块：等宽 + 染色底 + 复制/插入按钮，代码正文也可选中
-      local codeViews = {}
+    elseif part.type == "table" then
+      local tableCard = TableComponent and TableComponent.createTableView and TableComponent.createTableView(part, isUser)
+      if tableCard then
+        local tableLp = LinearLayout.LayoutParams(-1, -2)
+        tableLp.topMargin = dp(6)
+        tableLp.bottomMargin = dp(6)
+        inner.addView(tableCard, tableLp)
+      else
+        -- 降级容错：原生表格创建失败时回退为 Markdown 文本展示，绝不吞没表格内容
+        local userTableBg = ColorUtils.blendARGB(ColorPrimaryContainer, ColorOnPrimaryContainer, 0.08)
+        local aiTableBg = ColorUtils.blendARGB(ColorSurface, ColorOnSurface, 0.06)
+        local fallbackView = loadlayout({
+          MaterialTextView,
+          text = renderMarkdown(part.raw or "", {
+            isUser = isUser,
+            tableBg = isUser and userTableBg or aiTableBg,
+          }),
+          textSize = "14sp",
+          textColor = textColor,
+          lineSpacingMultiplier = 1.4,
+        })
+        inner.addView(fallbackView)
+      end
+    elseif part.type == "code" then
+      local langLabel = (part.lang and part.lang ~= "") and part.lang:upper() or "CODE"
       local codeCard = loadlayout({
         MaterialCardView,
         radius = "8dp",
@@ -310,46 +334,83 @@ function _M.renderMessage(role, content, stateMessage, opts)
         {
           LinearLayout,
           orientation = "vertical",
+          layout_width = "match",
+          layout_height = "wrap",
           padding = "8dp",
-          {
-            MaterialTextView,
-            id = "codeText",
-            text = part.code,
-            typeface = Typeface.MONOSPACE,
-            textSize = "12sp",
-            textColor = isUser and ColorOnPrimaryContainer or ColorOnSurface,
-            textIsSelectable = true,
-          },
           {
             LinearLayout,
             orientation = "horizontal",
-            layout_marginTop = "6dp",
+            gravity = "center_vertical",
+            layout_width = "match",
+            layout_height = "wrap",
+            paddingBottom = "4dp",
+            {
+              MaterialTextView,
+              text = langLabel,
+              textSize = "10sp",
+              textStyle = "bold",
+              textColor = isUser and ColorOnPrimaryContainer or ColorText,
+              layout_width = "0dp",
+              layout_weight = 1,
+            },
             {
               MaterialButton,
               text = S.ai_copy,
               textSize = "11sp",
+              icon = res.drawable("ic_copy"),
+              iconSize = dp(13),
+              iconTint = ColorStateList.valueOf(isUser and ColorOnPrimaryContainer or ColorPrimary),
+              iconPadding = dp(4),
               layout_width = "wrap",
-              layout_height = "30dp",
+              layout_height = "28dp",
+              minWidth = 0,
+              minHeight = 0,
+              paddingLeft = "6dp",
+              paddingRight = "6dp",
               BackgroundTintList = ColorStateList.valueOf(0),
               textColor = isUser and ColorOnPrimaryContainer or ColorPrimary,
               RippleColor = ColorStateList.valueOf(ColorRipple),
-              layout_marginRight = "6dp",
+              layout_marginRight = "4dp",
               onClick = function(v) copyText(part.code, v) end,
             },
             {
               MaterialButton,
               text = S.ai_insert,
               textSize = "11sp",
+              icon = res.drawable("ic_paste"),
+              iconSize = dp(13),
+              iconTint = ColorStateList.valueOf(isUser and ColorOnPrimaryContainer or ColorPrimary),
+              iconPadding = dp(4),
               layout_width = "wrap",
-              layout_height = "30dp",
+              layout_height = "28dp",
+              minWidth = 0,
+              minHeight = 0,
+              paddingLeft = "6dp",
+              paddingRight = "6dp",
               BackgroundTintList = ColorStateList.valueOf(0),
               textColor = isUser and ColorOnPrimaryContainer or ColorPrimary,
               RippleColor = ColorStateList.valueOf(ColorRipple),
               onClick = function() insertCode(part.code) end,
             },
           },
+          {
+            HorizontalScrollView,
+            layout_width = "match",
+            layout_height = "wrap",
+            horizontalScrollBarEnabled = false,
+            {
+              MaterialTextView,
+              id = "codeText",
+              text = part.code,
+              typeface = Typeface.MONOSPACE,
+              textSize = "12sp",
+              textColor = isUser and ColorOnPrimaryContainer or ColorOnSurface,
+              layout_width = "wrap",
+              layout_height = "wrap",
+            },
+          },
         },
-      }, codeViews)
+      })
       local codeLp = LinearLayout.LayoutParams(-1, -2)
       codeLp.topMargin = dp(4)
       codeLp.bottomMargin = dp(4)
@@ -357,7 +418,6 @@ function _M.renderMessage(role, content, stateMessage, opts)
     end
   end
 
-  -- AI 消息的操作行：复制全文 / 重新生成 / 续写标记与按钮
   local actionRow = rowViews.actionRow
   if not isUser then
     local continuation = stateMessage and continuationLabel(stateMessage.continuation_state)
@@ -371,6 +431,10 @@ function _M.renderMessage(role, content, stateMessage, opts)
         textSize = "12sp",
         allCaps = false,
         textColor = actionColor,
+        icon = res.drawable("ic_copy"),
+        iconSize = dp(14),
+        iconTint = ColorStateList.valueOf(actionColor),
+        iconPadding = dp(4),
         BackgroundTintList = ColorStateList.valueOf(0),
         layout_width = "wrap",
         layout_height = "30dp",
@@ -386,7 +450,6 @@ function _M.renderMessage(role, content, stateMessage, opts)
       })
       actionRow.addView(copyReply)
     end
-    -- 最新一条 AI 回复（且无进行中任务）：一键重新生成
     if opts.isLastAssistant and canAct and content and content ~= "" then
       local regenBtn = loadlayout({
         MaterialButton,
@@ -394,6 +457,10 @@ function _M.renderMessage(role, content, stateMessage, opts)
         textSize = "12sp",
         allCaps = false,
         textColor = actionColor,
+        icon = res.drawable("sync"),
+        iconSize = dp(14),
+        iconTint = ColorStateList.valueOf(actionColor),
+        iconPadding = dp(4),
         BackgroundTintList = ColorStateList.valueOf(0),
         layout_width = "wrap",
         layout_height = "30dp",
@@ -427,11 +494,11 @@ function _M.renderMessage(role, content, stateMessage, opts)
       local continueBtn = createContinueButton()
       continueBtn.setOnClickListener(function()
         if AgentTurn.isActive() then return end
-        clearContinuationState(stateMessage)
         local parent = continueBtn.getParent()
         if parent then parent.removeView(marker); parent.removeView(continueBtn) end
         AgentTurn.bumpGeneration()
         AgentTurn.send(true)
+        clearContinuationState(stateMessage)
       end)
       actionRow.addView(continueBtn)
     end
@@ -440,16 +507,216 @@ function _M.renderMessage(role, content, stateMessage, opts)
   local rowLp = LinearLayout.LayoutParams(-1, -2)
   rowLp.leftMargin = isUser and dp(64) or 0
   rowLp.bottomMargin = dp(14)
-  container.addView(row, rowLp)
-  scrollDown()
+  row.setLayoutParams(rowLp)
   return row
 end
 
--- ─── 任务计划卡片 ──
-
-function _M.renderTodo(list)
+function _M.renderMessage(role, content, stateMessage, opts)
   local container = getContainer()
   if not container then return end
+  local view = _M.createMessageView(role, content, stateMessage, opts)
+  container.addView(view)
+  scrollDown()
+  return view
+end
+
+--- 构建工具调用与结果气泡 View
+function _M.createToolView(toolName, args, result)
+  local isError = isToolError(toolName, result)
+  local icon = "→"
+  if toolName:match("create") then icon = "+"
+  elseif toolName:match("delete") then icon = "×"
+  elseif toolName == "apply_patch" then icon = "✎"
+  elseif toolName == "append_file" then icon = "+"
+  elseif toolName == "rename_file" then icon = "⇄"
+  elseif toolName == "get_env_info" then icon = "i"
+  elseif toolName == "fetch_url" then icon = "↗"
+  elseif toolName == "run_project" then icon = "▶"
+  elseif toolName == "build_project" then icon = "⚙"
+  elseif toolName == "run_subtask" then icon = "⚑" end
+
+  local resultText = tostring(result or "")
+  local resultLower = resultText:lower()
+  local denied = resultText == tostring(S.ai_user_denied)
+    or resultText:find("用户拒绝", 1, true) ~= nil
+    or resultLower:find("user declined", 1, true) ~= nil
+  local status = result == nil and S.ai_tool_pending
+    or (denied and S.ai_tool_denied or (isError and S.ai_tool_failed or S.ai_tool_success))
+  local summary = icon .. " " .. toolDisplayName(toolName) .. "  ·  " .. status
+  local resultPreview = ""
+  local detailParts = {}
+  if toolName ~= "apply_patch" and args.path then
+    detailParts[#detailParts + 1] = tostring(args.path)
+  end
+  if args.url then detailParts[#detailParts + 1] = tostring(args.url) end
+  if toolName == "read_files" and result == nil then
+    local files = args.paths
+    if type(files) == "table" then
+      for _, path in ipairs(files) do detailParts[#detailParts + 1] = tostring(path) end
+    elseif type(files) == "string" and files ~= "" then
+      detailParts[#detailParts + 1] = files
+    end
+  end
+
+  if toolName == "rename_file" and args.new_path then
+    detailParts[#detailParts + 1] = "→ " .. tostring(args.new_path)
+  end
+  if toolName == "apply_patch" and args.patch then
+    local blockCount = select(2, args.patch:gsub("<<<<<<<%s*SEARCH", ""))
+    local hunkCount = select(2, args.patch:gsub("@@", ""))
+    if blockCount > 0 then
+      detailParts[#detailParts + 1] = S.ai_search_replace_blocks:format(blockCount)
+    elseif hunkCount > 0 then
+      detailParts[#detailParts + 1] = "unified diff"
+    end
+  end
+  if result then
+    local display = result
+    local firstLine, rest = tostring(result):match("^([^\r\n]*)[\r\n]+(.*)$")
+    if not firstLine then
+      firstLine = tostring(result)
+      rest = ""
+    end
+    firstLine = firstLine:gsub("%s+$", "")
+    rest = rest:gsub("^[\r\n]+", ""):gsub("%s+$", "")
+    local function isOutcomeLine(line)
+      return line:find("成功", 1, true)
+        or line:find("失败", 1, true)
+        or line:find("通过", 1, true)
+        or line:find("语法错误", 1, true)
+        or line:find("异常", 1, true)
+        or line:find("已创建", 1, true)
+        or line:find("已删除", 1, true)
+        or line:find("已追加", 1, true)
+        or line:find("已替换", 1, true)
+        or line:find("已重命名", 1, true)
+    end
+    if toolName == "get_env_info" and not isError then
+      if isOutcomeLine(firstLine) then
+        resultPreview = firstLine
+      else
+        display = ""
+        resultPreview = firstLine:match("（(.+)）") or ""
+      end
+    elseif toolName == "read_files" and not isError then
+      local files = args.paths
+      local n = type(files) == "table" and #files or (type(files) == "string" and 1 or 0)
+      display = S.ai_read_files_summary:format(n)
+      local fileLines = {}
+      if type(files) == "table" then
+        for _, path in ipairs(files) do fileLines[#fileLines + 1] = tostring(path) end
+      elseif type(files) == "string" and files ~= "" then
+        fileLines[1] = files
+      end
+      if #fileLines > 0 then
+        display = display .. "\n" .. table.concat(fileLines, "\n")
+        resultPreview = table.concat(fileLines, " · ")
+      end
+    elseif not denied and isOutcomeLine(firstLine) then
+      local elapsed = firstLine:match("耗时%s*([^）%)]+)")
+      if elapsed then resultPreview = elapsed end
+      display = rest
+      if display == "" and resultPreview == "" then
+        local extra = firstLine:match("（(.+)）") or firstLine:match(": (.+)$")
+        if extra and extra ~= tostring(args.path or "") and extra ~= tostring(args.url or "") then
+          resultPreview = extra
+        end
+      end
+    end
+    if #display > 12000 then
+      display = display:sub(1, 12000) .. "\n\n" .. S.ai_tool_output_truncated
+    end
+    if not denied and display ~= "" and resultPreview == "" and not isOutcomeLine(firstLine) then
+      resultPreview = tostring(display):gsub("[\r\n].*", "")
+    end
+    if #resultPreview > 240 then resultPreview = TextUtil.utf8Cap(resultPreview, 240) .. "…" end
+    if display ~= "" then detailParts[#detailParts + 1] = tostring(display) end
+  end
+
+  local detail = table.concat(detailParts, "\n")
+  local bubbleViews = {}
+  local card = {
+    MaterialCardView,
+    radius = "12dp",
+    CardElevation = 0,
+    strokeWidth = isError and "1dp" or "0dp",
+    strokeColor = isError and ColorError or 0,
+    CardBackgroundColor = isError and ColorErrorContainer or ColorSurfaceContainerHigh,
+    layout_width = "match",
+    layout_height = "wrap",
+    {
+      LinearLayout,
+      orientation = "vertical",
+      layout_width = "match",
+      layout_height = "wrap",
+      {
+        MaterialTextView,
+        id = "toolHeader",
+        text = summary .. (detail ~= "" and "  ›" or ""),
+        contentDescription = summary .. (detail ~= "" and (". " .. S.ai_tool_tap_expand) or ""),
+        textSize = "12sp",
+        textStyle = "bold",
+        textColor = isError and ColorOnErrorContainer or ColorOnSurface,
+        padding = "10dp",
+        clickable = detail ~= "",
+        focusable = detail ~= "",
+      },
+      {
+        MaterialTextView,
+        text = resultPreview,
+        textSize = "11sp",
+        textColor = isError and ColorOnErrorContainer or ColorText,
+        paddingLeft = "10dp",
+        paddingRight = "10dp",
+        paddingBottom = resultPreview ~= "" and "8dp" or "0dp",
+        maxLines = 1,
+        ellipsize = "end",
+        visibility = resultPreview ~= "" and VISIBLE or GONE,
+      },
+      {
+        MaterialTextView,
+        id = "toolDetail",
+        text = detail,
+        textSize = "12sp",
+        textColor = isError and ColorOnErrorContainer or ColorOnSurface,
+        paddingLeft = "10dp",
+        paddingRight = "10dp",
+        paddingBottom = "10dp",
+        lineSpacingMultiplier = 1.3,
+        textIsSelectable = true,
+        visibility = GONE,
+      },
+    },
+  }
+  local bubble = loadlayout(card, bubbleViews)
+  local bubbleLp = LinearLayout.LayoutParams(-1, -2)
+  bubbleLp.bottomMargin = dp(10)
+  bubble.setLayoutParams(bubbleLp)
+
+  if detail ~= "" then
+    local expanded = false
+    bubbleViews.toolHeader.onClick = function()
+      expanded = not expanded
+      bubbleViews.toolDetail.setVisibility(expanded and VISIBLE or GONE)
+      bubbleViews.toolHeader.setText(summary .. (expanded and "  ⌄" or "  ›"))
+      bubbleViews.toolHeader.setContentDescription(summary .. ". "
+        .. (expanded and S.ai_tool_tap_collapse or S.ai_tool_tap_expand))
+    end
+  end
+  return bubble
+end
+
+function _M.renderTool(toolName, args, result)
+  local container = getContainer()
+  if not container then return end
+  local bubble = _M.createToolView(toolName, args, result)
+  container.addView(bubble)
+  scrollDown()
+  return bubble
+end
+
+--- 构建任务计划卡片 View
+function _M.createTodoView(list)
   local items = type(list) == "table" and list or {}
   local done = 0
   for _, item in ipairs(items) do
@@ -525,7 +792,6 @@ function _M.renderTodo(list)
       rowViews.todoContent.setPaintFlags(rowViews.todoContent.getPaintFlags()
         + luajava.bindClass("android.graphics.Paint").STRIKE_THRU_TEXT_FLAG)
     end
-    -- 独立加载的根视图 margin 会被加载器丢弃，间距在 addView 时显式传参
     local rowLp = LinearLayout.LayoutParams(-1, -2)
     rowLp.topMargin = dp(index > 1 and 4 or 8)
     inner.addView(row, rowLp)
@@ -533,35 +799,34 @@ function _M.renderTodo(list)
 
   local todoLp = LinearLayout.LayoutParams(-1, -2)
   todoLp.bottomMargin = dp(10)
-  container.addView(card, todoLp)
-  scrollDown()
+  card.setLayoutParams(todoLp)
+  return card
 end
 
--- ─── 子代理实时卡片 ──
--- 消息列表重建（refreshMessageList）后由 syncSubtask + renderSubtaskCard 恢复。
+function _M.renderTodo(list)
+  local container = getContainer()
+  if not container then return end
+  local card = _M.createTodoView(list)
+  container.addView(card)
+  scrollDown()
+  return card
+end
 
 local liveSubtask = nil
 local subtaskCardView = nil
 
---- 同步运行快照：done 的清除，运行中的更新
 function _M.syncSubtask(info)
   if liveSubtask and liveSubtask.done then liveSubtask = nil end
   if info then liveSubtask = info end
 end
 
-function _M.renderSubtaskCard()
-  if subtaskCardView then
-    local parent = subtaskCardView.getParent()
-    if parent then parent.removeView(subtaskCardView) end
-    subtaskCardView = nil
-  end
-  if not liveSubtask or liveSubtask.done then return end
-  local container = getContainer()
-  if not container or not isPanelVisible() then return end
+function _M.createSubtaskView(info)
+  local taskInfo = info or liveSubtask
+  if not taskInfo or taskInfo.done then return nil end
 
-  local statusText = S.ai_subtask_round:format(liveSubtask.rounds or 0)
-  if liveSubtask.tool and liveSubtask.tool ~= "" then
-    statusText = statusText .. " · " .. tostring(liveSubtask.tool)
+  local statusText = S.ai_subtask_round:format(taskInfo.rounds or 0)
+  if taskInfo.tool and taskInfo.tool ~= "" then
+    statusText = statusText .. " · " .. tostring(taskInfo.tool)
   end
   local cardViews = {}
   local card = loadlayout({
@@ -605,7 +870,7 @@ function _M.renderSubtaskCard()
       },
       {
         MaterialTextView,
-        text = tostring(liveSubtask.task or ""),
+        text = tostring(taskInfo.task or ""),
         textSize = "12sp",
         textColor = ColorText,
         maxLines = 2,
@@ -621,222 +886,28 @@ function _M.renderSubtaskCard()
       },
     },
   }, cardViews)
-  subtaskCardView = card
   local cardLp = LinearLayout.LayoutParams(-1, -2)
   cardLp.bottomMargin = dp(10)
-  container.addView(card, cardLp)
-  scrollDown()
+  card.setLayoutParams(cardLp)
+  return card
 end
 
--- ─── 工具气泡 ──
-
-function _M.renderTool(toolName, args, result)
+function _M.renderSubtaskCard()
+  if subtaskCardView then
+    local parent = subtaskCardView.getParent()
+    if parent then parent.removeView(subtaskCardView) end
+    subtaskCardView = nil
+  end
+  if not liveSubtask or liveSubtask.done then return end
   local container = getContainer()
-  if not container then return end
+  if not container or not (hooks.isPanelVisible and hooks.isPanelVisible()) then return end
 
-  if AgentChat.normalizeToolName(toolName) == "update_todos" then
-    local list = args and args.todos
-    local failed = result and tostring(result):find("任务计划未更新", 1, true) ~= nil
-    -- 列表合法且更新成功才渲染计划卡片；失败或清空走通用气泡展示结果文本
-    if type(list) == "table" and #list > 0 and not failed then
-      _M.renderTodo(list)
-      return
-    end
-  end
-
-  local isError = isToolError(toolName, result)
-  local icon = "→"
-  if toolName:match("create") then icon = "✚"
-  elseif toolName:match("delete") then icon = "✕"
-  elseif toolName == "apply_patch" then icon = "✎"
-  elseif toolName == "append_file" then icon = "＋"
-  elseif toolName == "rename_file" then icon = "⇄"
-  elseif toolName == "get_env_info" then icon = "ℹ"
-  elseif toolName == "fetch_url" then icon = "↗"
-  elseif toolName == "run_project" then icon = "▶"
-  elseif toolName == "build_project" then icon = "📦"
-  elseif toolName == "run_subtask" then icon = "⚑" end
-
-  local resultText = tostring(result or "")
-  local resultLower = resultText:lower()
-  local denied = resultText == tostring(S.ai_user_denied)
-    or resultText:find("用户拒绝", 1, true) ~= nil
-    or resultLower:find("user declined", 1, true) ~= nil
-  local status = result == nil and S.ai_tool_pending
-    or (denied and S.ai_tool_denied or (isError and S.ai_tool_failed or S.ai_tool_success))
-  local summary = icon .. " " .. toolDisplayName(toolName) .. "  ·  " .. status
-  local resultPreview = ""
-  local detailParts = {}
-  if toolName ~= "apply_patch" and args.path then
-    detailParts[#detailParts + 1] = tostring(args.path)
-  end
-  if args.url then detailParts[#detailParts + 1] = tostring(args.url) end
-  if toolName == "read_files" and result == nil then
-    local files = args.paths
-    if type(files) == "table" then
-      for _, path in ipairs(files) do detailParts[#detailParts + 1] = tostring(path) end
-    elseif type(files) == "string" and files ~= "" then
-      detailParts[#detailParts + 1] = files
-    end
-  end
-
-  if toolName == "rename_file" and args.new_path then
-    detailParts[#detailParts + 1] = "→ " .. tostring(args.new_path)
-  end
-  if toolName == "apply_patch" and args.patch then
-    local blockCount = select(2, args.patch:gsub("<<<<<<<%s*SEARCH", ""))
-    local hunkCount = select(2, args.patch:gsub("@@", ""))
-    if blockCount > 0 then
-      detailParts[#detailParts + 1] = S.ai_search_replace_blocks:format(blockCount)
-    elseif hunkCount > 0 then
-      detailParts[#detailParts + 1] = "unified diff"
-    end
-  end
-  if result then
-    local display = result
-    local firstLine, rest = tostring(result):match("^([^\r\n]*)[\r\n]+(.*)$")
-    if not firstLine then
-      firstLine = tostring(result)
-      rest = ""
-    end
-    firstLine = firstLine:gsub("%s+$", "")
-    rest = rest:gsub("^[\r\n]+", ""):gsub("%s+$", "")
-    local function isOutcomeLine(line)
-      return line:find("成功", 1, true)
-        or line:find("失败", 1, true)
-        or line:find("通过", 1, true)
-        or line:find("语法错误", 1, true)
-        or line:find("异常", 1, true)
-        or line:find("已创建", 1, true)
-        or line:find("已删除", 1, true)
-        or line:find("已追加", 1, true)
-        or line:find("已替换", 1, true)
-        or line:find("已重命名", 1, true)
-        or line:find("已应用", 1, true)
-        or line:find("补丁", 1, true)
-        or line:find("递归列表", 1, true)
-        or line:find("搜索「", 1, true)
-        or line:find("目录为空", 1, true)
-        or line:find("未找到", 1, true)
-        or line:find("需要 ", 1, true)
-    end
-    if toolName == "apply_patch" and not isError then
-      local locText = tostring(result):match("位置:%s*(.+)$")
-        or tostring(result):match("[Aa]t%s+([Ll%d%-%s,]+)$")
-      if locText then
-        locText = locText:gsub("%s+$", "")
-        display = S.ai_patch_locations:format(locText)
-        resultPreview = locText
-      else
-        display = ""
-        resultPreview = firstLine:match("（(.+)）") or ""
-      end
-    elseif toolName == "read_files" and not isError then
-      local files = args.paths
-      local n = type(files) == "table" and #files or (type(files) == "string" and 1 or 0)
-      display = S.ai_read_files_summary:format(n)
-      local fileLines = {}
-      if type(files) == "table" then
-        for _, path in ipairs(files) do fileLines[#fileLines + 1] = tostring(path) end
-      elseif type(files) == "string" and files ~= "" then
-        fileLines[1] = files
-      end
-      if #fileLines > 0 then
-        display = display .. "\n" .. table.concat(fileLines, "\n")
-        resultPreview = table.concat(fileLines, " · ")
-      end
-    elseif not denied and isOutcomeLine(firstLine) then
-      local elapsed = firstLine:match("耗时%s*([^）%)]+)")
-      if elapsed then resultPreview = elapsed end
-      display = rest
-      if display == "" and resultPreview == "" then
-        local extra = firstLine:match("（(.+)）") or firstLine:match(": (.+)$")
-        if extra and extra ~= tostring(args.path or "") and extra ~= tostring(args.url or "") then
-          resultPreview = extra
-        end
-      end
-    end
-    if #display > 12000 then
-      display = display:sub(1, 12000) .. "\n\n" .. S.ai_tool_output_truncated
-    end
-    if not denied and display ~= "" and resultPreview == "" and not isOutcomeLine(firstLine) then
-      resultPreview = tostring(display):gsub("[\r\n].*", "")
-    end
-    if #resultPreview > 240 then resultPreview = resultPreview:sub(1, 240) .. "…" end
-    if display ~= "" then detailParts[#detailParts + 1] = tostring(display) end
-  end
-
-  local detail = table.concat(detailParts, "\n")
-  local bubbleViews = {}
-  local card = {
-    MaterialCardView,
-    radius = "12dp",
-    CardElevation = 0,
-    strokeWidth = isError and "1dp" or "0dp",
-    strokeColor = isError and ColorError or 0,
-    CardBackgroundColor = isError and ColorErrorContainer or ColorSurfaceContainerHigh,
-    layout_width = "match",
-    layout_height = "wrap",
-    {
-      LinearLayout,
-      orientation = "vertical",
-      layout_width = "match",
-      layout_height = "wrap",
-      {
-        MaterialTextView,
-        id = "toolHeader",
-        text = summary .. (detail ~= "" and "  ›" or ""),
-        contentDescription = summary .. (detail ~= "" and (". " .. S.ai_tool_tap_expand) or ""),
-        textSize = "12sp",
-        textStyle = "bold",
-        textColor = isError and ColorOnErrorContainer or ColorOnSurface,
-        padding = "10dp",
-        clickable = detail ~= "",
-        focusable = detail ~= "",
-      },
-      {
-        MaterialTextView,
-        text = resultPreview,
-        textSize = "11sp",
-        textColor = isError and ColorOnErrorContainer or ColorText,
-        paddingLeft = "10dp",
-        paddingRight = "10dp",
-        paddingBottom = resultPreview ~= "" and "8dp" or "0dp",
-        maxLines = 1,
-        ellipsize = "end",
-        visibility = resultPreview ~= "" and VISIBLE or GONE,
-      },
-      {
-        MaterialTextView,
-        id = "toolDetail",
-        text = detail,
-        textSize = "12sp",
-        textColor = isError and ColorOnErrorContainer or ColorOnSurface,
-        paddingLeft = "10dp",
-        paddingRight = "10dp",
-        paddingBottom = "10dp",
-        lineSpacingMultiplier = 1.3,
-        textIsSelectable = true,
-        visibility = GONE,
-      },
-    },
-  }
-  local bubble = loadlayout(card, bubbleViews)
-  local bubbleLp = LinearLayout.LayoutParams(-1, -2)
-  bubbleLp.bottomMargin = dp(10)
-  container.addView(bubble, bubbleLp)
-  if detail ~= "" then
-    local expanded = false
-    bubbleViews.toolHeader.onClick = function()
-      expanded = not expanded
-      bubbleViews.toolDetail.setVisibility(expanded and VISIBLE or GONE)
-      bubbleViews.toolHeader.setText(summary .. (expanded and "  ⌄" or "  ›"))
-      bubbleViews.toolHeader.setContentDescription(summary .. ". "
-        .. (expanded and S.ai_tool_tap_collapse or S.ai_tool_tap_expand))
-    end
-  end
+  local card = _M.createSubtaskView(liveSubtask)
+  if not card then return end
+  subtaskCardView = card
+  container.addView(card)
   scrollDown()
-  return bubble
+  return card
 end
 
 return _M

@@ -84,7 +84,9 @@ end
 
 local function normalizeMaxTokens(value, fallback)
   local parsed = tonumber(value) or fallback or DEFAULT_MAX_TOKENS
-  return math.max(256, math.min(32768, math.floor(parsed)))
+  -- 支持大输出模型（如 Claude 3.5 Sonnet 8k, o1 64k/100k, DeepSeek 64k/128k 等）
+  -- 允许最大输出设至 1048576，不再硬编码 32768 上限
+  return math.max(256, math.min(1048576, math.floor(parsed)))
 end
 
 local function normalizeModelLimits(contextLength, maxTokens, fallbackContext, fallbackMaxTokens)

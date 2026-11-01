@@ -2,10 +2,13 @@
 --- 具体文件算法通过 configure 注入，避免执行层依赖 AgentChat 的全局状态。
 local _M = {}
 local config
-local activeJob
+local activeJobs = {} -- { [job] = { name = name, cancelled = false } }
+local AgentJobRegistry = nil
+pcall(function()
+  AgentJobRegistry = luajava.bindClass("com.nekolaska.agent.AgentJobRegistry")
+end)
 -- 进程级标记：模型是否已读过沙盒文档（run_lua 自动运行的前置条件）
 local sandboxDocRead = false
-local activeToolName
 
 local aliases = {
   read = "read_file", readfile = "read_file", file_read = "read_file",
@@ -159,14 +162,25 @@ function _M.executeToolAsync(name, args, onResult)
       return
     end
     local job
+    local syncDone = false
     job = requireConfig().callMcpToolAsync(server, tool, args, function(ok, text)
-      if activeJob == job then activeJob = nil; activeToolName = nil end
+      if not job then
+        syncDone = true
+      else
+        local entry = activeJobs[job]
+        activeJobs[job] = nil
+        if AgentJobRegistry then pcall(function() AgentJobRegistry.unregister(job) end) end
+        if entry and entry.cancelled then return end
+      end
+
       if not onResult then return end
       if ok then onResult(text, true)
       else onResult("MCP 工具调用失败: " .. tostring(text or "未知错误"), false) end
     end)
-    activeJob = job
-    activeToolName = job and name or nil
+    if job and not syncDone then
+      activeJobs[job] = { name = name, cancelled = false }
+      if AgentJobRegistry then pcall(function() AgentJobRegistry.register(job, name) end) end
+    end
     return job
   end
   if not onResult then return end
@@ -181,7 +195,13 @@ function _M.executeToolAsync(name, args, onResult)
         return { ok = false, result = tostring(result), toolOk = false }
       end,
       function(result)
-        if activeJob == job then activeJob = nil; activeToolName = nil end
+        local entry = activeJobs[job]
+        activeJobs[job] = nil
+        if AgentJobRegistry then pcall(function() AgentJobRegistry.unregister(job) end) end
+
+        -- 若已被取消，静默丢弃残余回调，严禁污染业务流
+        if entry and entry.cancelled then return end
+
         if type(result) == "table" then
           if result.ok then
             onResult(result.result, result.toolOk)
@@ -196,26 +216,53 @@ function _M.executeToolAsync(name, args, onResult)
     )
   end)
   if not okLaunch then onResult("无法启动后台工具任务") end
-  if okLaunch then activeJob = job; activeToolName = job and name or nil end
+  if okLaunch and job then
+    activeJobs[job] = { name = name, cancelled = false }
+    if AgentJobRegistry then pcall(function() AgentJobRegistry.register(job, name) end) end
+  end
   return job
 end
 
 function _M.cancelPending()
-  local job = activeJob
-  local name = activeToolName
-  activeJob = nil
-  activeToolName = nil
-  if not job then return false end
-  if job then pcall(function() job.cancel() end) end
-  local cfg = requireConfig()
-  if (name:match("^mcp::") or name:match("^mcp__")) and cfg.cancelMcpCalls then
-    pcall(cfg.cancelMcpCalls)
-  elseif name == "fetch_url" and cfg.cancelFetch then
-    pcall(cfg.cancelFetch)
-  elseif (name == "run_lua" or name == "check_lua_syntax") and cfg.cancelSandbox then
-    pcall(cfg.cancelSandbox)
+  local count = 0
+  local cancelledNames = {}
+
+  -- 1. Kotlin 原生注册表批量原子取消
+  if AgentJobRegistry then
+    pcall(function()
+      local tools = AgentJobRegistry.cancelAll()
+      if tools then
+        for i = 0, tools.size() - 1 do
+          cancelledNames[tools.get(i)] = true
+          count = count + 1
+        end
+      end
+    end)
   end
-  return true
+
+  -- 2. Lua 侧 activeJobs 集合全量标记取消（保留 entry 引用供回调拦截，不置空表）
+  for job, entry in pairs(activeJobs) do
+    if not entry.cancelled then
+      entry.cancelled = true
+      if job.cancel then pcall(function() job.cancel() end) end
+      if entry.name then cancelledNames[entry.name] = true end
+      count = count + 1
+    end
+  end
+
+  -- 3. 关联子模块清理钩子
+  local cfg = requireConfig()
+  for name, _ in pairs(cancelledNames) do
+    if (name:match("^mcp::") or name:match("^mcp__")) and cfg.cancelMcpCalls then
+      pcall(cfg.cancelMcpCalls)
+    elseif name == "fetch_url" and cfg.cancelFetch then
+      pcall(cfg.cancelFetch)
+    elseif (name == "run_lua" or name == "check_lua_syntax") and cfg.cancelSandbox then
+      pcall(cfg.cancelSandbox)
+    end
+  end
+
+  return count > 0
 end
 
 function _M.isDestructiveTool(name)
@@ -346,6 +393,10 @@ end
 --- 沙盒文档是否已被读过（run_lua 自动运行的前置条件；进程级）
 function _M.hasReadSandboxDoc()
   return sandboxDocRead
+end
+
+function _M.setSandboxDocRead(value)
+  sandboxDocRead = (value == true)
 end
 
 function _M.requiresConfirmation(name, args)

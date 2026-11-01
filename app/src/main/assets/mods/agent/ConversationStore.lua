@@ -14,6 +14,7 @@ local sequence = 0
 -- 会话按记录存储（LuaKV）：每会话一个记录文件 + 元数据索引，
 -- 一次工具轮保存只写当前会话，不再整包重写
 local KV = require("mods.utils.LuaKV")
+local TextUtil = require("mods.utils.TextUtil")
 local CONV_KV_NS = "conversations"
 local maxSeq = 0
 local kvReady = false
@@ -590,7 +591,7 @@ function _M.save(id, messages, path, updates)
   if target.name == "" or target.name == "新对话" then
     for _, message in ipairs(target.messages) do
       if message.role == "user" and message.content and tostring(message.content) ~= "" then
-        target.name = tostring(message.content):gsub("\n", " "):sub(1, 30)
+        target.name = TextUtil.utf8Cap(tostring(message.content):gsub("\n", " "), 30)
         break
       end
     end

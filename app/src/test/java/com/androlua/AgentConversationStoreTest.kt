@@ -19,17 +19,57 @@ class AgentConversationStoreTest {
     }
 
     private fun loadStore(globals: Globals, assets: File) {
+        val luaKvFile = File(assets, "mods/utils/LuaKV.lua")
+        val luaKvChunk = globals.load(luaKvFile.readText(), "@LuaKV.lua")
+        val textUtilFile = File(assets, "mods/utils/TextUtil.lua")
+        val textUtilChunk = globals.load(textUtilFile.readText(), "@TextUtil.lua")
+        val packageTable = globals.get("package")
+        val preload = packageTable.get("preload")
+        preload.set("mods.utils.LuaKV", luaKvChunk)
+        preload.set("mods.utils.TextUtil", textUtilChunk)
+
         val file = File(assets, "mods/agent/ConversationStore.lua")
         val chunk = globals.load(file.readText(), "@ConversationStore.lua")
         val store = chunk.call()
         globals.set("ConversationStore", store)
+
+        val tempDir = java.nio.file.Files.createTempDirectory("test_luakv").toFile()
+        globals.set("TEST_KV_ROOT", org.luaj.LuaValue.valueOf(tempDir.absolutePath.replace('\\', '/')))
+        globals.load(
+            """
+            function kvSer(v)
+              local t = type(v)
+              if t == "string" then return string.format("%q", v) end
+              if t == "number" or t == "boolean" or t == "nil" then return tostring(v) end
+              if t == "table" then
+                local parts = {}
+                for k, item in pairs(v) do
+                  parts[#parts + 1] = "[" .. kvSer(k) .. "]=" .. kvSer(item)
+                end
+                return "{" .. table.concat(parts, ",") .. "}"
+              end
+              return "nil"
+            end
+            function kvDeser(s)
+              local f = loadstring(s)
+              return f and f()
+            end
+            local KV = require("mods.utils.LuaKV")
+            KV.configure({
+                root = function() return TEST_KV_ROOT end,
+                encode = kvSer,
+                decode = kvDeser,
+            })
+            """.trimIndent(),
+            "@init_kv.lua"
+        ).call()
     }
 
     @Test
     fun testConversationStoreScopeAndStableIds() {
         val assets = sequenceOf(File("src/main/assets"), File("app/src/main/assets"))
             .first { it.isDirectory }
-        val globals = JsePlatform.standardGlobals()
+        val globals = createGlobals(assets)
         loadStore(globals, assets)
 
         val chunk = globals.load(
@@ -41,8 +81,8 @@ class AgentConversationStoreTest {
             ConversationStore.configure({
                 getData = function(key, def) return store[key] or def end,
                 setData = function(key, val) store[key] = val; return true end,
-                encode = function(v) return v end,
-                decode = function(v) return v end,
+                encode = kvSer,
+                decode = kvDeser,
                 getProjectPath = function() return currentProject end,
                 normalizeProjectPath = function(p) return p end,
             })
@@ -124,23 +164,23 @@ class AgentConversationStoreTest {
     fun testLegacyMigration() {
         val assets = sequenceOf(File("src/main/assets"), File("app/src/main/assets"))
             .first { it.isDirectory }
-        val globals = JsePlatform.standardGlobals()
+        val globals = createGlobals(assets)
         loadStore(globals, assets)
 
         globals.load(
             """
             local store = {
-                ai_conversations = {
+                ai_conversations = kvSer({
                     { name = "Old Conv 1", messages = { { role = "user", content = "Hi" } } }
-                },
+                }),
                 ai_current_conv = "1"
             }
 
             ConversationStore.configure({
                 getData = function(key, def) return store[key] or def end,
                 setData = function(key, val) store[key] = val; return true end,
-                encode = function(v) return v end,
-                decode = function(v) return v end,
+                encode = kvSer,
+                decode = kvDeser,
                 getProjectPath = function() return "/default/project" end,
                 normalizeProjectPath = function(p) return p end,
             })
@@ -164,7 +204,7 @@ class AgentConversationStoreTest {
     fun accidentalEmptySaveDoesNotEraseMessages() {
         val assets = sequenceOf(File("src/main/assets"), File("app/src/main/assets"))
             .first { it.isDirectory }
-        val globals = JsePlatform.standardGlobals()
+        val globals = createGlobals(assets)
         loadStore(globals, assets)
 
         globals.load(
@@ -173,8 +213,8 @@ class AgentConversationStoreTest {
             ConversationStore.configure({
                 getData = function(key, def) return store[key] or def end,
                 setData = function(key, value) store[key] = value; return true end,
-                encode = function(value) return value end,
-                decode = function(value) return value end,
+                encode = kvSer,
+                decode = kvDeser,
                 getProjectPath = function() return "/project" end,
                 normalizeProjectPath = function(path) return path end,
             })

@@ -1,4 +1,4 @@
-# NeLuaJ+ 纯 Lua 模块测试驱动：编译 Run/SyntaxCheck 并运行套件。
+﻿# NeLuaJ+ 纯 Lua 模块测试驱动：编译 Run/SyntaxCheck 并运行套件。
 #
 # 用法（在项目根目录执行）：
 #   .\tests\run_tests.ps1                  跑全部行为测试套件
@@ -65,12 +65,14 @@ if ($Check) {
 # ── 行为测试模式 ──
 $suites = @(
   "TestTodo", "TestPatch", "TestRegistry", "TestSubagent",
-  "TestParallel", "TestMarkdown", "TestTextUtil", "TestStoreIndex", "TestAgentUi",
+  "TestParallel", "TestMarkdown", "TestMarkdownAST", "TestTextUtil", "TestStoreIndex", "TestAgentUi",
   "TestMcpNotifications", "TestAgentTurn", "TestSessionState", "TestEditorSession"
 )
 if ($Suite) { $suites = @($Suite) }
 
 $failed = @()
+$prevEAP = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
 foreach ($s in $suites) {
   Write-Host "== $s ==" -ForegroundColor Cyan
   $lines = & java -noverify -cp $cp Run (Join-Path $testsDir "$s.lua") 2>&1
@@ -79,6 +81,7 @@ foreach ($s in $suites) {
     $failed += $s
   }
 }
+$ErrorActionPreference = $prevEAP
 
 if ($failed.Count -gt 0) {
   Write-Host "FAILED SUITES: $($failed -join ', ')" -ForegroundColor Red

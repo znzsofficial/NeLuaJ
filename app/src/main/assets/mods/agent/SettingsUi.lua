@@ -83,9 +83,19 @@ local function formatBalance(parsed)
   end
 end
 
+local function isActivityAlive()
+  if not activity then return false end
+  local okFinishing, finishing = pcall(function() return activity.isFinishing() end)
+  if okFinishing and finishing then return false end
+  local okDestroyed, destroyed = pcall(function() return activity.isDestroyed() end)
+  if okDestroyed and destroyed then return false end
+  return true
+end
+
 local function queryBalance(url, key, onDone)
   AgentChat.fetchBalance(url, key, function(ok, payload, detail)
     if onDone then onDone() end
+    if not isActivityAlive() then return end
     if not ok then
       print(fetchError(payload, detail))
       return
@@ -106,6 +116,7 @@ end
 local function fetchModels(url, key, onDone, onIds)
   AgentChat.fetchProviderModels(url, key, function(ok, payload, detail)
     if onDone then onDone() end
+    if not isActivityAlive() then return end
     if not ok then
       print(fetchError(payload, detail))
       return
@@ -261,17 +272,25 @@ showProviderEditor = function(existing, onSaved)
     end
     return AgentChat.findProvider(providerId)
   end
-  MaterialAlertDialogBuilder(activity)
+  local providerDialog = MaterialAlertDialogBuilder(activity)
     .setTitle(existing and S.ai_edit_provider or S.ai_add_provider)
     .setView(content)
-    .setPositiveButton(S.ai_save, function()
+    .setPositiveButton(S.ai_save, nil)
+    .setNegativeButton(S.ai_cancel, nil)
+    .create()
+
+  providerDialog.setOnShowListener(function()
+    local positive = providerDialog.getButton(-1) -- BUTTON_POSITIVE
+    if not positive then return end
+    positive.onClick = function()
       local provider = ensureProvider()
-      if not provider then return end
+      if not provider then return end -- 校验失败不关闭弹窗，保留用户草稿
+      providerDialog.dismiss()
       print(S.ai_saved)
       if onSaved then onSaved(provider) else showProviderManager() end
-    end)
-    .setNegativeButton(S.ai_cancel, nil)
-    .show()
+    end
+  end)
+  providerDialog.show()
   dialogViews.nameInput.setText(existing and existing.name or "")
   dialogViews.keyInput.setText(existing and existing.key or "")
   dialogViews.urlInput.setText(existing and existing.url or "")
@@ -459,10 +478,17 @@ showModelEditor = function(existingIndex)
     inputLayout,
   }, dialogViews)
 
-  MaterialAlertDialogBuilder(activity)
+  local modelDialog = MaterialAlertDialogBuilder(activity)
     .setTitle(existingIndex and S.ai_edit_model or S.ai_add_model)
     .setView(content)
-    .setPositiveButton(S.ai_save, function()
+    .setPositiveButton(S.ai_save, nil)
+    .setNegativeButton(S.ai_cancel, nil)
+    .create()
+
+  modelDialog.setOnShowListener(function()
+    local positive = modelDialog.getButton(-1) -- BUTTON_POSITIVE
+    if not positive then return end
+    positive.onClick = function()
       local name = fieldText(dialogViews.nameInput)
       local model = fieldText(dialogViews.modelInput)
       local contextLength = fieldText(dialogViews.contextInput)
@@ -470,7 +496,7 @@ showModelEditor = function(existingIndex)
       local responses = dialogViews.responsesSwitch.isChecked()
       if model == "" then
         print(S.ai_need_model)
-        return
+        return -- 校验失败不关闭弹窗，保留草稿
       end
       if not AgentChat.findProvider(selectedId) then
         print(S.ai_need_provider)
@@ -486,10 +512,11 @@ showModelEditor = function(existingIndex)
       end
       updateModelLabel()
       print(S.ai_saved)
+      modelDialog.dismiss()
       showModelPicker()
-    end)
-    .setNegativeButton(S.ai_cancel, nil)
-    .show()
+    end
+  end)
+  modelDialog.show()
 
   local function refreshProviderButton()
     dialogViews.providerButton.setText(providerLabel(AgentChat.findProvider(selectedId)))
@@ -621,13 +648,13 @@ showModelPicker = function()
         print(S.ai_switched_to:format(models[which + 1].name))
       end
     end)
-    .setNegativeButton(S.ai_manage, function()
-      showModelManager()
-    end)
+    .setNegativeButton(S.ai_close, nil)
     .setNeutralButton(S.ai_providers, function()
       showProviderManager()
     end)
-    .setPositiveButton(S.ai_close, nil)
+    .setPositiveButton(S.ai_manage, function()
+      showModelManager()
+    end)
     .show()
 end
 
@@ -1375,8 +1402,21 @@ showSettings = function()
       local retryVal = dlgViews.retryInput.text:gsub("^%s*(.-)%s*$", "%1")
       local roundsVal = dlgViews.maxRoundsInput.text:gsub("^%s*(.-)%s*$", "%1")
       local promptVal = dlgViews.promptInput.text
-      if tempVal ~= "" then this.setSharedData("ai_temperature", tempVal) end
-      if retryVal ~= "" then this.setSharedData("ai_retry_count", retryVal) end
+      if tempVal ~= "" then
+        local tempNum = tonumber(tempVal)
+        if tempNum then
+          -- 限制在合理温度区间 0.0 ~ 2.0，防止非法值导致 API 报 400
+          tempNum = math.max(0.0, math.min(2.0, tempNum))
+          this.setSharedData("ai_temperature", string.format("%.2f", tempNum))
+        end
+      end
+      if retryVal ~= "" then
+        local retryNum = tonumber(retryVal)
+        if retryNum then
+          retryNum = math.max(0, math.min(10, math.floor(retryNum)))
+          this.setSharedData("ai_retry_count", tostring(retryNum))
+        end
+      end
       -- 回合上限：留空/非数字 = 不限制（存 "0"）
       local roundsNum = tonumber(roundsVal) or 0
       if roundsNum < 0 then roundsNum = 0 end

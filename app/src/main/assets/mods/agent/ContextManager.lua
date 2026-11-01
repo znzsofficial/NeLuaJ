@@ -87,6 +87,7 @@ local function copyMessage(src)
   if src.reasoning_content ~= nil then copy.reasoning_content = src.reasoning_content end
   if src.response_output ~= nil then copy.response_output = src.response_output end
   if src.response_origin ~= nil then copy.response_origin = src.response_origin end
+  if src.continuation_state ~= nil then copy.continuation_state = src.continuation_state end
   if src.name ~= nil then copy.name = src.name end
   return copy
 end
