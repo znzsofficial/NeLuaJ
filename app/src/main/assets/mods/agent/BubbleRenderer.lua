@@ -299,7 +299,10 @@ function _M.createMessageView(role, content, stateMessage, opts)
       end
       inner.addView(markdownView)
     elseif part.type == "table" then
-      local tableCard = TableComponent and TableComponent.createTableView and TableComponent.createTableView(part, isUser)
+      local ok, tableCard = pcall(function()
+        return TableComponent and TableComponent.createTableView and TableComponent.createTableView(part, isUser)
+      end)
+      if not ok then tableCard = nil end
       if tableCard then
         local tableLp = LinearLayout.LayoutParams(-1, -2)
         tableLp.topMargin = dp(6)

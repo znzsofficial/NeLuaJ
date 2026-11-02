@@ -264,6 +264,13 @@ class OpenAIProtocolTest {
             assert(req2.messages[2].content == "...")
 
             -- 3. tool_calls 中的 arguments 无论为空串、nil、空白或非 object，均规整化为合法的 "{}" JSON 字符串
+            -- android.jar's org.json is a stub in local JVM tests. Supply a
+            -- deterministic decoder fixture rather than weakening production validation.
+            json.decode = function(text)
+              if text == '{"k":"v"}' then return { k = "v" } end
+              if text == '{}' then return {} end
+              error("Invalid JSON fixture: " .. tostring(text))
+            end
             local req3 = OpenAIProtocol.buildRequest(cfgGemini, {
               { role = "user", content = "run" },
               {
@@ -282,6 +289,21 @@ class OpenAIProtocolTest {
             assert(tcs[1]["function"].arguments == "{}", "tc1 args: " .. tostring(tcs[1]["function"].arguments))
             assert(tcs[2]["function"].arguments == "{}", "tc2 args: " .. tostring(tcs[2]["function"].arguments))
             assert(tcs[3]["function"].arguments == "{\"k\":\"v\"}", "tc3 args: " .. tostring(tcs[3]["function"].arguments))
+            local invalid = OpenAIProtocol.buildRequest(cfgGemini, {
+              { role = "user", content = "run" },
+              { role = "assistant", tool_calls = {
+                { id = "bad", type = "function", ["function"] = { name = "t", arguments = '{"x":}' } },
+              } },
+              { role = "tool", tool_call_id = "bad", content = "failed" },
+            }, {})
+            assert(invalid.messages[2].tool_calls[1]["function"].arguments == '{}')
+            local continued = OpenAIProtocol.buildRequest(cfgGemini, {
+              { role = "user", content = "question" },
+              { role = "assistant", content = "partial answer", continuation_state = "stopped" },
+            }, {})
+            assert(continued.messages[2].content == "partial answer")
+            assert(continued.messages[2].continuation_state == nil)
+            assert(continued.messages[3].role == "user")
             -- 验证 role="tool" 自动关联了函数名 name，空 content 规整为 "{}"
             assert(req3.messages[3].role == "tool" and req3.messages[3].name == "t1" and req3.messages[3].content == "{}")
             assert(req3.messages[4].role == "tool" and req3.messages[4].name == "t2" and req3.messages[4].content == "res2")

@@ -3,6 +3,7 @@
 --- HtmlCompat 延迟到首次渲染时绑定：模块加载零 Android 依赖，
 --- splitCodeBlocks 可在独立 LuaJ 挂架中做行为测试。
 local _M = {}
+local Inline = require("mods.agent.markdown.MarkdownInline")
 
 local HtmlCompat = nil
 
@@ -11,13 +12,6 @@ local function ensureHtmlCompat()
     HtmlCompat = luajava.bindClass("androidx.core.text.HtmlCompat")
   end
   return HtmlCompat
-end
-
-local function escapeHtml(text)
-  text = text:gsub("&", "&amp;")
-  text = text:gsub("<", "&lt;")
-  text = text:gsub(">", "&gt;")
-  return text
 end
 
 local MarkdownAST = nil
@@ -53,32 +47,7 @@ function _M.renderMarkdown(text, opts)
   opts = opts or {}
   local linkHex = hexColor(opts.linkColor)
   local function inline(source)
-    local html = escapeHtml(source)
-    local codeSpans = {}
-    html = html:gsub("`([^`]+)`", function(code)
-      local token = "\001CODE" .. tostring(#codeSpans + 1) .. "\002"
-      -- 双层包裹：外层由 TagHandler 赋予现代圆角底色与微缩等宽，内层保证原生 HtmlCompat 降级时仍是 monospace
-      codeSpans[#codeSpans + 1] = "<m-code><font face='monospace'>" .. code .. "</font></m-code>"
-      return token
-    end)
-    local links = {}
-    html = html:gsub("%[([^%]]+)%]%((https?://[^%)%s]+)%)", function(label, url)
-      local token = "\001LINK" .. tostring(#links + 1) .. "\002"
-      local styled = label
-      if linkHex then styled = "<font color='" .. linkHex .. "'>" .. label .. "</font>" end
-      links[#links + 1] = "<a href='" .. url:gsub("'", "&#39;") .. "'>" .. styled .. "</a>"
-      return token
-    end)
-    html = html:gsub("%*%*(.-)%*%*", "<b>%1</b>")
-    html = html:gsub("__([^_]+)__", "<b>%1</b>")
-    html = html:gsub("%*([^*]-)%*", "<i>%1</i>")
-    -- 仅匹配词边界下划线斜体，防止 snake_case（如 user_id_param）被误拆分为斜体
-    html = html:gsub("(%f[%w_])_([^_]+)_(%f[^%w_])", "%1<i>%2</i>%3")
-    html = html:gsub("^%s*_([^_]+)_%s*$", "<i>%1</i>")
-    html = html:gsub("~~(.-)~~", "<s>%1</s>")
-    html = html:gsub("\001LINK(%d+)\002", function(index) return links[tonumber(index)] end)
-    html = html:gsub("\001CODE(%d+)\002", function(index) return codeSpans[tonumber(index)] end)
-    return html
+    return Inline.render(source, linkHex)
   end
 
   text = tostring(text or ""):gsub("\r\n", "\n")
@@ -86,20 +55,17 @@ function _M.renderMarkdown(text, opts)
   for line in (text .. "\n"):gmatch("(.-)\n") do
     lines[#lines + 1] = line
   end
-  local html = {}
+  local html = opts.inlineOnly and { inline(text) } or {}
   local inList = nil
   local function closeList()
     if inList then html[#html + 1] = "</" .. inList .. ">"; inList = nil end
   end
 
-  --- 分隔行检测走模块级共享实现
-  local isTableSeparator = _M.isTableSeparator
-
   local i = 1
-  while i <= #lines do
+  while not opts.inlineOnly and i <= #lines do
     local line = lines[i]
     -- 表格块：表头行 + 分隔行 + 任意数据行，emit 真实 <table><tr><td> 标签
-    if line:match("^%s*|") and lines[i + 1] and isTableSeparator(lines[i + 1]) then
+    if MarkdownAST.isTableStart(line, lines[i + 1]) then
       closeList()
       local tableHtml = { "<table>" }
       -- 表头行（<th>，TagHandler 同样用双空格间隔）
@@ -110,7 +76,7 @@ function _M.renderMarkdown(text, opts)
       tableHtml[#tableHtml + 1] = "</tr>"
       -- 数据行
       local j = i + 2
-      while j <= #lines and lines[j]:match("^%s*|") do
+      while j <= #lines and lines[j]:find("|", 1, true) do
         tableHtml[#tableHtml + 1] = "<tr>"
         for _, cell in ipairs(_M.splitTableRow(lines[j])) do
           tableHtml[#tableHtml + 1] = "<td>" .. inline(cell) .. "</td>"
@@ -195,6 +161,12 @@ function _M.renderMarkdown(text, opts)
 
   -- 回退机制（如纯单元测试环境或缺少新类）
   return compat.fromHtml(htmlText, compat.FROM_HTML_MODE_LEGACY)
+end
+
+function _M.renderInline(text, opts)
+  local options = { inlineOnly = true }
+  for key, value in pairs(opts or {}) do options[key] = value end
+  return _M.renderMarkdown(text, options)
 end
 
 --- 把内容拆分为文本段 + 代码块序列

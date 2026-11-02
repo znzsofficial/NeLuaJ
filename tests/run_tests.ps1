@@ -64,9 +64,9 @@ if ($Check) {
 
 # ── 行为测试模式 ──
 $suites = @(
-  "TestTodo", "TestPatch", "TestRegistry", "TestSubagent",
-  "TestParallel", "TestMarkdown", "TestMarkdownAST", "TestTextUtil", "TestStoreIndex", "TestAgentUi",
-  "TestMcpNotifications", "TestAgentTurn", "TestSessionState", "TestEditorSession"
+  "TestTodo", "TestPatch", "TestRegistry", "TestSubagent", "TestToolCancellation",
+  "TestParallel", "TestMarkdown", "TestMarkdownAST", "TestMarkdownRendering", "TestTextUtil", "TestStoreIndex", "TestAgentUi",
+  "TestMcpNotifications", "TestOpenAIClientCancellation", "TestAgentTurn", "TestSessionState", "TestEditorSession"
 )
 if ($Suite) { $suites = @($Suite) }
 

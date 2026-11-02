@@ -66,6 +66,19 @@ local unclosedMd = "```python\nprint('hello')\n"
 local unclosedBlocks = AST.parseBlocks(unclosedMd)
 check("unclosed code block recognized", #unclosedBlocks == 1 and unclosedBlocks[1].type == "code" and unclosedBlocks[1].unclosed == true)
 
+local raw = "| A | B |\n| --- | --- |\n| 1 | 2 |"
+local rawBlock = AST.parseBlocks(raw)[1]
+check("fallback preserves exact table source", rawBlock.raw == raw)
+check("fallback source reparses as table", AST.parseBlocks(rawBlock.raw)[1].type == "table")
+local optionalPipes = AST.parseBlocks("A | B\n--- | :---:\n1 | 2")[1]
+check("table without outer pipes", optionalPipes.type == "table" and optionalPipes.rows[1][2] == "2")
+check("mismatched header separator is text", AST.parseBlocks("A | B\n--- | --- | ---")[1].type == "text")
+local tilde = AST.parseBlocks("~~~lua\nprint(1)\n~~~")[1]
+check("tilde fences supported", tilde.type == "code" and tilde.code == "print(1)")
+local nested = AST.parseBlocks("````md\n```lua\nx\n```\n````")[1]
+check("shorter fences remain code", nested.type == "code" and nested.code == "```lua\nx\n```")
+check("different fence cannot close block", AST.parseBlocks("~~~\nx\n```")[1].unclosed == true)
+
 print(string.format("== TestMarkdownAST: %d/%d PASS ==", passed, total))
 print("ALL-PASS")
 print("RUN-DONE")

@@ -110,7 +110,7 @@ open class RecyclerListAdapter @JvmOverloads constructor(
         for (i in 1..table.length()) {
             list.add(table[i])
         }
-        super.submitList(list)
+        submitList(list)
     }
 
     internal class DiffCallback(private val adapterCreator: Creator) :

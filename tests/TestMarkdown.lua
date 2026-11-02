@@ -1,4 +1,5 @@
 local ASSETS = ASSETS or "app/src/main/assets/"
+package.preload["mods.agent.markdown.MarkdownInline"] = assert(loadfile(ASSETS .. "mods/agent/markdown/MarkdownInline.lua"))
 
 -- Markdown.splitCodeBlocks 行为测试：纯字符串切分，独立 LuaJ 运行时。
 -- renderMarkdown 依赖 HtmlCompat（延迟绑定，Android 环境），挂架不调用它。

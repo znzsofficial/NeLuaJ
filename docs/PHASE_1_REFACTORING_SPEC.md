@@ -1,5 +1,10 @@
 # NeLuaJ+ 第一阶段架构重构工程方案：Kotlin 下沉与调度状态机加固
 
+> **历史设计草案。** 下文 `SubagentCoordinator` 等示例并非现有实现。
+> 当前直接使用 CountDownLatch，注册表以锁分离取消批次，不能仅凭
+> ConcurrentHashMap 或一次编译成功宣称取消原子性和死锁已全面消除。
+> 当前源码状态与测试边界见 `AGENT_REFACTORING_MASTER.md`。
+
 > 文档版本：1.1 (工程落地版)  
 > 目标：将多线程并发控制、线程挂起唤醒、并发任务追踪及高频排版算法下沉至 Kotlin 原生层，消除 LuaJ++ 环境下的线程死锁、CPU 忙等、跨会话时空错乱与 O(N^2) 渲染卡顿。
 

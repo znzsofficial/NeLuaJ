@@ -1,5 +1,10 @@
 # 阶段二实施细节方案：RecyclerView 渐进式集成与混合容器架构 (P1)
 
+> **已被替代的历史方案，请勿照此恢复旧容器。** 当前生产代码和单测都不使用
+> `msgContainer`/`msgScroll` 降级。实际 Adapter 继承 RecyclerView.Adapter，
+> 使用 DiffUtil 和 payload；流式类型为 4，错误为 5，欢迎为 6，子代理为 7。
+> 60 FPS/恒定内存没有实测保证。当前说明见 `AGENT_REFACTORING_MASTER.md`。
+
 > 目标：在 `ChatUI.lua` 中接入基于 `AgentChatAdapter` 的 `RecyclerView` 虚拟化容器，淘汰暴力 `removeAllViews()` 刷新。
 > **核心原则**：保持现有 `BubbleRenderer` 的复合卡片渲染能力 100% 不退化，同时保证 PC 端自动化单测套件 100% 持续通过。
 

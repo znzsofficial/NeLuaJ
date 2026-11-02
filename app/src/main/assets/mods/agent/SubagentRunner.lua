@@ -46,18 +46,24 @@ function _M.progressInfo()
   }
 end
 
+local postToMain
 local function notifyProgress(state)
   local report = config and config.onProgress
   if not report then return end
-  pcall(report, {
+  local snapshot = {
     task = state.task,
     rounds = state.rounds,
     tool = state.currentTool,
     done = state.done,
-  })
+  }
+  postToMain(function()
+    if current and current ~= state then return end
+    if state.done and not snapshot.done then return end
+    pcall(report, snapshot)
+  end)
 end
 
-local function postToMain(fn)
+postToMain = function(fn)
   local post = config and config.postToMain
   if post then return post(fn) end
   if activity then
@@ -67,17 +73,9 @@ local function postToMain(fn)
   end
 end
 
-local function sleepMs(ms)
-  local sleep = config and config.sleepMs
-  if sleep then return sleep(ms) end
-  pcall(function()
-    luajava.bindClass("java.lang.Thread").sleep(ms)
-  end)
-end
-
 --- 创建轻量同步等待/唤醒原语：
 --- 优先使用 JSE 原生标准的 java.util.concurrent.CountDownLatch(1)，出让 CPU 挂起，零忙等消耗；
---- 若在无并发类环境中，优雅降级为轮询。
+--- 同步测试不需要等待；生产环境由 CountDownLatch 唤醒。
 local function createSyncEvent()
   local ok, LatchClass = pcall(function()
     return luajava.bindClass("java.util.concurrent.CountDownLatch")
@@ -156,6 +154,15 @@ function _M.run(task, lightweight)
   local activeToolJob = nil
 
   local syncEvent = createSyncEvent()
+  local requestSerial = 0
+  local function cancelHandle(handle)
+    if handle then pcall(function() if handle.cancel then handle.cancel() end end) end
+  end
+  local function cancelToolJob(job)
+    if not job then return end
+    if c().cancelToolJob then pcall(c().cancelToolJob, job)
+    else cancelHandle(job) end
+  end
 
   local function finish(result, ok)
     if state.done then return end
@@ -164,8 +171,14 @@ function _M.run(task, lightweight)
     state.ok = ok == true
     state.currentTool = nil
     -- 中止可能仍在后台狂奔的网络请求或工具任务
-    if activeStreamCall and activeStreamCall.cancel then pcall(function() activeStreamCall.cancel() end) end
-    if activeToolJob and activeToolJob.cancel then pcall(function() activeToolJob.cancel() end) end
+    cancelHandle(activeStreamCall)
+    cancelToolJob(activeToolJob)
+    activeStreamCall, activeToolJob = nil, nil
+    if not state.ok and c().cancelToolConfirm then
+      postToMain(function()
+        if not current or current == state then pcall(c().cancelToolConfirm) end
+      end)
+    end
     notifyProgress(state)
     if current == state then current = nil end
     syncEvent.notify()
@@ -201,16 +214,25 @@ function _M.run(task, lightweight)
     notifyProgress(state)
     local override = lightweight and c().getAuxModelConfig and c().getAuxModelConfig() or nil
     setStatus("子任务 #" .. subSerial .. " · 第 " .. state.rounds .. " 轮")
-    activeStreamCall = c().sendStream(messages, {
+    requestSerial = requestSerial + 1
+    local serial = requestSerial
+    local completed = false
+    local function liveRequest()
+      return not state.done and not state.cancelled and current == state and serial == requestSerial
+    end
+    local call = c().sendStream(messages, {
       builtinTools = subTools(),
       modelOverride = override,
       onPrepared = function(usage)
+        if not liveRequest() then return end
         local report = c().reportUsage
         if report and type(usage) == "table" and usage.used then pcall(report, usage.used) end
       end,
       onToolCalls = function(toolCalls, text)
         stopIfCancelled()
-        if state.done then return end
+        if not liveRequest() or completed then return end
+        completed = true
+        activeStreamCall = nil
         -- 与主回合一致的可移植工具历史格式
         local assistantMsg = { role = "assistant" }
         if text and text ~= "" then assistantMsg.content = text end
@@ -230,6 +252,9 @@ function _M.run(task, lightweight)
         end)
       end,
       onDone = function(text)
+        if not liveRequest() or completed then return end
+        completed = true
+        activeStreamCall = nil
         text = tostring(text or ""):match("^%s*(.-)%s*$") or ""
         if text == "" then
           finish("子代理已完成工具操作但未返回总结文本；可直接检查相关文件或让其补充说明。", true)
@@ -238,6 +263,9 @@ function _M.run(task, lightweight)
         end
       end,
       onError = function(err)
+        if not liveRequest() or completed then return end
+        completed = true
+        activeStreamCall = nil
         if tostring(err):lower():match("cancel") then
           finish("子任务已被用户停止", false)
         else
@@ -245,6 +273,9 @@ function _M.run(task, lightweight)
         end
       end,
     })
+    if state.done or state.cancelled then
+      if not state.ok then cancelHandle(call) end
+    elseif not completed and serial == requestSerial then activeStreamCall = call end
   end
 
   runToolCalls = function(toolCalls, index, onAll)
@@ -254,10 +285,14 @@ function _M.run(task, lightweight)
     local tc = toolCalls[index]
     local args = {}
     pcall(function() args = json.decode(tc.arguments) end)
+    if type(args) ~= "table" then args = {} end
     tc.name = c().normalizeToolName(tc.name, args)
+    local accepted, started = false, false
     local function proceedWithResult(resultStr)
       stopIfCancelled()
-      if state.done then return end
+      if state.done or current ~= state or accepted then return end
+      accepted = true
+      activeToolJob = nil
       messages[#messages + 1] = {
         role = "tool",
         tool_call_id = tc.id,
@@ -266,9 +301,15 @@ function _M.run(task, lightweight)
       runToolCalls(toolCalls, index + 1, onAll)
     end
     local function execute()
+      stopIfCancelled()
+      if state.done or current ~= state or accepted or started then return end
+      started = true
       state.currentTool = tc.name
       notifyProgress(state)
-      activeToolJob = c().executeToolAsync(tc.name, args, proceedWithResult)
+      local job = c().executeToolAsync(tc.name, args, proceedWithResult)
+      if state.done or state.cancelled then
+        if not state.ok then cancelToolJob(job) end
+      elseif not accepted then activeToolJob = job end
     end
     -- 确认策略与主代理一致：自动批准直通；需确认的走全局确认钩子
     if c().shouldAutoApprove(tc.name, args) then

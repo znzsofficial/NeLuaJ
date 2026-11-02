@@ -166,7 +166,7 @@ local function finishStopped(toolCalls, index, args, turnScope)
   for remaining = index, #toolCalls do
     local call = toolCalls[remaining]
     local callArgs = args
-    if remaining ~= index then
+    if remaining ~= index or type(callArgs) ~= "table" then
       callArgs = {}
       pcall(function() callArgs = json.decode(call.arguments) end)
       if type(callArgs) ~= "table" then callArgs = {} end
@@ -198,8 +198,32 @@ local function executeToolCallsParallel(calls, toolCalls, results, onAllDone, ge
   local total = #calls
   local pending = total
   local collected = {}
+  local settled = false
+  local stopBatch
+  local function flush(stopping)
+    if settled or not isCurrentScope(turnScope) then return end
+    settled = true
+    if state.activeToolStop == stopBatch then state.activeToolStop = nil end
+    local messages = getMessages()
+    for j = 1, total do
+      local entry = collected[j]
+      local content = entry and tostring(entry.result or "") or S.ai_stopped
+      messages[#messages + 1] = { role = "tool", tool_call_id = calls[j].id, content = content }
+      results[#results + 1] = { tool_call_id = calls[j].id, content = content }
+      if entry then
+        state.failedToolCalls[entry.key] = entry.ok == false and content:sub(1, 1000) or nil
+      end
+    end
+    if stopping and messages[#messages] then messages[#messages].continuation_state = "stopped" end
+    hooks.saveHistory()
+    hooks.refreshMessageList()
+    if not stopping then onAllDone(results) end
+  end
+  stopBatch = function() flush(true) end
+  state.activeToolStop = stopBatch
   _M.setLoadingStatus(S.ai_tool_pending .. " · " .. S.ai_parallel_batch:format(total))
   for i = 1, total do
+    if settled or state.stopRequested or not isCurrentScope(turnScope) then break end
     local call = calls[i]
     local tc = toolCalls[i]
     tc.name = call.name
@@ -208,41 +232,11 @@ local function executeToolCallsParallel(calls, toolCalls, results, onAllDone, ge
       .. (argsEncoded and tostring(encodedArgs) or tostring(tc.arguments or ""))
     AgentChat.executeToolAsync(call.name, call.args, function(resultStr, toolOk)
       -- 严格时空守卫：世代或会话作用域已失效时，绝对禁止向活跃会话追加数据
-      if collected[i] or (generation and not isCurrent(generation)) or not isCurrentScope(turnScope) then return end
+      if settled or collected[i] or (generation and not isCurrent(generation)) or not isCurrentScope(turnScope) then return end
       collected[i] = { id = call.id, result = resultStr, ok = toolOk, key = toolCallKey }
       pending = pending - 1
-      if pending > 0 then return end
-      if not isCurrentScope(turnScope) then return end
-      -- 全部回调已到：按调用顺序落盘
-      local messages = getMessages()
-      for j = 1, total do
-        local entry = collected[j]
-        local content = tostring(entry.result)
-        messages[#messages + 1] = {
-          role = "tool",
-          tool_call_id = entry.id,
-          content = content,
-        }
-        results[#results + 1] = { tool_call_id = entry.id, content = content }
-        if entry.ok == false then
-          state.failedToolCalls[entry.key] = content:sub(1, 1000)
-        else
-          state.failedToolCalls[entry.key] = nil
-        end
-      end
-      if state.stopRequested then
-        local stateMessage = messages[#messages]
-        if stateMessage and stateMessage.role == "tool" then
-          stateMessage.continuation_state = "stopped"
-        end
-      end
-      hooks.saveHistory()
-      hooks.refreshMessageList()
-      pcall(function()
-        if MainActivity and MainActivity.RecyclerView then MainActivity.RecyclerView.update() end
-      end)
-      if state.stopRequested then return end
-      onAllDone(results)
+      if state.stopRequested then flush(true)
+      elseif pending == 0 then flush(false) end
     end)
   end
 end
@@ -446,6 +440,12 @@ function _M.sendRaw(apiMessages, isContinue)
       break
     end
   end
+  local requestMessage = requestUserIndex and messages[requestUserIndex]
+  if requestMessage and requestMessage.request_error then
+    requestMessage.request_error = nil
+    hooks.saveHistory()
+    hooks.refreshMessageList()
+  end
   state.stopRequested = false
   local function isCurrentRequest() return isCurrent(generation) end
   if not isContinue then
@@ -629,6 +629,16 @@ function _M.send(isContinue, userMsg)
   keepAliveAcquire()
   local messages = getMessages()
   local requestHistory = messages
+  -- Compression may be asynchronous; snapshot the continuation marker before
+  -- the continue button clears it on the original UI message.
+  if isContinue then
+    requestHistory = {}
+    for i, message in ipairs(messages) do
+      local copy = {}
+      for key, value in pairs(message) do copy[key] = value end
+      requestHistory[i] = copy
+    end
+  end
   if userMsg and userMsg ~= "" then
     requestHistory = {}
     for i, message in ipairs(messages) do
@@ -686,6 +696,37 @@ function _M.compress(onDone)
     hooks.refreshMessageList()
     print(S.ai_compress_done:format(#Session.messages()))
     if onDone then pcall(onDone) end
+  end, true)
+  return true
+end
+
+function _M.retry(payload)
+  if state.loading then return false end
+  _M.bumpGeneration()
+  state.roundsThisTurn = 0
+  if type(payload) == "table" and #payload > 0 then _M.sendRaw(payload, false)
+  else _M.send(false) end
+  return true
+end
+
+function _M.compressAndRetry(payload)
+  if state.loading then return false end
+  local generation = _M.bumpGeneration()
+  captureScope()
+  state.stopRequested = false
+  state.roundsThisTurn = 0
+  _M.showLoading()
+  keepAliveAcquire()
+  -- A captured retry payload may contain editor context. Compress only the
+  -- outgoing request; do not persist it as conversation history.
+  AgentChat.buildCompressedApiMessages(payload or getMessages(), function(apiMessages, compressed)
+    if not isCurrent(generation) or state.stopRequested then return end
+    if not compressed or type(apiMessages) ~= "table" or #apiMessages == 0 then
+      _M.hideLoading()
+      print(S.ai_compress_unavailable)
+      return -- Leave the error card and its retry payload intact.
+    end
+    _M.sendRaw(apiMessages, false)
   end, true)
   return true
 end

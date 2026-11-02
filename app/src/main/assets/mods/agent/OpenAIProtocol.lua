@@ -40,15 +40,9 @@ local function normalizeJsonArguments(args)
   local ok, decoded = false, nil
   if type(json) == "table" and type(json.decode) == "function" then
     ok, decoded = pcall(json.decode, s)
-  else
-    ok, decoded = pcall(function() return JSON:decode(s) end)
   end
   if ok and type(decoded) == "table" and not (#decoded > 0 and next(decoded, #decoded) == nil) then
     return s
-  end
-  if not ok then
-    -- 若运行环境中无 json 库或解析报错，但在语法上是合法大括号包裹的对象，兜底放行
-    if s:find(":", 1, true) then return s end
   end
   return "{}"
 end
@@ -760,21 +754,23 @@ function _M.buildRequest(cfg, messages, callbacks)
   end
 
   local isGemini = isGeminiTarget(apiUrl, model)
-  local function isPrunableAssistant(msg)
+  local continuing = prepared[#prepared] and prepared[#prepared].continuation_state ~= nil
+  local function isPrunableAssistant(msg, preserveContinuation)
     if not msg or msg.role ~= "assistant" then return false end
     -- 若助手消息带有未完成或挂起的工具调用，末尾必须裁剪
     if msg.tool_calls and #msg.tool_calls > 0 then return true end
     local content = tostring(msg.content or "")
     if content == "" then return true end
     -- 仅当是非延续态（非续写请求）且面向 Gemini 时才裁剪末尾非空 assistant
-    if isGemini and not msg.continuation_state then return true end
+    if isGemini and not preserveContinuation then return true end
     return false
   end
 
   -- Gemini / Google 官方 OpenAI 兼容层规范：请求消息列表末尾必须是用户 (user) 或工具结果 (tool/function) 轮次，
   -- 绝不允许以模型助手 (assistant) 轮次作为请求结尾。若末尾有残留的空 assistant 或未完结 assistant，将其裁剪以符合规范。
-  while #prepared > 0 and isPrunableAssistant(prepared[#prepared]) do
+  while #prepared > 0 and isPrunableAssistant(prepared[#prepared], continuing) do
     table.remove(prepared, #prepared)
+    continuing = false
   end
 
   -- 对兼容层（非 Responses API）的消息序列进行深度清洗：
@@ -784,9 +780,15 @@ function _M.buildRequest(cfg, messages, callbacks)
   if not useResponses and not legacyFunctionMode then
     prepared = sanitizeMessagesForOpenAI(prepared, retainReasoning)
     -- 再次确保末尾不以非法 assistant 结尾
-    while #prepared > 0 and isPrunableAssistant(prepared[#prepared]) do
+    while #prepared > 0 and isPrunableAssistant(prepared[#prepared], continuing) do
       table.remove(prepared, #prepared)
+      continuing = false
     end
+  end
+
+  -- Keep the partial answer, but give Gemini a user turn to continue from.
+  if isGemini and continuing and prepared[#prepared] and prepared[#prepared].role == "assistant" then
+    prepared[#prepared + 1] = { role = "user", content = "Continue from where you stopped. Do not repeat the previous content." }
   end
 
   -- Gemini / CPA 规范：请求 contents 数组绝不可为空。

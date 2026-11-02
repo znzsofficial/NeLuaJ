@@ -1,6 +1,7 @@
 --- 原生自适应表格组件：在移动端呈现带细边框、斑马纹、对齐支持且横向丝滑滑动的现代表格。
 --- 彻底替代在单行文本内用“3 个空格”模拟的假表格。
 local _M = {}
+local Markdown = require("mods.agent.Markdown")
 
 local LinearLayout = luajava.bindClass("android.widget.LinearLayout")
 local HorizontalScrollView = luajava.bindClass("android.widget.HorizontalScrollView")
@@ -8,6 +9,8 @@ local TableLayout = luajava.bindClass("android.widget.TableLayout")
 local TableRow = luajava.bindClass("android.widget.TableRow")
 local MaterialCardView = luajava.bindClass("com.google.android.material.card.MaterialCardView")
 local MaterialTextView = luajava.bindClass("com.google.android.material.textview.MaterialTextView")
+local MaterialButton = luajava.bindClass("com.google.android.material.button.MaterialButton")
+local LinkMovementMethod = luajava.bindClass("android.text.method.LinkMovementMethod")
 local Gravity = luajava.bindClass("android.view.Gravity")
 
 import "androidx.core.graphics.ColorUtils"
@@ -43,6 +46,13 @@ function _M.createTableView(tableNode, isUser)
   local borderColor = isUser and ColorUtils.blendARGB(ColorPrimaryContainer, ColorOnPrimaryContainer, 0.20) or ColorOutline
   local textColor = isUser and ColorOnPrimaryContainer or ColorOnSurface
   local headerTextColor = isUser and ColorOnPrimaryContainer or ColorPrimary
+  local function setCellText(tv, text)
+    tv.setText(Markdown.renderInline(text, {
+      codeColor = textColor, linkColor = headerTextColor,
+    }))
+    tv.setMovementMethod(LinkMovementMethod.getInstance())
+    tv.setLinksClickable(true)
+  end
 
   local views = {}
   local tableCard = loadlayout({
@@ -84,7 +94,7 @@ function _M.createTableView(tableNode, isUser)
   headerRow.setBackgroundColor(headerBg)
   for colIdx, headerText in ipairs(headers) do
     local tv = MaterialTextView(activity)
-    tv.setText(headerText)
+    setCellText(tv, headerText)
     tv.setTextSize(12)
     tv.setTypeface(tv.getTypeface(), 1) -- Bold
     tv.setTextColor(headerTextColor)
@@ -94,32 +104,40 @@ function _M.createTableView(tableNode, isUser)
   end
   tableRoot.addView(headerRow)
 
-  -- 2. 渲染数据行（支持前 30 行平滑渲染与斑马纹）
-  local maxRows = math.min(#rows, 30)
-  for rowIdx = 1, maxRows do
-    local rowData = rows[rowIdx]
-    local row = TableRow(activity)
-    if rowIdx % 2 == 0 then
-      row.setBackgroundColor(zebraBg)
+  -- Render in batches so every row remains accessible without a huge initial bind.
+  local renderedRows = 0
+  local function appendRows()
+    local maxRows = math.min(#rows, renderedRows + 30)
+    for rowIdx = renderedRows + 1, maxRows do
+      local rowData = rows[rowIdx]
+      local row = TableRow(activity)
+      if rowIdx % 2 == 0 then
+        row.setBackgroundColor(zebraBg)
+      end
+      for colIdx = 1, #headers do
+        local cellText = rowData[colIdx] or ""
+        local tv = MaterialTextView(activity)
+        setCellText(tv, cellText)
+        tv.setTextSize(12)
+        tv.setTextColor(textColor)
+        tv.setGravity(gravityFor(alignments[colIdx]))
+        tv.setPadding(dp(12), dp(7), dp(12), dp(7))
+        row.addView(tv)
+      end
+      tableRoot.addView(row)
     end
-    for colIdx = 1, #headers do
-      local cellText = rowData[colIdx] or ""
-      local tv = MaterialTextView(activity)
-      tv.setText(cellText)
-      tv.setTextSize(12)
-      tv.setTextColor(textColor)
-      tv.setGravity(gravityFor(alignments[colIdx]))
-      tv.setPadding(dp(12), dp(7), dp(12), dp(7))
-      row.addView(tv)
-    end
-    tableRoot.addView(row)
+    renderedRows = maxRows
   end
+  appendRows()
 
   -- 超出保护提示
-  if #rows > maxRows then
+  if #rows > renderedRows then
     local tipRow = TableRow(activity)
-    local tipTv = MaterialTextView(activity)
-    tipTv.setText(string.format("… 共 %d 行，已折叠剩余 %d 行", #rows, #rows - maxRows))
+    local tipTv = MaterialButton(activity)
+    local function updateLabel()
+      tipTv.setText(string.format(res.string.ai_table_more or "Show more (%d rows remaining)", #rows - renderedRows))
+    end
+    updateLabel()
     tipTv.setTextSize(11)
     tipTv.setTextColor(ColorText)
     tipTv.setPadding(dp(12), dp(6), dp(12), dp(6))
@@ -127,6 +145,14 @@ function _M.createTableView(tableNode, isUser)
     tipLp.span = math.max(1, #headers)
     tipRow.addView(tipTv, tipLp)
     tableRoot.addView(tipRow)
+    tipTv.setOnClickListener(function()
+      tableRoot.removeView(tipRow)
+      appendRows()
+      if renderedRows < #rows then
+        updateLabel()
+        tableRoot.addView(tipRow)
+      end
+    end)
   end
 
   return tableCard

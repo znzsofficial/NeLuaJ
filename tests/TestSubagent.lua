@@ -38,13 +38,18 @@ local function reset(script_)
       if callbacks.onPrepared then callbacks.onPrepared({ used = 100 }) end
       local stepDef = table.remove(script, 1)
       if not stepDef then error("脚本耗尽：未预期的第 " .. (#captured.overrides + 1) .. " 次请求") end
-      stepDef(messages, callbacks)
+      return stepDef(messages, callbacks)
     end,
     normalizeToolName = function(name) return name end,
     executeToolAsync = function(name, args, onResult)
       executed[#executed + 1] = { name = name, args = args }
       return fake.onTool(name, args, onResult)
     end,
+    cancelToolJob = function(job)
+      captured.cancelToolCount = (captured.cancelToolCount or 0) + 1
+      job.cancel()
+    end,
+    cancelToolConfirm = function() captured.confirmCancelled = true end,
     shouldAutoApprove = function(name) return fake.auto[name] == true end,
     requiresConfirmation = function(name) return fake.confirm[name] == true end,
     isDestructiveTool = function(name) return fake.destructive[name] == true end,
@@ -211,5 +216,79 @@ check("progress round reported", roundInfo ~= nil and roundInfo.rounds == 1, rou
 check("progress tool reported", toolInfo ~= nil and toolInfo.tool == "read_file", toolInfo and toolInfo.tool)
 check("progress done reported", doneInfo ~= nil and doneInfo.done == true and doneInfo.tool == nil)
 check("progress snapshot cleared", SR.progressInfo() == nil)
+
+-- Controllable latch: drive cancellation/timeout without waiting 180 seconds.
+local originalBridge = luajava
+local onAwait
+luajava = { bindClass = function(name)
+  if name == "java.util.concurrent.CountDownLatch" then
+    return function()
+      return { countDown = function() end, await = function() if onAwait then onAwait() end end }
+    end
+  end
+  if name == "java.util.concurrent.TimeUnit" then return { SECONDS = "seconds" } end
+  error("Unexpected class " .. name)
+end }
+local requestCallback, networkCancelled = nil, 0
+reset({ function(_, cb)
+  requestCallback = cb
+  return { cancel = function() networkCancelled = networkCancelled + 1; cb.onError("cancelled") end }
+end })
+onAwait = function() SR.cancel() end
+r, ok = SR.run("pending network", false)
+check("cancel stops the returned network handle", not ok and networkCancelled == 1 and not SR.isRunning())
+requestCallback.onDone("late success")
+check("cancelled request cannot report late usage", not SR.isRunning())
+
+local lateAllow, lateDeny
+reset({ stepTool("late", "apply_patch") })
+fake.confirm.apply_patch = true
+fake.onConfirm = function(_, _, allow, deny) lateAllow, lateDeny = allow, deny end
+fake.onTool = function() error("expired confirmation must not execute") end
+onAwait = function() end
+r, ok = SR.run("pending confirmation", false)
+check("pending confirmation times out", not ok and r:find("超时", 1, true) and not SR.isRunning())
+lateAllow(); lateDeny()
+check("old confirmation is inert after timeout", #executed == 0)
+reset({ function(_, cb) lateAllow(); cb.onDone("new task") end })
+r, ok = SR.run("new owner", false)
+check("old allow cannot execute in a new subagent", ok and #executed == 0)
+
+reset({ function(_, cb)
+  requestCallback = cb
+  return { cancel = function() networkCancelled = networkCancelled + 1 end }
+end })
+local before = networkCancelled
+r, ok = SR.run("network timeout", false)
+check("timeout stops the live network handle", not ok and networkCancelled == before + 1)
+
+reset({ stepTool("child", "read_file") })
+fake.auto.read_file = true
+local lateToolResult, childCancelled = nil, 0
+fake.onTool = function(_, _, cb)
+  lateToolResult = cb
+  return { cancel = function() childCancelled = childCancelled + 1 end }
+end
+r, ok = SR.run("tool timeout", false)
+check("timeout delegates child cancellation to its executor", not ok and captured.cancelToolCount == 1 and childCancelled == 1)
+lateToolResult("late result")
+check("late child result cannot resume the timed-out subagent", not SR.isRunning())
+
+reset({ function() end })
+local queue, inMain, wrongThread = {}, false, false
+SR.configure({
+  postToMain = function(fn) queue[#queue + 1] = fn end,
+  onProgress = function() if not inMain then wrongThread = true end end,
+})
+local function drainMain()
+  inMain = true
+  while #queue > 0 do table.remove(queue, 1)() end
+  inMain = false
+end
+onAwait = drainMain
+r, ok = SR.run("timeout progress", false)
+drainMain()
+check("timeout progress and cleanup are posted to the main thread", not ok and not wrongThread)
+luajava = originalBridge
 
 if failures == 0 then print("ALL-PASS") else print("FAILURES: " .. failures) end

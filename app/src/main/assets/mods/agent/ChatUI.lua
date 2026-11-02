@@ -82,6 +82,7 @@ local currentVisualCards = {}
 
 local saveHistory, loadHistory, renderCards, showModelManager, showModelPicker, showConvManager, showConvList, showSettings, addMessageBubble, addToolBubble, updateProjectLabel, sendMessage, addRequestErrorBubble
 local regenerateLastTurn, editUserMessage
+local refreshMessageList, updatePlanStrip
 
 -- 任务计划随会话记录的 todos 字段持久化：saveHistory 每次落盘都镜像
 -- TodoManager 的当前状态，因此工具更新只需在主线程 commit 状态即可。
@@ -235,7 +236,7 @@ addMessageBubble = BubbleRenderer.renderMessage
 
 --- 任务计划置顶条：显示当前计划的完成进度，点击弹出完整清单。
 --- 数据源就是 TodoManager 的实时状态（系统提示注入的同一份）。
-local function updatePlanStrip()
+updatePlanStrip = function()
   if not views.planStrip then return end
   local todos = TodoManager.get()
   if not todos or #todos == 0 then
@@ -409,7 +410,7 @@ end
 local isRefreshing = false
 local pendingRefresh = false
 
-local function refreshMessageList()
+refreshMessageList = function()
   if not isPanelVisible() then return end
   if isRefreshing then
     pendingRefresh = true
@@ -419,6 +420,7 @@ local function refreshMessageList()
   repeat
     pendingRefresh = false
     pcall(function()
+      updatePlanStrip()
       if renderCards then
         renderCards()
       else
@@ -1329,7 +1331,8 @@ function _M.show(startDraft)
         if animator then animator.setSupportsChangeAnimations(false) end
       end)
 
-      local delegate = {
+      local delegate
+      delegate = {
         getItemViewType = function(item, position)
           return item.viewType or 0
         end,
@@ -1346,6 +1349,7 @@ function _M.show(startDraft)
           return LuaCustRecyclerHolder(dummy)
         end,
         onBindViewHolder = function(holder, item, position)
+          if streamView.holder == holder then streamView = {} end
           local itemView = holder.itemView
           itemView.removeAllViews()
           local vt = item.viewType or 0
@@ -1374,7 +1378,7 @@ function _M.show(startDraft)
                 lineSpacingMultiplier = 1.4,
               },
             }, streamViews)
-            streamView = { bubble = cardView, textView = streamViews.aiStreamText, id = item.streamId }
+            streamView = { holder = holder, bubble = cardView, textView = streamViews.aiStreamText, id = item.streamId }
           elseif vt == 5 then
             -- 完整保留错误重试卡片（包含一键重试、打开设置、压缩上下文与编辑请求）
             local err = tostring(item.error or "")
@@ -1447,9 +1451,6 @@ function _M.show(startDraft)
                 return
               end
               local retryPayload = AgentTurn.retryPayloadFor(message)
-              message.request_error = nil
-              saveHistory()
-              refreshMessageList()
               if compresses then
                 AgentTurn.compressAndRetry(retryPayload)
               else
@@ -1458,8 +1459,10 @@ function _M.show(startDraft)
             end
 
             errViews.editButton.onClick = function()
+              if AgentTurn.isActive() then return end
               local message = messages()[item.messageIndex]
               if not message or message.role ~= "user" then return end
+              editingMessageIndex = item.messageIndex
               message.request_error = nil
               saveHistory()
               refreshMessageList()
@@ -1511,17 +1514,16 @@ function _M.show(startDraft)
             itemView.addView(cardView)
           end
         end,
-        areItemsTheSame = function(oldItem, newItem)
-          return oldItem.stableId == newItem.stableId
-        end,
-        areContentsTheSame = function(oldItem, newItem)
-          return oldItem.content == newItem.content and oldItem.text == newItem.text
-        end,
-        getChangePayload = function(oldItem, newItem)
-          if oldItem.viewType == 4 and newItem.viewType == 4 then
-            return AgentChatAdapter.PAYLOAD_STREAMING_TEXT
+        onBindViewHolderWithPayload = function(holder, item, position, payloads)
+          if item.viewType == 4 and streamView.holder == holder and streamView.id == item.streamId
+              and streamView.textView then
+            streamView.textView.setText(item.text or "")
+          else
+            delegate.onBindViewHolder(holder, item, position)
           end
-          return nil
+        end,
+        onViewRecycled = function(holder)
+          if streamView.holder == holder then streamView = {} end
         end,
       }
       chatAdapter = AgentChatAdapter(activity, delegate)
@@ -1820,6 +1822,9 @@ SubagentRunner.configure({
   showToolConfirm = function(name, args, onAllow, onDeny)
     showToolConfirm(name, args, onAllow, onDeny)
   end,
+  cancelToolConfirm = function()
+    if activeToolConfirm then activeToolConfirm.cancel() end
+  end,
   setStatus = function(text)
     AgentTurn.setLoadingStatus(text)
   end,
@@ -1869,20 +1874,15 @@ AgentTurn.configure({
       end
       if not isPanelVisible() then return end
 
-      -- 真机 RecyclerView 模式下流式更新：
-      -- 1. 更新持有中的 TextView；
-      -- 2. 若当前持有者未准备好（如初始进入流式），通过 refreshMessageList 将流式卡片提交并挂载
-      if streamView.textView then
-        streamView.textView.setText(streamState.text)
+      -- Update the adapter's source of truth, not a possibly recycled TextView.
+      if chatAdapter and chatAdapter.updateStreamingText(streamState.id, streamState.text or "") then
         local now = (os.clock and os.clock()) or os.time()
         if not streamView.lastScroll or (now - streamView.lastScroll) >= 0.1 then
           streamView.lastScroll = now
           scrollDown()
         end
       else
-        if not isRefreshing then
-          refreshMessageList()
-        end
+        refreshMessageList()
       end
   end,
 })

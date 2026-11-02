@@ -1,5 +1,9 @@
 # NeLuaJ+ Agent 系统与渲染体系架构级重构规划
 
+> **历史设计方案，不代表全部已实现。** 当前采用单子代理 CountDownLatch 等待、
+> RecyclerView 单容器及轻量 Markdown 扫描；多子代理、Ring-Buffer/VSYNC、完整
+> 嵌套 AST 与 100% 覆盖率仍不是已验收能力。当前状态见 `AGENT_REFACTORING_MASTER.md`。
+
 > 基于深度审查结论编写。本规划旨在彻底废弃当前“原型演示级”的补丁式设计，系统性消除并发竞态、线程饥饿、内存泄漏与排版失真，重塑为工业级可靠的移动端 Agent 体系。
 
 ---

@@ -6,28 +6,50 @@ local _M = {}
 --- 表格行解析：支持转义管道符 \|，保留单元格对齐文本
 function _M.splitTableRow(line)
   if not line or not line:find("|", 1, true) then return {} end
-  -- 保护转义管道符 \|
-  local clean = line:gsub("\\|", "\001PIPE\002")
-  clean = clean:gsub("^%s*|", ""):gsub("|%s*$", "")
-  local cells = {}
-  for cell in (clean .. "|"):gmatch("(.-)|") do
-    local text = cell:gsub("^%s*", ""):gsub("%s*$", "")
-    -- 还原转义管道符
-    text = text:gsub("\001PIPE\002", "|")
-    cells[#cells + 1] = text
+  local clean = line:gsub("^%s*", ""):gsub("%s*$", "")
+  local cells, buffer = {}, {}
+  local i = 1
+  local function flush()
+    cells[#cells + 1] = table.concat(buffer):gsub("^%s*", ""):gsub("%s*$", "")
+    buffer = {}
   end
+  while i <= #clean do
+    local char = clean:sub(i, i)
+    if char == "\\" and clean:sub(i + 1, i + 1) == "|" then
+      buffer[#buffer + 1] = "|"
+      i = i + 2
+    elseif char == "\\" and clean:sub(i + 1, i + 1) == "\\" then
+      buffer[#buffer + 1] = "\\\\"
+      i = i + 2
+    elseif char == "|" then
+      flush()
+      i = i + 1
+    else
+      buffer[#buffer + 1] = char
+      i = i + 1
+    end
+  end
+  flush()
+  if clean:sub(1, 1) == "|" then table.remove(cells, 1) end
+  if clean:sub(-1) == "|" and cells[#cells] == "" then table.remove(cells) end
   return cells
 end
 
 --- 分隔行检测：检测是否符合 | --- | :---: | 形式
 function _M.isTableSeparator(line)
-  if not line or not line:match("^%s*|") then return false end
+  if not line or not line:find("|", 1, true) then return false end
   local cells = _M.splitTableRow(line)
   if #cells == 0 then return false end
   for _, cell in ipairs(cells) do
     if not cell:match("^:?%-+:?$") then return false end
   end
   return true
+end
+
+function _M.isTableStart(header, separator)
+  return header and header:find("|", 1, true) ~= nil
+    and _M.isTableSeparator(separator)
+    and #_M.splitTableRow(header) == #_M.splitTableRow(separator)
 end
 
 --- 将文本拆分成块级节点流（Blocks）
@@ -57,8 +79,9 @@ function _M.parseBlocks(content)
     local line = lines[i]
 
     -- 1. 代码块起始匹配 ``` (允许行首 0~3 空格)
-    local sIndent, sFence, sLang = line:match("^(%s*)(```+)(.*)$")
-    if sFence and #sIndent <= 3 then
+    local sIndent, sFence, sLang = line:match("^( *)([`~]+)(.*)$")
+    local validFence = sFence and #sFence >= 3 and (sFence:match("^`+$") or sFence:match("^~+$"))
+    if validFence and #sIndent <= 3 and not (sFence:sub(1, 1) == "`" and sLang:find("`", 1, true)) then
       flushText()
       local lang = sLang:gsub("^%s*(.-)%s*$", "%1")
       local codeLines = {}
@@ -66,8 +89,9 @@ function _M.parseBlocks(content)
       local closed = false
       while j <= #lines do
         local curLine = lines[j]
-        local eIndent, eFence = curLine:match("^(%s*)(```+)%s*$")
-        if eFence and #eIndent <= 3 and #eFence >= #sFence then
+        local eIndent, eFence = curLine:match("^( *)([`~]+)%s*$")
+        if eFence and #eIndent <= 3 and #eFence >= #sFence
+            and eFence == string.rep(sFence:sub(1, 1), #eFence) then
           closed = true
           break
         end
@@ -93,7 +117,7 @@ function _M.parseBlocks(content)
         i = j
       end
     -- 2. 表格块匹配：表头行 + 分隔行 + 数据行
-    elseif line:match("^%s*|") and lines[i + 1] and _M.isTableSeparator(lines[i + 1]) then
+    elseif _M.isTableStart(line, lines[i + 1]) then
       flushText()
       local headerCells = _M.splitTableRow(line)
       local alignRow = lines[i + 1]
@@ -112,9 +136,9 @@ function _M.parseBlocks(content)
       end
 
       local dataRows = {}
-      local rawTableLines = { line, nextLine }
+      local rawTableLines = { line, alignRow }
       local j = i + 2
-      while j <= #lines and lines[j]:match("^%s*|") do
+      while j <= #lines and lines[j]:find("|", 1, true) and not lines[j]:match("^%s*$") do
         rawTableLines[#rawTableLines + 1] = lines[j]
         local rowCells = _M.splitTableRow(lines[j])
         dataRows[#dataRows + 1] = rowCells

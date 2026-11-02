@@ -1501,6 +1501,7 @@ SubagentRunner.configure({
   getMaxRounds = function() return _M.getMaxRounds() end,
   normalizeToolName = ToolExecutor.normalizeToolName,
   executeToolAsync = ToolExecutor.executeToolAsync,
+  cancelToolJob = ToolExecutor.cancelJob,
   shouldAutoApprove = ToolExecutor.shouldAutoApprove,
   requiresConfirmation = ToolExecutor.requiresConfirmation,
   isDestructiveTool = ToolExecutor.isDestructiveTool,

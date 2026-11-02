@@ -103,9 +103,22 @@ assert(bubble.onRegenerate() == false)
 bubble.onEditRequest({ role = "user", content = "test" })
 assert(activeChecks == 2, "hooks did not reach the real handlers")
 print("PASS late-defined chat actions are connected")
+local tableSource = "| A | B |\n| --- | --- |\n| 1 | 2 |"
+local ast = assert(loadfile(assets .. "mods/agent/markdown/MarkdownAST.lua"))()
+local renderedFallback
+modules["mods.agent.Markdown"] = {
+  parseBlocks = ast.parseBlocks,
+  renderMarkdown = function(text) renderedFallback = text; return text end,
+}
+modules["mods.agent.markdown.TableComponent"] = {
+  createTableView = function() error("simulated Android view construction failure") end,
+}
 local actualBubble = loadModule("BubbleRenderer")
 actualBubble.configure(bubble)
 assert(not pcall(actualBubble.configure, {}))
+assert(actualBubble.createMessageView("assistant", tableSource))
+assert(renderedFallback == tableSource, "table exceptions must preserve the full raw fallback")
+print("PASS native table exceptions fall back to complete Markdown source")
 -- 验证消息渲染：包括纯文本、Markdown、多字节中文注释与代码块高亮
 actualBubble.renderMessage("assistant", "代码示例：\n```lua\n-- 这是中文注释\nlocal x = 1\nreturn '你好'\n```", nil, { isLastAssistant = true })
 actualBubble.renderMessage("user", "用户输入", nil, { isLastUser = true })
@@ -185,6 +198,39 @@ print("PASS model editor positive click prevents dismissal on validation failure
 -- 验证 ChatUI showToolConfirm 对代码工具的长文本截断、等宽字体与 ScrollView 自定义视图
 env.res.string.ai_confirm_code = "%s"
 local turnConfig = assert(captured["mods.agent.AgentTurn"])
+agent.normalizeToolName = function(name) return name end
+assert(pcall(turnConfig.addToolBubble, "read_file", {}, "stopped"), "tool stop must resolve local refresh functions")
+assert(pcall(turnConfig.addToolBubble, "update_todos", {}, "stopped"), "todo stop must resolve local plan-strip updater")
+print("PASS tool-stop callbacks resolve their actual local UI functions")
+local function upvalue(fn, wanted)
+  for i = 1, 30 do
+    local name, value = debug.getupvalue(fn, i)
+    if name == wanted then return value, i end
+  end
+  error("Missing upvalue " .. wanted)
+end
+local refresh = upvalue(turnConfig.refreshMessageList, "refreshMessageList")
+local visible = upvalue(refresh, "isPanelVisible")
+local oldDialog, dialogSlot = upvalue(visible, "dialog")
+debug.setupvalue(visible, dialogSlot, { isShowing = function() return true end })
+local toolBubble = upvalue(turnConfig.addToolBubble, "addToolBubble")
+local updatePlan = upvalue(toolBubble, "updatePlanStrip")
+local planViews = upvalue(updatePlan, "views")
+planViews.planStrip, planViews.planLabel, planViews.planProgress = widget(), widget(), widget()
+local plan = { { status = "pending" }, { status = "completed" } }
+modules["mods.agent.TodoManager"].get = function() return plan end
+env.res.string.ai_plan_progress = "%d/%d"
+turnConfig.refreshMessageList()
+assert(planViews.planProgress.text == "1/2")
+plan[1].status = "completed"
+turnConfig.refreshMessageList()
+assert(planViews.planProgress.text == "2/2", "ordinary tool-result refresh must update the plan strip")
+plan = {}
+turnConfig.refreshMessageList()
+assert(planViews.planStrip.visibility == 8, "cleared plan strip must be hidden")
+planViews.planStrip, planViews.planLabel, planViews.planProgress = nil, nil, nil
+debug.setupvalue(visible, dialogSlot, oldDialog)
+print("PASS committed todo progress and clearing are reflected by ordinary message refresh")
 local longCode = string.rep("print('hello')\n", 200)
 turnConfig.showToolConfirm("run_lua", { code = longCode }, function() end, function() end)
 local toolDialog = dialogs[#dialogs]

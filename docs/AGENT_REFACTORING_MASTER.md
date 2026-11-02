@@ -1,138 +1,51 @@
-# NeLuaJ+ Agent 架构重构路线图与阶段实施细则（全景规划与推进档案）
+# Agent 重构实现状态
 
-> 本文档为 NeLuaJ+ Agent 底层调度、生命周期状态机、UI 渲染管道与 Markdown 排版体系的全生命周期重构指导手册。
-> **核心工程原则**：优先复用既有优秀轮子（`com.nekolaska.ktx`、`LuaFileUtil`、`LuaJobWrapper`、`xTask`），彻底消除打补丁掩盖底层缺陷的坏味道。
+本文描述当前源码，不将设计目标或测试通过等同于完整验收。旧方案见
+`AGENT_REFACTORING_PLAN.md`、`PHASE_1_REFACTORING_SPEC.md` 和
+`PHASE_2_REFACTORING_SPEC.md`；其中的双模容器等设计已不再采用。
 
----
+## 调度、取消与回合状态
 
-## 目录
-1. [阶段一：生命周期、并发调度与状态机加固 (P0) — [已全面完工验收]](#阶段一生命周期并发调度与状态机加固-p0--已全面完工验收)
-2. [阶段二：UI 渲染管线工业级重塑 (P1) — [已全面完工验收]](#阶段二ui-渲染管线工业级重塑-p1--已全面完工验收)
-3. [阶段三：独立 AST 增量排版引擎演进 (P2) — [本轮规划重点]](#阶段三独立-ast-增量排版引擎演进-p2--本轮规划重点)
-4. [质量门禁与全量验证记录](#质量门禁与全量验证记录)
+- `SubagentRunner.lua` 在工具线程等待 `CountDownLatch`，步骤由主线程推进。
+  仍是单个子代理、阻塞等待模型，不是多子代理异步调度器。
+- 子代理取消/超时会终结状态并取消持有的请求和工具句柄；旧确认、重复结果、
+  旧请求的用量回调不再执行。进度通知投递到主线程。
+- `OpenAIClient.sendStream()` 返回可取消的请求状态；已经结束的句柄不会再取消新请求。
+- `ToolExecutor.lua` 仅保留活跃任务。取消前分离批次并标记闭包中的取消状态，
+  不依赖取消后一定存在的完成回调清理条目。
+- `AgentJobRegistry.kt` 使用锁原子分离取消批次，随后在锁外执行取消；
+  取消期间注册的新任务仍留在下一批次中。它不是事务性、跨模块的统一取消屏障。
+- `AgentTurn.lua` 用工程、会话和 generation 守卫回调；并行停止保留已收到结果，
+  为未完成工具补停止结果。重试及强制压缩重试具有显式入口。
 
----
+## UI 与列表
 
-# 阶段一：生命周期、并发调度与状态机加固 (P0) — [已全面完工验收]
+- 对话列表只使用 `RecyclerView`，没有生产或单测 `msgContainer` 降级分支。
+- `MessageItemFlattener.lua` 生成复合卡片。`AgentChatAdapter.kt` 使用比较快照和
+  `DiffUtil` 发出增量通知，流式文本更新数据源后通过 payload 刷新。
+- 数据更新在主线程执行，布局计算期间按序延后；回收时释放流式 View 引用。
+- 完整重绑定仍会重建单个复合气泡，并非每个 Markdown 块都有独立 ViewHolder。
+- 任务计划条随消息刷新读取已提交的 TodoManager 状态。
+- 尚未实现 VSYNC/Ring-Buffer 合批；没有提供恒定总内存或 60 FPS 的实测保证。
 
-### 1.1 子代理事件挂起唤醒协调器（`SubagentRunner.lua`）
-- 封装 `createSyncEvent()`，内部使用 JSE 标准原生的 `java.util.concurrent.CountDownLatch(1)`；
-- Worker 线程调用 `syncEvent.await(180)`，出让 CPU 时间片进入操作系统级挂起（`WAITING`），超时或取消主动联动中断底层的 SSE 流与异步工具，杜绝脱缰后台任务。
+## Markdown 与协议
 
-### 1.2 并发任务原子追踪下沉（`AgentJobRegistry.kt` & `ToolExecutor.lua`）
-- 在 `com.nekolaska.agent.AgentJobRegistry` 下沉线程安全注册表（`ConcurrentHashMap<Any, String>`）；
-- 深度对齐工程内置的 `org.luaj.android.LuaJobWrapper` 强类型，纳秒级直接执行 `job.cancel()`；
-- 采用 Job 墓碑（Tombstone）机制保留 `cancelled = true`，任务回调触发时静默丢弃残余结果，彻底消除了“取消拦截逃逸”漏洞；
-- 将 MCP 异步工具完整纳入统一追踪，清除了逃逸的全局变量。
+- `MarkdownAST.lua` 是轻量块扫描器，识别普通文本、围栏代码和管道表格；
+  不是完整 CommonMark 语法树，也没有完整的嵌套列表/引用解析。
+- `MarkdownInline.lua` 识别代码、链接与基本强调；内部仍使用占位符和部分正则。
+- 原生表格支持对齐、斑马纹、行内格式、链接及每次 30 行展开。
+  创建失败时以完整原文降级；表格内部并未虚拟化。
+- `MarkdownTagHandler.kt` 对自定义标签的闭合位置采用独立栈；
+  O(1) 指栈查找，不是整个 Markdown 渲染的复杂度。
+- 请求层保留续写上下文、过滤内部字段，并对工具参数做 JSON 对象校验。
+  模型/中转站的实机兼容性仍须分别验证。
 
-### 1.3 状态机时空守卫三元组（`AgentTurn.lua`）
-- 闭包捕获启动时刻的 `(turnSessionId, turnProjectPath, turnGeneration)`；
-- `finishStopped` 与 `executeToolCallsParallel` 路径全量注入 **Fail-Closed 模式** 时空守卫；
-- 若已切出会话或工程，过期回调直接拦截丢弃，彻底杜绝跨工程/跨会话串写报废数据。
+## 验证边界
 
-### 1.4 Markdown 标签闭合算法 $O(1)$ 栈优化（`MarkdownTagHandler.kt`）
-- 引入 `kotlin.collections.ArrayDeque<Int>` 专有位置栈，标签打开压入、闭合安全出栈，耗时降为 $O(1)$；
-- 严格限定 `start in 0 until output.length`，严密防范流式截断与空标签。
-
----
-
-# 阶段二：UI 渲染管线工业级重塑 (P1) — [已全面完工验收]
-
-### 2.1 复合卡片流展平器（`MessageItemFlattener.lua`）
-- 将 `Session.messages()` 转换为与 UI 渲染一一对应的视觉卡片流（Visual Cards）：
-  - `TYPE_USER (0)`：用户输入气泡（带头像与编辑重发操作）；
-  - `TYPE_ASSISTANT (1)`：AI 复合消息卡片（思维链折叠 + Markdown/代码块 + 复制/重试操作）；
-  - `TYPE_TOOL (2)`：工具调用与返回状态卡片（严格移植了原配对与孤立 Tool 兜底算法）；
-  - `TYPE_STREAMING (4)`：独立流式动态卡片；
-  - `TYPE_ERROR (5)`：请求错误与完整重试/设置/压缩上下文操作卡片；
-  - `TYPE_WELCOME (6)`：空会话首屏引导卡片；
-  - `TYPE_SUBTASK (7)`：子代理实时任务进度卡片。
-- **稳定 ID（`stableId`）机制**：为每个卡片分配持久确定的 ID（如 `user_1`、`asst_2`、`tool_xxx`），供 `DiffUtil` 毫秒级计算比对。
-
-### 2.2 双模虚拟化容器与交互全量闭环（`ChatUI.lua` & `ai_chat_panel.lua`）
-- **真机环境**：优先采用 `RecyclerView` + `AgentChatAdapter`：
-  - 接入 `LinearLayoutManager`，禁用默认变更动画（`setSupportsChangeAnimations(false)`）；
-  - 刷新历史时直接走 `submitMessages(cards)` 异步增量更新，内存占用恒定，彻底终结了原先 `removeAllViews()` 暴力销毁上千 View 导致的 GC 抖动；
-  - **搜索定位闭环**：`jumpToMessage` 适配 `LinearLayoutManager.scrollToPositionWithOffset`，真机搜索点击秒级精准平滑置顶；
-  - **智能悬浮按钮闭环**：向 RecyclerView 注册 `OnScrollListener`，回看历史时 `btnJumpLatest` 丝滑弹出，一键直达底部；
-  - **流式无闪烁渲染**：流式期间通过专用流式卡片接入，直接拿到当前 TextView 进行节流更新，绝不高频触发 `notifyItemChanged` 或修改 `Session.messages()`，防范任何数据被篡改。
-- **单测环境**：保留原 `msgContainer` 降级能力，确保测试挂架无缝通行。
-
----
-
-# 阶段三：独立 AST 增量排版引擎演进 (P2) — [本轮规划重点]
-
-> **目标**：彻底推翻脆弱的单行正则与不可见控制字符占位符（`\001CODE\002`），构建可脱离 Android Framework 独立运行完备单测的现代不可变 AST 排版引擎，并为移动端带来真正具备列宽自适应与边框能力的表格组件。
-
-### 3.1 为什么必须进行阶段三？（现有正则引擎硬伤）
-1. **控制字符占位符魔法（Token Substitution 脏套路）**：
-   使用 `\001CODE1\002` 和 `\001LINK1\002` 临时占位，如果用户代码里包含这些字节，或者解析阶段出现交错嵌套，占位符就会裸露在界面上或直接崩溃；
-2. **块级嵌套（Block-level Nesting）完全无法处理**：
-   单行正则一旦遇到“无序列表嵌套代码块”、“引用内嵌套有序列表”、“列表内多段落换行”，现有的单行正则扫描立即瘫痪；
-3. **“空格画表格”是假功能**：
-   用 3 个固定空格隔开单元格，在移动端变宽字体下必然错位成一团乱码。
-
-### 3.2 阶段三架构蓝图：Lexer → Parser → Renderer 三层解耦
-
-```
-┌───────────────────────────────────────────────────────────────┐
-│               MarkdownLexer.lua (词法扫描器)                  │
-│       • 逐行/逐字符流扫描，输出标准 Token 序列                │
-│       • 0 Android 依赖，纯标准 Lua，可在独立 PC 挂架跑完单测   │
-└───────────────────────────────┬───────────────────────────────┘
-                                │ Tokens
-                                ▼
-┌───────────────────────────────────────────────────────────────┐
-│               MarkdownAST.lua (语法分析器)                    │
-│       • 基于栈与状态机构建不可变语法树 (Block Nodes & Inline) │
-│       • 原生支持多层嵌套：Quote -> List -> CodeBlock          │
-└───────────────────────────────┬───────────────────────────────┘
-                                │ AST 节点树
-                                ▼
-┌───────────────────────────────────────────────────────────────┐
-│           MarkdownSpannedRenderer.lua / TableLayout           │
-│       • 普通文本段 -> 映射为挂载现代 Span 的 Spanned 对象     │
-│       • 表格节点 -> 映射为原生的自适应网格组件 (TableComponent)│
-│         (HorizontalScrollView + TableLayout 带细边框与斑马纹)  │
-└───────────────────────────────────────────────────────────────┘
-```
-
-### 3.3 详细实施步骤规划
-
-#### 步骤 1：构建纯 Lua 词法扫描器（`mods/agent/markdown/MarkdownLexer.lua`）
-- 识别块级开始/结束标记：
-  - `HEADING(level, text)`
-  - `CODE_BLOCK(lang, code)`
-  - `BLOCKQUOTE_START(depth)` / `BLOCKQUOTE_END`
-  - `LIST_START(ordered, startNum)` / `LIST_ITEM(indent, text)` / `LIST_END`
-  - `TASK_ITEM(checked, text)`
-  - `TABLE_START` / `TABLE_ROW(cells)` / `TABLE_END`
-  - `THEMATIC_BREAK`（分割线，支持 `---`, `***`, `___` 3 个及以上字符）
-  - `PARAGRAPH(text)`
-
-#### 步骤 2：构建行内格式分析器（`mods/agent/markdown/InlineParser.lua`）
-- 采用双指针分词算法，替代当前的多次全量正则 `gsub`：
-  - 单次扫描匹配：`` `code` ``、`**bold**`、`*italic*`、`~~strike~~`、`[label](url)`；
-  - 自动校验词边界，彻底免疫 `snake_case` 变量名损坏；
-  - 原生支持嵌套（如 `**粗体中的`代码`和[链接](url)**`），不依赖任何 `\001` 控制字符占位。
-
-#### 3. 真正具备自适应能力的移动端表格（`TableComponent`）
-- 当遇到表格节点时：
-  - 不再将表格挤在单个 TextView 里用空格模拟；
-  - UI 端加载 `TableLayout`，并包裹在 `HorizontalScrollView` 中；
-  - 依据表头和数据行自动计算单元格对齐（左对齐/居中/右对齐）；
-  - 设置 1dp 细腻分割线与斑马纹底色，支持在手机屏幕上平滑横向滚动，永不错位。
-
-#### 4. 自动化测试套件扩充（`tests/TestMarkdown.lua`）
-- 在纯 JVM 挂架中编写 30+ 组针对真实大模型复杂输出的测试用例：
-  - 深度块级嵌套测试（引用嵌套列表、列表嵌套代码等）；
-  - 复杂行内嵌套测试（粗体嵌套代码与链接等）；
-  - 包含管道符 `|` 的表格转义测试；
-  - 畸形未闭合 Markdown 容错测试。
-- 保证核心 AST 引擎具备 100% 的脱水单测覆盖率。
-
----
-
-## 四、 质量验证基线
-1. 执行 `pwsh -File ./tests/run_tests.ps1` 必须持续保持 **100% 全部通过（ALL-PASS）**；
-2. 执行 `./gradlew :app:compileDebugKotlin` 必须保持编译零错误。
+- Lua 测试覆盖回合归属、重试、并行停止、取消清理、超时后确认失效、
+  请求句柄、Markdown 解析、表格降级及展开等行为。
+- JVM 测试覆盖比较快照、Diff 通知、原生任务注册表并发取消等逻辑。
+- `testDebugUnitTest` 是本地 JVM 测试，Android Framework 行为有桩限制；
+  `assembleDebug` 通过只代表构建成功。
+- 仍需真机验证：快速切会话、后台/销毁、停止与确认交错、长列表滚动、
+  IME、Markdown 视觉效果和各网关请求。未经实测不标注“全面验收”或“100% 覆盖”。

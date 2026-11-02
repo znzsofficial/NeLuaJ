@@ -143,4 +143,82 @@ turn.sendRaw(messages, false)
 callbacks.onDone("still wired", false)
 assert(Session.messages()[#Session.messages()].content == "still wired")
 print("PASS invalid callback contracts fail before replacing live hooks")
+turn.invalidate()
+local partial = { role = "assistant", content = "partial", continuation_state = "stopped" }
+Session.activate({ id = "continue", messages = { { role = "user", content = "question" }, partial } }, "/proj")
+local requestHistory, compressionDone
+agent.buildCompressedApiMessages = function(history, callback)
+  requestHistory, compressionDone = history, callback
+end
+turn.send(true)
+partial.continuation_state = nil
+assert(requestHistory[2] ~= partial and requestHistory[2].continuation_state == "stopped")
+compressionDone(requestHistory, false)
+callbacks.onDone("continued", false)
+print("PASS asynchronous continuation snapshots survive clearing the UI marker")
+
+-- Recovery actions use real APIs, keep request-only editor context off disk,
+-- and do not discard the error card when forced compression is unavailable.
+turn.invalidate()
+local request = { role = "user", content = "original", request_error = "HTTP 500" }
+Session.activate({ id = "retry", messages = { request } }, "/proj")
+local sent
+agent.sendStream = function(history, opts) sent, callbacks = history, opts end
+local payload = { { role = "user", content = "original + editor context" } }
+assert(turn.retry(payload))
+assert(sent == payload and request.request_error == nil)
+assert(Session.messages()[1].content == "original")
+assert(not turn.retry(payload), "active requests cannot be retried twice")
+callbacks.onError("context too long")
+local originalError = request.request_error
+local compressor
+agent.buildCompressedApiMessages = function(history, cb, force)
+  assert(history == payload and force == true)
+  compressor = cb
+end
+assert(turn.compressAndRetry(payload))
+compressor(payload, false)
+assert(not turn.isActive() and request.request_error == originalError)
+assert(turn.compressAndRetry(payload))
+local compact = { { role = "user", content = "summary + latest request" } }
+compressor(compact, true)
+assert(sent == compact and request.request_error == nil)
+assert(Session.messages()[1] == request and request.content == "original")
+callbacks.onDone("recovered", false)
+assert(Session.messages()[2].content == "recovered")
+print("PASS retry and forced compression preserve request context and conversation ownership")
+
+turn.invalidate()
+assert(turn.compressAndRetry(payload))
+local expiredCompression, oldSent = compressor, sent
+turn.invalidate()
+Session.activate({ id = "new", messages = { { role = "user", content = "new" } } }, "/proj")
+expiredCompression(compact, true)
+assert(sent == oldSent and #Session.messages() == 1)
+print("PASS stale compression cannot restart a request in another session")
+
+-- A cancelled parallel batch has no completion-callback guarantee.
+local pending = {}
+agent.classifyParallelBatch = function(calls)
+  local out = {}
+  for i, call in ipairs(calls) do out[i] = { name = call.name, id = call.id, args = {} } end
+  return out
+end
+agent.executeToolAsync = function(_, _, callback) pending[#pending + 1] = callback end
+agent.cancelPendingTools = noop
+turn.sendRaw(Session.messages(), false)
+callbacks.onToolCalls({
+  { id = "p1", name = "read_file", arguments = "{}" },
+  { id = "p2", name = "read_file", arguments = "{}" },
+}, "")
+assert(#pending == 2)
+pending[1]("completed before stop", true)
+turn.requestStop()
+assert(not turn.isActive() and #Session.messages() == 4)
+assert(Session.messages()[3].tool_call_id == "p1" and Session.messages()[3].content == "completed before stop")
+assert(Session.messages()[4].tool_call_id == "p2" and Session.messages()[4].content == res.string.ai_stopped)
+assert(Session.messages()[4].continuation_state == "stopped")
+pending[2]("late result", true); pending[1]("duplicate", true)
+assert(#Session.messages() == 4)
+print("PASS parallel stop persists collected results, pairs every tool, and rejects late callbacks")
 print("ALL-PASS")

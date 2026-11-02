@@ -1,7 +1,6 @@
 package com.nekolaska.agent
 
 import org.luaj.android.LuaJobWrapper
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * 线程安全的后台工具并发任务注册表。
@@ -12,18 +11,19 @@ import java.util.concurrent.ConcurrentHashMap
  */
 object AgentJobRegistry {
 
-    private val activeJobs = ConcurrentHashMap<Any, String>()
+    private val lock = Any()
+    private val activeJobs = LinkedHashMap<Any, String>()
 
     @JvmStatic
     fun register(job: Any?, toolName: String?) {
         if (job == null || toolName == null) return
-        activeJobs[job] = toolName
+        synchronized(lock) { activeJobs[job] = toolName }
     }
 
     @JvmStatic
     fun unregister(job: Any?) {
         if (job == null) return
-        activeJobs.remove(job)
+        synchronized(lock) { activeJobs.remove(job) }
     }
 
     /**
@@ -32,8 +32,14 @@ object AgentJobRegistry {
      */
     @JvmStatic
     fun cancelAll(): List<String> {
-        val cancelledTools = ArrayList<String>(activeJobs.size)
-        activeJobs.forEach { (job, toolName) ->
+        // Atomically detach one batch. Jobs registered during cancellation
+        // belong to the next batch and must remain tracked. Never run user
+        // cancellation code while holding the registry lock.
+        val batch = synchronized(lock) {
+            activeJobs.toMap().also { activeJobs.clear() }
+        }
+        val cancelledTools = ArrayList<String>(batch.size)
+        batch.forEach { (job, toolName) ->
             try {
                 if (job is LuaJobWrapper) {
                     job.cancel()
@@ -49,10 +55,9 @@ object AgentJobRegistry {
             } catch (_: Throwable) {}
             cancelledTools.add(toolName)
         }
-        activeJobs.clear()
         return cancelledTools
     }
 
     @JvmStatic
-    fun activeCount(): Int = activeJobs.size
+    fun activeCount(): Int = synchronized(lock) { activeJobs.size }
 }

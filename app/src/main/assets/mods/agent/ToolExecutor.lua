@@ -2,7 +2,7 @@
 --- 具体文件算法通过 configure 注入，避免执行层依赖 AgentChat 的全局状态。
 local _M = {}
 local config
-local activeJobs = {} -- { [job] = { name = name, cancelled = false } }
+local activeJobs = {} -- Only live jobs; callbacks capture their own cancellation state.
 local AgentJobRegistry = nil
 pcall(function()
   AgentJobRegistry = luajava.bindClass("com.nekolaska.agent.AgentJobRegistry")
@@ -148,6 +148,23 @@ end
 
 function _M.executeToolAsync(name, args, onResult)
   name = _M.normalizeToolName(name, args)
+  local job
+  local entry = { name = name, cancelled = false, completed = false }
+  local function complete()
+    if entry.completed then return false end
+    entry.completed = true
+    if job then
+      activeJobs[job] = nil
+      if AgentJobRegistry then pcall(function() AgentJobRegistry.unregister(job) end) end
+    end
+    return not entry.cancelled
+  end
+  local function register()
+    if job and not entry.completed and not entry.cancelled then
+      activeJobs[job] = entry
+      if AgentJobRegistry then pcall(function() AgentJobRegistry.register(job, name) end) end
+    end
+  end
   if name:match("^mcp::") or name:match("^mcp__") then
     local route = requireConfig().resolveMcpTool and requireConfig().resolveMcpTool(name)
     local ns, tool = name:sub(6):match("^([^:]+)::(.+)$")
@@ -161,32 +178,18 @@ function _M.executeToolAsync(name, args, onResult)
       if onResult then onResult("找不到 MCP 服务器: " .. ns, false) end
       return
     end
-    local job
-    local syncDone = false
     job = requireConfig().callMcpToolAsync(server, tool, args, function(ok, text)
-      if not job then
-        syncDone = true
-      else
-        local entry = activeJobs[job]
-        activeJobs[job] = nil
-        if AgentJobRegistry then pcall(function() AgentJobRegistry.unregister(job) end) end
-        if entry and entry.cancelled then return end
-      end
-
+      if not complete() then return end
       if not onResult then return end
       if ok then onResult(text, true)
       else onResult("MCP 工具调用失败: " .. tostring(text or "未知错误"), false) end
     end)
-    if job and not syncDone then
-      activeJobs[job] = { name = name, cancelled = false }
-      if AgentJobRegistry then pcall(function() AgentJobRegistry.register(job, name) end) end
-    end
+    register()
     return job
   end
   if not onResult then return end
   args = freezeFileArgs(name, args)
   -- 文件、网络和沙盒工具也必须离开 UI 线程；xTask 的完成回调回到主线程。
-  local job
   local okLaunch = pcall(function()
     job = xTask(
       function()
@@ -195,12 +198,7 @@ function _M.executeToolAsync(name, args, onResult)
         return { ok = false, result = tostring(result), toolOk = false }
       end,
       function(result)
-        local entry = activeJobs[job]
-        activeJobs[job] = nil
-        if AgentJobRegistry then pcall(function() AgentJobRegistry.unregister(job) end) end
-
-        -- 若已被取消，静默丢弃残余回调，严禁污染业务流
-        if entry and entry.cancelled then return end
+        if not complete() then return end
 
         if type(result) == "table" then
           if result.ok then
@@ -215,17 +213,45 @@ function _M.executeToolAsync(name, args, onResult)
       , "io"
     )
   end)
-  if not okLaunch then onResult("无法启动后台工具任务") end
-  if okLaunch and job then
-    activeJobs[job] = { name = name, cancelled = false }
-    if AgentJobRegistry then pcall(function() AgentJobRegistry.register(job, name) end) end
-  end
+  if not okLaunch and complete() then onResult("无法启动后台工具任务", false) end
+  if okLaunch then register() end
   return job
+end
+
+local function cancelResources(name)
+  local cfg = requireConfig()
+  if (name:match("^mcp::") or name:match("^mcp__")) and cfg.cancelMcpCalls then
+    pcall(cfg.cancelMcpCalls)
+  elseif name == "fetch_url" and cfg.cancelFetch then
+    pcall(cfg.cancelFetch)
+  elseif (name == "run_lua" or name == "check_lua_syntax") and cfg.cancelSandbox then
+    pcall(cfg.cancelSandbox)
+  end
+end
+
+-- A subagent timeout cancels one child job, not the main turn's whole batch.
+function _M.cancelJob(job)
+  if not job then return false end
+  local entry = activeJobs[job]
+  if entry then
+    entry.cancelled = true
+    activeJobs[job] = nil
+  end
+  if AgentJobRegistry then pcall(function() AgentJobRegistry.unregister(job) end) end
+  pcall(function() if job.cancel then job.cancel() end end)
+  if entry then cancelResources(entry.name) end
+  return entry ~= nil
 end
 
 function _M.cancelPending()
   local count = 0
   local cancelledNames = {}
+
+  -- Detach and mark the whole batch before cancel() can invoke any callback.
+  -- Cancelled xTask jobs need not deliver callbacks, so no tombstones stay here.
+  local jobs = activeJobs
+  activeJobs = {}
+  for _, entry in pairs(jobs) do entry.cancelled = true end
 
   -- 1. Kotlin 原生注册表批量原子取消
   if AgentJobRegistry then
@@ -240,26 +266,16 @@ function _M.cancelPending()
     end)
   end
 
-  -- 2. Lua 侧 activeJobs 集合全量标记取消（保留 entry 引用供回调拦截，不置空表）
-  for job, entry in pairs(activeJobs) do
-    if not entry.cancelled then
-      entry.cancelled = true
-      if job.cancel then pcall(function() job.cancel() end) end
-      if entry.name then cancelledNames[entry.name] = true end
-      count = count + 1
-    end
+  -- Lua fallback also covers environments without the native registry.
+  for job, entry in pairs(jobs) do
+    pcall(function() if job.cancel then job.cancel() end end)
+    if entry.name then cancelledNames[entry.name] = true end
+    count = count + 1
   end
 
   -- 3. 关联子模块清理钩子
-  local cfg = requireConfig()
   for name, _ in pairs(cancelledNames) do
-    if (name:match("^mcp::") or name:match("^mcp__")) and cfg.cancelMcpCalls then
-      pcall(cfg.cancelMcpCalls)
-    elseif name == "fetch_url" and cfg.cancelFetch then
-      pcall(cfg.cancelFetch)
-    elseif (name == "run_lua" or name == "check_lua_syntax") and cfg.cancelSandbox then
-      pcall(cfg.cancelSandbox)
-    end
+    cancelResources(name)
   end
 
   return count > 0

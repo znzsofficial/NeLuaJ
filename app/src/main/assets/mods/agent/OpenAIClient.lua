@@ -72,11 +72,12 @@ function _M.sendStream(messages, callbacks)
   local requestState = { cancelled = false }
   pendingRequest = requestState
   local function finishRequest(callback, ...)
+    requestState.finished = true
     if pendingRequest == requestState then pendingRequest = nil end
     finish(callback, ...)
   end
   function requestState.cancel()
-    if requestState.cancelled then return end
+    if requestState.cancelled or requestState.finished then return end
     requestState.cancelled = true
     if requestState.retry then retryHandler.removeCallbacks(requestState.retry) end
     pcall(function() httpClient.cancelAll() end)
@@ -84,14 +85,14 @@ function _M.sendStream(messages, callbacks)
   end
 
   local function request()
-    if requestState.cancelled then return end
+    if requestState.cancelled or requestState.finished then return end
     attempt = attempt + 1
     httpClient.postJsonStream(requestUrl, bodyStr, headers,
       function(text)
-        if not requestState.cancelled and callbacks.onChunk then callbacks.onChunk(tostring(text)) end
+        if not requestState.cancelled and not requestState.finished and callbacks.onChunk then callbacks.onChunk(tostring(text)) end
       end,
       function(arg1, arg2, explicitError, incomplete, rawResponseOutput, rawReasoningContent)
-        if requestState.cancelled then return end
+        if requestState.cancelled or requestState.finished then return end
         local text = tostring(arg1 or "")
         local streamedReasoning = rawReasoningContent and tostring(rawReasoningContent) or nil
         if streamedReasoning == "" then streamedReasoning = nil end
@@ -137,6 +138,7 @@ function _M.sendStream(messages, callbacks)
       end)
   end
   request()
+  return requestState
 end
 
 function _M.cancelPending()
