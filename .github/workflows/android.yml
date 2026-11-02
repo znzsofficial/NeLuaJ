@@ -23,11 +23,34 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build with Gradle
-        run: ./gradlew assembleRelease
+      - name: Check cross-platform Lua runner failure propagation
+        shell: pwsh
+        run: ./tests/check_build_maintenance.ps1
+
+      - name: Check documentation inventories
+        shell: pwsh
+        run: ./tests/check_documentation_inventory.ps1
+
+      - name: Run all Lua behavioral suites
+        shell: pwsh
+        run: ./tests/run_tests.ps1
+
+      - name: Verify runtime JAR takeover, run JVM tests and build APKs
+        run: ./gradlew --no-daemon :app:verifyRuntimeTakeover :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease
+
+      - name: Upload JVM test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jvm-test-reports
+          path: |
+            app/build/reports/tests/
+            app/build/test-results/
+          if-no-files-found: ignore
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-release-apk
           path: app/build/outputs/apk/release/
+          if-no-files-found: error

@@ -10,6 +10,7 @@ local ContextManager = require("mods.agent.ContextManager")
 local OpenAIClient = require("mods.agent.OpenAIClient")
 local OpenAIProtocol = require("mods.agent.OpenAIProtocol")
 local ToolExecutor = require("mods.agent.ToolExecutor")
+local ToolRegistry = require("mods.agent.ToolRegistry")
 local SkillManager = require("mods.agent.SkillManager")
 local TodoManager = require("mods.agent.TodoManager")
 local PatchEngine = require("mods.agent.PatchEngine")
@@ -71,6 +72,7 @@ local SYSTEM_PROMPT = [[
 - 完整文档目录位于 `res/doc/agent_docs.md`。不确定 NeLuaJ+ API、LuaJ++ 语法、布局写法、组件或工程约定时，先读取目录，再读取对应文档和项目中的现有用法，不要猜。
 - 首次调用 run_lua 前，如果当前会话上下文尚未包含沙盒文档，必须先用 read_file 读取 `res/doc/sandbox_zh.html`；仅在英文对话中改读 `res/doc/sandbox_en.html`。文档已在当前上下文时无需重复读取；不确定沙盒 API 时重新查阅，不要凭标准 Lua 或其他运行时经验猜测。
 - 不要仅因为代码不符合标准 Lua 写法就判断其错误；NeLuaJ+ 支持 LuaJ++ 扩展，需要时使用 check_lua_syntax 验证。
+- 编辑 LuaLayout 时保留原生布局表，按需用 layout_describe 查询控件及父容器契约；普通尺寸显式 dp、字号显式 sp，使用局部 views 绑定表和唯一 id。完整编写规范见 `res/doc/layout_ai.md`。修改后用 layout_check 检查相关源码；unknown/complete=false 表示仍有未验证部分，不代表布局正确，也不能代替真实界面验证。
 - `res/doc` 是应用自带的可信只读文档目录。read_file / read_files 读取其中内容无需确认；该信任不适用于写入、修改、删除或目录外的应用私有文件。
 
 # 回复
@@ -330,31 +332,12 @@ end
 
 -- ─── 工具执行（不含确认，确认在 ChatUI 层做）──
 
-local function legacyExecuteTool(name, args)
-  local originalName = name
-  name = ToolExecutor.normalizeToolName(name, args)
+local platformHandlers = {}
+local function registerTool(name, handler)
+  ToolRegistry.register(platformHandlers, name, handler)
+end
 
-  -- MCP 工具调用（mcp::服务器::工具）
-  if name:match("^mcp::") then
-    local ns, tool = name:sub(6):match("^([^:]+)::(.+)$")
-    if not ns or not tool then
-      return "MCP 工具名格式错误: " .. name
-    end
-    local server = MCPClient.findServer(ns)
-    if not server then
-      return "找不到 MCP 服务器: " .. ns
-    end
-    local okCall, text, err = pcall(MCPClient.callTool, server, tool, args)
-    if not okCall then
-      return "MCP 工具调用异常: " .. tostring(text)
-    end
-    if text then
-      return text
-    end
-    return "MCP 工具调用失败: " .. tostring(err or "未知错误")
-  end
-
-  if name == "create_file" then
+registerTool("create_file", function(args)
     local path = resolvePath(args.path)
     local content = args.content or ""
     local syntaxErr, syntaxChecked = luaSyntaxGuard(path, content)
@@ -373,7 +356,9 @@ local function legacyExecuteTool(name, args)
       return "创建文件失败\n路径: " .. path .. "\n原因: " .. tostring(result), false
     end
 
-  elseif name == "create_folder" then
+end)
+
+registerTool("create_folder", function(args)
     local path = resolvePath(args.path)
     local ok, result = pcall(function() return file.mkdir(path) end)
     local dirOk, isDir = pcall(function() return luajava.bindClass("java.io.File")(path).isDirectory() end)
@@ -383,7 +368,9 @@ local function legacyExecuteTool(name, args)
       return "创建文件夹失败\n路径: " .. path .. "\n原因: " .. tostring(result), false
     end
 
-  elseif name == "delete_file" then
+end)
+
+registerTool("delete_file", function(args)
     local path = resolvePath(args.path)
     if isProjectRootOrAncestor(path) then
       return "出于安全原因，禁止删除项目根目录或其上级目录: " .. args.path
@@ -398,7 +385,9 @@ local function legacyExecuteTool(name, args)
       return "删除文件失败\n路径: " .. path .. "\n原因: " .. tostring(result), false
     end
 
-  elseif name == "delete_folder" then
+end)
+
+registerTool("delete_folder", function(args)
     local path = resolvePath(args.path)
     if isProjectRootOrAncestor(path) then
       return "出于安全原因，禁止删除项目根目录或其上级目录: " .. args.path
@@ -413,12 +402,16 @@ local function legacyExecuteTool(name, args)
       return "删除文件夹失败\n路径: " .. path .. "\n原因: " .. tostring(result), false
     end
 
-  elseif name == "read_file" then
+end)
+
+registerTool("read_file", function(args)
     local content, err = readFileContent(args.path, args.offset, args.max)
     if not content then return err end
     return content
 
-  elseif name == "read_files" then
+end)
+
+registerTool("read_files", function(args)
     local paths = args.paths
     if type(paths) == "string" then paths = { paths } end
     if type(paths) ~= "table" or #paths == 0 then
@@ -449,7 +442,9 @@ local function legacyExecuteTool(name, args)
     end
     return result
 
-  elseif name == "list_dir" then
+end)
+
+registerTool("list_dir", function(args)
     local path = resolvePath(args.path)
     local recursive = args.recursive == true or args.recursive == "true" or args.recursive == 1
     local filter = args.pattern or ""
@@ -510,7 +505,9 @@ local function legacyExecuteTool(name, args)
     end
     return table.concat(out, "\n")
 
-  elseif name == "search_in_files" then
+end)
+
+registerTool("search_in_files", function(args)
     local root = resolvePath(args.path or "")
     local pattern = args.pattern or ""
     local maxResults = math.max(1, tonumber(args.max) or 50)
@@ -539,7 +536,29 @@ local function legacyExecuteTool(name, args)
     end
     return "搜索「" .. pattern .. "」共 " .. #matches .. " 处:\n" .. result
 
-  elseif name == "check_lua_syntax" then
+end)
+
+local function executeLayoutTool(name, args)
+    if name == "layout_describe" and (type(args.widget) ~= "string" or args.widget == "") then
+      return "layout_describe 需要 widget 参数", false
+    end
+    if name == "layout_check" and (type(args.path) ~= "string" or args.path == "") then
+      return "layout_check 需要 path 参数", false
+    end
+    local ok, report = pcall(function()
+      local tools = luajava.bindClass("com.androlua.layout.LayoutTools")
+      local parent = type(args.parent) == "string" and args.parent or ""
+      if name == "layout_describe" then return tools.describe(args.widget, parent) end
+      return tools.checkFile(resolvePath(args.path), parent)
+    end)
+    if not ok then return "布局检查工具异常: " .. tostring(report), false end
+    return json.encode(report), name == "layout_describe" or report.hasErrors ~= true
+
+end
+registerTool("layout_describe", function(args) return executeLayoutTool("layout_describe", args) end)
+registerTool("layout_check", function(args) return executeLayoutTool("layout_check", args) end)
+
+registerTool("check_lua_syntax", function(args)
     local code = args.code or ""
     if code == "" then return "check_lua_syntax 需要 code 参数" end
     local okBind, LuaSandbox = pcall(function()
@@ -553,7 +572,9 @@ local function legacyExecuteTool(name, args)
     if syntaxErr then return "Lua 语法错误:\n" .. tostring(syntaxErr) end
     return "Lua 语法检查通过"
 
-  elseif name == "run_lua" then
+end)
+
+registerTool("run_lua", function(args)
     local code = args.code or ""
     if code == "" then
       return "run_lua 需要 code 参数"
@@ -605,7 +626,9 @@ local function legacyExecuteTool(name, args)
     end
     return "运行失败（耗时 " .. elapsed .. "）:\n" .. err, false
 
-  elseif name == "run_project" then
+end)
+
+registerTool("run_project", function(args)
     -- 定位入口脚本
     local entry = tostring(args.path or "")
     if entry ~= "" then entry = resolvePath(entry) end
@@ -693,7 +716,9 @@ local function legacyExecuteTool(name, args)
     return "运行已启动（" .. waitMs .. "ms 内无新增崩溃记录）\n入口: " .. entry
       .. "\n注意：只有未捕获的运行时错误会写入崩溃日志；脚本内 onError 捕获的处理与界面表现不会记录，需要时用 read_file 检查相关代码或再次运行。", true
 
-  elseif name == "build_project" then
+end)
+
+registerTool("build_project", function(args)
     local projectDir = tostring(args.path or "")
     if projectDir ~= "" then projectDir = resolvePath(projectDir) end
     if projectDir == "" or not file.exists(projectDir) then
@@ -799,7 +824,9 @@ local function legacyExecuteTool(name, args)
 
     return info, true
 
-  elseif name == "fetch_url" then
+end)
+
+registerTool("fetch_url", function(args)
     local url = tostring(args.url or "")
     if url == "" then return "fetch_url 需要 url 参数" end
     local method = tostring(args.method or "GET")
@@ -815,7 +842,9 @@ local function legacyExecuteTool(name, args)
     if not okFetch then return "网络读取失败: " .. tostring(result) end
     return tostring(result)
 
-  elseif name == "apply_patch" then
+end)
+
+registerTool("apply_patch", function(args)
     local path = resolvePath(args.path)
     local patch = args.patch or ""
     local original = ""
@@ -852,7 +881,9 @@ local function legacyExecuteTool(name, args)
     end
     return "补丁已应用（" .. count .. " 处修改）" .. syntaxNote, true
 
-  elseif name == "replace_in_file" then
+end)
+
+registerTool("replace_in_file", function(args)
     local path = resolvePath(args.path)
     local old = args.old or ""
     local new = args.new or ""
@@ -891,7 +922,9 @@ local function legacyExecuteTool(name, args)
     end
     return "已替换 " .. replaced .. " 处: " .. path, true
 
-  elseif name == "append_file" then
+end)
+
+registerTool("append_file", function(args)
     local path = resolvePath(args.path)
     if not args.path or args.path == "" then
       return "append_file 需要 path 参数"
@@ -926,7 +959,9 @@ local function legacyExecuteTool(name, args)
       return "追加失败\n路径: " .. path .. "\n原因: " .. tostring(err), false
     end
 
-  elseif name == "rename_file" then
+end)
+
+registerTool("rename_file", function(args)
     local src = resolvePath(args.path)
     local dst = resolvePath(args.new_path)
     if not args.path or args.path == "" then
@@ -968,13 +1003,19 @@ local function legacyExecuteTool(name, args)
       return "重命名失败\n原路径: " .. src .. "\n目标: " .. dst .. "\n原因: " .. tostring(err), false
     end
 
-  elseif name == "run_subtask" then
+end)
+
+registerTool("run_subtask", function(args)
     return SubagentRunner.run(args.task, args.lightweight == true)
 
-  elseif name == "update_todos" then
+end)
+
+registerTool("update_todos", function(args)
     return TodoManager.update(args.todos)
 
-  elseif name == "get_env_info" then
+end)
+
+registerTool("get_env_info", function(args)
     local out = {}
     local okEnv, resEnv = pcall(function()
       local Build = luajava.bindClass("android.os.Build")
@@ -997,10 +1038,9 @@ local function legacyExecuteTool(name, args)
       return "获取环境信息失败: " .. tostring(resEnv)
     end
     return table.concat(out, "\n")
-  end
+end)
 
-  return "未知工具: " .. tostring(originalName) .. "（规范化后: " .. tostring(name) .. "）"
-end
+local executeBuiltinTool = ToolRegistry.bind(platformHandlers)
 
 local function changeSetFileType(path)
   local ok, kind = pcall(function() return file.type(path) end)
@@ -1064,7 +1104,10 @@ function _M.syncAgentProjectScope()
     scope = function() return normalizePath(Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir()) end,
     mkdir = function(p) local ok, result = pcall(function() return file.mkdir(p) end); return ok and (result == true or changeSetFileType(p) == "dir") end,
     remove = changeSetRemove,
-    isTracked = function(n) return n == "create_file" or n == "create_folder" or n == "delete_file" or n == "delete_folder" or n == "apply_patch" or n == "replace_in_file" or n == "append_file" or n == "rename_file" end,
+    isTracked = function(n)
+      local entry = ToolRegistry.get(n)
+      return entry ~= nil and (entry.approval == "project_write" or entry.approval == "create_file")
+    end,
     resultSucceeded = function(r)
       local t = tostring(r or "")
       return t:find("文件已创建:", 1, true) == 1
@@ -1489,7 +1532,7 @@ ToolExecutor.configure({
     end)
     if okBind and AgentFetch then pcall(function() AgentFetch.cancelPending() end) end
   end,
-  platformExecute = legacyExecuteTool,
+  platformExecute = executeBuiltinTool,
   changeSet = ChangeSet,
 })
 -- 子代理能力注入（UI 确认钩子由 ChatUI 在面板装配时补充）

@@ -4,6 +4,8 @@
 
 `LuaLayout` 把 **Lua 布局表** 转成 Android `View` 树，是 AndroLua / NeLuaJ+ 的核心 UI 桥接。
 
+本文将当前实现与后续方案分开；方案不作为验收承诺。维护约束和验证命令统一见 [MAINTENANCE.md](./MAINTENANCE.md)。下文 `res/` 相对 `app/src/main/assets/`。
+
 ```lua
 -- 布局表：第 1 个元素是 View 类，字符串键是属性，数字键是子节点
 return {
@@ -60,8 +62,8 @@ load(layout, env, paramsClass)
 ## 3. 模块拆分（当前）
 
 ```
-com.androlua.LuaLayout.kt          -- 编排 + 专用属性 when
-com.androlua.layout/
+app/src/main/java/com/androlua/LuaLayout.kt -- 编排 + 专用属性 when
+app/src/main/java/com/androlua/layout/
   LayoutEnums.kt                   -- 枚举分表、sizeTokens、relativeRules
   LayoutValueParser.kt             -- 字符串→尺寸/颜色/枚举/布尔
   LayoutParamsApplier.kt           -- layout_*、margin、padding、behavior
@@ -69,6 +71,10 @@ com.androlua.layout/
   LayoutReflection.kt              -- 属性可写集合、Method 缓存
   LayoutTint.kt                    -- TintColor / iconTint 按控件类型分发
   LayoutSrcLoader.kt               -- src / @drawable / Coil
+  LayoutTextSupport.kt             -- TextView / TextInputLayout 文字与提示代理
+  LayoutSchema.kt                  -- 布局工具的属性描述与适用条件
+  LayoutSource.kt                  -- 有限静态布局表读取，不执行源码
+  LayoutTools.kt                   -- Agent 查询与检查入口
 ```
 
 | 模块 | 职责 |
@@ -222,7 +228,25 @@ LayoutReflection.canSetJavaProperty(viewClass, key) → 否则 LuaError → send
 
 ---
 
-## 7. 后续可能的修改方案
+## 7. 静态工具现状与后续可能的修改方案
+
+### 7.0 已落地：AI 查询与有限静态检查
+
+- `com.androlua.layout.LayoutSchema` 描述专用属性、别名、单位与控件/父容器条件，枚举复用 `LayoutEnums`；反射能力复用 `LayoutReflection`，父容器 LP 查询复用 `LayoutParamsApplier`。
+- `LayoutTools.describe` / `checkFile` 由 Agent 的 `layout_describe` / `layout_check` 调用。后者先编译 LuaJ++，再用 `LayoutSource` 做受限字面量表读取，不执行源码或创建 View。
+- 未知动态值、自定义控件、适配器模板及未描述反射属性明确返回 unknown；诊断包含节点路径与可获得的行列。128 KiB 输入和诊断/节点上限避免无界分析。
+- 原始 `LuaLayout.load` 不接入自动预检，也不改变容错、引用顺序或绑定行为。严格加载仍待后续实施。
+- 编写规范与工具边界见 `res/doc/layout_ai.md`；静态规则完成不代表真机/视觉验收。
+
+### 7.0.1 布局助手复用生产加载器
+
+`activities/layouthelper/LayoutHelperActivity$loadlayout.lua` 默认准备独立运行表后调用 `LuaLayout.loadDecorated`，属性、子节点和 LayoutParams 由生产实现处理。新增装饰钩子在属性前/完成后执行，用于轮廓、最小可点击尺寸、源表 Tag、选择映射与触摸；普通 `load` 调用不保留装饰钩子。AbsoluteLayout 通过构造工厂补齐四参 LayoutParams。
+
+预览准备层仍负责项目资源路径、历史表样式和手势覆盖，不能宣称完全消除了所有预览差异。旧实现保存在 `activities/layouthelper/LayoutHelperActivity$legacyloadlayout.lua`，仅 `LayoutHelperActivity.useLegacyLayoutLoader = true` 时显式启用，不因异常自动降级。现有用户主动打开的布局助手会执行布局/资源源码，**不是沙盒或 AI 自动预览工具**。
+
+`TestLayoutPreview` 验证适配器边界与映射；`LayoutPreviewTest` 执行真实 Kotlin 加载方法，但通过平台替身及跳过 Android/Coil 构造来验证属性和钩子。主题、图片、触摸拖拽和实际视觉仍需真机验收。
+
+下面各节为后续候选方案，不表示已经实现。
 
 ### 7.1 短期（低风险）
 
@@ -247,7 +271,7 @@ LayoutReflection.canSetJavaProperty(viewClass, key) → 否则 LuaError → send
 |----|------|
 | 编译期布局 | 把布局表预编译为字节码或 View 工厂，减少运行时解析 |
 | Compose 桥 | 若产品线扩展，另开桥接层，不硬塞进 LuaLayout |
-| 与 LayoutHelper 统一 | 编辑器预览用的 loadlayout 副本与主实现合并，避免双份语义 |
+| 预览迁移收尾 | 真机验证默认共用加载路径；确认兼容后再考虑移除显式 legacy 实现，受控 AI 预览仍另行设计 |
 
 ### 7.4 不建议
 
@@ -266,6 +290,7 @@ LayoutReflection.canSetJavaProperty(viewClass, key) → 否则 LuaError → send
 - [ ] 更新 `res/doc/module_loadlayout.html` / `layout_reference.html`（含 `src` / `@drawable`）  
 - [ ] `src` 改动时同步 `LayoutSrcLoader` 与 `res.drawable` 顺序是否仍对齐  
 - [ ] 工程内存量布局（`res/layout/*.lua`、`vConsole`）冒烟  
+- [ ] 运行文档清单检查、`TestLayoutTools` 和相关 Kotlin 单测；静态诊断通过后仍需真机检查视觉、主题和生命周期（命令见维护入口）
 
 ---
 

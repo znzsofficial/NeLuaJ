@@ -1,429 +1,347 @@
---- 首页「项目」tab：最近修改卡片行 + 完整工程列表（按修改时间排序）。
---- 工程定义：/sdcard/LuaJ/Projects/ 下的一级目录；名称优先取 init.lua 的
---- app_name（字符串直读，不执行文件），回退目录名。
-local _M = {}
-
-local LuaFileUtil = luajava.kotlinObject("com.nekolaska.io.LuaFileUtil")
+--- Native project home: IO-only scans, retained results, recycled searchable rows.
+local M = {}
 local LinearLayout = luajava.bindClass("android.widget.LinearLayout")
 local HorizontalScrollView = luajava.bindClass("android.widget.HorizontalScrollView")
-local ScrollView = luajava.bindClass("android.widget.ScrollView")
 local MaterialTextView = luajava.bindClass("com.google.android.material.textview.MaterialTextView")
-local MaterialButton = luajava.bindClass("com.google.android.material.button.MaterialButton")
 local MaterialCardView = luajava.bindClass("com.google.android.material.card.MaterialCardView")
-local AppCompatImageView = luajava.bindClass("androidx.appcompat.widget.AppCompatImageView")
-local BitmapFactory = luajava.bindClass("android.graphics.BitmapFactory")
-local File = luajava.bindClass("java.io.File")
-local Toast = luajava.bindClass("android.widget.Toast")
-
+local EditText = luajava.bindClass("androidx.appcompat.widget.AppCompatEditText")
+local MaterialTextField = luajava.bindClass("vinx.material.textfield.MaterialTextField")
+local MDC_R = luajava.bindClass("com.google.android.material.R")
+local ImageView = luajava.bindClass("androidx.appcompat.widget.AppCompatImageView")
+local RecyclerView = luajava.bindClass("androidx.recyclerview.widget.RecyclerView")
+local LinearLayoutManager = luajava.bindClass("androidx.recyclerview.widget.LinearLayoutManager")
+local LuaRecyclerAdapter = luajava.bindClass("com.androlua.adapter.LuaRecyclerAdapter")
+local Dialog = luajava.bindClass("com.google.android.material.dialog.MaterialAlertDialogBuilder")
+local Snackbar = luajava.bindClass("com.google.android.material.snackbar.Snackbar")
 local ActivityUtil = require "mods.utils.ActivityUtil"
-local InitReader = require "mods.project.InitReader"
+local Data = require "mods.project.HomeProjects"
+local Recent = require "mods.project.RecentProjects"
+local Style = require "activities.home.HomeStyle"
+local Rows = require "activities.home.HomeRows"
+local S, colors = res.string, this.themeUtil
+local built, adapter, job, directoryJob, directoryDialog
+local views, projects, adapterData = {}, {}, {}
+local generation, directoryGeneration = 0, 0
+local state, query, disposed = "loading", "", false
+local onSurface, secondary, surfaceCard
+local rowUpdates, renderedRecent
+local hasLoaded = false
+local projectFields = { "path", "name", "appName", "pkg", "icon", "mtime" }
+local recentFields = { "path", "name", "appName", "openedAt" }
 
-local ColorUtil = this.themeUtil
-local res = res
-local dp = function(n) return this.dpToPx(n) end
-
--- 主题色在 build() 时解析：模块若在 dynamicColor() 生效前被 require，
--- 顶层立即取色会把当时的主题色冻结（曾导致首页背景偏紫）
-local background, onSurface, onSurfaceVar, primary, surfaceCard
-
-local built = nil
-local views = {}
-
---- init.lua 字段缓存：以 init.lua 的 mtime 为键，目录重扫时未变更的
---- 工程跳过文件读取（首页每次 onResume/切 tab 都会重扫，这里是 IO 大头）
-local initCache = {} -- path -> { appName, pkg, mtime }
-
-local function readInitInfo(path)
-  local ok, mtime = pcall(function() return LuaFileUtil.lastModified(path .. "/init.lua") end)
-  mtime = tonumber(mtime) or 0
-  local cached = initCache[path]
-  if cached and mtime > 0 and cached.mtime == mtime then
-    return cached.appName, cached.pkg
-  end
-  local fields = InitReader.readFields(path, { "app_name", "package_name" }) or {}
-  if mtime > 0 then
-    initCache[path] = { appName = fields.app_name, pkg = fields.package_name, mtime = mtime }
-  end
-  return fields.app_name, fields.package_name
+local function snack(message)
+  if built and not disposed then Snackbar.make(built, tostring(message), Snackbar.LENGTH_LONG).show() end
 end
-
---- 扫描工程目录，按 mtime 降序返回 { { path, name, appName, pkg, mtime } }
---- 使用 LuaFileUtil.listMeta 一次取回条目元信息（isDir/mtime）
-local function scanProjects()
-  local root = Bean.Path.app_root_pro_dir
-  local projects = {}
-  local ok, entries = pcall(function() return LuaFileUtil.listMeta(root) end)
-  if not ok or type(entries) ~= "table" then return projects end
-  for _, entry in ipairs(entries) do
-    if entry.isDir then
-      local path = root .. "/" .. tostring(entry.name)
-      local appName, pkg = readInitInfo(path)
-      projects[#projects + 1] = {
-        path = path,
-        name = tostring(entry.name),
-        appName = appName,
-        pkg = pkg,
-        mtime = tonumber(entry.mtime) or 0,
-      }
+local function permission()
+  return this.checkStoragePermission()
+end
+local function requestPermission()
+  if _G.__homeUi and _G.__homeUi.requestStoragePermission then
+    _G.__homeUi.requestStoragePermission()
+  else
+    this.requestStoragePermission()
+  end
+end
+local function alive(token)
+  return not disposed and generation == token and not activity.isFinishing() and not activity.isDestroyed()
+end
+local function openProject(path, openMain)
+  local ok, opened = pcall(function()
+    -- Ordinary project/folder opens must restore their workspace, not force main.lua
+    -- or replace an unrelated pending request. Only newly created projects opt in.
+    if openMain == true and ActivityUtil.setPending("open_file", path .. "/main.lua") ~= true then return false end
+    return ActivityUtil.open("editor", path)
+  end)
+  if not ok or opened == false then snack(S.home_open_failed) return false end
+  -- Metadata writes also stay off the UI thread. Editor can call record on successful open too.
+  xTask(function() return Recent.record(path) end, nil, "io")
+  return true
+end
+local function showProjectMenu(project)
+  require("mods.project.ProjectMenu").show(project.path, project.name, {
+    snack = snack,
+    open = openProject,
+    afterRename = function(oldPath, newPath, detail)
+      -- Persistence service owns migration/status messaging, including pending failures.
+      M.refresh()
+    end,
+    refresh = function() M.refresh() end,
+    renameFailed = function(detail)
+      -- Rejected requests (live editor/name conflict) did not start a migration.
+      -- ProjectMenu already presents their specific failure message.
+      if not detail or not detail.retryable then return end
+      if not disposed then
+        state = "rename_pending"
+        views.status.setText(S.home_rename_pending)
+        views.status.setVisibility(0)
+        views.statusBlock.setVisibility(0)
+        views.retry.setVisibility(0)
+        views.retry.setEnabled(true)
+        if _G.__homeUi and _G.__homeUi.pageContentReady then _G.__homeUi.pageContentReady("projects") end
+      end
+    end,
+  })
+end
+local function rowData(project)
+  return {
+    title = project.appName or project.name,
+    metadata = project.name .. (project.pkg and (" · " .. project.pkg) or ""),
+    icon = project.icon or res.drawable("android_studio", secondary),
+    projectRow = {
+      contentDescription = (project.appName or project.name) .. "\n" .. project.path,
+      onClick = function() openProject(project.path) end,
+      onLongClick = function() showProjectMenu(project) return true end,
+    },
+  }
+end
+local function renderStatus()
+  local text = ""
+  if state == "permission" then text = S.need_manage_permission
+  elseif state == "error" then text = S.home_scan_failed
+  elseif state == "root_not_directory" then text = S.home_root_not_directory
+  elseif state == "rename_pending" then text = S.home_rename_pending
+  elseif state == "loading" and not hasLoaded then text = S.home_loading
+  elseif #adapterData == 0 then text = query ~= "" and S.home_no_search_results or S.home_no_projects end
+  views.status.setText(text)
+  views.status.setVisibility(text == "" and 8 or 0)
+  views.statusBlock.setVisibility(text == "" and 8 or 0)
+  local recovery = state == "permission" or state == "error" or state == "root_not_directory" or state == "rename_pending"
+  views.retry.setVisibility(recovery and 0 or 8)
+  views.retry.setText(state == "permission" and S.home_grant_storage or S.home_retry)
+  views.retry.setEnabled(state ~= "loading")
+  views.clear.setVisibility(query == "" and 8 or 0)
+  if state ~= "loading" and _G.__homeUi and _G.__homeUi.pageContentReady then
+    _G.__homeUi.pageContentReady("projects")
+  end
+end
+local function renderList()
+  rowUpdates.submit(Data.filter(projects, query))
+  renderStatus()
+end
+local function renderRecent(recent)
+  local equal = renderedRecent and #renderedRecent == #recent
+  if equal then
+    for i, project in ipairs(recent) do
+      if not Rows.same(renderedRecent[i], project, recentFields) then equal = false break end
     end
   end
-  table.sort(projects, function(a, b) return a.mtime > b.mtime end)
-  return projects
+  if equal then return end
+  renderedRecent = recent
+  views.recentRow.removeAllViews()
+  views.recentBlock.setVisibility(#recent == 0 and 8 or 0)
+  for _, project in ipairs(recent) do
+    local card = loadlayout({ MaterialCardView, radius = "16dp", cardElevation = 0, strokeWidth = 0,
+      CardBackgroundColor = surfaceCard, layout_width = "184dp", layout_height = "wrap",
+      minHeight = "80dp", clickable = true, focusable = true, longClickable = true,
+      contentDescription = (project.appName or project.name) .. "\n" .. project.path,
+      { LinearLayout, orientation = "vertical", padding = "16dp", layout_width = "match", layout_height = "wrap",
+        { MaterialTextView, text = project.appName or project.name, textSize = "16sp", textColor = onSurface,
+          maxLines = 1, ellipsize = "end" },
+        { MaterialTextView, text = os.date("%Y-%m-%d %H:%M", (project.openedAt or 0) / 1000),
+           textSize = "12sp", textColor = secondary, layout_marginTop = "8dp" },
+      },
+    })
+    card.onClick = function() openProject(project.path) end
+    card.onLongClick = function() showProjectMenu(project) return true end
+    -- Root loadlayout params have no parent. Supply width AND spacing here.
+    local lp = LinearLayout.LayoutParams(this.dpToPx(184), -2)
+    lp.setMarginEnd(this.dpToPx(12))
+    views.recentRow.addView(card, lp)
+  end
 end
-
-local function formatTime(mtime)
-  if not mtime or mtime <= 0 then return "" end
-  return os.date("%Y-%m-%d %H:%M", mtime / 1000)
+function M.refresh()
+  if not built or disposed then return end
+  generation = generation + 1
+  local token = generation
+  if job then pcall(function() job.cancel() end) job = nil end
+  if not permission() then state = "permission" renderStatus() return end
+  state = "loading"
+  renderStatus() -- A loading indicator must not invalidate/rebind successful rows.
+  local root = tostring(Bean.Path.app_root_pro_dir)
+  local ok, launched = pcall(function()
+    return xTask(function() return Data.scan(root) end, function(result)
+      if not alive(token) or root ~= tostring(Bean.Path.app_root_pro_dir) then return end
+      job = nil
+      if not permission() then state = "permission" renderStatus() return end
+      result = type(result) == "table" and result or { status = "error" }
+      state = result.status
+      -- Never turn a failed refresh into a successful empty dataset.
+      if result.projects then
+        projects, hasLoaded = result.projects, true
+        renderRecent(result.recent or {})
+        renderList()
+      else renderStatus() end
+    end, "io")
+  end)
+  if ok then job = launched else state = "error" renderStatus() end
 end
-
-local function openProject(path)
-  ActivityUtil.open("editor", path)
+local function openDirectoryDialog()
+  if not permission() then requestPermission() return end
+  local binding = {}
+  -- Match the existing file/package dialogs: padded container + outlined field.
+  local content = loadlayout({ LinearLayout, orientation = "vertical",
+    layout_width = "match", layout_height = "wrap",
+    paddingLeft = "20dp", paddingRight = "20dp", paddingTop = "12dp", paddingBottom = "4dp",
+    focusable = true, focusableInTouchMode = true,
+    { MaterialTextField, id = "directoryInput", hint = S.home_directory_path,
+      text = tostring(Bean.Path.app_root_pro_dir), textSize = "14sp", singleLine = true,
+      layout_width = "match", layout_height = "wrap", tintColor = colors.getColorPrimary(),
+      style = MDC_R.style.Widget_Material3_TextInputLayout_OutlinedBox, boxBackgroundMode = 2 },
+  }, binding)
+  local input = binding.directoryInput
+  local dialog = Dialog(activity).setTitle(S.home_open_directory).setView(content)
+    .setPositiveButton(S.open, nil).setNegativeButton(android.R.string.cancel, nil).create()
+  dialog.setOnShowListener(function()
+    local button = dialog.getButton(-1)
+    button.onClick = function()
+      directoryGeneration = directoryGeneration + 1
+      local token, text = directoryGeneration, tostring(input.getText())
+      input.setError(nil)
+      if directoryJob then pcall(function() directoryJob.cancel() end) end
+      button.setEnabled(false)
+      directoryJob = xTask(function() return Data.chooseDirectory(text) end, function(path)
+        if disposed or token ~= directoryGeneration or not dialog.isShowing() then return end
+        directoryJob = nil
+        button.setEnabled(true)
+        if not path then input.setError(S.home_invalid_directory) return end
+        if openProject(path) then dialog.dismiss() end
+      end, "io")
+    end
+  end)
+  directoryDialog = dialog
+  dialog.show()
 end
-
-local function bindProjectIcon(imageView, path)
-  pcall(function()
-    local iconFile = File(path .. "/icon.png")
-    if iconFile.isFile() then
-      local bmp = BitmapFactory.decodeFile(iconFile.getAbsolutePath())
-      if bmp then
-        imageView.setImageBitmap(bmp)
+local function retryPendingRename()
+  -- Recovery is deliberately explicit and synchronous: gate + backend cannot be
+  -- separated by an IO job during which a new editor could acquire the old paths.
+  local dialog = Dialog(activity).setTitle(S.rename).setMessage(S.home_rename_recovery_confirm)
+    .setPositiveButton(S.home_retry, function()
+      if disposed then return end
+      local menu = require "mods.project.ProjectMenu"
+      local called, complete, detail = pcall(menu.resumePendingRename)
+      if not called or complete ~= true then
+        if called and detail and detail.error == "project_in_use" then
+          snack(S.project_rename_close_editor)
+          return
+        end
+        state = "rename_pending"
+        renderList()
+        snack(S.home_rename_pending)
         return
       end
-    end
-    local d = res.drawable("android_studio", onSurfaceVar)
-    if d then imageView.setImageDrawable(d) end
-  end)
+      M.refresh() -- one read-only refresh, never a recovery/refresh loop
+    end).setNegativeButton(android.R.string.cancel, nil).create()
+  directoryDialog = dialog
+  dialog.show()
 end
-
-local lastMenuAt = 0
-
-local function showProjectMenu(project)
-  -- 长按在这套 View 绑定里会进两次监听，400ms 内只开一个面板
-  local now = os.clock()
-  if now - lastMenuAt < 0.4 then return end
-  lastMenuAt = now
-  require("mods.project.ProjectMenu").show(project.path, project.name, {
-    snack = function(msg)
-      pcall(function() Toast.makeText(activity, tostring(msg), Toast.LENGTH_SHORT).show() end)
-    end,
-    refresh = function()
-      initCache[project.path] = nil
-      _M.refresh()
-    end,
-  })
+function M.pause()
+  generation, directoryGeneration = generation + 1, directoryGeneration + 1
+  if job then pcall(function() job.cancel() end) job = nil end
+  if directoryJob then pcall(function() directoryJob.cancel() end) directoryJob = nil end
+  if directoryDialog then pcall(function() directoryDialog.dismiss() end) directoryDialog = nil end
 end
-
-local function bindProjectActions(view, project)
-  view.onClick = function() openProject(project.path) end
-  view.onLongClick = function()
-    showProjectMenu(project)
-    return true
-  end
+function M.dispose()
+  M.pause()
+  disposed = true
+  built, adapter, views, adapterData = nil, nil, {}, {}
+  rowUpdates, renderedRecent = nil, nil
 end
-
---- 最近修改横向卡片
-local function buildRecentCard(project)
-  local card = loadlayout({
-    MaterialCardView,
-    radius = "16dp",
-    CardElevation = 0,
-    CardBackgroundColor = surfaceCard,
-    layout_width = "160dp",
-    layout_height = "wrap",
-    clickable = true,
-    focusable = true,
-    longClickable = true,
-    {
-      LinearLayout,
-      orientation = "vertical",
-      layout_width = "match",
-      layout_height = "wrap",
-      padding = "12dp",
-      {
-        MaterialTextView,
-        text = project.appName or project.name,
-        textSize = "15sp",
-        textStyle = "bold",
-        textColor = onSurface,
-        maxLines = 1,
-        ellipsize = "end",
-      },
-      {
-        MaterialTextView,
-        text = project.name,
-        textSize = "11sp",
-        textColor = onSurfaceVar,
-        maxLines = 1,
-        ellipsize = "end",
-        layout_marginTop = "2dp",
-      },
-      {
-        MaterialTextView,
-        text = formatTime(project.mtime),
-        textSize = "11sp",
-        textColor = onSurfaceVar,
-        layout_marginTop = "4dp",
-      },
-    },
-  })
-  bindProjectActions(card, project)
-  return card
-end
-
---- 完整列表行
-local function buildListRow(project)
-  local rowViews = {}
-  local row = loadlayout({
-    MaterialCardView,
-    radius = "14dp",
-    CardElevation = 0,
-    CardBackgroundColor = surfaceCard,
-    layout_width = "match",
-    layout_height = "wrap",
-    clickable = true,
-    focusable = true,
-    longClickable = true,
-    {
-      LinearLayout,
-      orientation = "horizontal",
-      gravity = "center_vertical",
-      layout_width = "match",
-      layout_height = "wrap",
-      padding = "12dp",
-      {
-        AppCompatImageView,
-        id = "icon",
-        layout_width = "40dp",
-        layout_height = "40dp",
-        scaleType = "centerCrop",
-      },
-      {
-        LinearLayout,
-        orientation = "vertical",
-        layout_width = "0dp",
-        layout_weight = 1,
-        layout_height = "wrap",
-        layout_marginLeft = "12dp",
-        {
-          MaterialTextView,
-          text = project.appName or project.name,
-          textSize = "15sp",
-          textStyle = "bold",
-          textColor = onSurface,
-          maxLines = 1,
-          ellipsize = "end",
-        },
-        {
-          MaterialTextView,
-          text = project.name .. (project.pkg and (" · " .. project.pkg) or ""),
-          textSize = "11sp",
-          textColor = onSurfaceVar,
-          maxLines = 1,
-          ellipsize = "end",
-          layout_marginTop = "2dp",
-        },
-        {
-          MaterialTextView,
-          text = formatTime(project.mtime),
-          textSize = "11sp",
-          textColor = primary,
-          layout_marginTop = "4dp",
-        },
-      },
-    },
-  }, rowViews)
-  bindProjectIcon(rowViews.icon, project.path)
-  bindProjectActions(row, project)
-  return row
-end
-
---- 独立加载的根视图必须用显式 LayoutParams 传 margin
-local function addRowWithMargin(container, child, topMargin)
-  local lp = LinearLayout.LayoutParams(-1, -2)
-  lp.topMargin = dp(topMargin)
-  container.addView(child, lp)
-end
-
-local function renderRecent(projects)
-  local container = views.recentRow
-  if not container then return end
-  container.removeAllViews()
-  local recentCount = math.min(5, #projects)
-  if recentCount == 0 then
-    views.recentBlock.setVisibility(8) -- GONE
-    return
-  end
-  views.recentBlock.setVisibility(0)
-  for i = 1, recentCount do
-    local lp = LinearLayout.LayoutParams(-2, -2)
-    if i > 1 then lp.leftMargin = dp(10) end
-    container.addView(buildRecentCard(projects[i]), lp)
-  end
-end
-
-local function renderList(projects)
-  local container = views.projectList
-  if not container then return end
-  container.removeAllViews()
-  if #projects == 0 then
-    views.emptyHint.setVisibility(0)
-    views.listBlock.setVisibility(8)
-    return
-  end
-  views.emptyHint.setVisibility(8)
-  views.listBlock.setVisibility(0)
-  for i, project in ipairs(projects) do
-    addRowWithMargin(container, buildListRow(project), i > 1 and 8 or 0)
-  end
-end
-
-function _M.refresh()
-  if not built then return end
-  local projects = scanProjects()
-  renderRecent(projects)
-  renderList(projects)
-end
-
-function _M.build()
+M.onDispose = M.dispose
+function M.build()
   if built then return built end
-  background = ColorUtil.getColorSurface()
-  onSurface = ColorUtil.getColorOnSurface()
-  onSurfaceVar = ColorUtil.getColorOnSurfaceVariant()
-  primary = ColorUtil.getColorPrimary()
-  surfaceCard = ColorUtil.getColorSurfaceContainer()
-  built = loadlayout({
-    LinearLayout,
-    layout_width = "match",
-    layout_height = "match",
-    orientation = "vertical",
-    backgroundColor = background,
-    {
-      -- 顶栏：标题 + 新建按钮
-      LinearLayout,
-      orientation = "horizontal",
-      layout_width = "match",
-      layout_height = "wrap",
-      gravity = "center_vertical",
-      paddingLeft = "16dp",
-      paddingRight = "16dp",
-      paddingTop = "12dp",
-      paddingBottom = "4dp",
-      {
-        MaterialTextView,
-        text = res.string.home_tab_projects,
-        textSize = "22sp",
-        textStyle = "bold",
-        textColor = onSurface,
-        layout_width = "0dp",
-        layout_weight = 1,
+  disposed = false
+  onSurface, secondary, surfaceCard = colors.getColorOnSurface(), colors.getColorOnSurfaceVariant(), colors.getColorSurfaceContainer()
+  local create = Style.action("btnNew", S.home_create_project)
+  local folder = Style.action("openDirectory", "", "tonal")
+  folder.icon = res.drawable("folder")
+  folder.iconTint, folder.iconSize = colors.getColorOnSecondaryContainer(), "20dp"
+  folder.iconPadding, folder.iconGravity = 0, 2
+  folder.paddingLeft, folder.paddingRight = 0, 0
+  folder.layout_width, folder.layout_marginStart = "48dp", "12dp"
+  folder.contentDescription, folder.tooltipText = S.home_open_directory, S.home_open_directory
+  local clear = Style.action("clear", "", "quiet")
+  clear.icon, clear.iconTint, clear.iconSize = res.drawable("close"), secondary, "20dp"
+  clear.iconPadding, clear.iconGravity = 0, 2
+  clear.paddingLeft, clear.paddingRight = 0, 0
+  clear.layout_width, clear.visibility = "48dp", 8
+  clear.contentDescription, clear.tooltipText = S.clear, S.clear
+  built = loadlayout(Style.listPage({ LinearLayout, orientation = "vertical", layout_width = "match", layout_height = "wrap",
+    backgroundColor = colors.getColorSurface(), paddingLeft = "20dp", paddingRight = "20dp",
+    Style.header(S.home_tab_projects, create),
+    { LinearLayout, orientation = "horizontal", gravity = "center_vertical", layout_width = "match", layout_height = "wrap",
+      { MaterialCardView, radius = "16dp", cardElevation = 0, strokeWidth = 0,
+        CardBackgroundColor = surfaceCard, layout_width = "0dp", layout_weight = 1, layout_height = "wrap",
+        { LinearLayout, orientation = "horizontal", gravity = "center_vertical",
+          layout_width = "match", layout_height = "wrap", paddingStart = "16dp", paddingEnd = "4dp",
+          { ImageView, src = res.drawable("search", secondary), layout_width = "20dp", layout_height = "20dp",
+            importantForAccessibility = 2 },
+          { EditText, id = "search", hint = S.home_search_projects, contentDescription = S.home_search_projects,
+            textSize = "14sp", singleLine = true, textColor = onSurface, hintTextColor = secondary,
+            backgroundColor = 0, paddingStart = "12dp", paddingEnd = "8dp", minHeight = "56dp",
+            layout_width = "0dp", layout_weight = 1, layout_height = "wrap" },
+          clear,
+        },
       },
-      {
-        MaterialButton,
-        id = "btnNew",
-        text = res.string.create_project,
-        textSize = "13sp",
-        layout_width = "wrap",
-        layout_height = "wrap",
+      folder,
+    },
+    { LinearLayout, orientation = "vertical", id = "recentBlock", visibility = 8,
+      layout_width = "match", layout_height = "wrap",
+      Style.section(S.home_recent_projects),
+      { HorizontalScrollView, layout_width = "match", layout_height = "wrap", overScrollMode = 2, horizontalScrollBarEnabled = false,
+        { LinearLayout, id = "recentRow", orientation = "horizontal", layout_width = "wrap", layout_height = "wrap" } },
+    },
+    Style.section(S.home_all_projects),
+    { LinearLayout, id = "statusBlock", orientation = "vertical", layout_width = "match", layout_height = "wrap",
+      paddingBottom = "12dp", visibility = 8,
+      { MaterialTextView, id = "status", textSize = "14sp", textColor = secondary,
+        accessibilityLiveRegion = 1, layout_width = "match", layout_height = "wrap", paddingTop = "8dp", paddingBottom = "8dp" },
+      Style.action("retry", S.home_retry, "tonal"),
+    },
+  }, { RecyclerView, id = "projectList", layout_width = "match",
+      clipToPadding = false, paddingBottom = "24dp" }), views)
+  views.pageHeader.setId(0x00d0f002)
+  local rowLayout = { MaterialCardView, id = "projectRow", radius = "16dp", cardElevation = 0, strokeWidth = 0,
+    CardBackgroundColor = surfaceCard, layout_width = "match", layout_height = "wrap", layout_marginBottom = "12dp",
+    minHeight = "80dp", clickable = true, focusable = true, longClickable = true,
+    { LinearLayout, orientation = "horizontal", gravity = "center_vertical", padding = "16dp",
+      layout_width = "match", layout_height = "wrap",
+      { ImageView, id = "icon", layout_width = "44dp", layout_height = "44dp", scaleType = "fitCenter", importantForAccessibility = 2 },
+      { LinearLayout, orientation = "vertical", layout_width = "0dp", layout_weight = 1, layout_height = "wrap", layout_marginStart = "16dp",
+        { MaterialTextView, id = "title", textSize = "16sp", textStyle = "bold", textColor = onSurface, maxLines = 1, ellipsize = "end" },
+        { MaterialTextView, id = "metadata", textSize = "12sp", textColor = secondary, maxLines = 2, ellipsize = "end", layout_marginTop = "4dp" },
       },
     },
-    {
-      ScrollView,
-      layout_width = "match",
-      layout_height = "match",
-      fillViewport = true,
-      overScrollMode = 2,
-      {
-        LinearLayout,
-        orientation = "vertical",
-        layout_width = "match",
-        layout_height = "wrap",
-        paddingLeft = "16dp",
-        paddingRight = "16dp",
-        paddingBottom = "24dp",
-        {
-          -- 最近修改卡片行
-          LinearLayout,
-          id = "recentBlock",
-          orientation = "vertical",
-          layout_width = "match",
-          layout_height = "wrap",
-          layout_marginTop = "4dp",
-          {
-            MaterialTextView,
-            text = res.string.home_recent_projects,
-            textSize = "13sp",
-            textStyle = "bold",
-            textColor = onSurfaceVar,
-            paddingBottom = "8dp",
-          },
-          {
-            HorizontalScrollView,
-            layout_width = "match",
-            layout_height = "wrap",
-            overScrollMode = 2,
-            {
-              LinearLayout,
-              id = "recentRow",
-              orientation = "horizontal",
-              layout_width = "wrap",
-              layout_height = "wrap",
-            },
-          },
-        },
-        {
-          -- 全部工程列表
-          LinearLayout,
-          id = "listBlock",
-          orientation = "vertical",
-          layout_width = "match",
-          layout_height = "wrap",
-          layout_marginTop = "12dp",
-          {
-            MaterialTextView,
-            text = res.string.home_all_projects,
-            textSize = "13sp",
-            textStyle = "bold",
-            textColor = onSurfaceVar,
-            paddingBottom = "8dp",
-          },
-          {
-            LinearLayout,
-            id = "projectList",
-            orientation = "vertical",
-            layout_width = "match",
-            layout_height = "wrap",
-          },
-        },
-        {
-          MaterialTextView,
-          id = "emptyHint",
-          text = res.string.home_no_projects,
-          textSize = "14sp",
-          textColor = onSurfaceVar,
-          gravity = "center",
-          padding = "32dp",
-          visibility = 8,
-        },
-      },
-    },
-  }, views)
-
-  views.btnNew.onClick = function()
-    require("activities.main.CreateProject").show({
-      snack = function(msg)
-        pcall(function() Toast.makeText(activity, msg, Toast.LENGTH_SHORT).show() end)
-      end,
-      onCreated = function()
-        -- 创建完成后刷新列表（对话框不会触发 onResume）
-        _M.refresh()
-      end,
-    })
+  }
+  adapter = LuaRecyclerAdapter(activity, adapterData, rowLayout)
+  rowUpdates = Rows.new(adapterData, adapter, function(row) return row.path end,
+    function(a, b) return Rows.same(a, b, projectFields) end, rowData)
+  views.projectList.setLayoutManager(LinearLayoutManager(activity))
+  views.projectList.setAdapter(adapter) -- existing adapter's Coil loader decodes/caches icons off-thread
+  -- loadlayout's generated IDs vary across Activity instances. This ID is deliberately
+  -- outside the shell's per-page scroller range and lets Android restore text/selection.
+  views.search.setId(0x00d0f001)
+  views.search.setSaveEnabled(true)
+  views.search.setFreezesText(true)
+  views.search.addTextChangedListener(luajava.bindClass("android.text.TextWatcher")({
+    beforeTextChanged = function() end, onTextChanged = function() end,
+    afterTextChanged = function(text) query = tostring(text or "") renderList() end,
+  }))
+  views.clear.onClick = function() views.search.setText("") end
+  views.retry.onClick = function()
+    if not permission() then requestPermission()
+    elseif state == "rename_pending" then retryPendingRename()
+    else M.refresh() end
   end
-
-  -- 片段视图创建即自刷：外部 refresh 与片段装配的时序无保证，
-  -- build 时自刷保证数据首次出现与视图同步
-  _M.refresh()
+  views.openDirectory.onClick = openDirectoryDialog
+  views.btnNew.onClick = function()
+    if not permission() then requestPermission() return end
+    require("activities.main.CreateProject").show({ snack = snack,
+      onCreated = function(path, openAfter) M.refresh() end,
+      openProject = function(path) return openProject(path, true) end })
+  end
+  state = permission() and "loading" or "permission"
+  if query ~= "" then views.search.setText(query) else renderList() end
+  -- Shell owns refresh scheduling, including the initial visible-page scan.
   return built
 end
-
-return _M
+return M

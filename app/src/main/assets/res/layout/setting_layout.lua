@@ -12,8 +12,9 @@ local onSurfaceColor = themeUtil.getColorOnSurface()
 local onSurfaceVarColor = themeUtil.getColorOnSurfaceVariant()
 local surfaceColor = themeUtil.getColorSurface()
 local surfaceContainerColor = themeUtil.getColorSurfaceContainer()
-local outlineColor = themeUtil.getColorOutlineVariant()
-local rippleRes = activity.obtainStyledAttributes({ android.R.attr.selectableItemBackground }).getResourceId(0, 0)
+local rippleAttrs = activity.obtainStyledAttributes({ android.R.attr.selectableItemBackground })
+local rippleRes = rippleAttrs.getResourceId(0, 0)
+rippleAttrs.recycle()
 
 local function tintedIcon(name)
     local d = nil
@@ -44,10 +45,10 @@ local sectionTitle = function(text, iconName)
         layout_width = "match",
         layout_height = "wrap",
         gravity = "center_vertical",
-        paddingLeft = "16dp",
-        paddingRight = "16dp",
-        paddingBottom = "4dp",
-        paddingTop = "16dp",
+        paddingLeft = "24dp",
+        paddingRight = "24dp",
+        paddingBottom = "12dp",
+        paddingTop = "24dp",
     }
     if iconName then
         row[#row + 1] = {
@@ -76,6 +77,7 @@ local colorItem = function(tag, title, subtitle, iconName)
         layout_width = "match",
         layout_height = "wrap",
         tag = tag,
+        minimumHeight = "64dp",
         id = tag .. "Item",
         clickable = true,
         focusable = true,
@@ -93,6 +95,7 @@ local colorItem = function(tag, title, subtitle, iconName)
         orientation = "vertical",
         layout_width = "0dp",
         layout_weight = 1,
+        layout_height = "wrap",
         {
             MaterialTextView,
             textSize = "16sp",
@@ -101,8 +104,9 @@ local colorItem = function(tag, title, subtitle, iconName)
         },
         {
             MaterialTextView,
-            textSize = "12sp",
+            textSize = "13sp",
             text = subtitle or "",
+            layout_marginTop = "4dp",
             textColor = onSurfaceVarColor,
             Visibility = subtitle and 0 or 8,
         },
@@ -124,6 +128,7 @@ local settingItem = function(id, title, subtitle, iconName)
         layout_width = "match",
         layout_height = "wrap",
         id = id,
+        minimumHeight = "64dp",
         clickable = true,
         focusable = true,
         backgroundResource = rippleRes,
@@ -138,7 +143,9 @@ local settingItem = function(id, title, subtitle, iconName)
     row[#row + 1] = {
         LinearLayout,
         orientation = "vertical",
-        layout_width = "match",
+        layout_width = "0dp",
+        layout_weight = 1,
+        layout_height = "wrap",
         {
             MaterialTextView,
             textSize = "16sp",
@@ -147,9 +154,10 @@ local settingItem = function(id, title, subtitle, iconName)
         },
         {
             MaterialTextView,
-            textSize = "12sp",
+            textSize = "13sp",
             text = subtitle or "",
             id = id .. "Desc",
+            layout_marginTop = "4dp",
             textColor = onSurfaceVarColor,
             Visibility = subtitle and 0 or 8,
         },
@@ -164,6 +172,8 @@ local switchItem = function(id, title, subtitle, iconName)
         layout_width = "match",
         layout_height = "wrap",
         id = id,
+        contentDescription = title .. (subtitle and (". " .. subtitle) or ""),
+        minimumHeight = "48dp",
         clickable = true,
         focusable = true,
         backgroundResource = rippleRes,
@@ -180,6 +190,7 @@ local switchItem = function(id, title, subtitle, iconName)
         orientation = "vertical",
         layout_width = "0dp",
         layout_weight = 1,
+        layout_height = "wrap",
         {
             MaterialTextView,
             textSize = "16sp",
@@ -188,8 +199,9 @@ local switchItem = function(id, title, subtitle, iconName)
         },
         {
             MaterialTextView,
-            textSize = "12sp",
+            textSize = "13sp",
             text = subtitle or "",
+            layout_marginTop = "4dp",
             textColor = onSurfaceVarColor,
             Visibility = subtitle and 0 or 8,
         },
@@ -219,14 +231,11 @@ local card = function(...)
         MaterialCardView,
         layout_width = "match",
         layout_height = "wrap",
-        layout_marginLeft = "16dp",
-        layout_marginRight = "16dp",
-        layout_marginTop = "8dp",
-        layout_marginBottom = "8dp",
-        radius = "20dp",
+        layout_marginLeft = "20dp",
+        layout_marginRight = "20dp",
+        radius = "16dp",
         CardElevation = 0,
-        strokeWidth = "1dp",
-        strokeColor = outlineColor,
+        strokeWidth = 0,
         CardBackgroundColor = surfaceContainerColor,
         {
             LinearLayout,
@@ -272,8 +281,9 @@ local themeItem = function()
             },
             {
                 MaterialTextView,
-                textSize = "12sp",
+                textSize = "13sp",
                 id = "ThemeColorDesc",
+                layout_marginTop = "4dp",
                 text = res.string.theme_color_follow_system,
                 textColor = onSurfaceVarColor,
             },
@@ -292,14 +302,27 @@ return {
     ScrollView,
     layout_width = "match",
     layout_height = "match",
+    fillViewport = true,
     backgroundColor = surfaceColor,
     {
         LinearLayout,
         orientation = "vertical",
         layout_width = "match",
         layout_height = "wrap",
-        paddingTop = "8dp",
         paddingBottom = "32dp",
+
+        {
+            MaterialTextView,
+            text = res.string.home_tab_settings,
+            textSize = "28sp",
+            textColor = onSurfaceColor,
+            layout_width = "match",
+            layout_height = "wrap",
+            paddingLeft = "20dp",
+            paddingRight = "20dp",
+            paddingTop = "16dp",
+            paddingBottom = "4dp",
+        },
 
         -- ── 外观 ──
         sectionTitle(res.string.appearance, "dashboard"),

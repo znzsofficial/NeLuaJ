@@ -19,6 +19,7 @@ return {
     title = "入门",
     subtitle = "迁移、工程配置与设计约定",
     items = {
+      { title = docLanguage == "zh" and "首页与工程管理" or "Home and projects", desc = docLanguage == "zh" and "创建、打开、搜索、会话与保存失败恢复" or "Create, open, search, chat and recover from save failures", file = "home_" .. docLanguage .. ".html", tags = "首页 工程 项目 保存 恢复 home project workspace" },
       { title = res.string.migration_guide, desc = "从旧版 AndroLua / NeLuaJ 迁移", file = "migration_" .. docLanguage .. ".html", tags = "迁移 升级 兼容" },
       { title = "init.lua", desc = "包名、SDK、主题名与权限", file = "init_lua_" .. docLanguage .. ".html", tags = "配置 权限 SDK 主题" },
       { title = "welcome.lua", desc = "打包时的启动页背景、图标或整页图", file = "welcome_" .. docLanguage .. ".html", tags = "启动页 welcome 打包 splash" },

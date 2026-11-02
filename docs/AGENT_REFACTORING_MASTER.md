@@ -1,6 +1,8 @@
 # Agent 重构实现状态
 
-本文描述当前源码，不将设计目标或测试通过等同于完整验收。旧方案见
+本文是重构范围和验证边界的摘要；Agent 当前模块、协议及存储以
+[AIAgent.md](./AIAgent.md) 为主要入口，首页交接以 [HOME.md](./HOME.md) 为准。
+不将设计目标或测试通过等同于完整验收。旧方案见
 `AGENT_REFACTORING_PLAN.md`、`PHASE_1_REFACTORING_SPEC.md` 和
 `PHASE_2_REFACTORING_SPEC.md`；其中的双模容器等设计已不再采用。
 

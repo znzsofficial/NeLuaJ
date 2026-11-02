@@ -1,6 +1,7 @@
 --- Agent 工具执行边界。
 --- 具体文件算法通过 configure 注入，避免执行层依赖 AgentChat 的全局状态。
 local _M = {}
+local ToolRegistry = require("mods.agent.ToolRegistry")
 local config
 local activeJobs = {} -- Only live jobs; callbacks capture their own cancellation state.
 local AgentJobRegistry = nil
@@ -284,10 +285,8 @@ end
 function _M.isDestructiveTool(name)
   name = _M.normalizeToolName(name)
   if name:match("^mcp::") or name:match("^mcp__") then return true end
-  return name == "create_file" or name == "create_folder"
-    or name == "delete_file" or name == "delete_folder"
-    or name == "apply_patch" or name == "replace_in_file"
-    or name == "append_file" or name == "rename_file" or name == "run_lua"
+  local entry = ToolRegistry.get(name)
+  return entry ~= nil and entry.destructive == true
 end
 
 function _M.isInProjectDir(path)
@@ -309,10 +308,11 @@ end
 
 local function allPathsInProject(name, args)
   args = args or {}
+  local entry = ToolRegistry.get(name)
   local function readPathAllowed(path)
     if _M.isInProjectDir(path) then return true end
     local trusted = requireConfig().isTrustedReadPath
-    return trusted and trusted(path) == true or false
+    return entry and entry.trustedDocs and trusted and trusted(path) == true or false
   end
   if name == "read_files" then
     local paths = args.paths
@@ -417,22 +417,23 @@ end
 
 function _M.requiresConfirmation(name, args)
   name = _M.normalizeToolName(name, args)
+  local entry = ToolRegistry.get(name)
+  local category = entry and entry.approval
   -- 用户配置：MCP 不需要任何确认，直接执行
   --（副作用未知由用户自担；项目 networkHosts 也不约束 MCP 服务器）
   if name:match("^mcp::") or name:match("^mcp__") then return false end
-  if name == "run_project" or name == "build_project" then return true end
-  if name == "run_lua" then
+  if category == "always_confirm" then return true end
+  if category == "sandbox" then
     if not autoRunsSandbox() then return true end
     if not sandboxDocRead then return true end
     if not isNetworkRequest(name, args) then return false end
     return not (autoApprovesNetworkRequests() and networkAllowedByPolicy(name, args))
   end
-  if isNetworkRequest(name, args) then
+  if category == "network" then
     return not (autoApprovesNetworkRequests() and networkAllowedByPolicy(name, args))
   end
   if _M.isDestructiveTool(name) then return true end
-  if name == "fetch_url" then return true end
-  if name == "read_file" or name == "read_files" or name == "list_dir" or name == "search_in_files" then
+  if category == "project_read" then
     return not allPathsInProject(name, args)
   end
   return false
@@ -440,23 +441,25 @@ end
 
 function _M.shouldAutoApprove(name, args)
   name = _M.normalizeToolName(name, args)
+  local entry = ToolRegistry.get(name)
+  local category = entry and entry.approval
   -- 用户配置：MCP 不需要任何确认，无条件自动执行
   if name:match("^mcp::") or name:match("^mcp__") then return true end
-  if name == "run_lua" then
+  if category == "sandbox" then
     if not autoRunsSandbox() then return false end
     if not sandboxDocRead then return false end
     if not isNetworkRequest(name, args) then return true end
     return autoApprovesNetworkRequests() and networkAllowedByPolicy(name, args)
   end
-  if isNetworkRequest(name, args) then
+  if category == "network" then
     return autoApprovesNetworkRequests() and networkAllowedByPolicy(name, args)
   end
-  if name == "run_project" or name == "build_project" then return false end
-  if name == "get_env_info" or name == "check_lua_syntax" then return true end
-  if name == "read_file" or name == "read_files" or name == "list_dir" or name == "search_in_files" then
+  if category == "always_confirm" then return false end
+  if category == "pure" then return true end
+  if category == "project_read" then
     return allPathsInProject(name, args)
   end
-  if name == "create_file" then
+  if category == "create_file" then
     -- 覆盖已存在文件等于静默数据丢失：即使开启文件自动批准也要求确认
     -- （系统提示词已引导模型对已有文件改用 apply_patch）
     local path = tostring((args or {}).path or "")
@@ -484,13 +487,9 @@ end
 -- 也不会堆叠确认对话框。run_lua（沙盒全局槽位）与 fetch_url（取消注册表）
 -- 各自有全局单例语义，明确排除。
 
-local PARALLEL_SAFE_TOOLS = {
-  read_file = true, read_files = true, list_dir = true,
-  search_in_files = true, check_lua_syntax = true, get_env_info = true,
-}
-
 function _M.isParallelSafe(name, args)
-  return PARALLEL_SAFE_TOOLS[_M.normalizeToolName(name, args)] == true
+  local entry = ToolRegistry.get(_M.normalizeToolName(name, args))
+  return entry ~= nil and entry.parallelSafe == true
 end
 
 --- 判断一批 tool_calls 是否可整体并行执行。满足才返回逐调用描述表：
@@ -506,7 +505,7 @@ function _M.classifyParallelBatch(toolCalls, deps)
     local decodeOk = pcall(function() args = json.decode(tc.arguments) end)
     if not decodeOk or type(args) ~= "table" then return nil end
     local name = _M.normalizeToolName(tc.name, args)
-    if not PARALLEL_SAFE_TOOLS[name] then return nil end
+    if not _M.isParallelSafe(name, args) then return nil end
     if _M.requiresConfirmation(name, args) then return nil end
     if failedCalls then
       local argsEncoded, encodedArgs = pcall(json.encode, args)

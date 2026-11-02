@@ -95,6 +95,7 @@ end
 -- The real module must inject callbacks that reach its later local functions.
 modules["mods.agent.Contracts"] = loadModule("Contracts")
 modules["mods.agent.SessionState"] = loadModule("SessionState")
+modules["mods.agent.ToolRegistry"] = loadModule("ToolRegistry")
 loadModule("ChatUI")
 local bubble = assert(captured["mods.agent.BubbleRenderer"])
 assert(type(bubble.onRegenerate) == "function", "missing regenerate hook")

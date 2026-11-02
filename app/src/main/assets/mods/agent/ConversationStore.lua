@@ -18,6 +18,7 @@ local TextUtil = require("mods.utils.TextUtil")
 local CONV_KV_NS = "conversations"
 local maxSeq = 0
 local kvReady = false
+local loadError
 
 local function ensureKV()
   if kvReady then return true end
@@ -128,7 +129,7 @@ local function makeId(used)
     if not value or value == "" then
       value = "conv_" .. tostring(os.time()) .. "_" .. tostring(sequence)
     end
-    if not used[value] then return value end
+    if not used[value] and value ~= "_index" and value ~= "_legacy_migration" then return value end
   end
 end
 
@@ -159,7 +160,7 @@ local function normalizeRecord(value, fallbackProject, used)
   local changed = false
 
   local id = trim(record.id)
-  if id == "" or used[id] then
+  if id == "" or used[id] or id == "_index" or id == "_legacy_migration" then
     id = makeId(used)
     changed = true
   end
@@ -199,21 +200,30 @@ end
 --- 磁盘索引是成员名单。别的界面已经删掉的 id 不能再写回去；
 --- 磁盘上有、这份内存里没有的会话要留在索引里，避免整表覆盖把它们抹掉。
 local function readDiskIndex()
-  if not ensureKV() then return nil end
-  local raw = KV.read(KV.nsPath(CONV_KV_NS) .. "/_index.json")
-  if type(raw) ~= "string" or raw == "" then return nil end
+  if not ensureKV() then return nil, "storage_unavailable" end
+  local raw, readError = KV.read(KV.nsPath(CONV_KV_NS) .. "/_index.json")
+  if raw == nil then
+    return nil, (readError and readError ~= "missing") and "index_read_failed" or "index_missing"
+  end
+  if type(raw) ~= "string" or raw == "" then return nil, "index_corrupt" end
   local decoded = decode(raw)
-  if type(decoded) ~= "table" then return nil end
+  if type(decoded) ~= "table" then return nil, "index_corrupt" end
   local ids = {}
   local entries = {}
+  local count = 0
+  for key in pairs(decoded) do
+    if type(key) ~= "number" or key < 1 or key % 1 ~= 0 then return nil, "index_corrupt" end
+    count = count + 1
+  end
+  if count ~= #decoded then return nil, "index_corrupt" end
   for _, entry in ipairs(decoded) do
-    if type(entry) == "table" and entry.id ~= nil and tostring(entry.id) ~= "" then
+    if type(entry) == "table" and entry.id ~= nil and tostring(entry.id) ~= "" and entry.messages == nil then
       local id = tostring(entry.id)
       if not ids[id] then
         ids[id] = true
         entries[#entries + 1] = entry
-      end
-    end
+      else return nil, "index_corrupt" end
+    else return nil, "index_corrupt" end
   end
   return { ids = ids, entries = entries }
 end
@@ -228,12 +238,16 @@ end
 
 --- 按记录持久化：每个会话一个 KV 记录 + 重写元数据索引。
 --- removedIds 会删记录文件；createdIds 是这次新出现、磁盘索引里还没有的 id。
-local function persistConversations(value, removedIds, createdIds)
+local function persistConversations(value, removedIds, createdIds, migrating, reassociating)
+  if loadError and not migrating then return false, loadError end
   if not ensureKV() then return false end
   local root = KV.nsPath(CONV_KV_NS)
   local removedSet = idSet(removedIds)
   local createdSet = idSet(createdIds)
-  local disk = readDiskIndex()
+  local disk, diskError = readDiskIndex()
+  if not disk and diskError ~= "index_missing" then return false, diskError end
+  local diskPaths = {}
+  for _, entry in ipairs(disk and disk.entries or {}) do diskPaths[tostring(entry.id)] = entry.projectPath end
   local kept = {}
   local seen = {}
   for _, record in ipairs(value) do
@@ -242,6 +256,11 @@ local function persistConversations(value, removedIds, createdIds)
       -- 索引还留着、记录文件已经没了：这是一次没写完的删除，不要从内存恢复。
       local fileGone = disk and disk.ids[id] and not createdSet[id] and not KV.exists(CONV_KV_NS, id)
       if not fileGone and (not disk or disk.ids[id] or createdSet[id]) then
+        -- A stale editor may still hold the pre-rename path. Only the explicit
+        -- reassociation service may change ownership of an existing record.
+        if not migrating and not reassociating and diskPaths[id] ~= nil then
+          record.projectPath = diskPaths[id]
+        end
         seen[id] = true
         kept[#kept + 1] = record
       end
@@ -249,6 +268,7 @@ local function persistConversations(value, removedIds, createdIds)
   end
 
   local ok = true
+  local writeError
   local written = {}
   local indexEntries = {}
   local preserved = {}
@@ -273,6 +293,7 @@ local function persistConversations(value, removedIds, createdIds)
       }
     else
       ok = false
+      writeError = writeError or ("record_write_failed:" .. id)
     end
   end
   if disk then
@@ -291,13 +312,13 @@ local function persistConversations(value, removedIds, createdIds)
   -- 记录文件还在时不能先改索引，否则列表里没了、json 还留在目录里。
   for _, id in ipairs(removedIds or {}) do
     if not KV.delete(CONV_KV_NS, tostring(id)) then
-      return false
+      return false, "record_delete_failed:" .. tostring(id)
     end
   end
   local encodedIndex = encode(indexEntries)
-  if not (ok and encodedIndex and KV.writeAtomic(root .. "/_index.json", encodedIndex)) then
-    return false
-  end
+  if not ok then return false, writeError end
+  if not encodedIndex then return false, "index_encode_failed" end
+  if not KV.writeAtomic(root .. "/_index.json", encodedIndex) then return false, "index_write_failed" end
   local cached = {}
   for _, record in ipairs(kept) do
     if written[tostring(record.id)] then
@@ -374,6 +395,7 @@ function _M.configure(options)
   config = options or {}
   conversations = nil
   currentByProject = nil
+  loadError = nil
 end
 
 --- 是否已被宿主配置过（首页等只读方避免重复 configure 清缓存）
@@ -384,34 +406,43 @@ end
 function _M.invalidate()
   conversations = nil
   currentByProject = nil
+  loadError = nil
 end
 
 function _M.load(force)
-  if conversations and not force then return clone(conversations) end
+  if conversations and not force and not loadError then return clone(conversations) end
 
   local source = {}
   local fromLegacy = false
-  if ensureKV() then
-    -- 索引存在时按索引枚举记录文件
-    local rawIndex = KV.read(KV.nsPath(CONV_KV_NS) .. "/_index.json")
-    local decodedIndex = rawIndex and decode(rawIndex) or nil
-    if type(decodedIndex) == "table" and #decodedIndex > 0 then
-      for _, entry in ipairs(decodedIndex) do
-        if type(entry) == "table" and entry.id then
-          local record = KV.get(CONV_KV_NS, tostring(entry.id))
-          if type(record) == "table" then source[#source + 1] = record end
-        end
+  loadError = nil
+  local disk, diskError = readDiskIndex()
+  local legacyRaw = getData(CONVERSATIONS_KEY, "")
+  -- Until the source has been cleared, ALWAYS retry the entire legacy batch.
+  -- An index from a previous interrupted attempt is not a completion marker.
+  if type(legacyRaw) == "string" and legacyRaw ~= "" then
+    local decoded = decode(legacyRaw)
+    if type(decoded) ~= "table" then loadError = "legacy_corrupt"; return {}, loadError end
+    source = decoded.id and { decoded } or decoded
+    local count = 0
+    for key, value in pairs(source) do
+      if type(key) ~= "number" or key < 1 or key % 1 ~= 0 or type(value) ~= "table" then
+        loadError = "legacy_corrupt"; return {}, loadError
       end
-    else
-      -- 迁移源：SharedData 旧 ai_conversations 整包（唯一发布过的形态）
-      local raw = getData(CONVERSATIONS_KEY, "")
-      if type(raw) == "string" and raw ~= "" then
-        local decoded = raw ~= "" and decode(raw) or nil
-        if type(decoded) == "table" then
-          source = decoded.id and { decoded } or decoded
-          fromLegacy = true
-        end
-      end
+      count = count + 1
+    end
+    if count ~= #source then loadError = "legacy_corrupt"; return {}, loadError end
+    fromLegacy = true
+  elseif not disk and diskError ~= "index_missing" then
+    loadError = diskError
+    return {}, loadError
+  elseif disk then
+    for _, entry in ipairs(disk.entries) do
+      local record = KV.get(CONV_KV_NS, tostring(entry.id))
+      if type(record) == "table" then source[#source + 1] = record
+      elseif KV.exists(CONV_KV_NS, tostring(entry.id)) then
+        loadError = "record_corrupt:" .. tostring(entry.id)
+        return {}, loadError
+      end -- Missing records are interrupted deletions, never resurrect them.
     end
   end
 
@@ -439,16 +470,45 @@ function _M.load(force)
     if (record.seq or 0) > maxSeq then maxSeq = record.seq end
   end
 
+  if fromLegacy then
+    -- Persist normalized IDs before any record writes, so retries/restarts cannot
+    -- generate different IDs for legacy rows which did not have one.
+    local journal = KV.get(CONV_KV_NS, "_legacy_migration")
+    if (journal == nil and KV.exists(CONV_KV_NS, "_legacy_migration"))
+        or (journal and (type(journal) ~= "table" or type(journal.records) ~= "table")) then
+      loadError = "legacy_journal_corrupt"
+    elseif journal and journal.source == legacyRaw then
+      local ids, count, valid = {}, 0, #journal.records == #source
+      for key, record in pairs(journal.records) do
+        count = count + 1
+        if type(key) ~= "number" or key < 1 or key % 1 ~= 0 or type(record) ~= "table"
+            or type(record.id) ~= "string" or record.id == "" or ids[record.id]
+            or type(record.messages) ~= "table" or type(record.projectPath) ~= "string" then
+          valid = false
+        elseif record then ids[record.id] = true end
+      end
+      if count ~= #source then valid = false end
+      if valid then normalized = journal.records else loadError = "legacy_journal_corrupt" end
+    elseif not KV.set(CONV_KV_NS, "_legacy_migration", { source = legacyRaw, records = normalized }) then
+      loadError = "legacy_journal_write_failed"
+    end
+  end
+
   conversations = normalized
   currentByProject = loadCurrentMap()
   if migrateLegacySelection(conversations, currentByProject) then
     persistCurrentMap(currentByProject)
   end
-  if migrated or fromLegacy then
+  if (migrated or fromLegacy) and not loadError then
     -- 规范化时新分配的 id 还不在磁盘索引里，要明确标成新建，避免被当成“别的界面已删除”。
     local created = nil
     local diskNow = readDiskIndex()
-    if diskNow then
+    if fromLegacy then
+      -- Every source row must be written, even if an interrupted/older migration
+      -- left an index entry without its record. This is not a stale editor save.
+      created = {}
+      for _, record in ipairs(normalized) do created[#created + 1] = record.id end
+    elseif diskNow then
       created = {}
       for _, record in ipairs(normalized) do
         if not diskNow.ids[tostring(record.id)] then
@@ -456,22 +516,42 @@ function _M.load(force)
         end
       end
     end
-    persistConversations(normalized, nil, created)
+    local saved, saveError = persistConversations(normalized, nil, created, true)
+    if not saved then loadError = saveError or (fromLegacy and "legacy_persist_failed" or "normalization_persist_failed") end
   end
-  if fromLegacy then
+  if fromLegacy and not loadError then
     -- 记录已落 KV，清除 SharedData 旧整包（迁移完成标记）
-    setData(CONVERSATIONS_KEY, nil)
+    if not setData(CONVERSATIONS_KEY, nil) then
+      loadError = "legacy_cleanup_failed"
+    else
+      -- A leftover journal is harmless: it is used only with the matching source.
+      KV.delete(CONV_KV_NS, "_legacy_migration")
+    end
   end
-  return clone(conversations)
+  return clone(conversations), loadError
 end
 
 --- 轻量索引：仅提取记录的标量元数据，不深拷贝 messages。
 --- 会话列表渲染（首页会话 tab）只需要元信息，全量 load 的深克隆
 --- 在会话较多时是列表卡顿的主因。
 function _M.loadIndex(force)
-  if not conversations or force then _M.load(force) end
+  local legacyRaw = getData(CONVERSATIONS_KEY, "")
+  if type(legacyRaw) == "string" and legacyRaw ~= "" then
+    local _, migrationError = _M.load(true)
+    if migrationError then return {}, migrationError end
+  end
+  -- Do not call load() on the ordinary path, including force=true: the index
+  -- already contains all list metadata, and message bodies need not be opened.
+  local disk, diskError = readDiskIndex()
+  if not disk then
+    if diskError == "index_missing" then return {} end
+    return {}, diskError
+  end
   local result = {}
-  for _, record in ipairs(conversations) do
+  local ordered = {}
+  for i, entry in ipairs(disk.entries) do ordered[i] = entry end
+  table.sort(ordered, function(a, b) return (tonumber(a.seq) or 0) < (tonumber(b.seq) or 0) end)
+  for _, record in ipairs(ordered) do
     local usage = type(record.usage) == "table" and clone(record.usage) or nil
     result[#result + 1] = {
       id = record.id,
@@ -480,10 +560,61 @@ function _M.loadIndex(force)
       createdAt = record.createdAt,
       updatedAt = record.updatedAt,
       usage = usage,
-      messageCount = type(record.messages) == "table" and #record.messages or 0,
+      messageCount = tonumber(record.messageCount) or 0,
     }
   end
   return result
+end
+
+--- Idempotent path reassociation, not an all-files transaction. Message bodies
+--- and IDs are unchanged. On failure old source data must be kept by the caller.
+function _M.reassociateProject(oldPath, newPath)
+  oldPath, newPath = projectPath(oldPath), projectPath(newPath)
+  if oldPath == "" or newPath == "" then return false, "invalid_project_path" end
+  if oldPath == newPath then return true end
+  local function moved(path)
+    path = tostring(path or "")
+    if path == oldPath or path:sub(1, #oldPath + 1) == oldPath .. "/" then
+      return newPath .. path:sub(#oldPath + 1)
+    end
+    return path
+  end
+  local records, err = _M.load(true)
+  if err then return false, err end
+  local rawMap = getData(CURRENT_BY_PROJECT_KEY, "")
+  if rawMap ~= "" and type(decode(rawMap)) ~= "table" then return false, "current_map_corrupt" end
+  local map = loadCurrentMap()
+  local updated = clone(map)
+  for path, id in pairs(map) do
+    local target = moved(path)
+    if target ~= path then
+      if updated[target] and updated[target] ~= id then return false, "current_project_conflict" end
+      updated[target], updated[path] = id, nil
+    end
+  end
+  local backupKey = oldPath .. "\n" .. newPath
+  local backup = KV.get("conversation_project_backups", backupKey)
+  if backup ~= nil then
+    if type(backup) ~= "table" or type(backup.records) ~= "table" or type(backup.current) ~= "table" then
+      return false, "conversation_backup_corrupt"
+    end
+  elseif KV.exists("conversation_project_backups", backupKey) then
+    return false, "conversation_backup_corrupt"
+  elseif not KV.set("conversation_project_backups", backupKey, { records = records, current = map }) then
+    return false, "conversation_backup_write_failed"
+  end
+  local changed = false
+  for _, record in ipairs(records) do
+    local path = moved(record.projectPath)
+    if path ~= record.projectPath then record.projectPath = path; changed = true end
+  end
+  -- Also repair an index left behind after record writes in an earlier attempt.
+  if changed or #records > 0 then
+    local saved, saveError = persistConversations(records, nil, nil, false, true)
+    if not saved then return false, saveError or "conversation_reassociate_failed" end
+  end
+  if not persistCurrentMap(updated) then return false, "current_map_write_failed" end
+  return true
 end
 
 function _M.list(path, force)

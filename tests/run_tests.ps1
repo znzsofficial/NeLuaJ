@@ -17,22 +17,27 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+# Native exit codes are checked explicitly, including on PowerShell versions
+# where a non-zero exit does not become a terminating error.
+$PSNativeCommandUseErrorActionPreference = $false
 $testsDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $root = Split-Path -Parent $testsDir
+# Some Lua suites use TEMP; Unix hosts normally only expose TMPDIR (or neither).
+if (-not $env:TEMP) { $env:TEMP = [System.IO.Path]::GetTempPath() }
 
 # ── 定位 luajpp.jar ──
 # 优先 tests/libs/luajpp.jar（随仓库分发的纯 JSE 精简版）；
 # 其次兄弟仓库 NeLuaJ+Builder 的完整版；
 # 最后本仓库 luajpp_nocglib.jar（仅支持 -Check 语法检查）
 if (-not $Luajpp) {
-  $bundled = Join-Path $testsDir "libs\luajpp.jar"
-  $sibling = Join-Path (Split-Path -Parent $root) "NeLuaJ+Builder\app\libs\luajpp.jar"
+  $bundled = Join-Path $testsDir "libs/luajpp.jar"
+  $sibling = Join-Path (Split-Path -Parent $root) "NeLuaJ+Builder/app/libs/luajpp.jar"
   if (Test-Path $bundled) {
     $Luajpp = $bundled
   } elseif (Test-Path $sibling) {
     $Luajpp = $sibling
   } else {
-    $local = Join-Path $root "app\libs\luajpp_nocglib.jar"
+    $local = Join-Path $root "app/libs/luajpp_nocglib.jar"
     if (Test-Path $local) {
       Write-Warning "未找到完整版 luajpp.jar，回退到 luajpp_nocglib.jar（仅支持 -Check 语法检查）"
       $Luajpp = $local
@@ -44,44 +49,54 @@ if (-not $Luajpp -or -not (Test-Path $Luajpp)) {
 }
 Write-Host "luajpp.jar: $Luajpp" -ForegroundColor DarkGray
 
-# ── 增量编译基础设施 ──
+# ── 编译基础设施 ──
+# Always rebuild both small drivers, so changing the JDK/JAR cannot reuse stale
+# classes. A failed compile must never fall through to an old .class file.
 $out = Join-Path $testsDir "out"
 New-Item -ItemType Directory -Path $out -Force | Out-Null
-foreach ($j in @("Run.java", "SyntaxCheck.java")) {
-  $srcFile = Join-Path $testsDir $j
-  $clsFile = Join-Path $out ($j -replace '\.java$', '.class')
-  if (-not (Test-Path $clsFile) -or (Get-Item $srcFile).LastWriteTime -gt (Get-Item $clsFile).LastWriteTime) {
-    javac -encoding UTF-8 -cp $Luajpp -d $out $srcFile
-  }
+$sources = @((Join-Path $testsDir "Run.java"), (Join-Path $testsDir "SyntaxCheck.java"))
+& javac -encoding UTF-8 -cp $Luajpp -d $out @sources
+if ($LASTEXITCODE -ne 0) {
+  throw "javac failed (exit $LASTEXITCODE); tests were not run."
 }
-$cp = "$Luajpp;$out"
+$cp = $Luajpp, $out -join [System.IO.Path]::PathSeparator
 
 # ── 语法检查模式 ──
 if ($Check) {
-  java -noverify -cp $cp SyntaxCheck @Check
+  & java -noverify -cp $cp SyntaxCheck @Check
+  if ($LASTEXITCODE -ne 0) {
+    throw "Lua syntax check failed (exit $LASTEXITCODE)."
+  }
   return
 }
 
 # ── 行为测试模式 ──
-$suites = @(
-  "TestTodo", "TestPatch", "TestRegistry", "TestSubagent", "TestToolCancellation",
-  "TestParallel", "TestMarkdown", "TestMarkdownAST", "TestMarkdownRendering", "TestTextUtil", "TestStoreIndex", "TestAgentUi",
-  "TestMcpNotifications", "TestOpenAIClientCancellation", "TestAgentTurn", "TestSessionState", "TestEditorSession"
-)
+# Discover every behavioral suite, including TestLayoutTools and future suites.
+$suites = @(Get-ChildItem -Path $testsDir -Filter "Test*.lua" -File | Sort-Object Name | ForEach-Object { $_.BaseName })
 if ($Suite) { $suites = @($Suite) }
+if ($suites.Count -eq 0) { throw "No Lua behavioral suites found in $testsDir" }
 
 $failed = @()
-$prevEAP = $ErrorActionPreference
-$ErrorActionPreference = "Continue"
 foreach ($s in $suites) {
   Write-Host "== $s ==" -ForegroundColor Cyan
-  $lines = & java -noverify -cp $cp Run (Join-Path $testsDir "$s.lua") 2>&1
+  # Windows PowerShell can treat redirected native stderr as an ErrorRecord.
+  # Keep capturing it without obscuring the process exit status.
+  $prevEAP = $ErrorActionPreference
+  $previousSuitePath = $env:NELUAJ_TEST_SUITE
+  try {
+    $ErrorActionPreference = "Continue"
+    $env:NELUAJ_TEST_SUITE = Join-Path $testsDir "$s.lua"
+    $lines = @(& java -noverify -cp $cp Run (Join-Path $testsDir "build_maintenance_bootstrap.lua") 2>&1)
+    $testExitCode = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $prevEAP
+    $env:NELUAJ_TEST_SUITE = $previousSuitePath
+  }
   $lines | ForEach-Object { Write-Host "  $_" }
-  if ($LASTEXITCODE -ne 0 -or -not (($lines | Out-String) -match "ALL-PASS")) {
+  if ($testExitCode -ne 0 -or -not (($lines | Out-String) -match "(?m)^ALL-PASS\b")) {
     $failed += $s
   }
 }
-$ErrorActionPreference = $prevEAP
 
 if ($failed.Count -gt 0) {
   Write-Host "FAILED SUITES: $($failed -join ', ')" -ForegroundColor Red

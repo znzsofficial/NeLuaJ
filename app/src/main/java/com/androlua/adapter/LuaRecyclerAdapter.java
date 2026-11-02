@@ -62,7 +62,10 @@ public class LuaRecyclerAdapter extends RecyclerView.Adapter<LuaRecyclerAdapter.
     public LuaViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
         try {
             LuaTable holder = new LuaTable();
-            LuaValue view = loadlayout.load(mLayout, holder);
+            // The row's parent is RecyclerView, even while it is detached. Loading
+            // with plain ViewGroup.LayoutParams silently loses root row margins.
+            LuaValue view = loadlayout.load(mLayout, holder,
+                    CoerceJavaToLua.coerce(RecyclerView.LayoutParams.class));
             return new LuaViewHolder(view.touserdata(View.class), holder);
         } catch (LuaError e) {
             return new LuaViewHolder(new View(mContext.getContext()), new LuaTable());

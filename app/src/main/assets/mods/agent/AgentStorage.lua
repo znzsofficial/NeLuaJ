@@ -6,6 +6,7 @@ local FileOutputStream = luajava.bindClass("java.io.FileOutputStream")
 local MessageDigest = luajava.bindClass("java.security.MessageDigest")
 local ReentrantLock = luajava.bindClass("java.util.concurrent.locks.ReentrantLock")
 local UUID = luajava.bindClass("java.util.UUID")
+local KV = require("mods.utils.LuaKV")
 
 local root = ""
 local projectDir = ""
@@ -43,13 +44,28 @@ local function safeName(name)
   return name
 end
 
+local function resolveProject(path, storageRoot)
+  local key = storageRoot .. "\n" .. tostring(path or "")
+  local alias = KV.get("agent_project_aliases", key)
+  if alias ~= nil then
+    if type(alias) ~= "table" or type(alias.projectDir) ~= "string"
+        or type(alias.legacyProjectDir) ~= "string"
+        or alias.projectDir:sub(1, #storageRoot + 10) ~= storageRoot .. "/projects/"
+        or alias.legacyProjectDir:sub(1, #storageRoot + 10) ~= storageRoot .. "/projects/" then
+      error("agent_storage_alias_corrupt")
+    end
+    return alias.projectDir, alias.legacyProjectDir
+  end
+  if KV.exists("agent_project_aliases", key) then error("agent_storage_alias_corrupt") end
+  return storageRoot .. "/projects/" .. hash(path), storageRoot .. "/projects/" .. legacyHash(path)
+end
+
 function _M.configure(path, agentRoot)
   storageLock.lock()
   local ok = pcall(function()
     root = tostring(agentRoot or (tostring(Environment.getExternalStorageDirectory()) .. "/LuaJ/agents"))
     local projectRoot = tostring(path or "")
-    projectDir = root .. "/projects/" .. hash(projectRoot)
-    legacyProjectDir = root .. "/projects/" .. legacyHash(projectRoot)
+    projectDir, legacyProjectDir = resolveProject(projectRoot, root)
   end)
   storageLock.unlock()
   return ok
@@ -60,11 +76,11 @@ function _M.configureCurrent(path, agentRoot)
   local ok = pcall(function()
     local nextRoot = tostring(agentRoot or (tostring(Environment.getExternalStorageDirectory()) .. "/LuaJ/agents"))
     local projectRoot = tostring(path or "")
-    local nextProject = nextRoot .. "/projects/" .. hash(projectRoot)
+    local nextProject, nextLegacy = resolveProject(projectRoot, nextRoot)
     if nextRoot ~= root or nextProject ~= projectDir then
       root = nextRoot
       projectDir = nextProject
-      legacyProjectDir = root .. "/projects/" .. legacyHash(projectRoot)
+      legacyProjectDir = nextLegacy
     end
   end)
   storageLock.unlock()
@@ -73,6 +89,32 @@ end
 
 function _M.getRoot() return root end
 function _M.getProjectDir() return projectDir end
+
+--- Reassociate the new path with the existing hashed storage, without moving or
+--- deleting any directory. Both paths keep access; conflicts are never merged.
+function _M.reassociateProject(oldPath, newPath, agentRoot)
+  storageLock.lock()
+  local called, result, err = pcall(function()
+    local storageRoot = tostring(agentRoot or (tostring(Environment.getExternalStorageDirectory()) .. "/LuaJ/agents"))
+    local source, legacy = resolveProject(oldPath, storageRoot)
+    local target, targetLegacy = resolveProject(newPath, storageRoot)
+    if source == target and legacy == targetLegacy then return true end
+    local function nonempty(path)
+      local dir = File(path)
+      if not dir.exists() then return false end
+      local children = dir.list()
+      return not dir.isDirectory() or children == nil or #children > 0
+    end
+    if nonempty(target) or nonempty(targetLegacy) then return false, "agent_storage_conflict" end
+    if not KV.set("agent_project_aliases", storageRoot .. "\n" .. tostring(newPath), {
+      projectDir = source, legacyProjectDir = legacy,
+    }) then return false, "agent_storage_alias_write_failed" end
+    return true
+  end)
+  storageLock.unlock()
+  if not called then return false, tostring(result) end
+  return result, err
+end
 
 function _M.read(name)
   storageLock.lock()

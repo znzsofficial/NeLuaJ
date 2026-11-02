@@ -68,6 +68,40 @@ class LuaLayout(private val initialContext: Context) {
     private val paramsApplier = LayoutParamsApplier(luaContext, values, ids)
     private val srcLoader = LayoutSrcLoader(initialContext, luaContext)
 
+    // Scoped to an explicit editor load, including its recursively loaded children/pages.
+    // Ordinary load() calls have no decorations and keep their existing behaviour.
+    private var decorationHooks: LuaTable? = null
+
+    /**
+     * User-invoked layout editors may decorate views without reimplementing inflation.
+     * onCreated(view, layout) runs before attributes; onLoaded(view, layout) runs after
+     * LayoutParams/padding. Both receive the exact table passed to the production loader.
+     * layoutParamsFactory(paramsClass, layout) may return a constructor callable for
+     * unusual editor containers (e.g. AbsoluteLayout's four-argument LayoutParams),
+     * or nil to retain the production constructor. Attribute application is unchanged.
+     * Hooks are restored even on failure or a nested decorated load. This is not a sandbox.
+     */
+    @JvmOverloads
+    fun loadDecorated(
+        layout: LuaValue,
+        env: LuaTable,
+        hooks: LuaTable,
+        params: LuaValue = ViewGroup.LayoutParams::class.java.toLuaValue(),
+    ): LuaValue {
+        val previous = decorationHooks
+        decorationHooks = hooks
+        try {
+            return load(layout, env, params)
+        } finally {
+            decorationHooks = previous
+        }
+    }
+
+    private fun decorate(name: String, view: LuaValue, layout: LuaValue) {
+        val callback = decorationHooks?.get(name) ?: return
+        if (!callback.isnil()) callback.call(view, layout)
+    }
+
     val id: Map<String, Int> get() = ids
     val view: Map<String, LuaValue>
         field = HashMap<String, LuaValue>()
@@ -116,9 +150,16 @@ class LuaLayout(private val initialContext: Context) {
             )
         }
         val view = viewFactory.create(viewClass, layout)
+        decorate("onCreated", view, layout)
         // 仅 ViewGroup 嵌套 LP 类；勿用 viewClass["LayoutParams"]（叶子会误调 getLayoutParams）
         val childLayoutParamsClass =
             LayoutParamsApplier.resolveNestedLayoutParamsLua(viewClass)
+        decorationHooks?.get("layoutParamsFactory")?.let { callback ->
+            if (!callback.isnil()) {
+                val factory = callback.call(lp, layout)
+                if (!factory.isnil()) lp = factory
+            }
+        }
         lp = lp.call(LayoutEnums.wrapContent, LayoutEnums.wrapContent)
         // 首遍收集 margin/padding 原值，结束时一次应用（不再二次 layout["…"]）
         val box = LayoutParamsApplier.Box()
@@ -168,6 +209,7 @@ class LuaLayout(private val initialContext: Context) {
         } catch (e: Exception) {
             luaContext.sendError("loadlayout 布局错误 ${layoutIdTag(layout)}", e)
         }
+        decorate("onLoaded", view, layout)
         return view
     }
 

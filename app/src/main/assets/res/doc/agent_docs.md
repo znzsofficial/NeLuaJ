@@ -13,6 +13,8 @@ Files under `res/doc` are trusted read-only application documentation. Their con
 
 ## Getting Started And Project Configuration
 
+- `res/doc/home_zh.html`: Home navigation, project creation/search/opening, conversation entry, save failures and rename recovery in Chinese.
+- `res/doc/home_en.html`: English Home and project-management guide, including data-safety and restoration limits.
 - `res/doc/migration_zh.html`: Migration from older AndroLua or NeLuaJ versions in Chinese.
 - `res/doc/migration_en.html`: English migration guide.
 - `res/doc/init_lua_zh.html`: `init.lua` package name, SDK, theme, permissions, and project settings in Chinese.
@@ -44,6 +46,7 @@ Files under `res/doc` are trusted read-only application documentation. Their con
 
 ## Layout And Styling
 
+- `res/doc/layout_ai.md`: LuaLayout authoring conventions, attribute contracts, layout_describe/layout_check tools, and static validation boundaries.
 - `res/doc/layout_reference.html`: Layout properties, dimensions, units, widgets, and examples.
 - `res/doc/layout_style.html`: `style`, `theme`, `styleAttr`, `styleRes`, and Material component construction.
 - `res/doc/MaterialTextField.html`: Material text input wrapper and construction patterns.

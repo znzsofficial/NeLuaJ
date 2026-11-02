@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="doc.css" />
+    <script src="doc.js" defer></script>
+    <title>Home and project management</title>
+  </head>
+  <body>
+    <main class="markdown-export">
+      <h1>Home and project management</h1>
+      <p>Home has four destinations: Projects, Chats, Help and Settings. Opening a project enters a separate editor workspace. Compact windows use bottom navigation; wider windows use a rail with the same destinations.</p>
+
+      <h2>Create or continue a project</h2>
+      <ol>
+        <li>Choose Create Project, enter the app and package names, and select the template and options.</li>
+        <li>With Open after creation enabled, the editor opens the new project's <code>main.lua</code>. Otherwise, you stay on Home.</li>
+        <li>Opening an existing project attempts to restore its tabs, active file and cursor instead of always opening <code>main.lua</code>.</li>
+      </ol>
+      <p>Recently opened uses actual open history, not directory modification time. Search matches app names, folder names and package names; clearing it restores the full list.</p>
+
+      <h2>Open an existing folder</h2>
+      <p>Open project folder accepts the full path of a readable folder and opens it directly. It does not copy or overwrite projects and is not a ZIP importer. Extract downloaded archives to an accessible directory first.</p>
+      <p>Successful creation does not guarantee the subsequent navigation succeeded. If opening fails, check the destination, files and file access before creating another project with the same name.</p>
+
+      <h2>Permissions, empty lists and read failures</h2>
+      <ul>
+        <li>Use Grant file access to open system authorization. Returning after granting access in Settings allows the app to refresh.</li>
+        <li>For a read failure or invalid project-root folder, check the location and retry. Previously loaded results may remain visible; that does not mean the latest read succeeded.</li>
+        <li>No projects means a successful read found none. No matching projects only describes the current search.</li>
+      </ul>
+
+      <h2>Start an AI conversation</h2>
+      <p>Choose New conversation on Chats, select a project, and enter its editor AI panel. Create a project first if none is available. See the <a class="doc-link" href="agent_en.html">built-in AI Agent guide</a> for model setup.</p>
+      <p>The Home list reads conversation metadata; opening a conversation loads its messages. A deleted project or missing conversation is not silently replaced by another project. Failed navigation can be retried or dismissed; retained requests can also be retried from the editor's More menu.</p>
+
+      <h2>Leave safely after a save failure</h2>
+      <p>Back closes the file drawer or search first, then checks saving. A failure keeps edits in the current buffer and offers Retry or Cancel. Discard requires a second confirmation. Menu exit uses the same guard.</p>
+      <p><strong>There is no automatic unsaved-draft recovery guarantee.</strong> Workspace state stores paths, tabs and cursors, not unsaved text. Pre-overwrite backups are not copies of the current buffer. See <a class="doc-link" href="backup_crash.html">backups and crash logs</a> (Chinese). Save successfully before the process can be reclaimed.</p>
+
+      <h2>Rename and recover a project</h2>
+      <ul>
+        <li>Close related editors first so tabs and autosave cannot keep writing old paths. The conservative occupancy check may also block renaming while another editor remains alive.</li>
+        <li>Renaming reassociates workspace, conversations, recent history and root Agent storage, then moves the directory last. Journals and source snapshots are retained on failure; this is not a transaction across all files.</li>
+        <li>If Home reports an incomplete rename, close editors and explicitly retry. Recovery may briefly pause the app. Do not manually delete source data, journals or backups.</li>
+        <li>Absolute paths in old file-change undo history are not rewritten, so replay after renaming is not guaranteed. Occupancy detection is not a complete multi-window or cross-process lock.</li>
+      </ul>
+
+      <h2>Settings and window changes</h2>
+      <p>The editor's tablet preference temporarily falls back to a drawer in compact split-screen windows, then restores columns when widened without changing the preference. Theme changes recreate pages. Tab, search and list restoration mechanisms exist, but process-death and window behavior still need device-specific verification.</p>
+
+      <h2>Next steps</h2>
+      <ul>
+        <li><a class="doc-link" href="init_lua_en.html">Project configuration with init.lua</a></li>
+        <li><a class="doc-link" href="module_loadlayout.html">Lua layout tables and loadlayout</a> (Chinese)</li>
+        <li><a class="doc-link" href="migration_en.html">Migrate older projects</a></li>
+        <li><a class="doc-link" href="home_zh.html">中文指南</a></li>
+      </ul>
+    </main>
+  </body>
+</html>

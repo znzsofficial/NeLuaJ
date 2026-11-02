@@ -13,8 +13,8 @@ import "android.widget.LinearLayout"
 import "android.widget.FrameLayout"
 import "android.widget.SeekBar"
 import "android.widget.ScrollView"
-import "android.widget.CheckBox"
-import "android.widget.Button"
+import "com.google.android.material.checkbox.MaterialCheckBox"
+import "androidx.appcompat.widget.AppCompatImageButton"
 import "android.graphics.Bitmap"
 import "android.graphics.Canvas"
 import "android.graphics.Paint"
@@ -27,6 +27,12 @@ local ColorUtil = this.themeUtil
 local onSurfaceColor = ColorUtil.getColorOnSurface()
 local onSurfaceVarColor = ColorUtil.getColorOnSurfaceVariant()
 local primaryColor = ColorUtil.getColorPrimary()
+local orderButtonBackground
+do
+    local attrs = activity.obtainStyledAttributes({ android.R.attr.selectableItemBackgroundBorderless })
+    orderButtonBackground = attrs.getResourceId(0, 0)
+    attrs.recycle()
+end
 
 function _M.apply()
 local function sliderRow(label, seekId, valueId)
@@ -122,7 +128,7 @@ local input = {
             layout_width = "fill",
             layout_height = "wrap",
             layout_marginTop = "12dp",
-            textSize = "16dp",
+            textSize = "16sp",
             hint = "#[aa]rrggbb",
             tintColor = primaryColor,
             style = MDC_R.style.Widget_Material3_TextInputLayout_OutlinedBox,
@@ -146,7 +152,7 @@ local input_package = {
         MaterialTextField,
         layout_width = "fill",
         layout_height = "wrap",
-        textSize = "16dp",
+        textSize = "16sp",
         hint = res.string.package_name,
         tintColor = ColorUtil.getColorPrimary(),
         style = MDC_R.style.Widget_Material3_TextInputLayout_OutlinedBox,
@@ -169,7 +175,7 @@ local input_symbol_bar = {
         MaterialTextField,
         layout_width = "fill",
         layout_height = "wrap",
-        textSize = "14dp",
+        textSize = "14sp",
         hint = res.string.symbol_bar_hint,
         tintColor = ColorUtil.getColorPrimary(),
         style = MDC_R.style.Widget_Material3_TextInputLayout_OutlinedBox,
@@ -834,13 +840,14 @@ FunctionBarItem.onClick = function()
         order[i], order[j] = order[j], order[i]
     end
 
-    local function rebuildList()
+    local function rebuildList(focusId, focusAction)
         if not listHost then return end
         listHost.removeAllViews()
         for i, id in ipairs(order) do
             local idx = i
             local itemId = id
-            listHost.addView(loadlayout({
+            local rowViews = {}
+            local row = loadlayout({
                 LinearLayout,
                 orientation = "horizontal",
                 layout_width = "match",
@@ -849,53 +856,69 @@ FunctionBarItem.onClick = function()
                 paddingTop = "4dp",
                 paddingBottom = "4dp",
                 {
-                    CheckBox,
-                    layout_width = "wrap",
+                    MaterialCheckBox,
+                    id = "enabled",
+                    text = titleOf[itemId] or itemId,
+                    textSize = "15sp",
+                    textColor = onSurfaceColor,
+                    layout_width = "0dp",
+                    layout_weight = 1,
                     layout_height = "wrap",
+                    minHeight = "48dp",
                     checked = selected[itemId] == true,
                     onClick = function(v)
                         selected[itemId] = v.isChecked()
                     end,
                 },
                 {
-                    MaterialTextView,
-                    text = titleOf[itemId] or itemId,
-                    textSize = "15sp",
-                    textColor = onSurfaceColor,
-                    layout_width = "0dp",
-                    layout_weight = 1,
-                    paddingLeft = "4dp",
-                    paddingRight = "4dp",
-                },
-                {
-                    Button,
-                    text = "↑",
-                    layout_width = "40dp",
-                    layout_height = "40dp",
-                    minWidth = 0,
-                    minHeight = 0,
+                    AppCompatImageButton,
+                    id = "up",
+                    enabled = idx > 1,
+                    src = res.drawable("s_up", primaryColor),
+                    contentDescription = string.format(res.string.function_bar_move_up, titleOf[itemId] or itemId),
+                    backgroundResource = orderButtonBackground,
+                    padding = "12dp",
+                    layout_marginLeft = "8dp",
+                    layout_width = "48dp",
+                    layout_height = "48dp",
                     onClick = function()
                         if idx > 1 then
                             swap(idx, idx - 1)
-                            rebuildList()
+                            rebuildList(itemId, "up")
                         end
                     end,
                 },
                 {
-                    Button,
-                    text = "↓",
-                    layout_width = "40dp",
-                    layout_height = "40dp",
-                    minWidth = 0,
-                    minHeight = 0,
+                    AppCompatImageButton,
+                    id = "down",
+                    enabled = idx < #order,
+                    src = res.drawable("s_down", primaryColor),
+                    contentDescription = string.format(res.string.function_bar_move_down, titleOf[itemId] or itemId),
+                    backgroundResource = orderButtonBackground,
+                    padding = "12dp",
+                    layout_marginLeft = "8dp",
+                    layout_width = "48dp",
+                    layout_height = "48dp",
                     onClick = function()
                         if idx < #order then
                             swap(idx, idx + 1)
-                            rebuildList()
+                            rebuildList(itemId, "down")
                         end
                     end,
                 },
-            }))
+            }, rowViews)
+            listHost.addView(row)
+            if itemId == focusId then
+                local target = rowViews[focusAction] or rowViews.enabled
+                if (focusAction == "up" and idx == 1) or (focusAction == "down" and idx == #order) then
+                    target = rowViews.enabled
+                end
+                target.post(function()
+                    target.requestFocus()
+                    -- Rebuilt controls must retain TalkBack focus as well as keyboard focus.
+                    target.performAccessibilityAction(64, nil)
+                end)
+            end
         end
     end
 
@@ -965,9 +988,7 @@ end
 -- ── 平板模式 ──
 local function isLargeScreenDevice()
     local ok, large = pcall(function()
-        local dm = this.getResources().getDisplayMetrics()
-        local sw = math.min(dm.widthPixels, dm.heightPixels) / dm.density
-        return sw >= 600
+        return require("activities.main.TabletMode").isLargeScreen()
     end)
     return ok and large
 end
@@ -1362,6 +1383,17 @@ CopyrightItem.onClick = function()
         .setMessage(res.string.copyright)
         .setPositiveButton(android.R.string.ok, nil)
         .show()
+end
+
+-- A native delegate exposes row name, switch role, checked state and click action.
+-- Hiding the visual switch only with focusable=false does not remove its TalkBack node.
+local SettingsAccessibility = luajava.bindClass "com.nekolaska.widget.SettingsAccessibility"
+for _, id in ipairs({
+    "TabletModeItem", "SymbolBarTwoRowsItem", "EditorMagnifierItem",
+    "EditorWordWrapItem", "EditorWhitespaceItem", "EditorActionModeCommentItem",
+    "CodeMinimapItem", "EditorCustomCaretItem",
+}) do
+    SettingsAccessibility.bindSwitch(_G[id], _G[id .. "Switch"])
 end
 end
 

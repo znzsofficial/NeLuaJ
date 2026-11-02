@@ -9,31 +9,14 @@ local LuaKV = require "mods.utils.LuaKV"
 local TabUtil = require "mods.utils.TabUtil"
 local EditorUtil = require "mods.utils.EditorUtil"
 local Session = require "mods.editor.EditorSession"
+local ProjectContext = require "mods.project.ProjectContext"
 
 local _M = {}
 
-local function normalize(dir)
-    return tostring(dir or ""):gsub("/+$", "")
-end
-
---- 工程目录 → 工作区键（Projects 根下的第一级工程目录）；非工程目录返回 nil
-local function projectKeyOf(dir)
-    dir = normalize(dir)
-    local root = normalize(Bean and Bean.Path and Bean.Path.app_root_pro_dir or "")
-    if dir == "" or root == "" or dir == root then return nil end
-    -- 必须是 root 后紧跟 /，避免 Projects 误匹配 ProjectsBackup
-    if dir:sub(1, #root) ~= root then return nil end
-    local rest = dir:sub(#root + 1)
-    if rest:sub(1, 1) ~= "/" then return nil end
-    local project = rest:match("^/([^/]+)")
-    if not project or project == "" then return nil end
-    return root .. "/" .. project
-end
+local normalize = ProjectContext.normalize
 
 local function underProject(path, key)
-    if path == "" or not key or key == "" then return false end
-    local prefix = key .. "/"
-    return path:sub(1, #prefix) == prefix
+    return key ~= nil and path ~= key and ProjectContext.contains(path, key)
 end
 
 local function editorContext()
@@ -79,28 +62,38 @@ end
 --- 保存指定工程目录的工作区（缺省 = 当前 this_dir）；非工程目录/非编辑器环境返回 false
 function _M.saveFor(dir)
     if not editorContext() then return false end
-    local key = projectKeyOf(dir or Bean.Path.this_dir)
+    local key = ProjectContext.projectKeyOf(dir or ProjectContext.snapshot().directory)
     if not key then return false end
-    return LuaKV.set("workspace", key, collect(key))
+    local saved = LuaKV.set("workspace", key, collect(key))
+    if not saved then return false, "workspace write failed: " .. key end
+    return true
 end
 
 --- 恢复当前 this_dir 工程的工作区：加回文件标签、选中活动文件并恢复光标。
 --- 返回是否发生了恢复。
 function _M.restoreCurrent()
     if not editorContext() then return false end
-    local key = projectKeyOf(Bean.Path.this_dir)
+    local key = ProjectContext.snapshot().projectRoot
     if not key then return false end
     local ws = LuaKV.get("workspace", key)
     if type(ws) ~= "table" then return false end
 
     local active = normalize(ws.active or "")
+    if not underProject(active, key) then active = "" end
     local restored = false
-    if type(ws.cursors) == "table" then Session.importCursors(ws.cursors) end
+    if type(ws.cursors) == "table" then
+        local cursors = {}
+        for path, position in pairs(ws.cursors) do
+            path = normalize(path)
+            if underProject(path, key) then cursors[path] = position end
+        end
+        Session.importCursors(cursors)
+    end
 
     -- 非活动文件只挂标签，不读进唯一的缓冲区。
     for _, p in ipairs(ws.tabs or {}) do
         p = normalize(p)
-        if p ~= "" and p ~= active and File(p).isFile() then
+        if underProject(p, key) and p ~= active and File(p).isFile() then
             TabUtil.add(p, { select = false })
             restored = true
         end

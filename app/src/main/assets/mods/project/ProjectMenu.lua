@@ -108,6 +108,63 @@ local function isProjectRoot(path)
   return name ~= "" and not name:find("/", 1, true) and not name:find("\\", 1, true)
 end
 
+--- UI-thread entry point shared with tests. Tab handlers capture original paths;
+--- without a complete binding rebuild an active project must NOT be renamed.
+function _M.checkRenameAllowed(oldPath)
+  local lookupOK, editor = pcall(function()
+    return luajava.bindClass("com.androlua.LuaActivity").getActivity("MainActivity")
+  end)
+  if not lookupOK then
+    return false, { stage = "editor", error = "project_in_use", path = oldPath, completed = false }
+  end
+  if editor ~= nil then
+    local checked, alive, same = pcall(function()
+      local live = not editor.isFinishing() and not editor.isDestroyed()
+      return live, editor == activity or (activity ~= nil and editor.equals(activity))
+    end)
+    -- Never inspect another Activity's Globals; its relationship to this project
+    -- cannot be established safely. Reject conservatively on the UI thread.
+    if not checked or (alive and not same) then
+      return false, { stage = "editor", error = "project_in_use", path = oldPath, completed = false }
+    end
+  end
+  local Context = require "mods.project.ProjectContext"
+  local snapshot = Context.snapshot()
+  -- Bean's current-file reference may also be visible from a non-editor host.
+  if Context.contains(snapshot.file, oldPath) then
+    return false, { stage = "editor", error = "project_in_use", path = oldPath, completed = false }
+  end
+  if mLuaEditor ~= nil then
+    local EditorUtil = require "mods.utils.EditorUtil"
+    local current = EditorUtil.currentFile()
+    local referenced = Context.contains(current, oldPath) or Context.contains(snapshot.directory, oldPath)
+    for tabPath in pairs(require("mods.utils.TabUtil").Table or {}) do
+      if Context.contains(tabPath, oldPath) then referenced = true; break end
+    end
+    if referenced then
+      return false, { stage = "editor", error = "project_in_use", path = oldPath, completed = false }
+    end
+  end
+  return true
+end
+
+function _M.renameProject(oldPath, newPath)
+  local allowed, detail = _M.checkRenameAllowed(oldPath)
+  if not allowed then return false, detail end
+  return require("mods.project.ProjectPersistence").rename(oldPath, newPath)
+end
+
+--- Explicit synchronous UI-thread Retry, not a background scan side effect.
+function _M.resumePendingRename()
+  local Persistence = require "mods.project.ProjectPersistence"
+  local pending, err = Persistence.pendingRename()
+  if err then return false, err end
+  if not pending then return true, { stage = "none", completed = false } end
+  local allowed, detail = _M.checkRenameAllowed(pending.oldPath)
+  if not allowed then return false, detail end
+  return Persistence.resumePending()
+end
+
 --- @param host table|nil snack/open/openSettings/openInit/run/beforeRename/afterRename/delete/refresh/parentDir
 function _M.show(path, name, host)
   host = host or {}
@@ -268,19 +325,26 @@ function _M.show(path, name, host)
           snack(res.string.rename_fail)
           return
         end
-        local result = tostring(LuaFileUtil.renameWithin(path, text) or "failed")
-        if result == "same" then return end
-        if result == "exists" then
+        if new_path == path then return end
+        if host.beforeRename then host.beforeRename(path, new_path) end
+        local called, renamed, detail = pcall(function()
+          return _M.renameProject(path, new_path)
+        end)
+        if called and not renamed and detail and detail.error == "exists" then
           snack(res.string.have_same_name)
+          if host.renameFailed then host.renameFailed(detail) end
           return
         end
-        if result ~= "ok" then
-          snack(res.string.rename_fail)
-          if host.renameFailed then host.renameFailed() end
+        if not called or not renamed then
+          snack(called and detail and detail.error == "project_in_use"
+            and (res.string.project_rename_close_editor or res.string.rename_fail) or res.string.rename_fail)
+          if host.renameFailed then host.renameFailed(called and detail or { stage = "exception", error = tostring(renamed) }) end
+          -- Directory may already have moved; expose the exact partial result.
+          if called and detail and detail.path == new_path and host.refresh then host.refresh() end
           return
         end
-        if host.beforeRename then host.beforeRename() end
-        notifyChanged()
+        if host.afterRename then host.afterRename(path, new_path, detail)
+        else notifyChanged() end
       end)
       .setNegativeButton(android.R.string.cancel, nil)
       .show()

@@ -91,21 +91,38 @@ local function removed(path)
 end
 
 local function readOnce(path)
-  local ok, h = pcall(io.open, path, "rb")
-  if not ok or not h then return nil end
+  local ok, h, err, code = pcall(io.open, path, "rb")
+  if not ok then err, h = h, nil end
+  if not h then
+    local text = tostring(err or ""):lower()
+    local missing = code == 2 or text:find("no such file", 1, true)
+      or text:find("cannot find", 1, true) or text:find("not found", 1, true)
+    if not missing and luajava and luajava.bindClass then
+      local checked, exists = pcall(function() return luajava.bindClass("java.io.File")(path).exists() end)
+      if not checked and luajava.newInstance then
+        checked, exists = pcall(function()
+          local file = luajava.newInstance("java.io.File", path)
+          return file.exists()
+        end)
+      end
+      if checked and exists == false then missing = true end
+    end
+    return nil, missing and "missing" or "read_failed"
+  end
   local okRead, content = pcall(function() return h:read("*a") end)
   closeQuietly(h)
-  if not okRead or content == nil or content == "" then return nil end
+  if not okRead or content == nil then return nil, "read_failed" end
+  if content == "" then return nil, "empty" end
   return content
 end
 
 --- 原子读：文件缺失、为空或读失败返回 nil。
 --- 正式文件不在、但 .bak 还在时，说明上次替换被打断，读备份并尽量放回原位。
 function _M.read(path)
-  local content = readOnce(path)
+  local content, err = readOnce(path)
   if content then return content end
   local backup = readOnce(path .. ".bak")
-  if not backup then return nil end
+  if not backup then return nil, err end
   renamed(path .. ".bak", path)
   return backup
 end
@@ -164,6 +181,21 @@ function _M.get(ns, key, fallback)
   if not content then return fallback end
   local ok, decoded = pcall(decodeValue, content)
   if not ok or type(decoded) ~= "table" then return fallback end
+  return decoded.v
+end
+
+--- Read-only inspection: unlike read/get this never restores a .bak by rename.
+--- Returns value, nil on success, or fallback, missing/corrupt/read_failed/empty.
+function _M.peek(ns, key, fallback)
+  local path = keyPath(ns, key)
+  local content, err = readOnce(path)
+  if not content then
+    local backup, backupError = readOnce(path .. ".bak")
+    content = backup
+    if not content then return fallback, err == "missing" and backupError or err end
+  end
+  local ok, decoded = pcall(decodeValue, content)
+  if not ok or type(decoded) ~= "table" then return fallback, "corrupt" end
   return decoded.v
 end
 

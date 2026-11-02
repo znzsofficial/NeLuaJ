@@ -22,6 +22,7 @@ local DialogInterface = luajava.bindClass("android.content.DialogInterface")
 import "androidx.core.graphics.ColorUtils"
 
 local AgentChat = require("mods.agent.AgentChat")
+local ToolRegistry = require("mods.agent.ToolRegistry")
 local Session = require("mods.agent.SessionState")
 local AgentTurn = require("mods.agent.AgentTurn")
 local MCPClient = require("mods.agent.MCPClient")
@@ -152,29 +153,7 @@ local function isToolError(toolName, result)
 end
 
 local function toolDisplayName(name)
-  local labels = {
-    create_file = S.ai_create_file,
-    create_folder = S.ai_create_folder,
-    delete_file = S.ai_delete_file,
-    delete_folder = S.ai_delete_folder,
-    apply_patch = S.ai_apply_patch,
-    replace_in_file = S.ai_replace_text,
-    run_lua = S.ai_run_code,
-    append_file = S.ai_append_file,
-    rename_file = S.ai_rename_file,
-    read_file = S.ai_tool_read_file,
-    read_files = S.ai_tool_read_files,
-    list_dir = S.ai_tool_list_dir,
-    search_in_files = S.ai_tool_search,
-    get_env_info = S.ai_tool_env,
-    check_lua_syntax = S.ai_tool_check_syntax,
-    fetch_url = S.ai_tool_fetch_url,
-    run_project = S.run_project,
-    build_project = S.build_project,
-    update_todos = S.ai_tool_todo,
-    run_subtask = S.ai_tool_subtask,
-  }
-  return labels[name] or tostring(name or "")
+  return ToolRegistry.displayName(name, S)
 end
 
 --- 智能滚动：仅当用户停留在底部附近时自动跟随；回看历史时不再打扰，

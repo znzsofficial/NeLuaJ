@@ -5,8 +5,6 @@
 import "java.io.File"
 import "com.google.android.material.dialog.MaterialAlertDialogBuilder"
 local ProjectTheme = require "mods.utils.ProjectTheme"
-local PathManager = require "mods.utils.PathManager"
-local EditorUtil = require "mods.utils.EditorUtil"
 local res = res
 
 local _M = {}
@@ -205,23 +203,18 @@ local function writeScaffold(base_path, appname, packagename, themeName, useSamp
     "",
   }, "\n")
 
-  LuaFileUtil
-    .create(base_path .. "/main.lua", mainTpl)
-    .create(base_path .. "/init.lua", initBody)
-    .create(base_path .. "/res/string/init.lua", stringInit)
-    .create(base_path .. "/res/string/en.lua", stringEn)
-    .create(base_path .. "/res/string/zh.lua", stringZh)
-    .create(base_path .. "/res/string/default.lua", 'return "zh"\n')
-    .create(base_path .. "/res/plurals/init.lua", "-- plurals\n")
-    .create(base_path .. "/res/plurals/en.lua", "-- English\n")
-    .create(base_path .. "/res/plurals/zh.lua", "-- Chinese\n")
-    .create(base_path .. "/res/dimen/init.lua", "-- dimensions\n")
-    .create(base_path .. "/res/dimen/land.lua", "-- landscape\n")
-    .create(base_path .. "/res/dimen/port.lua", "-- portrait\n")
-    .create(base_path .. "/res/color/init.lua", "-- colors\n")
-    .create(base_path .. "/res/color/day.lua", "-- day\n")
-    .create(base_path .. "/res/color/night.lua", "-- night\n")
-    .create(base_path .. "/res/layout/main.lua", layoutTpl)
+  -- Kotlin create() returns Unit, not LuaFileUtil: do not chain the writes.
+  local files = {
+    { "/main.lua", mainTpl }, { "/init.lua", initBody },
+    { "/res/string/init.lua", stringInit }, { "/res/string/en.lua", stringEn },
+    { "/res/string/zh.lua", stringZh }, { "/res/string/default.lua", 'return "zh"\n' },
+    { "/res/plurals/init.lua", "-- plurals\n" }, { "/res/plurals/en.lua", "-- English\n" },
+    { "/res/plurals/zh.lua", "-- Chinese\n" }, { "/res/dimen/init.lua", "-- dimensions\n" },
+    { "/res/dimen/land.lua", "-- landscape\n" }, { "/res/dimen/port.lua", "-- portrait\n" },
+    { "/res/color/init.lua", "-- colors\n" }, { "/res/color/day.lua", "-- day\n" },
+    { "/res/color/night.lua", "-- night\n" }, { "/res/layout/main.lua", layoutTpl },
+  }
+  for _, entry in ipairs(files) do LuaFileUtil.create(base_path .. entry[1], entry[2]) end
 end
 
 --- @param deps { snack: function } 主界面 snack 等
@@ -306,24 +299,42 @@ function _M.show(deps)
       pcall(function() debugMode = binding.project_debug_mode.isChecked() end)
       local themeName = selectedTheme(binding)
 
-      writeScaffold(base_path, appname, packagename, themeName, useSample, useInternet, debugMode, binding)
+      local wrote, writeError = pcall(writeScaffold, base_path, appname, packagename, themeName, useSample, useInternet, debugMode, binding)
+      if not wrote then
+        snack(res.string.project_create_failed .. ": " .. tostring(writeError))
+        return
+      end
 
       dialog.dismiss()
       snack(res.string.create_success .. ": " .. appname)
-      -- 首页等非编辑器环境：创建完成后回调（刷新列表/直接打开），编辑器环境不传
-      if deps.onCreated then pcall(deps.onCreated, base_path) end
+      -- Notification is independent of optional navigation; do not silently use editor globals on home.
+      if deps.onCreated then
+        local notified, err = pcall(deps.onCreated, base_path, openAfter)
+        if not notified then snack(tostring(err)) end
+      end
       pcall(function() MainActivity.RecyclerView.update() end)
 
       if openAfter then
-        pcall(function()
-          PathManager.updateDir(base_path)
-          filetab.setPath(base_path)
-          MainActivity.RecyclerView.update()
-          if File(base_path .. "/main.lua").isFile() then
-            EditorUtil.fromRecy = true
-            EditorUtil.load(base_path .. "/main.lua")
-          end
-        end)
+        local opened, result
+        if deps.openProject then
+          opened, result = pcall(deps.openProject, base_path)
+        else
+          opened, result = pcall(function()
+            local PathManager = require "mods.utils.PathManager"
+            local EditorUtil = require "mods.utils.EditorUtil"
+            PathManager.updateDir(base_path)
+            filetab.setPath(base_path)
+            MainActivity.RecyclerView.update()
+            if File(base_path .. "/main.lua").isFile() then
+              EditorUtil.fromRecy = true
+              EditorUtil.load(base_path .. "/main.lua")
+            end
+            return true
+          end)
+        end
+        if not opened or result == false then
+          snack(res.string.home_open_failed .. (not opened and (": " .. tostring(result)) or ""))
+        end
       end
     end
   end)

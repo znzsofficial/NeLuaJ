@@ -98,8 +98,9 @@ function _M.buildRow(conv, projectName, onOpen, onLongPress)
           text = table.concat(metaParts, " · "),
           textSize = "12sp",
           textColor = ColorText,
-          singleLine = true,
-          ellipsize = "end",
+          layout_width = "match",
+          layout_height = "wrap",
+          singleLine = false,
           layout_marginTop = "2dp",
         },
       },
@@ -113,8 +114,10 @@ function _M.buildRow(conv, projectName, onOpen, onLongPress)
         visibility = conv.running and 0 or 8,
         paddingLeft = "8dp",
         paddingRight = "8dp",
+        paddingTop = "4dp",
+        paddingBottom = "4dp",
         layout_width = "wrap",
-        layout_height = "24dp",
+        layout_height = "wrap",
       },
     },
   }, rowViews)
@@ -150,7 +153,8 @@ end
 
 --- 渲染整个列表到 container：rows = { { conv = 记录, projectName = 路径或 nil } }，
 --- 按 updatedAt 降序排序；空列表显示占位提示。
-function _M.renderList(container, rows, onOpen, onLongPress)
+function _M.renderList(container, rows, onOpen, onLongPress, options)
+  options = options or {}
   container.removeAllViews()
   local sorted = {}
   for i, item in ipairs(rows) do
@@ -173,7 +177,7 @@ function _M.renderList(container, rows, onOpen, onLongPress)
   if #sorted == 0 then
     local ColorUtil = this.themeUtil
     local empty = MaterialTextView(activity)
-    empty.setText(S.ai_center_empty)
+    empty.setText(options.emptyText or S.ai_center_empty)
     empty.setTextSize(13)
     empty.setTextColor(ColorUtil.surface.onVariant)
     empty.setGravity(17)

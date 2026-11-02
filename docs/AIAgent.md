@@ -2,13 +2,15 @@
 
 NeLuaJ+ 的内置 AI 助手是面向当前工程的编码 Agent。当前实现同时支持 OpenAI 兼容的 Chat Completions 和 Responses 流式接口，具备工程文件工具、隔离 Lua 沙盒、公开网页读取、MCP 工具、本地 Skill、上下文压缩和文件变更撤销能力；回合状态机（`AgentTurn`）驱动工具循环（默认不限轮数，设置项 `ai_max_rounds` 可封顶），只读工具批量并行，`run_subtask` 可派生隔离子代理，`update_todos` 维护任务计划，`run_project` / `build_project` 覆盖运行与打包交接。
 
-本文描述当前代码行为。用户可见说明位于：
+本文描述当前代码行为，不是历史重构计划；文件存在不代表 Android 集成已经验收。维护约束和验证分层见 [MAINTENANCE.md](./MAINTENANCE.md)。下文 `mods/`、`res/` 相对 `app/src/main/assets/`，`com/` 相对 `app/src/main/java/`。用户可见说明位于：
 
 - `app/src/main/assets/res/doc/agent_zh.html`
 - `app/src/main/assets/res/doc/agent_en.html`
 - `app/src/main/assets/res/doc/sandbox_zh.html`
 - `app/src/main/assets/res/doc/sandbox_en.html`
 - `app/src/main/assets/res/doc/agent_docs.md`
+
+首页跨工程会话入口、安全返回、pending 导航与工程改名关联见 [HOME.md](./HOME.md)。本文聚焦 Agent 本身，不重复首页操作指南。
 
 ## 功能入口
 
@@ -24,11 +26,13 @@ NeLuaJ+ 的内置 AI 助手是面向当前工程的编码 Agent。当前实现�
 
 | 文件 | 职责 |
 |------|------|
-| `mods/agent/AgentChat.lua` | 组合根：内置系统提示词、20 个工具 schema、平台工具实现、编辑器上下文，以及各子模块依赖注入 |
+| `mods/agent/AgentChat.lua` | 组合根：内置系统提示词、工具装配、平台工具实现、编辑器上下文，以及各子模块依赖注入 |
+| `mods/agent/ToolSchemas.lua` | 内置工具 schema 入口；工具清单以源码为准，不手写工具总数 |
+| `mods/agent/ToolRegistry.lua` | 工具定义与元数据入口；`ToolSchemas` 导出兼容 schema，行为边界仍须通过执行器与回归验证 |
 | `mods/agent/AgentTurn.lua` | 回合状态机：generation 守卫、加载状态、keepalive、压缩触发、请求生命周期与工具循环；只读白名单工具组成并行批 |
 | `mods/agent/ChatUI.lua` | 聊天面板装配、流式渲染入口、确认对话框、会话/模型/MCP/设置管理入口 |
 | `mods/agent/SessionState.lua` | 当前会话工作集：消息、用量、身份、持久化保护、回合撤销/重做；不持有视图或存储 |
-| `mods/agent/McpHttpTransport.lua` / `McpSseTransport.lua` | MCP Streamable HTTP 与旧版 HTTP+SSE 请求传输；协商和缓存仍在 MCPClient |
+| `mods/agent/McpHttpTransport.lua` / `mods/agent/McpSseTransport.lua` | MCP Streamable HTTP 与旧版 HTTP+SSE 请求传输；协商和缓存仍在 MCPClient |
 | `mods/agent/AsyncScope.lua` | 异步结果归属：同时核对工程、会话和回合 |
 | `mods/agent/Contracts.lua` | UI/回合模块回调契约：检查必需项、类型和未知键；校验通过后才替换依赖 |
 | `mods/agent/BubbleRenderer.lua` | 消息、待办计划、子代理进度、工具调用气泡的构建 |
@@ -36,7 +40,7 @@ NeLuaJ+ 的内置 AI 助手是面向当前工程的编码 Agent。当前实现�
 | `mods/agent/ModelRegistry.lua` | 供应商/模型多配置注册表：增删改、当前模型指针、辅助模型按身份持久化、旧单模型配置迁移 |
 | `mods/agent/PatchEngine.lua` | 多格式补丁应用：SEARCH/REPLACE 块、Unified Diff、整文件替换 |
 | `mods/agent/ConversationStore.lua` | 会话持久化：稳定 ID、工程作用域、工程→会话映射、轻量索引 |
-| `mods/agent/ConvList.lua` / `ConvUi.lua` | 会话列表行渲染与新建/切换/重命名/删除/搜索管理界面 |
+| `mods/agent/ConvList.lua` / `mods/agent/ConvUi.lua` | 会话列表行渲染与新建/切换/重命名/删除/搜索管理界面 |
 | `mods/agent/SettingsUi.lua` | 供应商/模型/参数/AI 偏好设置对话框 |
 | `mods/agent/SubagentRunner.lua` | `run_subtask` 隔离子代理执行：独立上下文、进度实时上报、取消传播、结果截断 |
 | `mods/agent/TodoManager.lua` | `update_todos` 任务计划：校验、归一化、持久化到会话与提示词注入 |
@@ -49,7 +53,7 @@ NeLuaJ+ 的内置 AI 助手是面向当前工程的编码 Agent。当前实现�
 | `mods/agent/ChangeSet.lua` | 文件变更前后快照、fingerprint 冲突检测、事务回滚、撤销和恢复 |
 | `mods/agent/AgentStorage.lua` | 工程级 Agent 外部存储、工程哈希、锁和临时文件/备份原子写入 |
 | `mods/agent/SkillManager.lua` | 本地 `SKILL.md` 扫描、优先级合并、关键词匹配和提示词注入 |
-| `mods/agent/TextUtil.lua` | UTF-8 安全截断、token 数格式化等共享文本工具 |
+| `mods/utils/TextUtil.lua` | UTF-8 安全截断、token 数格式化等共享文本工具 |
 | `mods/utils/LuaKV.lua` | 目录型 KV 存储引擎：每键一文件、键名白名单编码；设备上经 `LuaFileUtil.replaceText` 同目录 fsync 后原子替换，桌面测试退回 tmp + `.bak` 换名。会话记录的存储底座 |
 
 ### 装配与流式状态边界
@@ -84,10 +88,10 @@ NeLuaJ+ 的内置 AI 助手是面向当前工程的编码 Agent。当前实现�
 1. 用户发送消息时，`ChatUI.sendMessage()` 先按文本匹配当前 Skill，并只持久化用户原始输入。
 2. `AgentChat.buildContext()` 为本次请求临时加入当前文件、项目路径、选中代码、最多 5000 字符的编辑器内容、可见编译错误和工程顶层文件名。该副本不会写入会话历史。
 3. `ContextManager` 加入当前系统提示词，并按模型上下文窗口构建请求历史。`assistant.tool_calls` 与紧随其后的 `tool` 结果作为不可拆分单元裁剪。
-4. 历史超预算时，较早内容会通过同一模型、禁用工具的摘要请求压缩；失败时回退到最近历史裁剪。
+4. 历史超预算时，较早内容通过禁用工具的摘要请求压缩，默认走辅助模型（未配置则回退当前主模型）；失败时回退到最近历史裁剪。
 5. `OpenAIProtocol` 合并内置工具和当前已缓存的 MCP 工具，设置 `tool_choice = "auto"`，并编码为 Chat Completions 或 Responses 请求。
 6. `AiHttpClient` 在后台读取 SSE，在主线程增量更新 UI，并汇总文本、reasoning、结构化工具调用、Responses 原始输出和 incomplete 状态。
-7. 模型返回工具调用后，assistant 消息先持久化。`AgentTurn` 将连续的只读白名单工具（`read_file`、`read_files`、`list_dir`、`search_in_files`、`check_lua_syntax`、`get_env_info`）组成并行批并发执行，其余工具按序串行；每个结果完成后立即持久化。
+7. 模型返回工具调用后，assistant 消息先持久化。`AgentTurn` 按 `ToolRegistry` 的只读/并行元数据和执行器批准结果形成批次，包含符合条件的文件读取、发现、语法检查、布局查询/检查与环境工具。串行结果逐项落盘；并行批收集后按原调用顺序统一落盘，停止时为未完成项补齐结果。
 8. 工具结果全部完成后发起下一轮模型请求。工具循环默认没有硬上限（由用户停止或模型结束调用）；可在设置中配置每回合工具轮数上限（`ai_max_rounds`），超出后回合结束并提示，子代理轮次同用此上限。
 9. 最终文本、停止状态、不完整状态、工具后空响应和请求错误都会保存到会话，以支持重开面板、继续或恢复操作。
 
@@ -119,7 +123,7 @@ name, url, key, model, responses, contextLength, maxTokens
 - `responses = true` 使用流式 `/responses`。
 - API 地址可以填写根地址或完整终端地址；端点归一化会保留 query string，并处理普通 OpenAI 兼容地址、Azure OpenAI 和 DeepSeek Responses 地址差异。
 - Azure OpenAI 和 Xiaomi MiMo（按量付费与 Token Plan）使用 `api-key` 请求头，其他端点使用 Bearer token。MiMo 的 Chat Completions 请求使用 `max_completion_tokens`，并在后续轮次保留 `reasoning_content`。Token Plan 地址包括 `token-plan-cn`、`token-plan-sgp` 和 `token-plan-ams`。MiMo 没有公开的余额接口。
-- 官方 OpenAI 的 GPT-5、o1、o3 和 o4 系列，以及 xAI 的 Grok 4、Grok 3 Mini、Grok Code，请求会省略不支持的 `temperature`。
+- 当前协议适配对名称以 `gpt-5`、`gpt-6`、`o1`、`o3`、`o4` 开头的模型省略 `temperature`（包括中转站）；xAI 的 Grok 4、Grok 3 Mini、Grok Code 也有相应处理。这是实现规则，不保证所有网关接受相同参数。
 - Grok Responses 使用 `https://api.x.ai/v1/responses`。请求带 `include: ["reasoning.encrypted_content"]`，并把完整 output 回放给同一 origin。流式解析同时接收 `response.reasoning_text.delta` 和 `response.reasoning_summary_text.delta`。
 - Chat 模式兼容 `tool_calls`、单个 `tool_call`、旧 `function_call`、部分中转服务的 completed message，以及 `reasoning` / `reasoning_content`。
 - Responses 模式处理 `response.*` 事件、输出文本、reasoning、function call 参数增量、不完整响应和完整 output 序列。
@@ -151,20 +155,21 @@ name, url, key, model, responses, contextLength, maxTokens
 | `ai_mcp_servers` | 首次写入预设 | MCP 服务器 JSON；默认预设 `context7` 和 `deepwiki` |
 | `ai_aux_provider_id` / `ai_aux_model_id` | `""` | 辅助模型（标题生成、上下文压缩、轻量子代理）按 provider + model 身份持久化；模型列表重排不影响指向，模型被删除时自动清除 |
 | `ai_max_rounds` | `"0"` | 每回合工具轮数上限；`0` = 不限制（默认）。仅计数自动工具续环，用户发送新消息即重置；超出后回合结束并提示，子代理轮次同用此上限 |
-| `ai_conversations` | SharedData 旧键（迁移源，迁移后清除） | 会话已按记录迁至 LuaKV 文件存储：`<agents 根>/kv/conversations/`，每会话一个记录文件（设备上同目录 fsync 后原子替换），`_index.json` 保存元数据索引（首页列表只读索引即可）。每条记录含 `usage`、`todos`、`seq`（稳定排序） |
+| `ai_conversations` | SharedData 旧键（迁移源，完整提交后清除） | 迁移日志固定 ID，所有记录与索引成功提交后才清旧源；失败保留旧源并允许重试。记录存于 `<agents 根>/kv/conversations/`；`_index.json` 保存元数据，每条记录含 `usage`、`todos`、`seq` |
 | `ai_current_conv_by_project` | `{}` | 工程 → 会话 ID 映射；会话列表与恢复按工程读取 |
 | `ai_current_conv_id` | `""` | 最近选择的会话 ID |
 | `ai_current_conv` | `"0"` | 旧版会话索引导入源，读取时迁移 |
 | `ai_changesets` | `""` | 旧版变更历史迁移源，迁移后清空 |
 
-模型上下文窗口最小为 1000；最大输出限制为 256–32768，并且不超过上下文窗口减 500。
+模型上下文窗口最小为 1000；最大输出配置范围为 256–1048576，并且不超过上下文窗口减 500。配置上限不等于模型或供应商的实际可用输出上限。
 
 `ai_allow_selfsigned` 只影响模型 API 的 `AiHttpClient`。它不会放宽 `fetch_url`、沙盒 HTTPS 或 MCP 的校验。
 
 ## 内置工具
 
-当前共有 20 个内置工具：
+下表列出内置工具的规范名称；以 `ToolRegistry.lua` 中的 schema 声明为准，`ToolSchemas.lua` 保留兼容导出，MCP 动态工具不计入。`tests/check_documentation_inventory.ps1` 比较该表与静态 schema 声明，不执行应用源码，也不验证工具行为。
 
+<!-- builtin-tools:start -->
 | 类别 | 工具 |
 |------|------|
 | 读取与发现 | `read_file`、`read_files`、`list_dir`、`search_in_files` |
@@ -172,6 +177,10 @@ name, url, key, model, responses, contextLength, maxTokens
 | 语法、执行与网络 | `check_lua_syntax`、`run_lua`、`fetch_url` |
 | 工程与任务 | `run_project`、`build_project`、`run_subtask`、`update_todos` |
 | 环境 | `get_env_info` |
+| 布局查询与静态检查 | `layout_describe`、`layout_check` |
+<!-- builtin-tools:end -->
+
+`layout_check` 是有限静态分析，不执行布局源码、不创建 View，不能替代布局预览或设备验收；具体边界见 [LuaLayout.md](./LuaLayout.md)。
 
 `ToolExecutor.normalizeToolName()` 兼容 `read`、`mkdir`、`edit_file`、`run`、`fetch` 等常见别名，并可根据参数推断缺失的工具名。模型仍应使用 schema 中的规范名称。
 
@@ -191,9 +200,9 @@ name, url, key, model, responses, contextLength, maxTokens
 
 | 操作 | 默认行为 |
 |------|----------|
-| 当前工程内的读取、列目录和搜索 | 自动批准 |
+| 当前工程内的读取、列目录、搜索和 `layout_check` | 自动批准 |
 | 通过 `read_file` / `read_files` 读取内置 `res/doc` 文档 | 自动批准 |
-| `get_env_info`、`check_lua_syntax` | 自动批准 |
+| `get_env_info`、`check_lua_syntax`、`layout_describe` | 自动批准 |
 | 工程外读取、列目录或搜索 | 请求确认 |
 | 文件创建、修改、删除、移动 | 请求确认；开启 `ai_auto_approve` 后工程内变更可免确认，但**已存在目标的 `create_file`（覆盖写）仍要求确认** |
 | 不带 `network_hosts` 的 `run_lua` | 由 `ai_auto_run_sandbox` 控制，且需已读过沙盒前置文档；默认自动运行 |
@@ -298,7 +307,7 @@ Skill 只读取直接子目录中的 `SKILL.md`，不执行文件内容，也不
 
 frontmatter 支持 `name`、`description`、`triggers`、`keywords`。匹配使用不区分大小写的字面量计分：名称 +3、每个 trigger/keyword +2、description +1，同分时使用来源优先级。
 
-每次发送用户消息都会重新选择 Skill；没有匹配时清除当前 Skill。会话中的 `skills` 字段只记录使用过的名称，当前实现不会根据该字段在重开会话后自动恢复 Skill 正文。
+每次发送用户消息都会重新选择 Skill；没有匹配时清除当前 Skill。会话中的 `skills` 字段记录使用过的名称；重开会话时按名称重新查找正文，找不到的技能不恢复（不是持久化正文快照）。
 
 ## 上下文管理
 
@@ -312,7 +321,9 @@ frontmatter 支持 `name`、`description`、`triggers`、`keywords`。匹配使�
 
 ## 会话与生命周期
 
-- 会话按记录存于 `<agents 根>/kv/conversations/`（LuaKV：每会话一个记录文件。设备上由 `LuaFileUtil.replaceText` 在同目录 fsync 后原子替换，替换完成前旧内容保持原样；桌面测试退回 tmp + `.bak` 换名。读成功后 `close` 的 EIO 不丢内容，正式文件缺失时仍可读 `.bak`）。`_index.json` 保存元数据索引（首页跨工程列表只读索引，无需解析消息体），每条包含 `projectPath`；会话列表和当前选择按工程过滤。SharedData 旧 `ai_conversations` 键是迁移源，迁移成功后清除。
+- 会话按记录存于 `<agents 根>/kv/conversations/`（LuaKV：每会话一个记录文件。设备上由 `LuaFileUtil.replaceText` 在同目录 fsync 后原子替换；桌面测试退回 tmp + `.bak` 换名）。`_index.json` 保存元数据索引，每条包含 `projectPath`；会话列表和当前选择按工程过滤。
+- `loadIndex(force)` 正常读取磁盘索引，不加载消息正文；返回 `rows, error`，调用方必须区分失败与空列表。首次旧数据迁移不属于零正文读取路径。SharedData 旧源只在记录与索引完整提交后清除，部分失败保留日志与源数据；损坏索引不作为可覆盖的空数据集。
+- 工程改名通过 `ProjectPersistence` 关联会话与 Agent 根存储，原数据/日志保留；旧 ChangeSet 绝对路径不自动改写。占用门禁、显式恢复与限制见 [HOME.md](./HOME.md)。
 - 会话保存用户/assistant/tool 消息、结构化工具调用和结果、reasoning、Responses 原始 output/origin、continuation state 和请求错误。
 - 新会话默认以首条用户消息去换行后的前 30 个字符命名；首轮问答完成后由辅助模型异步生成简短标题（不超过 16 字、与对话同语言）替换默认名，生成失败时保留默认名。
 - 重开会话时按记录的 `skills` 名单恢复激活技能（`SkillManager.findByName` 重查正文；同名技能内容已变更则为新内容，找不到则不恢复）。后续发送仍按消息重新匹配。
@@ -331,6 +342,7 @@ frontmatter 支持 `name`、`description`、`triggers`、`keywords`。匹配使�
 - 执行期间以进度卡实时上报阶段（开始 / 轮次 / 工具 / 完成）；主会话的停止操作会传播取消子代理。
 - 未指定模型时默认使用主模型；可在设置中指定辅助模型供轻量子代理使用。
 - 工具历史使用可移植格式（不依赖 Responses 原生 output），结果有长度上限。
+- 当前一次只运行一个子代理，工具线程通过 CountDownLatch 等待、主线程推进步骤；不是多子代理并发调度器。超时/取消会终结句柄，旧确认与迟到结果失效。
 
 ### `update_todos`
 
@@ -349,7 +361,7 @@ frontmatter 支持 `name`、`description`、`triggers`、`keywords`。匹配使�
 ## UI 与国际化
 
 - 命令菜单支持手动压缩、聊天回合撤销/恢复、文件变更撤销/恢复、会话切换、Agent 帮助和设置。
-- Markdown 气泡支持标题、强调、删除线、列表、任务列表、引用、链接、分隔线、行内代码与表格（表格经 `MarkdownTagHandler` 渲染）；代码块使用独立卡片，可复制或手动插入编辑器。
+- Markdown 使用轻量块/行内解析，不是完整 CommonMark。表格由原生组件展示，支持行内格式、链接及分批展开，异常以完整原文降级；表格内部未虚拟化。文本通过 HTML/Spanned 渲染，代码块用独立卡片，可复制或手动插入编辑器。
 - “插入编辑器”不是模型工具，只是代码块卡片上的用户操作。
 - AI 界面文案位于 `res/string/zh.lua` 和 `res/string/en.lua` 的 `ai_*` 键，修改用户可见文本时应同步双语。
 
@@ -371,18 +383,10 @@ frontmatter 支持 `name`、`description`、`triggers`、`keywords`。匹配使�
 - `app/src/test/java/com/nekolaska/ai/AgentFetchTest.kt`
 - `app/src/test/java/com/nekolaska/ai/ResponsesStreamStateTest.kt`
 
-修改 Agent 核心逻辑、Lua 资源或工具策略后至少运行：
+修改核心逻辑、资源或策略后，按 [BUILDING.md](./BUILDING.md) 执行 Lua/JVM 测试与构建，并运行文档清单校验；需要强制重跑时再使用 Gradle 的 rerun 选项，不把过期测试输出当作本次执行结果。
 
-```powershell
-.\gradlew.bat :app:testDebugUnitTest :app:mergeDebugAssets --rerun-tasks
-```
+套件职责以 [tests/README.md](../tests/README.md) 为单一清单。重点包括工具注册/批准、回合归属/取消、模型协议、迁移失败注入、轻量索引、Markdown 解析/原生表格，以及 UI 接线替身测试。
 
-此外，纯 Lua 模块的行为测试在桌面 JVM 上运行（无需设备）：
-
-```powershell
-.\tests\run_tests.ps1
-```
-
-与 Agent 相关的套件：`TestParallel`（只读并行批与拦截规则）、`TestSubagent`（子代理执行/取消/模型路由）、`TestRegistry`（供应商与辅助模型注册表）、`TestStoreIndex`（会话存储与轻量索引）、`TestPatch`（补丁引擎）、`TestTodo`（任务计划）。方法论见 [tests/README.md](../tests/README.md)。
+这些验证分别检查 JVM 行为、资源合并和文件清单；都不证明真实模型/MCP 网络互通、Android 布局或生命周期正确。Gradle 命令应串行运行，避免多个会话同时写同一构建目录。
 
 `AgentToolExecutorVerificationTest` 还会加载关键 Lua 文件、检查文档读取批准边界、网络自动批准策略、沙盒文档前置提示和内置文档目录完整性。

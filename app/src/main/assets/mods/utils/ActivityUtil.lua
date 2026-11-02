@@ -23,6 +23,9 @@ local routes = {
 }
 
 local PENDING_KEY = "_nav_pending_v1"
+local FAILED_KEY = "_nav_pending_failed_v1"
+local sequence = 0
+local MAX_PENDING_AGE = 10 * 60
 
 function _M.route(name)
   return routes[name]
@@ -76,6 +79,16 @@ function _M.finishWith(...)
   -- 同时写入 pending，防止 for-result 链路异常时丢失
   if #args >= 1 then
     _M.setPending(args[1], args[2])
+    -- Additive identity lets MainActivity deduplicate result-after-onResume.
+    -- Existing action/payload consumers continue to receive the first two args.
+    if #args <= 2 then
+      local pending = _M.peekPending()
+      if pending and pending.action == tostring(args[1])
+          and pending.payload == tostring(args[2] or "") then
+        args[2] = args[2] or ""
+        args[3] = pending.id
+      end
+    end
   end
   pcall(function()
     this.result(args)
@@ -87,39 +100,77 @@ end
 function _M.setPending(action, payload)
   local a = tostring(action or "")
   local p = tostring(payload or "")
-  -- 单行 action + 换行 + payload（payload 可含路径）
-  pcall(function()
-    this.setSharedData(PENDING_KEY, a .. "\n" .. p)
+  if a == "" or a:find("\n", 1, true) then return false end
+  sequence = sequence + 1
+  -- Unique per request, including two requests for the very same destination.
+  local id = tostring(os.time()) .. ":" .. tostring(os.clock()) .. ":" .. tostring({}) .. ":" .. sequence
+  local raw = "\30nav2:" .. id .. "\n" .. os.time() .. "\n" .. a .. "\n" .. p
+  local ok, result = pcall(function()
+    return this.setSharedData(PENDING_KEY, raw)
   end)
-end
-
-function _M.takePending()
-  local raw
-  pcall(function()
-    raw = this.getSharedData(PENDING_KEY, nil)
-    this.setSharedData(PENDING_KEY, nil)
-  end)
-  if type(raw) ~= "string" or raw == "" then
-    return nil
-  end
-  local action, payload = raw:match("^(.-)\n(.*)$")
-  if not action then
-    action = raw
-    payload = ""
-  end
-  if action == "" then return nil end
-  return { action = action, payload = payload }
+  return ok and result ~= false
 end
 
 function _M.peekPending()
   local raw
   pcall(function() raw = this.getSharedData(PENDING_KEY, nil) end)
   if type(raw) ~= "string" or raw == "" then return nil end
-  local action, payload = raw:match("^(.-)\n(.*)$")
-  if not action then
-    return { action = raw, payload = "" }
+  local id, created, action, payload = raw:match("^\30nav2:([^\n]+)\n(%d+)\n([^\n]*)\n(.*)$")
+  if not id then
+    action, payload = raw:match("^(.-)\n(.*)$")
+    action, payload = action or raw, payload or ""
   end
-  return { action = action, payload = payload }
+  local failed
+  pcall(function() failed = this.getSharedData(FAILED_KEY, nil) end)
+  return { action = action, payload = payload, id = id or raw, token = raw,
+    expired = created ~= nil and os.time() - tonumber(created) > MAX_PENDING_AGE,
+    blocked = failed == raw }
+end
+
+-- Compare-and-ack on the UI thread: never erase a replacement posted by a callback.
+function _M.ackPending(pending)
+  if not pending or not pending.token then return false end
+  local ok, result = pcall(function()
+    if this.getSharedData(PENDING_KEY, nil) ~= pending.token then return false end
+    local written = this.setSharedData(PENDING_KEY, nil)
+    if written == false then return false end
+    if this.getSharedData(FAILED_KEY, nil) == pending.token then
+      this.setSharedData(FAILED_KEY, nil)
+    end
+    return true
+  end)
+  return ok and result == true
+end
+
+-- Callback must positively report success. Failed requests remain available for
+-- explicit retry/dismiss, but are not automatically replayed on every onResume.
+function _M.consumePending(callback, pending, retry)
+  pending = pending or _M.peekPending()
+  if not pending then return false, "missing" end
+  local current = _M.peekPending()
+  if not current or current.token ~= pending.token then return false, "replaced", pending end
+  if pending.blocked and not retry then return false, "blocked", pending end
+  local ok, result, reason
+  if pending.expired and not retry then
+    ok, result, reason = true, false, "expired"
+  else
+    ok, result, reason = pcall(callback, pending.action, pending.payload)
+  end
+  if ok and result == true then
+    if not _M.ackPending(pending) then return true, "unacknowledged", pending end
+    return true, nil, pending
+  end
+  current = _M.peekPending()
+  if current and current.token == pending.token then
+    pcall(function() this.setSharedData(FAILED_KEY, pending.token) end)
+  end
+  return false, ok and (reason or "failed") or "failed", pending
+end
+
+-- Compatibility API; new navigation must use consumePending instead.
+function _M.takePending()
+  local pending = _M.peekPending()
+  if pending and _M.ackPending(pending) then return pending end
 end
 
 function _M.showLog(context)

@@ -1,4 +1,5 @@
 local ASSETS = ASSETS or "app/src/main/assets/"
+package.preload["mods.agent.ToolRegistry"] = assert(loadfile(ASSETS .. "mods/agent/ToolRegistry.lua"))
 
 -- ConversationStore.loadIndex + getData 回退 + InitReader.readFields 行为测试
 package.preload["mods.agent.ConversationStore"] = assert(loadfile(ASSETS .. "mods/agent/ConversationStore.lua"))
@@ -9,7 +10,7 @@ local CS = assert(loadfile(ASSETS .. "mods/agent/ConversationStore.lua"))()
 local IR = assert(loadfile(ASSETS .. "mods/project/InitReader.lua"))()
 
 -- LuaKV 根指向临时目录；编解码用可往返的 Lua 序列化器（桌面无 json 全局）
-local kvRoot = ((os.getenv("TEMP") or "/tmp"):gsub("\\", "/")) .. "/test_luakv"
+local kvRoot = ((os.getenv("TEMP") or "/tmp"):gsub("\\", "/")) .. "/test_luakv_" .. tostring(os.time()) .. "_" .. tostring(math.random(1000000))
 local function kvSer(v)
   local t = type(v)
   if t == "string" then return string.format("%q", v) end
@@ -24,7 +25,7 @@ local function kvSer(v)
   return "nil"
 end
 local function kvDeser(s)
-  local f = loadstring(s)
+  local f = loadstring("return " .. s)
   return f and f()
 end
 LuaKV.configure({
@@ -157,7 +158,7 @@ os.remove(tmpPath)
 
 -- ── 6. ToolSchemas 纯数据完整性 ──
 local TS = assert(loadfile(ASSETS .. "mods/agent/ToolSchemas.lua"))()
-check("ToolSchemas has 20 tools", type(TS) == "table" and #TS == 20)
+check("ToolSchemas has 22 tools", type(TS) == "table" and #TS == 22)
 local toolNames, dup = {}, false
 for _, t in ipairs(TS) do
   local n = t["function"] and t["function"].name
@@ -169,7 +170,7 @@ check("ToolSchemas includes project/task tools",
   toolNames.run_subtask and toolNames.update_todos and toolNames.build_project and toolNames.run_project)
 
 -- ── 7. LuaKV：读写/删除/键名编码 ──
-local kvTestRoot = ((os.getenv("TEMP") or "/tmp"):gsub("\\", "/")) .. "/test_luakv_unit"
+local kvTestRoot = kvRoot .. "_unit"
 LuaKV.configure({ root = function() return kvTestRoot end, encode = kvSer, decode = kvDeser })
 check("kv set/get string", (function()
   LuaKV.set("ns", "k1", "hello")
@@ -248,9 +249,28 @@ check("kv read survives close EIO", (function()
   io.open = realOpen
   return ok and content == "kept"
 end)())
+check("kv missing-file fallback preserves Java dot-call convention", (function()
+  local realOpen, realBridge = io.open, luajava
+  local calls = 0
+  io.open = function() return nil, "unclassified read error" end
+  luajava = {
+    bindClass = function() error("constructor unavailable") end,
+    newInstance = function(className, path)
+      assert(className == "java.io.File" and type(path) == "string")
+      return { exists = function(...)
+        assert(select("#", ...) == 0, "Java method must not receive a Lua self argument")
+        calls = calls + 1
+        return false
+      end }
+    end,
+  }
+  local ok, content, err = pcall(LuaKV.read, "missing-fallback")
+  io.open, luajava = realOpen, realBridge
+  return ok and content == nil and err == "missing" and calls == 2
+end)())
 
 -- ── 8. 旧整包 → 按记录 KV 迁移（独立根 + 独立 Store 实例）──
-local legacyRoot = ((os.getenv("TEMP") or "/tmp"):gsub("\\", "/")) .. "/test_conv_legacy_kv"
+local legacyRoot = kvRoot .. "_legacy"
 LuaKV.configure({ root = function() return legacyRoot end, encode = kvSer, decode = kvDeser })
 local legacyShared = {}
 local CS2 = assert(loadfile(ASSETS .. "mods/agent/ConversationStore.lua"))()

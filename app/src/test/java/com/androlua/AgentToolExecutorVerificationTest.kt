@@ -12,10 +12,16 @@ class AgentToolExecutorVerificationTest {
         val assets = sequenceOf(File("src/main/assets"), File("app/src/main/assets"))
             .first { it.isDirectory }
         val source = File(assets, "mods/agent/AgentChat.lua").readText()
-        val schemas = File(assets, "mods/agent/ToolSchemas.lua").readText()
+        val globals = JsePlatform.standardGlobals()
+        globals.get("package").get("loaded").set("mods.agent.ToolRegistry", globals.load(
+            File(assets, "mods/agent/ToolRegistry.lua").readText(), "@ToolRegistry.lua"
+        ).call())
+        val schemas = globals.load(
+            File(assets, "mods/agent/ToolSchemas.lua").readText(), "@ToolSchemas.lua"
+        ).call()
         val systemPrompt = source.substringBefore("function _M.getSystemPrompt")
-        val runLuaTool = schemas.substringAfter("name = \"run_lua\"")
-            .substringBefore("name = \"fetch_url\"")
+        val runLuaTool = (1..schemas.length()).map { schemas.get(it).get("function") }
+            .first { it.get("name").tojstring() == "run_lua" }.get("description").tojstring()
 
         for (section in listOf(systemPrompt, runLuaTool)) {
             assertTrue(section.contains("read_file"))
@@ -31,6 +37,9 @@ class AgentToolExecutorVerificationTest {
         val assets = sequenceOf(File("src/main/assets"), File("app/src/main/assets"))
             .first { it.isDirectory }
         val globals = JsePlatform.standardGlobals()
+        globals.get("package").get("loaded").set("mods.agent.ToolRegistry", globals.load(
+            File(assets, "mods/agent/ToolRegistry.lua").readText(), "@ToolRegistry.lua"
+        ).call())
         val toolExecutor = globals.load(
             File(assets, "mods/agent/ToolExecutor.lua").readText(),
             "@ToolExecutor.lua"

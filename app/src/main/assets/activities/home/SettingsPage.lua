@@ -58,6 +58,12 @@ function _M.refresh()
   -- 设置项静态，无需动态刷新
 end
 
+function _M.dispose()
+  -- A restored/re-created fragment must inflate fresh controls and wire the new Views.
+  built = nil
+  wiringApplied = false
+end
+
 function _M.build()
   if built then return built end
   -- 根布局表（含 ScrollView）直接加载；id 落在本环境全局供接线使用

@@ -2,14 +2,41 @@ import com.android.build.api.dsl.Packaging
 import org.gradle.api.tasks.testing.Test
 import org.gradle.jvm.tasks.Jar
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-import java.io.FileInputStream
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Properties
+import java.util.zip.ZipFile
 
 plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.kotlinAndroid)
+}
+
+val versionPropsFile = layout.projectDirectory.file("version.properties")
+val versionProps = Properties().apply {
+    versionPropsFile.asFile.inputStream().use { load(it) }
+}
+val verCode = versionProps.getProperty("VERSION_CODE").toInt()
+
+// Deliberate maintenance operation, never a dependency of assemble/publish.
+// Run separately, then build in a NEW invocation so Android reads the new code.
+tasks.register("bumpVersionCode") {
+    group = "versioning"
+    description = "Increment VERSION_CODE explicitly; run alone, then build in a new invocation."
+    val requestedTasks = gradle.startParameter.taskNames.toList()
+    doLast {
+        check(requestedTasks.size == 1) {
+            "Run :app:bumpVersionCode alone, then assemble in a separate Gradle invocation."
+        }
+        val current = Properties().apply {
+            versionPropsFile.asFile.inputStream().use { load(it) }
+        }
+        val next = Math.addExact(current.getProperty("VERSION_CODE").toInt(), 1)
+        check(next > 0 && next <= 2_100_000_000) { "VERSION_CODE exceeds the Android limit." }
+        current.setProperty("VERSION_CODE", next.toString())
+        versionPropsFile.asFile.outputStream().use { current.store(it, null) }
+        logger.lifecycle("VERSION_CODE=$next; rebuild in a new Gradle invocation.")
+    }
 }
 
 android {
@@ -17,15 +44,6 @@ android {
     //compileSdk = 36
     compileSdk {
         version = release(37)
-    }
-
-    val versionProps = Properties()
-    val versionPropsFile = file("version.properties")
-    versionProps.load(FileInputStream(versionPropsFile))
-    val verCode = Integer.parseInt(versionProps["VERSION_CODE"] as String)
-    if (":app:assembleRelease" in gradle.startParameter.taskNames) {
-        versionProps["VERSION_CODE"] = (verCode + 1).toString()
-        versionProps.store(versionPropsFile.writer(), null)
     }
 
     defaultConfig {
@@ -93,23 +111,73 @@ android {
     }
 }
 
+// One registry drives both filtering and verification, including nested classes.
+// Some bridge classes are already absent from the nocglib archive; they still
+// belong here so replacing that archive cannot silently reintroduce them.
+val runtimeTakeoverClasses = setOf(
+    "org/luaj/LuaString",
+    "org/luaj/LuaUtf8String",
+    "org/luaj/lib/jse/LuajavaLib",
+    "org/luaj/lib/jse/CoerceJavaToLua",
+    "org/luaj/lib/jse/CoerceLuaToJava",
+    "org/luaj/lib/jse/JavaClass",
+    "org/luaj/lib/jse/JavaConstructor",
+    "org/luaj/lib/jse/JavaInstance",
+    "org/luaj/lib/jse/JavaMethod",
+    "org/luaj/lib/jse/JavaPackage",
+    "org/luaj/lib/jse/JsePlatform",
+    "org/luaj/lib/jse/JseIoLib"
+)
+val runtimeTakeoverExcludes = runtimeTakeoverClasses.flatMap {
+    listOf("$it.class", "$it\$*.class")
+}
+val runtimeBaseJar = layout.projectDirectory.file("libs/luajpp_nocglib.jar")
 val filteredLuajppJar = tasks.register<Jar>("filteredLuajppJar") {
     archiveFileName.set("luajpp_nocglib_without_luajava.jar")
     destinationDirectory.set(layout.buildDirectory.dir("filtered-libs"))
-    from(zipTree(layout.projectDirectory.file("libs/luajpp_nocglib.jar"))) {
-        exclude("org/luaj/LuaString*.class")
-        exclude("org/luaj/LuaUtf8String*.class")
-        exclude("org/luaj/lib/jse/LuajavaLib*.class")
-        exclude("org/luaj/lib/jse/CoerceJavaToLua*.class")
-        exclude("org/luaj/lib/jse/CoerceLuaToJava*.class")
-        exclude("org/luaj/lib/jse/JavaClass.class")
-        exclude("org/luaj/lib/jse/JavaConstructor*.class")
-        exclude("org/luaj/lib/jse/JavaInstance.class")
-        exclude("org/luaj/lib/jse/JavaMethod*.class")
-        exclude("org/luaj/lib/jse/JavaPackage.class")
-        exclude("org/luaj/lib/jse/JsePlatform.class")
-        exclude("org/luaj/lib/jse/JseIoLib*.class")
+    from(zipTree(runtimeBaseJar)) {
+        exclude(runtimeTakeoverExcludes)
     }
+}
+
+val verifyRuntimeTakeover = tasks.register("verifyRuntimeTakeover") {
+    group = "verification"
+    description = "Check source takeover registry and actual filtered JAR class entries (not ABI compatibility)."
+    dependsOn(filteredLuajppJar)
+    val sourceRoot = layout.projectDirectory.dir("src/main").asFile
+    val sources = fileTree(sourceRoot) { include("java/**/*.java", "java/**/*.kt", "kotlin/**/*.kt") }
+    val filteredArchive = filteredLuajppJar.flatMap { it.archiveFile }
+    val registeredClasses = runtimeTakeoverClasses
+    inputs.files(sources).withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.file(runtimeBaseJar).withPathSensitivity(PathSensitivity.NONE)
+    inputs.file(filteredArchive).withPathSensitivity(PathSensitivity.NONE)
+    inputs.property("runtimeTakeoverClasses", registeredClasses.sorted())
+    doLast {
+        fun classEntries(jar: File): Set<String> = ZipFile(jar).use { zip ->
+            zip.entries().asSequence().map { it.name }.filter { it.endsWith(".class") }.toSet()
+        }
+        fun classOwner(entry: String) = entry.removeSuffix(".class").substringBefore('$')
+        val sourceClasses = sources.files.map { source ->
+            source.relativeTo(sourceRoot).invariantSeparatorsPath.substringAfter('/')
+                .substringBeforeLast('.')
+        }.toSet()
+        val original = classEntries(runtimeBaseJar.asFile)
+        val filtered = classEntries(filteredArchive.get().asFile)
+        val missingSources = registeredClasses - sourceClasses
+        check(missingSources.isEmpty()) { "Takeover entries without source files: $missingSources" }
+        val unregistered = original.map(::classOwner).toSet().intersect(sourceClasses) - registeredClasses
+        check(unregistered.isEmpty()) { "Source/JAR collisions missing from runtimeTakeoverClasses: $unregistered" }
+        val expected = original.filterNot { classOwner(it) in registeredClasses }.toSet()
+        check(filtered == expected) {
+            "Filtered JAR mismatch; unexpected=${filtered - expected}, missing=${expected - filtered}"
+        }
+        logger.lifecycle("Runtime takeover verified: ${registeredClasses.size} source families; ${original.size - filtered.size} JAR classes removed. No ABI guarantee implied.")
+    }
+}
+
+// Fail every normal build/check, not just the explicit CI verification command.
+tasks.matching { it.name == "preBuild" || it.name == "check" }.configureEach {
+    dependsOn(verifyRuntimeTakeover)
 }
 
 // The legacy Luaj++ JAR omits StackMapTable entries; ART accepts its DEX output,

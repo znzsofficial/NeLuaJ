@@ -17,25 +17,52 @@ local PHONE_MINIMAP_DP = 52
 
 local lastTabletEnabled = nil
 local drawerToggle
+local observedDrawer, layoutListener
+local pendingApply = false
+local lastAppliedWidth = nil
 
 local function isSharedTruthy(value)
   return value == true or value == "true" or value == 1
 end
 
-local function isTabletModeOn()
+local function isTabletModePreferred()
   return isSharedTruthy(this.getSharedData("tablet_mode", false))
 end
 
 local function screenWidthDp()
-  local ok, w = pcall(function()
-    local dm = this.getResources().getDisplayMetrics()
-    return dm.widthPixels / dm.density
+  local density = this.getResources().getDisplayMetrics().density
+  local widths = {}
+  local function add(px)
+    if tonumber(px) and px > 0 then widths[#widths + 1] = px / density end
+  end
+  -- DrawerLayout spans the available content, unlike the editor workspace whose
+  -- size may change when the side column is attached. Never use physical display width.
+  pcall(function() add(drawer.getWidth()) end)
+  pcall(function()
+    local metrics = activity.getWindowManager().getCurrentWindowMetrics()
+    local bounds = metrics.getBounds()
+    local Type = luajava.bindClass "android.view.WindowInsets$Type"
+    local insets = metrics.getWindowInsets().getInsetsIgnoringVisibility(Type.systemBars() + Type.displayCutout())
+    add(bounds.width() - insets.left - insets.right)
   end)
-  return ok and w or 360
+  -- Pre-30 / pre-layout fallback is activity configuration, which follows split
+  -- screen. Taking the minimum also avoids stale measured width during shrinking.
+  pcall(function()
+    local width = this.getResources().getConfiguration().screenWidthDp
+    if width > 0 then widths[#widths + 1] = width end
+  end)
+  if #widths == 0 then return 360 end
+  local smallest = widths[1]
+  for i = 2, #widths do smallest = math.min(smallest, widths[i]) end
+  return smallest
 end
 
 local function isLargeScreen()
   return screenWidthDp() >= 600
+end
+
+local function isTabletModeOn()
+  return isTabletModePreferred() and isLargeScreen()
 end
 
 local function tabletDrawerWidthDp()
@@ -89,6 +116,11 @@ end
 local function attachHeadToWorkspace(drawerW)
   if not head or not workspace or not drawer then return end
   hideSideHostPlaceholder()
+  pcall(function()
+    drawer.closeDrawer(GravityCompat.START)
+    drawer.setDrawerLockMode(DrawerLayout.LOCK_MODE_LOCKED_CLOSED, GravityCompat.START)
+    drawer.setScrimColor(0)
+  end)
 
   if headParentIs(workspace) then
     pcall(function()
@@ -129,6 +161,10 @@ end
 local function attachHeadToDrawer(drawerW)
   if not head or not drawer then return end
   hideSideHostPlaceholder()
+  pcall(function()
+    drawer.setDrawerLockMode(DrawerLayout.LOCK_MODE_UNLOCKED, GravityCompat.START)
+    drawer.setScrimColor(0x99000000)
+  end)
 
   if headParentIs(drawer) then
     pcall(function()
@@ -164,6 +200,10 @@ function _M.isTabletMode()
   return isTabletModeOn()
 end
 
+function _M.isTabletModePreferred()
+  return isTabletModePreferred()
+end
+
 function _M.isLargeScreen()
   return isLargeScreen()
 end
@@ -191,8 +231,34 @@ end
 
 function _M.apply()
   if not drawer or not head then return end
+  -- One listener per live root, with a coalesced post after layout. Reapplying
+  -- unchanged widths would otherwise make requestLayout feed back indefinitely.
+  if observedDrawer ~= drawer then
+    if observedDrawer and layoutListener then
+      pcall(function() observedDrawer.removeOnLayoutChangeListener(layoutListener) end)
+    end
+    observedDrawer = drawer
+    local root = drawer
+    layoutListener = luajava.createProxy("android.view.View$OnLayoutChangeListener", {
+      onLayoutChange = function()
+        if drawer ~= root or pendingApply then return end
+        if math.abs(screenWidthDp() - (lastAppliedWidth or 0)) < 0.5 then return end
+        pendingApply = true
+        root.post(function()
+          pendingApply = false
+          if drawer ~= root then return end
+          local alive = true
+          pcall(function() alive = not activity.isFinishing() and not activity.isDestroyed() end)
+          if alive then _M.apply() end
+        end)
+      end,
+    })
+    root.addOnLayoutChangeListener(layoutListener)
+  end
   local enabled = isTabletModeOn()
-  local drawerDp = enabled and tabletDrawerWidthDp() or PHONE_DRAWER_DP
+  local changed = lastTabletEnabled ~= enabled
+  local drawerDp = enabled and tabletDrawerWidthDp()
+    or math.max(1, math.min(PHONE_DRAWER_DP, math.floor(screenWidthDp() - 56)))
   local drawerW = math.floor(this.dpToPx(drawerDp) + 0.5)
   local minimapW = math.floor(this.dpToPx(enabled and TABLET_MINIMAP_DP or PHONE_MINIMAP_DP) + 0.5)
 
@@ -254,7 +320,7 @@ function _M.apply()
     drawer.requestLayout()
   end)
 
-  if enabled then
+  if enabled and changed then
     pcall(function()
       head.post(function()
         pcall(function()
@@ -267,7 +333,9 @@ function _M.apply()
   end
 
   lastTabletEnabled = enabled
+  lastAppliedWidth = screenWidthDp()
   _M.syncEditorEmptyState()
+  if changed then pcall(function() activity.invalidateOptionsMenu() end) end
 end
 
 return _M

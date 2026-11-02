@@ -3,18 +3,57 @@ require "environment"
 import "java.io.File"
 import "androidx.core.view.GravityCompat"
 import "androidx.appcompat.widget.PopupMenu"
-import "com.google.android.material.snackbar.Snackbar"
 import "com.google.android.material.dialog.MaterialAlertDialogBuilder"
 
 local Init = require "activities.main.Init"
 import "mods.utils.ActivityUtil"
 import "mods.utils.EditorUtil"
 local AppInit = require "mods.utils.AppInit"
+local LeaveGuard = require "mods.editor.LeaveGuard"
 
 local Actions = Init.Actions
-local _exit = 0
 local ColorUtil = this.themeUtil
 local res = res
+local pauseSaveFailed = false
+
+local leaveGuard = LeaveGuard.new({
+  currentFile = EditorUtil.currentFile,
+  save = function() return EditorUtil.save() end,
+  snapshot = function()
+    return tostring(EditorUtil.currentFile()) .. "\0" .. tostring(mLuaEditor.getText().toString())
+  end,
+  closeTransient = function()
+    if not (Init.isTabletMode and Init.isTabletMode()) and drawer.isDrawerOpen(GravityCompat.START) then
+      drawer.closeDrawer(GravityCompat.START)
+      return true
+    end
+    if mSearch.getVisibility() == Init.VISIBLE then
+      Actions.hideSearchBar()
+      return true
+    end
+    return false
+  end,
+  finish = function() activity.finish() end,
+  onFailure = function(choice)
+    MaterialAlertDialogBuilder(activity)
+      .setTitle(res.string.save_fail)
+      .setMessage(res.string.editor_leave_save_failed)
+      .setPositiveButton(res.string.retry, function() choice.retry() end)
+      .setNegativeButton(android.R.string.cancel, function() choice.cancel() end)
+      .setNeutralButton(res.string.editor_discard_changes, function() choice.discard() end)
+      .setOnCancelListener(function() choice.cancel() end)
+      .show()
+  end,
+  confirmDiscard = function(confirm)
+    MaterialAlertDialogBuilder(activity)
+      .setTitle(res.string.editor_discard_changes)
+      .setMessage(res.string.editor_discard_confirm)
+      .setPositiveButton(res.string.editor_discard_changes, function() confirm(true) end)
+      .setNegativeButton(android.R.string.cancel, function() confirm(false) end)
+      .setOnCancelListener(function() confirm(false) end)
+      .show()
+  end,
+})
 
 -- 作为编辑器路由页直接启动时的工程目录参数（首页打开工程时传入）
 local launchProject = tostring(select(1, ...) or "")
@@ -167,47 +206,104 @@ end
 
 local function handleNavAction(action, path)
   if (action == "open_file" or action == "open_init") and type(path) == "string" and path ~= "" then
-    if File(path).isFile() then
-      EditorUtil.fromRecy = true
-      EditorUtil.load(path)
-      return true
-    end
+    if not File(path).isFile() then return false, "file_missing" end
+    EditorUtil.fromRecy = true
+    EditorUtil.load(path)
+    -- load is an old void API; verify the actual binding, not its return value.
+    if EditorUtil.currentFile() == path then return true end
+    return false, "file_failed"
   end
   -- 会话中心回传：打开指定会话（必要时先切换工程）
   if action == "open_agent_conv" then
-    pcall(function()
-      require("mods.agent.ChatUI").openConversation(path)
-    end)
-    return true
+    local directory = tostring(Bean.Path.this_dir or "")
+    if directory ~= "" and not File(directory).isDirectory() then return false, "project_missing" end
+    if require("mods.agent.ChatUI").openConversation(path) == true then return true end
+    return false, "conversation_missing"
   end
   if action == "open_agent_conv_switch" then
     local project, convId = tostring(path):match("^(.-)\n(.*)$")
     if project and project ~= "" and convId and convId ~= "" then
-      pcall(function()
-        local PathManager = require "mods.utils.PathManager"
-        if tostring(Bean.Path.this_dir) ~= project then
-          PathManager.updateDir(project)
-          filetab.setPath(project)
-          MainActivity.RecyclerView.update()
-        end
-        require("mods.agent.ChatUI").openConversation(convId)
-      end)
-      return true
+      if not File(project).isDirectory() then return false, "project_missing" end
+      -- Validate before changing the project or cancelling its active agent turn.
+      if not require("mods.agent.ConversationStore").get(convId, project) then
+        return false, "conversation_missing"
+      end
+      local PathManager = require "mods.utils.PathManager"
+      if tostring(Bean.Path.this_dir) ~= project then
+        if not leaveGuard.save() then return false, "file_failed" end
+        PathManager.updateDir(project)
+        filetab.setPath(project)
+        MainActivity.RecyclerView.update()
+      end
+      if require("mods.agent.ChatUI").openConversation(convId) == true then return true end
+      return false, "conversation_missing"
     end
   end
   if action == "open_agent_new" then
-    pcall(function()
-      local PathManager = require "mods.utils.PathManager"
-      if path ~= "" and tostring(Bean.Path.this_dir) ~= path then
-        PathManager.updateDir(path)
-        filetab.setPath(path)
-        MainActivity.RecyclerView.update()
-      end
-      require("mods.agent.ChatUI").show(true)
-    end)
+    if type(path) ~= "string" then return false, "invalid" end
+    if path ~= "" and not File(path).isDirectory() then return false, "project_missing" end
+    local PathManager = require "mods.utils.PathManager"
+    if path ~= "" and tostring(Bean.Path.this_dir) ~= path then
+      if not leaveGuard.save() then return false, "file_failed" end
+      PathManager.updateDir(path)
+      filetab.setPath(path)
+      MainActivity.RecyclerView.update()
+    end
+    -- show is a legacy void API: false is failure, nil after a normal call is success.
+    if require("mods.agent.ChatUI").show(true) == false then return false, "failed" end
     return true
   end
-  return false
+  return false, "invalid"
+end
+
+local pendingDialog, shownPendingToken
+local completedRequests, completedOrder = {}, {}
+local processPending
+local function showPendingFailure(pending, reason, force)
+  if pendingDialog or (not force and shownPendingToken == pending.token) then return end
+  shownPendingToken = pending.token
+  local messages = {
+    expired = res.string.navigation_expired,
+    project_missing = res.string.navigation_project_missing,
+    conversation_missing = res.string.navigation_conversation_missing,
+    file_missing = res.string.navigation_file_missing,
+    file_failed = res.string.navigation_file_failed,
+  }
+  local function close() pendingDialog = nil end
+  pendingDialog = MaterialAlertDialogBuilder(activity)
+    .setTitle(res.string.navigation_failed)
+    .setMessage(messages[reason] or res.string.navigation_retry_hint)
+    .setPositiveButton(res.string.retry, function()
+      close()
+      processPending(true, pending)
+    end)
+    .setNegativeButton(res.string.navigation_dismiss, function()
+      close()
+      ActivityUtil.ackPending(pending)
+      activity.invalidateOptionsMenu()
+    end)
+    .setNeutralButton(android.R.string.cancel, close)
+    .setOnCancelListener(close)
+    .show()
+end
+
+processPending = function(retry, expected)
+  local pending = expected or ActivityUtil.peekPending()
+  if not pending then return false end
+  local ok, reason = ActivityUtil.consumePending(handleNavAction, pending, retry)
+  if ok and not completedRequests[pending.id] then
+    completedRequests[pending.id] = true
+    completedOrder[#completedOrder + 1] = pending.id
+    if #completedOrder > 8 then completedRequests[table.remove(completedOrder, 1)] = nil end
+  end
+  if not ok and reason ~= "replaced" then showPendingFailure(pending, reason, retry) end
+  if ok and reason == "unacknowledged" then
+    -- A newer request stays queued; a failed persistence acknowledgement is visible.
+    local current = ActivityUtil.peekPending()
+    if current and current.token == pending.token then showPendingFailure(pending, "failed", retry) end
+  end
+  pcall(function() activity.invalidateOptionsMenu() end)
+  return ok
 end
 
 --- 设置页改完编辑器偏好后即时应用（由 EditorUtil.notifyPrefsChanged 触发）
@@ -225,25 +321,31 @@ function onResume()
   Init.applyTabletMode()
   EditorUtil.applyEditorPrefs()
   pcall(function() activity.invalidateOptionsMenu() end)
-  -- 消费 ActivityUtil 兜底 pending（finishWith 同时写 SharedData）
-  pcall(function()
-    local ActivityUtil = require "mods.utils.ActivityUtil"
-    local pending = ActivityUtil.takePending()
-    if pending then
-      handleNavAction(pending.action, pending.payload)
-    end
-  end)
+  if pauseSaveFailed then
+    Actions.snack(res.string.save_fail)
+    pauseSaveFailed = false
+  end
+  processPending(false)
 end
 
 -- 子页 this.result / ActivityUtil.finishWith 回传
-function onResult(name, action, path)
-  if handleNavAction(action, path) then
-    -- 已由 result 消费，清掉兜底 pending，避免 onResume 再打开一次
-    pcall(function()
-      require("mods.utils.ActivityUtil").takePending()
-    end)
-    return true
+function onResult(name, action, path, requestId)
+  if requestId and completedRequests[requestId] then return true end
+  local pending = ActivityUtil.peekPending()
+  if requestId and pending and pending.id ~= requestId then return false end
+  if pending and pending.action == action and pending.payload == tostring(path or "") then
+    return processPending(false, pending)
   end
+  if not pending and action ~= nil then
+    if ActivityUtil.setPending(action, path) then return processPending(false) end
+  end
+  -- Legacy direct result calls have no transaction. Never clear unrelated pending.
+  local ok, result = pcall(handleNavAction, action, path)
+  if ok and result == true then return true end
+  if action ~= nil then
+    Actions.snack(res.string.navigation_failed)
+  end
+  return false
 end
 
 function onConfigurationChanged(config)
@@ -275,10 +377,7 @@ function onOptionsItemSelected(item)
       return
     end
     if not drawer.isDrawerOpen(GravityCompat.START) then
-      if EditorUtil.currentFile() ~= "" then
-        local saved = EditorUtil.save()
-        if saved ~= true and saved ~= "same" then Actions.snack(res.string.save_fail) end
-      end
+      if not leaveGuard.save() then Actions.snack(res.string.save_fail) end
       drawer.openDrawer(GravityCompat.START)
     else
       drawer.closeDrawer(GravityCompat.START)
@@ -362,7 +461,10 @@ function onCreateOptionsMenu(menu)
     ActivityUtil.open("agent_center", Bean.Path.this_dir)
   end, nil, icon("ic_command"))
 
-  addItem(menu, res.string.exit, function() activity.finish(true) end, nil, icon("exit"))
+  if ActivityUtil.peekPending() then
+    addItem(moreMenu, res.string.navigation_retry, function() processPending(true) end)
+  end
+  addItem(menu, res.string.exit, function() leaveGuard.request() end, nil, icon("exit"))
 
   return true
 end
@@ -372,8 +474,8 @@ function onPause()
   pcall(function()
     require("activities.main.Workspace").saveFor(Bean.Path.this_dir)
   end)
-  if EditorUtil.currentFile() ~= "" then
-    EditorUtil.save()
+  if not leaveGuard.isLeaving() then
+    pauseSaveFailed = not leaveGuard.save()
   end
   pcall(function()
     require("mods.agent.ChatUI").saveCurrentConversation()
@@ -381,31 +483,5 @@ function onPause()
 end
 
 this.addOnBackPressedCallback(function()
-  if _exit + 2 > os.time() then
-    activity.finish(true)
-    return
-  end
-
-  if (not (Init.isTabletMode and Init.isTabletMode())) and drawer.isDrawerOpen(GravityCompat.START) then
-    drawer.closeDrawer(GravityCompat.START)
-    return
-  end
-
-  if mSearch.getVisibility() == VISIBLE then
-    Actions.hideSearchBar()
-    return
-  end
-
-  local leaveMessage = res.string.confirm_exit
-  if EditorUtil.currentFile() ~= "" then
-    local saved = EditorUtil.save()
-    if saved ~= true and saved ~= "same" then leaveMessage = res.string.save_fail end
-  end
-  Snackbar.make(coordinatorLayout, leaveMessage, Snackbar.LENGTH_SHORT)
-    .setAnchorView(ps_bar)
-    .setAction(res.string.exit, function()
-      activity.finish(true)
-    end)
-    .show()
-  _exit = os.time()
+  leaveGuard.request()
 end)

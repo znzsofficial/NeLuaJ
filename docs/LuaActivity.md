@@ -1,5 +1,7 @@
 # LuaActivity 实现思路与后续方案
 
+本文解释脚本宿主，不代表首页与编辑器的完整业务流程；后者见 [HOME.md](./HOME.md)。维护约束与验证分层见 [MAINTENANCE.md](./MAINTENANCE.md)；“后续方案”不作为已实现能力。
+
 ## 1. 定位
 
 `LuaActivity` 是 NeLuaJ+ 的 **Lua 脚本宿主**：每个打开的 `.lua` 页面（或工程 `main.lua`）对应一个 Activity 实例，持有独立的 **LuaJ `Globals`**，并把 Android 能力注入全局环境。
@@ -13,8 +15,8 @@
         ├─ 解析 Intent 路径 → luaDir / luaFile / pageName
         ├─ LuaDexLoader 加载工程 libs
         ├─ JsePlatform.standardGlobals()
-        ├─ 注入 activity/this/print/loadlayout/task/…
-        ├─ initENV()（init.lua 等）
+         ├─ initENV()（init.lua 等）
+         ├─ 注入 activity/this/print/loadlayout/task/…
         ├─ doFile(luaFile)
         ├─ runFunc("onCreate")
         └─ 未 setContentView → showLogView
@@ -59,7 +61,7 @@
 | `res` / `json` / `file` / `okhttp` / `saf` / `Http` / `R` / `android` | 模块与包 |
 | `lazy` | 惰性值 |
 
-脚本侧工程环境另有 `environment.lua`（主界面）与 `mods.bootstrap`（二级页轻量环境），与 Activity 注入叠加，注意**勿在二级页 require 主界面 environment**。
+脚本侧另有 `environment.lua`（编辑器工作台）与 `mods.bootstrap`（首页和非编辑器页面的轻量环境），与 Activity 注入叠加。首页不是编辑器环境，注意**勿在首页/二级页 require 编辑器 environment 来取得全局控件**。
 
 ### 3.3 init.lua 与 debug
 
