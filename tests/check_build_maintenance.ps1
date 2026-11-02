@@ -54,3 +54,8 @@ try {
 } finally {
     if (Test-Path $sandbox) { Remove-Item -LiteralPath $sandbox -Recurse -Force }
 }
+
+# Expected failing child processes leave LASTEXITCODE=1. GitHub Actions' built-in
+# pwsh shell dot-sources this file, then exits with that value. Reset it ONLY
+# after every assertion and cleanup succeed; exceptions must still fail the step.
+$global:LASTEXITCODE = 0
