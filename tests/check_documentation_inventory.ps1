@@ -52,7 +52,7 @@ function Check-FileReference([string]$Document, [string]$RelativePath) {
 }
 
 $documents = @('README.md', 'README_CN.md', 'docs/README.md', 'docs/BUILDING.md',
-  'docs/MAINTENANCE.md', 'docs/HOME.md', 'docs/HOME_VALIDATION.md',
+  'docs/MAINTENANCE.md', 'docs/HOME.md', 'docs/HOME_VALIDATION.md', 'docs/PROJECT_TEMPLATES.md',
   'docs/AIAgent.md', 'docs/AGENT_REFACTORING_MASTER.md', 'docs/LuaLayout.md',
   'docs/LuaActivity.md', 'docs/LuaJRuntime.md', 'docs/BuilderHandoff.md',
   'tests/README.md', 'app/libs/README.md')

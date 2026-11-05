@@ -3,20 +3,12 @@
 local M = {}
 local LinearLayout = luajava.bindClass("android.widget.LinearLayout")
 local TextView = luajava.bindClass("com.google.android.material.textview.MaterialTextView")
-local Button = luajava.bindClass("com.google.android.material.button.MaterialButton")
+local UI = require "mods.ui.Components"
 local CoordinatorLayout = luajava.bindClass("androidx.coordinatorlayout.widget.CoordinatorLayout")
 local AppBarLayout = luajava.bindClass("com.google.android.material.appbar.AppBarLayout")
 
 function M.action(id, text, kind)
-  local colors = this.themeUtil
-  local tonal = kind == "tonal"
-  local quiet = kind == "quiet"
-  return { Button, id = id, text = text, textSize = "14sp", allCaps = false,
-    minHeight = "48dp", minWidth = "48dp", layout_width = "wrap", layout_height = "wrap",
-    paddingLeft = "16dp", paddingRight = "16dp", paddingTop = "8dp", paddingBottom = "8dp",
-    backgroundTint = quiet and 0 or (tonal and colors.getColorSecondaryContainer() or colors.getColorPrimary()),
-    textColor = quiet and colors.getColorPrimary() or (tonal and colors.getColorOnSecondaryContainer() or colors.getColorOnPrimary()),
-  }
+  return UI.button { id = id, text = text, variant = kind == "quiet" and "text" or kind }
 end
 
 function M.header(title, action)

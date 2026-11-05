@@ -36,7 +36,8 @@ print("PASS locale keys and printf argument contracts agree in both languages")
 for _, path in ipairs({
   "activities/home/ProjectsPage.lua", "activities/home/ConversationsPage.lua",
   "activities/home/HomeActivity.lua", "activities/main/CreateProject.lua",
-  "activities/main/MainActivity.lua", "activities/main/TabletMode.lua",
+  "activities/main/MainActivity.lua", "activities/main/TabletMode.lua", "res/layout/new_project.lua",
+  "activities/projectcreate/Preview.lua", "activities/projectcreate/CreateProjectActivity.lua",
 }) do
   local text = read(path)
   for key in text:gmatch("res%.string%.([%a_][%w_]*)") do
@@ -47,4 +48,12 @@ for _, path in ipairs({
   end
 end
 print("PASS home and editor literal resource references resolve in both languages")
+package.path = assets .. "?.lua;" .. package.path
+local templates = require "mods.project.templates.Registry"
+for _, template in ipairs(templates.list()) do
+  for _, key in ipairs({ template.titleKey, template.descriptionKey, "template_" .. template.id .. "_structure" }) do
+    assert(type(zh[key]) == "string" and type(en[key]) == "string", "missing template locale: " .. key)
+  end
+end
+print("PASS registered template labels and structure previews resolve in both languages")
 print("ALL-PASS")

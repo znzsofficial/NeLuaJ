@@ -96,25 +96,23 @@ user_permission = {
 }
 </code></pre>
 <h3>变更说明</h3>
-<div class="table-wrapper"><table><thead><tr><th>配置项</th><th>旧默认值</th><th>新默认值</th><th>原因</th></tr></thead><tbody><tr><td><code>min_sdk</code></td><td><code>21</code></td><td><code>26</code></td><td>Android 8.0 以下设备占比极低</td></tr><tr><td><code>target_sdk</code></td><td><code>29</code></td><td><code>33</code></td><td>适配 Android 13 权限模型</td></tr><tr><td><code>user_permission</code></td><td>含 <code>WRITE_EXTERNAL_STORAGE</code></td><td>仅 <code>INTERNET</code></td><td>Android 13+ 不再需要存储权限</td></tr></tbody></table></div>
+<div class="table-wrapper"><table><thead><tr><th>配置项</th><th>旧默认值</th><th>新建模板默认值</th><th>说明</th></tr></thead><tbody><tr><td><code>min_sdk</code></td><td><code>21</code></td><td><code>26</code></td><td>与当前运行时最低版本一致</td></tr><tr><td><code>target_sdk</code></td><td><code>29</code></td><td><code>33</code></td><td>生成工程的目标版本</td></tr><tr><td><code>user_permission</code></td><td>含存储与网络权限</td><td>空列表</td><td>六种模板默认离线；需要网络时显式启用 INTERNET，其他权限按实际功能配置</td></tr></tbody></table></div>
 <hr>
 <h2>5. 新版模板示例</h2>
 <h3>main.lua</h3>
-<pre><code class="language-lua">require "environment"
-
-local ColorUtil = this.themeUtil
-
--- 主题已在 init.lua 中配置，无需手动 setTheme
-activity.dynamicColor()
+<pre><code class="language-lua">-- 主题（含动态色）在 init.lua 中配置。
 activity.setContentView(res.layout.main)
-  .setSupportActionBar(toolbar)
-  .getSupportActionBar() {
-  Title = res.string.app_title,
-  Elevation = 0,
-}
+activity.setSupportActionBar(toolbar)
+local actionBar = activity.getSupportActionBar()
+if actionBar then
+  actionBar.setTitle(res.string.app_title)
+  actionBar.setElevation(0)
+end
 </code></pre>
+<p>以上是自定义 Toolbar 的基础写法。系统 ActionBar 主题不再添加 Toolbar；新建工程会按主题生成相应配置，具体文件与运行方法见工程内 README。推荐显式方法调用，不以运行时对象的表批量属性设置作为入门示例。</p>
 <h3>res/layout/main.lua</h3>
-<pre><code class="language-lua">import "com.google.android.material.appbar.MaterialToolbar"
+<pre><code class="language-lua">import "android.widget.LinearLayout"
+import "com.google.android.material.appbar.MaterialToolbar"
 import "com.google.android.material.textview.MaterialTextView"
 import "com.google.android.material.button.MaterialButton"
 
@@ -193,5 +191,3 @@ local onSurface = ColorUtil.surface.on
     </main>
   </body>
 </html>
-
-

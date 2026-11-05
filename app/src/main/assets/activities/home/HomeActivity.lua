@@ -6,6 +6,8 @@ require "mods.bootstrap"
 import "com.google.android.material.dialog.MaterialAlertDialogBuilder"
 
 local AppInit = require "mods.utils.AppInit"
+local ActivityUtil = require "mods.utils.ActivityUtil"
+local File = luajava.bindClass "java.io.File"
 
 local ColorUtil = this.themeUtil
 local res = res
@@ -68,6 +70,48 @@ local function refreshVisiblePage()
   end
 end
 
+local navigation, navigationDialog, shownNavigationToken
+local function showNavigationFailure(pending, reason, retry)
+  if destroyed or navigationDialog or (pending.token and shownNavigationToken == pending.token and not retry) then return end
+  shownNavigationToken = pending.token
+  local messages = {
+    permission = res.string.need_manage_permission,
+    expired = res.string.navigation_expired,
+    project_missing = res.string.navigation_project_missing,
+    file_missing = res.string.navigation_file_missing,
+  }
+  local function close() navigationDialog = nil end
+  navigationDialog = MaterialAlertDialogBuilder(activity)
+    .setTitle(res.string.navigation_failed)
+    .setMessage(messages[reason] or res.string.navigation_retry_hint)
+    .setPositiveButton(res.string.retry, function()
+      close()
+      if pending.token then navigation.process(true, pending)
+      else navigation.result(pending.action, pending.payload, pending.id) end
+    end)
+    .setNegativeButton(res.string.navigation_dismiss, function()
+      close()
+      ActivityUtil.ackPending(pending)
+    end)
+    .setNeutralButton(android.R.string.cancel, close)
+    .setOnCancelListener(close)
+    .show()
+end
+navigation = require("activities.home.HomeNavigation").new {
+  navigation = ActivityUtil,
+  alive = function() return not destroyed and not activity.isFinishing() and not activity.isDestroyed() end,
+  hasPermission = function() return this.checkStoragePermission() end,
+  isDirectory = function(path) return File(path).isDirectory() end,
+  isFile = function(path) return File(path).isFile() end,
+  open = function(path) return ActivityUtil.open("editor", path) end,
+  refresh = refreshVisiblePage,
+  failure = showNavigationFailure,
+}
+
+function onResult(name, action, path, requestId)
+  return navigation.result(action, path, requestId)
+end
+
 local function setupWindow()
   activity.getWindow().setSoftInputMode(0x10)
   -- 底栏是 BottomNavigationView，默认色是 surfaceContainer，不是页面的 surface。
@@ -112,10 +156,12 @@ function onResume()
     ensureReady()
   end
   refreshVisiblePage()
+  navigation.process(false)
 end
 
 function onDestroy()
   destroyed = true
+  if navigationDialog then navigationDialog.dismiss() navigationDialog = nil end
   if _G.__homeUi then _G.__homeUi.root.dispose() end
   for key in pairs(pages) do __homePausePage(key) end
   _G.__homeUi = nil

@@ -176,7 +176,9 @@ Page.build()
 assert(allViews.btnNew.layout.text == "home_create_project")
 assert(allViews.btnNew.layout.allCaps == false and allViews.btnNew.layout.textAllCaps == nil,
   "use the native setAllCaps property, not the XML-only textAllCaps attribute")
-assert(allViews.openDirectory.layout.contentDescription == "home_open_directory" and allViews.openDirectory.layout.layout_width == "48dp")
+assert(allViews.openDirectory.layout.contentDescription == "home_open_directory" and
+  allViews.openDirectory.layout.styleAttr == "?attr/materialIconButtonStyle" and
+  allViews.openDirectory.layout.layout_width == "wrap")
 assert(allViews.search.layout.backgroundColor == 0 and allViews.search.layout.minHeight == "56dp")
 assert(allViews.pageHeader.layout[2].layout_scrollFlags == 5 and allViews.projectList.layout.layout_height == "match",
   "headers must scroll away rather than reducing a short viewport to a zero-height list")

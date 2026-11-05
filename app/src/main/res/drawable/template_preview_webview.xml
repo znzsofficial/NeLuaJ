@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Bundled local HTML counter: count, increment/reset and offline explanation. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="160dp" android:height="200dp"
+    android:viewportWidth="160" android:viewportHeight="200">
+    <path android:fillColor="?attr/colorSurface" android:pathData="M0,0H160V200H0Z" />
+    <path android:fillColor="?attr/colorSurfaceContainer" android:pathData="M0,0H160V30H0Z" />
+    <path android:fillColor="?attr/colorOnSurface" android:pathData="M16,12H70V18H16Z M16,43H126V51H16Z M16,56H86V64H16Z M16,92H69V97H16Z M16,170H105V175H16Z" />
+    <path android:fillColor="?attr/colorOnSurfaceVariant" android:pathData="M16,73H140V77H16Z M16,81H112V85H16Z M16,182H139V185H16Z M16,190H123V193H16Z" />
+    <path android:strokeColor="?attr/colorOnSurface" android:strokeWidth="3.5" android:pathData="M25,105C19,105 18,109 18,116C18,123 19,127 25,127C31,127 32,123 32,116C32,109 31,105 25,105Z" />
+    <path android:fillColor="?attr/colorPrimary" android:pathData="M26,135H76A10,10 0,0 1,76,155H26A10,10 0,0 1,26,135Z M16,161H74V164H16Z" />
+    <path android:fillColor="?attr/colorSecondaryContainer" android:pathData="M103,135H134A10,10 0,0 1,134,155H103A10,10 0,0 1,103,135Z" />
+    <path android:fillColor="?attr/colorOnPrimary" android:pathData="M33,143H69V147H33Z" />
+    <path android:fillColor="?attr/colorOnSecondaryContainer" android:pathData="M106,143H131V147H106Z" />
+</vector>

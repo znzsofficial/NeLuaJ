@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Behavior switch, size radio group, preview and save action. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="160dp" android:height="200dp"
+    android:viewportWidth="160" android:viewportHeight="200">
+    <path android:fillColor="?attr/colorSurface" android:pathData="M0,0H160V200H0Z" />
+    <path android:fillColor="?attr/colorSurfaceContainer" android:pathData="M0,0H160V30H0Z" />
+    <path android:fillColor="?attr/colorOnSurface" android:pathData="M16,12H70V18H16Z M16,42H88V51H16Z" />
+    <path android:fillColor="?attr/colorOnSurfaceVariant" android:pathData="M16,59H129V63H16Z M16,88H78V92H16Z M38,124H89V128H38Z M38,141H80V145H38Z M16,167H104V171H16Z" />
+    <path android:fillColor="?attr/colorPrimary" android:pathData="M16,74H53V78H16Z M16,109H61V113H16Z M16,156H49V160H16Z M119,82H135A8,8 0,0 1,135,98H119A8,8 0,0 1,119,82Z M25,179H135A9,9 0,0 1,135,197H25A9,9 0,0 1,25,179Z" />
+    <path android:fillColor="?attr/colorOnPrimary" android:pathData="M140,90A5,5 0,1 1,130,90A5,5 0,1 1,140,90Z M61,186H99V190H61Z" />
+    <path android:strokeColor="?attr/colorPrimary" android:strokeWidth="1.5" android:pathData="M28,126A5,5 0,1 1,18,126A5,5 0,1 1,28,126Z" />
+    <path android:fillColor="?attr/colorPrimary" android:pathData="M25.5,126A2.5,2.5 0,1 1,20.5,126A2.5,2.5 0,1 1,25.5,126Z" />
+    <path android:strokeColor="?attr/colorOnSurfaceVariant" android:strokeWidth="1.5" android:pathData="M28,143A5,5 0,1 1,18,143A5,5 0,1 1,28,143Z" />
+</vector>

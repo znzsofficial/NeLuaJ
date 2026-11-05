@@ -161,4 +161,29 @@ p = nav.peekPending()
 assert(not onResult("stale", "open_agent_conv", "exists", "old-id"))
 assert(nav.peekPending().token == p.token and opened == before)
 print("PASS actual MainActivity verifies destination, preserves failed requests, gives retry/dismiss feedback and validates scope")
+nav.takePending()
+local refreshCount, saves = 0, 0
+MainActivity.RecyclerView.update = function() refreshCount = refreshCount + 1 end
+editor.save = function() saves = saves + 1 return false end
+nav.setPending("open_project", "/p")
+onResume()
+assert(nav.peekPending().blocked and switched == 0 and saves == 1,
+  "creator open must save before changing project scope")
+editor.save = function() saves = saves + 1 return true end
+dialogs[#dialogs].setPositiveButtonCallback()
+assert(not nav.peekPending() and switched == 1 and currentFile == "/p/main.lua")
+local previousScope = Bean.Path.this_dir
+local previousSaves, previousRefresh = saves, refreshCount
+nav.setPending("project_created", "/other")
+p = nav.peekPending()
+onResume()
+assert(not nav.peekPending() and Bean.Path.this_dir == previousScope and saves == previousSaves)
+assert(refreshCount == previousRefresh + 1, "creation without opening only refreshes the file list")
+assert(onResult("creator", "project_created", "/other", p.id))
+assert(refreshCount == previousRefresh + 1, "late creator result is deduplicated")
+nav.setPending("open_file", "/p/main.lua")
+p = nav.peekPending()
+assert(not onResult("creator", "open_project", "/p"))
+assert(nav.peekPending().token == p.token and switched == 1)
+print("PASS creator results preserve save guard, scope, pending ownership and deduplication")
 print("ALL-PASS")

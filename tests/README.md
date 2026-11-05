@@ -114,9 +114,18 @@ file = { readall = function(p) local h = io.open(p, "rb"); ... end }
 | TestLayoutPreview | `activities/layouthelper/LayoutHelperActivity$loadlayout.lua` | 布局助手调用生产加载器、节点映射与编辑装饰；不证明 Android 渲染 |
 | TestHomeShell | `activities/home/HomeActivity.lua`、`res/layout/home_layout.lua` | 首页命名宿主、生命周期分发、帮助回收列表的恒定壳加载、页面销毁重建；Android 依赖用替身 |
 | TestHomeRows | `activities/home/HomeRows.lua` | 不变快照跳过绑定、行复用、连续区间通知与随机增删改重排回放；不代表帧率实测 |
+| TestHomeNavigation | `activities/home/HomeNavigation.lua` | 独立创建页结果与 pending 去重、保存确认失败重试、请求归属与销毁抑制 |
 | TestHomeProjects | `activities/home/ProjectsPage.lua` | 工程搜索、后台归属、权限/错误、未变刷新零额外绑定/最近卡片创建 |
 | TestHomeConversations | `activities/home/ConversationsPage.lua` | 会话元信息、错误恢复、新建/打开、大列表未变跳过及单行更新 |
-| TestCreateProject | `activities/main/CreateProject.lua` | 创建通知与宿主打开意图分离 |
+| TestCreateProject | `activities/main/CreateProject.lua` | 独立创建页控制器及真实 Activity/布局宿主替身流程、六模板选择、行内预览、异步生命周期与结果回传 |
+| TestTemplateGenerator | `mods/project/templates/Generator.lua` | 参数与主题兼容、生成产物语法、模块复制、发布竞争、失败清理及真实 JVM 文件系统；不替代 Android 运行/打包验收 |
+| TestTemplateScreen | `templates/shared/screen.lua.tpl` | 生成页面对运行时主题与 ActionBar 配置的响应；Android 依赖使用替身 |
+| TestTemplateBehavior | `templates/` 生成产物 | 表单校验、清单回滚/重开/删除、存储写入校验、详情导航、WebView 资源与生命周期 |
+| TestTemplateModules | `templates/shared/modules/TimeMeter.lua`、`templates/shared/modules/Strings.lua` | 可选计时模块的回调/单位与字符串限次拆分的数据保留 |
+| TestTemplateArray | `templates/shared/modules/Array.lua` | Java 类型数组、null 槽位、边界检查与类绑定缓存 |
+| TestTemplateTimeMeter | `templates/shared/modules/TimeMeter.lua` | 独立计时状态、检查点、重置及多返回值/异常 |
+| TestTemplateStrings | `templates/shared/modules/Strings.lua` | Unicode 索引、字面量/pattern 分离、空字段保留与无全局副作用 |
+| TestTemplateAnimator | `templates/shared/modules/ObjectAnimator.lua` | 动画类型分派、配置校验与启动顺序；不替代 Android 动画渲染验收 |
 | TestHomeTranslations | `res/string/zh.lua`、`res/string/en.lua` | 双语键、格式参数与首页/编辑器资源引用 |
 | TestEditorLeave | `mods/editor/LeaveGuard.lua`、`activities/main/MainActivity.lua` | 保存失败阻止离开、重试、取消、明确放弃与过期确认 |
 | TestPendingNavigation | `mods/utils/ActivityUtil.lua` | 成功确认消费、失败保留、过期与替换请求 |

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Name input, submit action, clear action and an illustrative result. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="160dp" android:height="200dp"
+    android:viewportWidth="160" android:viewportHeight="200">
+    <path android:fillColor="?attr/colorSurface" android:pathData="M0,0H160V200H0Z" />
+    <path android:fillColor="?attr/colorSurfaceContainer" android:pathData="M0,0H160V30H0Z" />
+    <path android:fillColor="?attr/colorOnSurface" android:pathData="M16,12H70V18H16Z M16,44H91V53H16Z" />
+    <path android:fillColor="?attr/colorOnSurfaceVariant" android:pathData="M16,62H134V66H16Z" />
+    <path android:fillColor="?attr/colorSurfaceContainer" android:pathData="M20,80H140Q144,80 144,84V108H16V84Q16,80 20,80Z" />
+    <path android:fillColor="?attr/colorOnSurfaceVariant" android:pathData="M24,87H49V90H24Z M24,97H79V101H24Z M16,107H144V108H16Z" />
+    <path android:fillColor="?attr/colorPrimary" android:pathData="M28,118H132A12,12 0,0 1,132,142H28A12,12 0,0 1,28,118Z" />
+    <path android:fillColor="?attr/colorOnPrimary" android:pathData="M57,128H103V132H57Z" />
+    <path android:strokeColor="?attr/colorOnSurfaceVariant" android:strokeWidth="1.8" android:strokeLineCap="round" android:pathData="M132,151L140,159 M140,151L132,159" />
+    <path android:fillColor="?attr/colorOnSurface" android:pathData="M16,174H98V180H16Z" />
+</vector>

@@ -24,6 +24,7 @@ package.loaded["mods.utils.AppInit"] = {
   prepareDirs = function() prepareCount = prepareCount + 1 end,
 }
 package.loaded["mods.utils.SystemBars"] = { apply = function() end }
+package.loaded["mods.utils.ActivityUtil"] = { peekPending = function() return nil end }
 local dialogCount, backCallbacks = 0, 0
 MaterialAlertDialogBuilder = function()
   dialogCount = dialogCount + 1
@@ -69,10 +70,12 @@ local function nativeShell()
   return value
 end
 luajava = { bindClass = function(name)
+  if name == "java.io.File" then return function() return {} end end
   assert(name == "com.nekolaska.home.HomeShellView")
   return nativeShell
 end }
 activity = {
+  isFinishing = function() return false end, isDestroyed = function() return false end,
   setTheme = function() end, dynamicColor = function() end,
   getWindow = function() return { setSoftInputMode = function() end } end,
   setContentView = function() assert(loadfile(assets .. "res/layout/home_layout.lua"))() end,

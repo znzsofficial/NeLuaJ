@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Schematic template illustration, not a screenshot. 4:5 aspect ratio. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="160dp" android:height="200dp"
+    android:viewportWidth="160" android:viewportHeight="200">
+    <path android:fillColor="?attr/colorSurface" android:pathData="M0,0H160V200H0Z" />
+    <path android:fillColor="?attr/colorSurfaceContainer" android:pathData="M0,0H160V30H0Z" />
+    <path android:fillColor="?attr/colorOnSurface" android:pathData="M16,12H70V18H16Z M16,48H104V57H16Z" />
+    <path android:fillColor="?attr/colorOnSurfaceVariant" android:pathData="M16,70H139V74H16Z M16,80H126V84H16Z M16,90H84V94H16Z" />
+</vector>

@@ -95,7 +95,7 @@ user_permission = {
 }
 </code></pre>
 <h3>Changes</h3>
-<div class="table-wrapper"><table><thead><tr><th>Config</th><th>Old Default</th><th>New Default</th><th>Reason</th></tr></thead><tbody><tr><td><code>min_sdk</code></td><td><code>21</code></td><td><code>26</code></td><td>Android 8.0 below has minimal market share</td></tr><tr><td><code>target_sdk</code></td><td><code>29</code></td><td><code>33</code></td><td>Android 13 permission model</td></tr><tr><td><code>user_permission</code></td><td>Includes <code>WRITE_EXTERNAL_STORAGE</code></td><td>Only <code>INTERNET</code></td><td>Not needed on Android 13+</td></tr></tbody></table></div>
+<div class="table-wrapper"><table><thead><tr><th>Config</th><th>Old Default</th><th>New Template Default</th><th>Notes</th></tr></thead><tbody><tr><td><code>min_sdk</code></td><td><code>21</code></td><td><code>26</code></td><td>Matches the current runtime minimum</td></tr><tr><td><code>target_sdk</code></td><td><code>29</code></td><td><code>33</code></td><td>Target version of generated projects</td></tr><tr><td><code>user_permission</code></td><td>Storage and network permissions</td><td>Empty list</td><td>All six templates work offline by default. Enable INTERNET explicitly for networking; configure other permissions for the features that require them.</td></tr></tbody></table></div>
 <hr>
 <h2>5. FAQ</h2>
 <h3>Q: Status bar icons invisible in dark mode?</h3>
@@ -134,5 +134,4 @@ local onSurface = ColorUtil.surface.on
     </main>
   </body>
 </html>
-
 

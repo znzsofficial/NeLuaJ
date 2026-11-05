@@ -5,8 +5,7 @@ local HorizontalScrollView = luajava.bindClass("android.widget.HorizontalScrollV
 local MaterialTextView = luajava.bindClass("com.google.android.material.textview.MaterialTextView")
 local MaterialCardView = luajava.bindClass("com.google.android.material.card.MaterialCardView")
 local EditText = luajava.bindClass("androidx.appcompat.widget.AppCompatEditText")
-local MaterialTextField = luajava.bindClass("vinx.material.textfield.MaterialTextField")
-local MDC_R = luajava.bindClass("com.google.android.material.R")
+local UI = require "mods.ui.Components"
 local ImageView = luajava.bindClass("androidx.appcompat.widget.AppCompatImageView")
 local RecyclerView = luajava.bindClass("androidx.recyclerview.widget.RecyclerView")
 local LinearLayoutManager = luajava.bindClass("androidx.recyclerview.widget.LinearLayoutManager")
@@ -183,10 +182,8 @@ local function openDirectoryDialog()
     layout_width = "match", layout_height = "wrap",
     paddingLeft = "20dp", paddingRight = "20dp", paddingTop = "12dp", paddingBottom = "4dp",
     focusable = true, focusableInTouchMode = true,
-    { MaterialTextField, id = "directoryInput", hint = S.home_directory_path,
-      text = tostring(Bean.Path.app_root_pro_dir), textSize = "14sp", singleLine = true,
-      layout_width = "match", layout_height = "wrap", tintColor = colors.getColorPrimary(),
-      style = MDC_R.style.Widget_Material3_TextInputLayout_OutlinedBox, boxBackgroundMode = 2 },
+    UI.textField { id = "directoryInput", hint = S.home_directory_path,
+      text = tostring(Bean.Path.app_root_pro_dir) },
   }, binding)
   local input = binding.directoryInput
   local dialog = Dialog(activity).setTitle(S.home_open_directory).setView(content)
@@ -252,19 +249,14 @@ function M.build()
   disposed = false
   onSurface, secondary, surfaceCard = colors.getColorOnSurface(), colors.getColorOnSurfaceVariant(), colors.getColorSurfaceContainer()
   local create = Style.action("btnNew", S.home_create_project)
-  local folder = Style.action("openDirectory", "", "tonal")
-  folder.icon = res.drawable("folder")
-  folder.iconTint, folder.iconSize = colors.getColorOnSecondaryContainer(), "20dp"
-  folder.iconPadding, folder.iconGravity = 0, 2
-  folder.paddingLeft, folder.paddingRight = 0, 0
-  folder.layout_width, folder.layout_marginStart = "48dp", "12dp"
-  folder.contentDescription, folder.tooltipText = S.home_open_directory, S.home_open_directory
-  local clear = Style.action("clear", "", "quiet")
-  clear.icon, clear.iconTint, clear.iconSize = res.drawable("close"), secondary, "20dp"
-  clear.iconPadding, clear.iconGravity = 0, 2
-  clear.paddingLeft, clear.paddingRight = 0, 0
-  clear.layout_width, clear.visibility = "48dp", 8
-  clear.contentDescription, clear.tooltipText = S.clear, S.clear
+  local folder = UI.iconButton { id = "openDirectory", icon = res.drawable("folder"),
+    description = S.home_open_directory,
+    props = { layout_marginStart = "12dp", backgroundTint = colors.getColorSecondaryContainer(),
+      iconTint = colors.getColorOnSecondaryContainer() },
+  }
+  local clear = UI.iconButton { id = "clear", icon = res.drawable("close"), description = S.clear,
+    props = { iconTint = secondary, visibility = 8 },
+  }
   built = loadlayout(Style.listPage({ LinearLayout, orientation = "vertical", layout_width = "match", layout_height = "wrap",
     backgroundColor = colors.getColorSurface(), paddingLeft = "20dp", paddingRight = "20dp",
     Style.header(S.home_tab_projects, create),

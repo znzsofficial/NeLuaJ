@@ -24,6 +24,7 @@
 | 文档 | 内容 |
 |------|------|
 | [HOME.md](./HOME.md) | 首页、编辑器交接、列表加载、状态恢复、工程改名与数据安全边界 |
+| [PROJECT_TEMPLATES.md](./PROJECT_TEMPLATES.md) | 独立模板、生成器接口、扩展规则与产物验收 |
 | [AIAgent.md](./AIAgent.md) | Agent 模块、工具注册与批准策略、协议、上下文、会话存储 |
 | [LuaLayout.md](./LuaLayout.md) | 布局表加载、属性解析、AI 静态工具与布局助手复用 |
 | [LuaActivity.md](./LuaActivity.md) | 脚本宿主、独立 Globals、生命周期、平台 helper |

@@ -1,208 +1,93 @@
 import "android.widget.LinearLayout"
 import "android.widget.ScrollView"
-import "android.widget.HorizontalScrollView"
+import "android.widget.Spinner"
 import "com.google.android.material.textview.MaterialTextView"
-import "vinx.material.textfield.MaterialTextField"
 import "com.google.android.material.chip.Chip"
-import "com.google.android.material.card.MaterialCardView"
+import "com.google.android.material.chip.ChipGroup"
 import "com.google.android.material.materialswitch.MaterialSwitch"
-local ColorUtil = this.themeUtil
+local UI = require "mods.ui.Components"
+local colors = this.themeUtil
 local MDC_R = luajava.bindClass "com.google.android.material.R"
-local primary = ColorUtil.getColorPrimary()
-local onSurface = ColorUtil.getColorOnSurface()
-local onVar = ColorUtil.getColorOnSurfaceVariant()
-local surfaceC = ColorUtil.getColorSurfaceContainer()
-local outline = ColorUtil.getColorOutlineVariant()
 
-local function sectionLabel(text, top)
-  return {
-    MaterialTextView,
-    text = text,
-    textSize = "13sp",
-    textStyle = "bold",
-    textColor = primary,
-    layout_marginTop = top or "14dp",
-    layout_marginBottom = "6dp",
+local function label(text)
+  return { MaterialTextView, text = text, textSize = "20sp",
+    layout_width = "match", layout_height = "wrap",
+    textColor = colors.getColorOnSurface(), layout_marginTop = "24dp", layout_marginBottom = "12dp" }
+end
+
+local function description(id, text)
+  return { MaterialTextView, id = id, text = text, textSize = "14sp",
+    layout_width = "match", layout_height = "wrap", layout_marginTop = "8dp",
+    textColor = colors.getColorOnSurfaceVariant() }
+end
+
+local function dropdown(id, title)
+  return { LinearLayout, layout_width = "match", layout_height = "wrap",
+    minHeight = "56dp", gravity = "center_vertical", paddingStart = "12dp", paddingEnd = "8dp",
+    background = colors.getColorSurface(),
+    { Spinner, id = id, layout_width = "match", layout_height = "wrap",
+      minHeight = "56dp", contentDescription = title },
   }
 end
 
-local function optionRow(title, desc, switchId, checked)
-  return {
-    LinearLayout,
-    layout_width = "match",
-    gravity = "center_vertical",
-    paddingLeft = "12dp",
-    paddingRight = "10dp",
-    paddingTop = "6dp",
-    paddingBottom = "6dp",
-    {
-      LinearLayout,
-      orientation = "vertical",
-      layout_width = "0dp",
-      layout_weight = 1,
-      {
-        MaterialTextView,
-        text = title,
-        textSize = "14sp",
-        textColor = onSurface,
-      },
-      {
-        MaterialTextView,
-        text = desc,
-        textSize = "11sp",
-        textColor = onVar,
-      },
+local function option(title, desc, id, value)
+  return { LinearLayout, layout_width = "match", layout_height = "wrap",
+    gravity = "center_vertical", paddingTop = "16dp", paddingBottom = "16dp",
+    { LinearLayout, orientation = "vertical", layout_width = "0dp", layout_weight = 1,
+      { MaterialTextView, text = title, textSize = "16sp", textColor = colors.getColorOnSurface() },
+      description(nil, desc),
     },
-    {
-      MaterialSwitch,
-      id = switchId,
-      checked = checked ~= false,
-    },
+    { MaterialSwitch, id = id, checked = value, contentDescription = title,
+      minWidth = "48dp", minHeight = "48dp", layout_marginStart = "16dp" },
   }
 end
 
-local function hChip(id, text, checkable)
-  return {
-    Chip,
-    id = id,
-    text = text,
-    Checkable = checkable ~= false,
-    CheckedIconEnabled = true,
-    layout_marginRight = "6dp",
-    style = MDC_R.style.Widget_Material3_Chip,
-  }
+local function chip(id, text)
+  return { Chip, id = id, text = text, checkable = true, checkedIconEnabled = true,
+    textSize = "14sp", minHeight = "48dp", ensureMinTouchTargetSize = true,
+    style = MDC_R.style.Widget_Material3_Chip }
 end
 
-return {
-  ScrollView,
-  layout_width = "match",
-  layout_height = "wrap",
-  {
-    LinearLayout,
-    orientation = "vertical",
-    layout_width = "match",
-    layout_height = "wrap",
-    paddingLeft = "18dp",
-    paddingTop = "6dp",
-    paddingRight = "18dp",
-    paddingBottom = "6dp",
-    Focusable = true,
-    FocusableInTouchMode = true,
+local moduleGroup = { ChipGroup, layout_width = "match", layout_height = "wrap",
+  chipSpacingHorizontal = "8dp", chipSpacingVertical = "8dp", layout_marginTop = "12dp",
+  chip("module_vconsole", "vConsole"), chip("module_time", "TimeMeter"),
+  chip("module_array", "Array"), chip("module_strings", "Strings"),
+  chip("module_anim", "ObjectAnimator"), chip("module_rxlua", "RxLua"),
+}
 
-    sectionLabel(res.string.project_basic_info, "4dp"),
-    {
-      MaterialTextField,
-      id = "project_appName",
-      hint = res.string.project_app_name_hint,
-      layout_width = "match",
-      layout_height = "wrap",
-      textSize = "14sp",
-      TintColor = primary,
-      style = MDC_R.style.Widget_Material3_TextInputLayout_OutlinedBox,
-      boxBackgroundMode = 2,
-      singleLine = true,
+return { ScrollView, layout_width = "match", layout_height = "wrap", fillViewport = true,
+  { LinearLayout, orientation = "vertical", layout_width = "match", layout_height = "wrap",
+    paddingLeft = "20dp", paddingRight = "20dp", paddingTop = "16dp", paddingBottom = "24dp",
+    focusable = true, focusableInTouchMode = true,
+    { MaterialTextView, id = "project_template_summary", textSize = "24sp",
+      layout_width = "match", layout_height = "wrap", textColor = colors.getColorOnSurface() },
+    description("project_template_description"),
+    UI.button { id = "project_change_template", text = res.string.project_change_template, variant = "text",
+      props = { layout_marginTop = "8dp" } },
+    label(res.string.project_basic_info),
+    UI.textField { id = "project_appName", hint = res.string.project_app_name_hint,
+      props = { textSize = "16sp" } },
+    UI.textField { id = "project_packageName", hint = res.string.project_package_hint,
+      props = { textSize = "16sp", layout_marginTop = "16dp" } },
+    description("project_path_preview"),
+    label(res.string.project_theme_family),
+    dropdown("project_theme_family", res.string.project_theme_family),
+    description("project_theme_description"),
+    description("project_theme_compatibility"),
+    label(res.string.project_titlebar),
+    dropdown("project_titlebar", res.string.project_titlebar),
+    description("project_titlebar_description"),
+    option(res.string.project_open_after, res.string.project_open_after_desc, "project_open_after", true),
+    UI.button { id = "project_advanced_toggle", text = res.string.project_advanced_show, variant = "text",
+      props = { layout_marginTop = "8dp" } },
+    { LinearLayout, id = "project_advanced", orientation = "vertical", visibility = "gone",
+      layout_width = "match", layout_height = "wrap",
+      option(res.string.project_internet, res.string.project_internet_desc, "project_internet", false),
+      option(res.string.project_debug_mode, res.string.project_debug_mode_desc, "project_debug_mode", true),
+      label(res.string.modules), description(nil, res.string.project_modules_hint), moduleGroup,
     },
-    {
-      MaterialTextField,
-      id = "project_packageName",
-      layout_marginTop = "10dp",
-      hint = res.string.project_package_hint,
-      layout_width = "match",
-      layout_height = "wrap",
-      textSize = "14sp",
-      TintColor = primary,
-      style = MDC_R.style.Widget_Material3_TextInputLayout_OutlinedBox,
-      boxBackgroundMode = 2,
-      singleLine = true,
-    },
-    {
-      MaterialTextView,
-      id = "project_path_preview",
-      textSize = "11sp",
-      textColor = onVar,
-      layout_marginTop = "6dp",
-      lineSpacingMultiplier = 1.15,
-    },
-
-    sectionLabel(res.string.project_theme),
-    {
-      MaterialTextView,
-      text = res.string.project_theme_hint,
-      textSize = "11sp",
-      textColor = onVar,
-      layout_marginBottom = "4dp",
-    },
-    {
-      HorizontalScrollView,
-      layout_width = "match",
-      layout_height = "wrap",
-      horizontalScrollBarEnabled = false,
-      {
-        LinearLayout,
-        orientation = "horizontal",
-        layout_width = "wrap",
-        layout_height = "wrap",
-        id = "project_theme_row",
-        hChip("theme_m3", res.string.project_theme_chip_m3, true),
-        hChip("theme_m3_ab", res.string.project_theme_chip_m3_ab, true),
-        hChip("theme_dyn", res.string.project_theme_chip_dyn, true),
-        hChip("theme_dyn_ab", res.string.project_theme_chip_dyn_ab, true),
-        hChip("theme_mc", res.string.project_theme_chip_mc, true),
-        hChip("theme_mc_ab", res.string.project_theme_chip_mc_ab, true),
-        hChip("theme_compat", res.string.project_theme_chip_compat, true),
-        hChip("theme_compat_ab", res.string.project_theme_chip_compat_ab, true),
-      },
-    },
-
-    sectionLabel(res.string.project_options),
-    {
-      MaterialCardView,
-      layout_width = "match",
-      layout_height = "wrap",
-      radius = "12dp",
-      CardElevation = 0,
-      strokeWidth = "1dp",
-      strokeColor = outline,
-      CardBackgroundColor = surfaceC,
-      {
-        LinearLayout,
-        orientation = "vertical",
-        layout_width = "match",
-        paddingTop = "2dp",
-        paddingBottom = "2dp",
-        optionRow(res.string.project_open_after, res.string.project_open_after_desc, "project_open_after", true),
-        optionRow(res.string.project_sample_ui, res.string.project_sample_ui_desc, "project_sample_ui", true),
-        optionRow(res.string.project_internet, res.string.project_internet_desc, "project_internet", true),
-        optionRow(res.string.project_debug_mode, res.string.project_debug_mode_desc, "project_debug_mode", true),
-      },
-    },
-
-    sectionLabel(res.string.modules),
-    {
-      MaterialTextView,
-      text = res.string.project_modules_hint,
-      textSize = "11sp",
-      textColor = onVar,
-      layout_marginBottom = "4dp",
-    },
-    {
-      HorizontalScrollView,
-      layout_width = "match",
-      layout_height = "wrap",
-      horizontalScrollBarEnabled = false,
-      {
-        LinearLayout,
-        orientation = "horizontal",
-        layout_width = "wrap",
-        layout_height = "wrap",
-        id = "project_module_row",
-        hChip("module_vconsole", "vConsole", true),
-        hChip("module_time", "TimeMeter", true),
-        hChip("module_array", "Array", true),
-        hChip("module_strings", "Strings", true),
-        hChip("module_anim", "ObjectAnimator", true),
-        hChip("module_rxlua", "RxLua", true),
-      },
-    },
+    { MaterialTextView, id = "project_error", visibility = "gone", textSize = "14sp",
+      layout_width = "match", layout_height = "wrap", layout_marginTop = "12dp",
+      accessibilityLiveRegion = 1, textColor = colors.getColorError() },
   },
 }

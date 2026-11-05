@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Illustrative populated checklist; each row has its own delete action. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="160dp" android:height="200dp"
+    android:viewportWidth="160" android:viewportHeight="200">
+    <path android:fillColor="?attr/colorSurface" android:pathData="M0,0H160V200H0Z" />
+    <path android:fillColor="?attr/colorSurfaceContainer" android:pathData="M0,0H160V30H0Z" />
+    <path android:fillColor="?attr/colorOnSurface" android:pathData="M16,12H70V18H16Z M16,42H105V51H16Z" />
+    <path android:fillColor="?attr/colorOnSurfaceVariant" android:pathData="M16,59H133V63H16Z" />
+    <path android:fillColor="?attr/colorSurfaceContainer" android:pathData="M20,73H140Q144,73 144,77V96H16V77Q16,73 20,73Z" />
+    <path android:fillColor="?attr/colorOnSurfaceVariant" android:pathData="M24,83H75V87H24Z M16,95H144V96H16Z M16,125H67V128H16Z" />
+    <path android:fillColor="?attr/colorPrimary" android:pathData="M25,102H135A9,9 0,0 1,135,120H25A9,9 0,0 1,25,102Z M18,138H28V148H18Z M115,151H137A7,7 0,0 1,137,165H115A7,7 0,0 1,115,151Z M115,180H137A7,7 0,0 1,137,194H115A7,7 0,0 1,115,180Z" />
+    <path android:fillColor="?attr/colorOnPrimary" android:pathData="M62,109H98V113H62Z M117,157H135V160H117Z M117,186H135V189H117Z" />
+    <path android:strokeColor="?attr/colorOnPrimary" android:strokeWidth="1.5" android:strokeLineJoin="round" android:pathData="M20,142L22,145L26,140" />
+    <path android:strokeColor="?attr/colorOnSurfaceVariant" android:strokeWidth="1.5" android:pathData="M18,167H28V177H18Z" />
+    <path android:fillColor="?attr/colorOnSurfaceVariant" android:pathData="M37,141H101V145H37Z" />
+    <path android:fillColor="?attr/colorOnSurface" android:pathData="M37,170H89V174H37Z" />
+</vector>

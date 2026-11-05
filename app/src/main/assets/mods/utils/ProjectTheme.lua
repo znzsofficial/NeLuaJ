@@ -186,32 +186,4 @@ function _M.isDynamic(themeName)
   return type(themeName) == "string" and themeName:find("DynamicColors", 1, true) ~= nil
 end
 
---- 返回 res.string 中 main / layout 模板键
-function _M.templateKeys(themeName, useSample)
-  local ab = _M.hasSystemActionBar(themeName)
-  if _M.isCompat(themeName) then
-    if ab then
-      return useSample and "mcode_compat_ab" or "mcode_compat_ab_minimal",
-        useSample and "lcode_compat_ab" or "lcode_compat_ab_minimal"
-    end
-    return useSample and "mcode_compat" or "mcode_compat_minimal",
-      useSample and "lcode_compat" or "lcode_compat_minimal"
-  end
-  if _M.isMaterialComponent(themeName) then
-    if ab then
-      return useSample and "mcode_mc_ab" or "mcode_mc_ab_minimal",
-        useSample and "lcode_mc_ab" or "lcode_mc_ab_minimal"
-    end
-    return useSample and "mcode_mc" or "mcode_mc_minimal",
-      useSample and "lcode_mc" or "lcode_mc_minimal"
-  end
-  -- M3 / DynamicColors
-  if ab then
-    return useSample and "mcode_ab" or "mcode_ab_minimal",
-      useSample and "lcode_ab" or "lcode_ab_minimal"
-  end
-  return useSample and "mcode" or "mcode_minimal",
-    useSample and "lcode" or "lcode_minimal"
-end
-
 return _M

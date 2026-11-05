@@ -14,11 +14,15 @@
 
       <h2>Create or continue a project</h2>
       <ol>
-        <li>Choose Create Project, enter the app and package names, and select the template and options.</li>
+        <li>Choose Create Project, select a template, then enter the app name, package name and theme. Review the generated file list and permissions before creating it.</li>
         <li>With Open after creation enabled, the editor opens the new project's <code>main.lua</code>. Otherwise, you stay on Home.</li>
         <li>Opening an existing project attempts to restore its tabs, active file and cursor instead of always opening <code>main.lua</code>.</li>
       </ol>
       <p>Recently opened uses actual open history, not directory modification time. Search matches app names, folder names and package names; clearing it restores the full list.</p>
+      <h3>Choose a template</h3>
+      <p>Six starting points are included: blank page, interactive form, local checklist, multiple pages, settings and a local WebView. Blank supports legacy themes; the other templates target Material 3 and dynamic colors. Incompatible theme combinations cannot be generated.</p>
+      <p>Debugging, network permission and optional utility modules are advanced settings. Templates do not request network access by default. Every generated project includes a README describing its entry points, example behavior and packaging. Files remain editable, and template updates do not overwrite existing projects.</p>
+      <p>On failure, your inputs remain available and an error explains the problem. Existing project folders are never overwritten. After an interrupted creation, inspect the reported target or staging directory before deciding whether to keep, move or delete your leftover files.</p>
 
       <h2>Open an existing folder</h2>
       <p>Open project folder accepts the full path of a readable folder and opens it directly. It does not copy or overwrite projects and is not a ZIP importer. Extract downloaded archives to an accessible directory first.</p>

@@ -205,6 +205,26 @@ function onCreate()
 end
 
 local function handleNavAction(action, path)
+  if action == "project_created" or action == "open_project" then
+    if type(path) ~= "string" or path == "" or not File(path).isDirectory() then
+      return false, "project_missing"
+    end
+    if action == "project_created" then
+      MainActivity.RecyclerView.update()
+      return true
+    end
+    local entry = path .. "/main.lua"
+    if not File(entry).isFile() then return false, "file_missing" end
+    if not leaveGuard.save() then return false, "file_failed" end
+    local PathManager = require "mods.utils.PathManager"
+    PathManager.updateDir(path)
+    filetab.setPath(path)
+    MainActivity.RecyclerView.update()
+    EditorUtil.fromRecy = true
+    EditorUtil.load(entry)
+    if EditorUtil.currentFile() == entry then return true end
+    return false, "file_failed"
+  end
   if (action == "open_file" or action == "open_init") and type(path) == "string" and path ~= "" then
     if not File(path).isFile() then return false, "file_missing" end
     EditorUtil.fromRecy = true
@@ -290,7 +310,10 @@ end
 processPending = function(retry, expected)
   local pending = expected or ActivityUtil.peekPending()
   if not pending then return false end
-  local ok, reason = ActivityUtil.consumePending(handleNavAction, pending, retry)
+  local ok, reason = ActivityUtil.consumePending(function(action, path)
+    if completedRequests[pending.id] then return true end
+    return handleNavAction(action, path)
+  end, pending, retry)
   if ok and not completedRequests[pending.id] then
     completedRequests[pending.id] = true
     completedOrder[#completedOrder + 1] = pending.id
@@ -336,6 +359,7 @@ function onResult(name, action, path, requestId)
   if pending and pending.action == action and pending.payload == tostring(path or "") then
     return processPending(false, pending)
   end
+  if pending and (action == "open_project" or action == "project_created") then return false end
   if not pending and action ~= nil then
     if ActivityUtil.setPending(action, path) then return processPending(false) end
   end

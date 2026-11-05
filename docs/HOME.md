@@ -18,6 +18,8 @@
 | `mods/project/HomeProjects.lua` | 后台只读工程扫描与过滤、目录验证 |
 | `mods/project/RecentProjects.lua` | 真实打开时间记录，非目录 mtime 推断 |
 | `activities/main/CreateProject.lua` | 工程脚手架；创建通知与宿主打开动作分离 |
+| `activities/home/HomeNavigation.lua` | 独立创建页结果的首页消费、请求去重与失败重试；编辑器由自身保存保护处理工程切换 |
+| `mods/project/templates/Generator.lua` | 模板预览、参数校验和完整工程生成；独立文件资产与扩展规则见 [PROJECT_TEMPLATES.md](./PROJECT_TEMPLATES.md) |
 | `activities/main/MainActivity.lua` | 编辑器装配、工作区恢复、安全离开与待办导航消费 |
 | `mods/utils/ActivityUtil.lua` | 路由、带身份的待办导航、成功确认消费 |
 | `mods/editor/LeaveGuard.lua` | 保存结果判定、重试/取消/明确放弃、过期确认保护 |
@@ -64,6 +66,28 @@ Fragment 通过稳定 arguments 页面键向新 Activity 的命名 Lua 宿主重
 已知占用的工程先关闭编辑器再改名，避免标签闭包/自动保存写回旧路径。跨 Activity 检查保守阻止可见的活动编辑器，但当前 registry 只公开最新实例，不是完整多窗口/跨进程租约。
 
 Agent 根存储通过别名保留，**不自动改写旧 ChangeSet 内嵌绝对路径、scope 或未定义的子目录哈希桶**。旧文件撤销历史不能承诺在改名后继续重放；日志/备份暂无自动垃圾回收，应在确认恢复前保留。
+
+## 公共基础控件
+
+`mods.ui.Components` 返回新布局表，不创建或缓存 View。首页的 `HomeStyle.action`
+保留兼容入口，委托给公共 `button`（旧 `quiet` 对应 `text`）。
+
+```lua
+local UI = require "mods.ui.Components"
+UI.button { id = "save", text = "保存", variant = "primary" }
+UI.iconButton { id = "folder", icon = res.drawable("folder"),
+  description = "打开目录", variant = "tonal",
+  props = { layout_marginStart = "12dp" } }
+UI.textField { id = "path", hint = "目录路径", text = "/sdcard/Projects",
+  singleLine = true }
+```
+
+- `button`：`primary`（默认）、`tonal`、`outlined`、`text`，采用对应 Material 主题属性。
+- `iconButton`：`standard`（默认）、`filled`、`tonal`、`outlined`；`description` 同时用于无障碍描述和 tooltip。
+- `textField`：outlined `MaterialTextField`，默认单行；颜色在调用时读取当前 Activity 主题。
+- 原生属性、监听器等放进 `props`，最后覆盖默认值；例如 `props = { onClick = save }`。
+  传入的 options 不会被修改，props 中嵌套对象按引用使用；不要跨页面复用带 View/Activity 的对象。
+- 业务校验、提交、加载状态与点击行为由页面管理。未知按钮 variant 会显式报错。
 
 ## 验证边界
 

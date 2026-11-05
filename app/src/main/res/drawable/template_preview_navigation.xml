@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Main navigation template: title, message input and open-detail action. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="160dp" android:height="200dp"
+    android:viewportWidth="160" android:viewportHeight="200">
+    <path android:fillColor="?attr/colorSurface" android:pathData="M0,0H160V200H0Z" />
+    <path android:fillColor="?attr/colorSurfaceContainer" android:pathData="M0,0H160V30H0Z" />
+    <path android:fillColor="?attr/colorOnSurface" android:pathData="M16,12H70V18H16Z M16,44H117V53H16Z" />
+    <path android:fillColor="?attr/colorOnSurfaceVariant" android:pathData="M16,63H137V67H16Z M16,72H101V76H16Z" />
+    <path android:fillColor="?attr/colorSurfaceContainer" android:pathData="M20,90H140Q144,90 144,94V133H16V94Q16,90 20,90Z" />
+    <path android:fillColor="?attr/colorOnSurfaceVariant" android:pathData="M24,97H59V100H24Z M24,110H121V114H24Z M24,119H82V123H24Z M16,132H144V133H16Z" />
+    <path android:fillColor="?attr/colorPrimary" android:pathData="M29,147H131A13,13 0,0 1,131,173H29A13,13 0,0 1,29,147Z" />
+    <path android:fillColor="?attr/colorOnPrimary" android:pathData="M38,158H100V162H38Z" />
+    <path android:strokeColor="?attr/colorOnPrimary" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M113,160H125 M121,156L125,160L121,164" />
+</vector>

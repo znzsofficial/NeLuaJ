@@ -1,0 +1,20 @@
+:root { color-scheme: light dark; --surface: #fcf9ff; --text: #211b2b; --accent: #65518a; --on-accent: #fff; --subtle: #ece5f4; }
+@media (prefers-color-scheme: dark) {
+  :root { --surface: #17121d; --text: #eee5f6; --accent: #cfb9f3; --on-accent: #35234e; --subtle: #302738; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--surface); color: var(--text); font: 1rem/1.6 system-ui, sans-serif; }
+main { max-width: 40rem; margin: auto; padding: 1.5rem; overflow-wrap: anywhere; }
+h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 1rem; }
+h2 { font-size: 1.25rem; line-height: 1.4; margin: 0 0 .75rem; }
+section { margin-block: 2rem; }
+output { display: block; font-size: 3rem; font-variant-numeric: tabular-nums; line-height: 1.3; margin-block: 1rem; }
+.actions { display: flex; flex-wrap: wrap; gap: .75rem; }
+button { min-height: 3rem; padding: .75rem 1.5rem; border: 0; border-radius: 1.5rem; font: inherit; font-weight: 600; background: var(--accent); color: var(--on-accent); cursor: pointer; }
+button.secondary { background: var(--subtle); color: var(--text); }
+button:active { opacity: .8; }
+button:disabled { opacity: .5; cursor: default; }
+a { color: var(--accent); text-underline-offset: .2em; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+::selection { background: var(--accent); color: var(--on-accent); }
+code { font-size: .9em; }

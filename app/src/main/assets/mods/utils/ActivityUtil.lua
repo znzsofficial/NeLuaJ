@@ -18,6 +18,7 @@ local routes = {
   layouthelper     = "layouthelper/LayoutHelperActivity.lua",
   resource         = "resource/ResourceBrowserActivity.lua",
   project_settings = "projectsettings/ProjectSettingsActivity.lua",
+  project_create   = "projectcreate/CreateProjectActivity.lua",
   media            = "media/MediaBrowserActivity.lua",
   agent_center     = "agent/AgentCenterActivity.lua",
 }
