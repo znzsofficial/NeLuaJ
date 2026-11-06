@@ -11,8 +11,6 @@ local SubagentRunner = require("mods.agent.SubagentRunner")
 local Contracts = require("mods.agent.Contracts")
 local S = res.string
 
--- 编辑器刷新依赖 EditorUtil 全局；自行 import，不依赖 ChatUI 的副作用
-import "mods.utils.EditorUtil"
 
 -- ─── 视图钩子（ChatUI 在 configure 时注入）──
 
@@ -208,8 +206,12 @@ local function executeToolCallsParallel(calls, toolCalls, results, onAllDone, ge
     for j = 1, total do
       local entry = collected[j]
       local content = entry and tostring(entry.result or "") or S.ai_stopped
-      messages[#messages + 1] = { role = "tool", tool_call_id = calls[j].id, content = content }
-      results[#results + 1] = { tool_call_id = calls[j].id, content = content }
+      local toolOk, fileResult
+      if entry then toolOk, fileResult = entry.ok, entry.fileResult end
+      messages[#messages + 1] = { role = "tool", tool_call_id = calls[j].id, content = content,
+        tool_ok = toolOk, file_result = fileResult }
+      results[#results + 1] = { tool_call_id = calls[j].id, content = content,
+        tool_ok = toolOk, file_result = fileResult }
       if entry then
         state.failedToolCalls[entry.key] = entry.ok == false and content:sub(1, 1000) or nil
       end
@@ -230,10 +232,10 @@ local function executeToolCallsParallel(calls, toolCalls, results, onAllDone, ge
     local argsEncoded, encodedArgs = pcall(json.encode, call.args)
     local toolCallKey = call.name .. "\n"
       .. (argsEncoded and tostring(encodedArgs) or tostring(tc.arguments or ""))
-    AgentChat.executeToolAsync(call.name, call.args, function(resultStr, toolOk)
+    AgentChat.executeToolAsync(call.name, call.args, function(resultStr, toolOk, fileResult)
       -- 严格时空守卫：世代或会话作用域已失效时，绝对禁止向活跃会话追加数据
       if settled or collected[i] or (generation and not isCurrent(generation)) or not isCurrentScope(turnScope) then return end
-      collected[i] = { id = call.id, result = resultStr, ok = toolOk, key = toolCallKey }
+      collected[i] = { id = call.id, result = resultStr, ok = toolOk, key = toolCallKey, fileResult = fileResult }
       pending = pending - 1
       if state.stopRequested then flush(true)
       elseif pending == 0 then flush(false) end
@@ -259,43 +261,6 @@ executeToolCalls = function(toolCalls, index, results, onAllDone, generation)
     pcall(function()
       if MainActivity and MainActivity.RecyclerView then
         MainActivity.RecyclerView.update()
-      end
-      -- 如果修改了当前打开的文件，刷新编辑器；rename_file 命中旧路径时改载新路径
-      local messages = getMessages()
-      local function resolveToolPath(p)
-        p = tostring(p or "")
-        if p == "" then return nil end
-        if p:sub(1, 1) ~= "/" then
-          local base = Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir()
-          p = base .. "/" .. p
-        end
-        return p:gsub("/+$", "")
-      end
-      for _, r in ipairs(results) do
-        if r.tool_call_id then
-          for _, tc in ipairs(toolCalls) do
-            if tc.id == r.tool_call_id and (tc.name == "create_file" or tc.name == "apply_patch"
-                or tc.name == "append_file" or tc.name == "replace_in_file" or tc.name == "rename_file") then
-              local args = {}
-              pcall(function() args = json.decode(tc.arguments) end)
-              if args.path then
-                local thisFile = Bean and Bean.Path and Bean.Path.this_file
-                if thisFile then
-                  thisFile = tostring(thisFile):gsub("/+$", "")
-                  local resolvedPath = resolveToolPath(args.path)
-                  if tc.name == "rename_file" then
-                    local renamedTo = resolveToolPath(args.new_path)
-                    if thisFile == resolvedPath and renamedTo then
-                      EditorUtil.load(renamedTo)
-                    end
-                  elseif thisFile == resolvedPath then
-                    EditorUtil.load(resolvedPath)
-                  end
-                end
-              end
-            end
-          end
-        end
       end
     end)
     onAllDone(results)
@@ -329,14 +294,18 @@ executeToolCalls = function(toolCalls, index, results, onAllDone, generation)
     end
   end
 
-  local function proceedWithResult(resultStr, stopAfterResult, toolOk)
+  local function proceedWithResult(resultStr, stopAfterResult, toolOk, fileResult)
     -- 仅清属于自己的停止句柄：过期回调不得抹掉当前回合的句柄
     if state.activeToolStop == stopHandle then state.activeToolStop = nil end
     if stopped or accepted or state.stopRequested or not isCurrentScope(turnScope) then return end
     accepted = true
+    local failed = toolOk == false
+    if toolOk == nil then failed = hooks.isToolError(tc.name, resultStr) end
     results[#results + 1] = {
       tool_call_id = tc.id,
       content = resultStr,
+      tool_ok = toolOk,
+      file_result = fileResult,
     }
     -- Persist each completed tool before proceeding. A later stop must not
     -- lose evidence of already-executed operations from the conversation.
@@ -345,13 +314,13 @@ executeToolCalls = function(toolCalls, index, results, onAllDone, generation)
       role = "tool",
       tool_call_id = tc.id,
       content = resultStr,
+      tool_ok = toolOk,
+      file_result = fileResult,
     }
     -- 任务计划状态在主线程提交：update 在工具线程只做规范化，
     -- 此处与下方 saveHistory 合并为一次落盘（携带 tool 结果与新计划）
     if tc.name == "update_todos" then pcall(TodoManager.commitPending) end
     -- 执行器的结构化标志优先（true=成功，false=失败）；旧式工具（nil）回退到文本嗅探
-    local failed = toolOk == false
-    if toolOk == nil then failed = hooks.isToolError(tc.name, resultStr) end
     if failed then
       state.failedToolCalls[toolCallKey] = tostring(resultStr):sub(1, 1000)
     else
@@ -385,8 +354,8 @@ executeToolCalls = function(toolCalls, index, results, onAllDone, generation)
   local function executeCurrentTool()
     stopHandle = finish
     state.activeToolStop = stopHandle
-    AgentChat.executeToolAsync(tc.name, args, function(resultStr, toolOk)
-      proceedWithResult(resultStr, nil, toolOk)
+    AgentChat.executeToolAsync(tc.name, args, function(resultStr, toolOk, fileResult)
+      proceedWithResult(resultStr, nil, toolOk, fileResult)
     end)
   end
 

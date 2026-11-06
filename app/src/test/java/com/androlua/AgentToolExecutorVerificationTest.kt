@@ -37,6 +37,7 @@ class AgentToolExecutorVerificationTest {
         val assets = sequenceOf(File("src/main/assets"), File("app/src/main/assets"))
             .first { it.isDirectory }
         val globals = JsePlatform.standardGlobals()
+        globals.get("package").set("path", assets.absolutePath.replace('\\', '/') + "/?.lua;" + globals.get("package").get("path").tojstring())
         globals.get("package").get("loaded").set("mods.agent.ToolRegistry", globals.load(
             File(assets, "mods/agent/ToolRegistry.lua").readText(), "@ToolRegistry.lua"
         ).call())

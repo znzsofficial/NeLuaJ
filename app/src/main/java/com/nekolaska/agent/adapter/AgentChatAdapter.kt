@@ -205,9 +205,10 @@ internal class AgentCardList {
         val subtask = value.get("subtask")
         val content = listOf(
             "content", "text", "error", "title", "body", "isLastUser", "isLastAssistant",
-            "toolName", "result", "streamId", "messageIndex"
+            "toolName", "result", "toolOk", "streamId", "messageIndex"
         ).map { value.get(it).tojstring() } + listOf(
             fingerprint(value.get("args")),
+            fingerprint(value.get("fileResult")),
             if (message.istable()) message.get("reasoning_content").tojstring() else "",
             if (message.istable()) message.get("continuation_state").tojstring() else ""
         ) + listOf("task", "rounds", "tool", "done").map {

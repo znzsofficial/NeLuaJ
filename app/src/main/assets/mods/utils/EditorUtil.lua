@@ -7,6 +7,120 @@ local Selection = require "mods.editor.EditorSelection"
 local File = bindClass "java.io.File"
 local Color = bindClass "android.graphics.Color"
 local _M = {}
+local loadedPath, loadedText, diskVersion
+local ProjectContext = require "mods.project.ProjectContext"
+local testStorage, native
+
+-- Only a non-Android harness may explicitly supply storage. Binding failures in
+-- production are errors, never permission to fall back to non-atomic writes.
+function _M.setTestStorage(storage)
+    assert(not luajava, "test storage is unavailable on Android")
+    testStorage = storage
+end
+
+local function decode(value)
+    if type(value) == "table" then return value end
+    return require("json").decode(tostring(value))
+end
+
+local function storage()
+    if testStorage then return testStorage end
+    if not native then native = luajava.kotlinObject("com.nekolaska.io.FileMutationEngine") end
+    return native
+end
+
+local function observe(path)
+    local ok, value = pcall(function() return decode(storage().observe(path)) end)
+    if ok and value and value.kind == "file" and type(value.text) == "string"
+        and type(value.version) == "string" then return value end
+    return nil, ok and "无法读取文本文件版本" or tostring(value)
+end
+
+local function draftFile(slot)
+    local root = tostring(activity.getFilesDir()) .. "/editor-drafts"
+    assert(File(root).isDirectory() or File(root).mkdirs(), "无法创建草稿目录")
+    return root .. "/" .. slot .. ".json"
+end
+
+local function readDraftSlot(slot)
+    if testStorage then return testStorage.readDraft(slot) end
+    local f = io.open(draftFile(slot), "rb")
+    if not f then return nil end
+    local text = f:read("*a"); f:close()
+    return decode(text)
+end
+
+function _M.listDrafts()
+    local list = {}
+    for slot = 1, 8 do
+        local ok, draft = pcall(readDraftSlot, slot)
+        if ok and draft then draft.slot = slot; list[#list + 1] = draft end
+    end
+    table.sort(list, function(a, b)
+        if a.created ~= b.created then return a.created > b.created end
+        return (a.order or 0) > (b.order or 0)
+    end)
+    return list
+end
+
+function _M.readDraft(slot)
+    assert(type(slot) == "number" and slot >= 1 and slot <= 8 and slot % 1 == 0)
+    local ok, draft = pcall(readDraftSlot, slot)
+    if ok then return draft end
+    return nil, tostring(draft)
+end
+
+function _M.listExternalDrafts(path)
+    local list = {}
+    for _, draft in ipairs(_M.listDrafts()) do
+        if not path or draft.path == path then
+            draft.id, draft.createdAt = draft.slot, draft.created
+            list[#list + 1] = draft
+        end
+    end
+    return list
+end
+
+local function preserveDraft(snapshot, target)
+    local text = tostring(mLuaEditor.getText().toString())
+    Session.observeText(text)
+    if text == snapshot.text then return true end
+    local ok, err = pcall(function()
+        assert(#text <= 1024 * 1024, "草稿超过 1 MiB 上限")
+        local list, used, slot, order = _M.listDrafts(), {}, nil, 0
+        for _, item in ipairs(list) do used[item.slot] = true; order = math.max(order, item.order or 0) end
+        for index = 1, 8 do if not used[index] then slot = index; break end end
+        slot = slot or list[#list].slot
+        local draft = { path = target or Session.current(), originalPath = Session.current(), text = text, created = os.time(), order = order + 1,
+            documentId = Session.identity().documentId, diskVersion = diskVersion,
+            cursor = mLuaEditor.getSelectionEnd() }
+        if testStorage then assert(testStorage.writeDraft(slot, draft)); return end
+        local path = draftFile(slot)
+        local f = assert(io.open(path .. ".tmp", "wb"))
+        local written, reason = f:write(require("json").encode(draft))
+        local closed = f:close()
+        assert(written and closed, reason or "草稿写入失败")
+        assert(os.rename(path .. ".tmp", path))
+    end)
+    if not ok then return false, "强制刷新已继续，但手动输入草稿保存失败: " .. tostring(err) end
+    return true
+end
+
+function _M.restoreDraft(slot)
+    local draft, err = _M.readDraft(slot)
+    if not draft then return false, err or "草稿不存在" end
+    if Session.current() ~= draft.path then return false, "请先打开草稿对应文件" end
+    local ok, warning = preserveDraft({ text = loadedText })
+    if not ok then return false, warning end
+    local latest, readError = observe(draft.path)
+    if not latest then return false, readError end
+    loadedPath, loadedText, diskVersion = draft.path, latest.text, latest.version
+    mLuaEditor.setText(draft.text)
+    Session.observeText(draft.text)
+    return true
+end
+
+_M.restoreExternalDraft = _M.restoreDraft
 _M.fromRecy = false
 
 local function isSharedTruthy(value)
@@ -120,6 +234,7 @@ function _M.rebindPath(path)
     end
     local cursor = Session.cursor(previous)
     commitFile(path)
+    if loadedPath == previous then loadedPath = path end
     if type(cursor) == "number" then
         Session.setCursor(path, cursor)
     end
@@ -137,21 +252,18 @@ end
 
 --- 读入编辑用文本。读失败时 LuaFileUtil.read 返回 ""，非空文件绝不当成空内容。
 local function readFileForEdit(path)
-    local file = File(path)
-    if not file.isFile() then return nil end
-    local text = tostring(LuaFileUtil.read(path) or "")
-    local len = file.length()
-    if text == "" and len and len > 0 then
-        return nil
-    end
-    return text
+    local value = observe(path)
+    if value then return value.text, value.version end
 end
 
 --- 把已经读到的文本载入编辑器。失败时不改当前文件。
-local function bindFile(path, text)
+local function bindFile(path, text, version)
     if text == nil then return false end
     mLuaEditor.setText(text)
     commitFile(path)
+    loadedPath, loadedText = path, text
+    diskVersion = version
+    Session.observeText(text)
     mLuaEditor.setVisibility(0)
     resetPageTitle(path)
     local Init = package.loaded["activities.main.Init"]
@@ -163,6 +275,7 @@ end
 --- 关掉最后一个文件、或启动时还没有文件：清掉缓冲区，只留空状态。
 --- 不清除工程名——人还在工程里，只是没打开文件。
 function _M.enterEmptyState()
+    loadedPath, loadedText, diskVersion = nil, nil, nil
     clearFile()
     if mLuaEditor then
         mLuaEditor.setText("")
@@ -260,7 +373,7 @@ end
 
 --- 返回 nil（无法保存）、"same"（不用写）或写入是否成功。
 --- 只写当前缓冲区对应的文件。非空文件读成空时拒绝覆盖。
-function _M.save(path, str, editor)
+function _M.save(path, str, editor, token)
     editor = editor or mLuaEditor
     path = path or Session.current()
     if not path or path == "" or not editor then
@@ -275,27 +388,27 @@ function _M.save(path, str, editor)
         str = tostring(str)
     end
 
-    local file = File(path)
-    local exists = file.isFile()
-    local disk = tostring(LuaFileUtil.read(path) or "")
-    local len = file.length()
-    if exists and disk == "" and len and len > 0 then
-        return
+    Session.observeText(str)
+    if loadedPath ~= path or not diskVersion then return false, "missing_baseline" end
+    local ok, result = pcall(function()
+        return decode(storage().saveText(token or "", path, str, diskVersion))
+    end)
+    if not ok then return false, tostring(result) end
+    if result.outcome ~= "committed" and result.outcome ~= "unchanged" then
+        return false, result.error or "save_rejected"
     end
-    if str == disk then
-        return "same"
+    -- The version must belong to the committed text, not to a later observe.
+    local version = result.version
+    for _, change in ipairs(result.changes or {}) do
+        if change.path == path then version = change.afterVersion or change.version or (change.after and change.after.version) or version end
     end
-
-    if exists then backupPrevious(path, disk) end
-    local written
-    if exists then
-        written = LuaFileUtil.write(path, str)
-    else
-        written = LuaFileUtil.writeOrCreate(path, str)
+    if not version then
+        local value = observe(path)
+        if value and value.text == str then version = value.version end
     end
-    if written ~= true then
-        return false
-    end
+    diskVersion = version
+    loadedPath, loadedText = path, str
+    if result.outcome == "unchanged" then return "same" end
 
     if #str == 0 then noteEmptySave() end
     local selectionEnd = editor.getSelectionEnd()
@@ -303,6 +416,201 @@ function _M.save(path, str, editor)
     this.setSharedData("lastFile", path)
     this.setSharedData("lastSelect", selectionEnd)
     return true
+end
+
+local function canonical(path)
+    return tostring(File(path).getCanonicalPath())
+end
+
+--- Called on the UI thread immediately before an AI write, after approval.
+function _M.prepareExternalWrite(path, token)
+    local current = Session.current()
+    if not current or current == "" or not mLuaEditor or canonical(current) ~= canonical(path) then
+        return nil
+    end
+    local saved = _M.save(current, nil, nil, token)
+    if saved ~= true and saved ~= "same" then
+        error("当前编辑器内容无法保存或与磁盘冲突，AI 写入未执行")
+    end
+    local snapshot = Session.identity(editorText(mLuaEditor))
+    snapshot.text, snapshot.cursor, snapshot.diskVersion = editorText(mLuaEditor), mLuaEditor.getSelectionEnd(), diskVersion
+    return snapshot
+end
+
+--- Reload without load()'s save/same-file shortcuts; AI may explicitly prefer disk content.
+function _M.finishExternalWrite(snapshot, target, force)
+    if not snapshot or not Session.isBinding(snapshot) then return true end
+    if not force and editorText(mLuaEditor) ~= snapshot.text then
+        return false, "AI 已修改磁盘文件，但编辑期间又有手动修改；已保留编辑器内容，请合并后再保存。"
+    end
+    target = target or snapshot.path
+    local text, version = readFileForEdit(target)
+    if text == nil then return false, "AI 已写入，但编辑器无法重新读取文件: " .. target end
+    local _, warning = preserveDraft(snapshot, target)
+    if target ~= snapshot.path and not TabUtil.Table[target] then
+        TabUtil.add(target, { select = false })
+    end
+    bindFile(target, text, version)
+    Session.remember(target)
+    if type(snapshot.cursor) == "number" then Session.setCursor(target, snapshot.cursor) end
+    if target ~= snapshot.path then
+        selectingQuietly = true
+        local ok, err = pcall(TabUtil.remove, snapshot.path)
+        selectingQuietly = false
+        if not ok then return false, tostring(err) end
+    end
+    quietSelect(TabUtil.Table[target] and TabUtil.Table[target].obj)
+    pcall(function() mLuaEditor.setSelection(snapshot.cursor or 0) end)
+    return true, warning
+end
+
+local function within(path, root)
+    return path == root or path:sub(1, #root + 1) == root .. "/"
+end
+
+function _M.prepareFileOperation(name, args, token)
+    if not args or not args.path then return nil end
+    local root = canonical(args.path):gsub("/+$", "")
+    local destination = name == "rename_file" and args.new_path and canonical(args.new_path) or nil
+    local snapshot = { tabs = {}, root = root, destination = destination,
+        scope = ProjectContext.snapshot() }
+    for path, tab in pairs(TabUtil.Table) do
+        local normalized = canonical(path)
+        if within(normalized, root) then
+            snapshot.tabs[#snapshot.tabs + 1] = { path = path, tab = tab,
+                target = destination and (destination .. normalized:sub(#root + 1)) or path }
+        end
+    end
+    local current = Session.current()
+    if current and current ~= "" and within(canonical(current), root) then
+        snapshot.editor = _M.prepareExternalWrite(current, token)
+        snapshot.target = destination and (destination .. canonical(current):sub(#root + 1)) or current
+    end
+    return snapshot
+end
+
+-- Recovery captures UI ownership without saving an old buffer over recovered data.
+function _M.captureRecovery(effects)
+    if not mLuaEditor then return nil, "editor_unavailable" end
+    local scope = ProjectContext.snapshot()
+    if effects.scopeId ~= scope.scopePath then return nil, "scope_stale" end
+    local snapshot = { scope = scope, tabs = {}, recovery = true }
+    for path, tab in pairs(TabUtil.Table) do
+        snapshot.tabs[#snapshot.tabs + 1] = { path = path, tab = tab, target = path }
+    end
+    local current = Session.current()
+    if current and current ~= "" then
+        snapshot.editor = Session.identity(editorText(mLuaEditor))
+        snapshot.editor.text = loadedText
+        snapshot.editor.cursor = mLuaEditor.getSelectionEnd()
+    end
+    return snapshot
+end
+
+function _M.finishFileOperation(snapshot, effects)
+    if not snapshot then return true end
+    if not mLuaEditor then return false, "editor_unavailable" end
+    if not ProjectContext.isCurrent(snapshot.scope, "project") then return true end
+    if not effects or (effects.outcome ~= "committed" and effects.outcome ~= "partial") then return true end
+    local recoveryWarning
+    if effects.outcome == "partial" then
+        local unknown = {}
+        for _, item in ipairs(effects.unknownPaths or {}) do
+            unknown[#unknown + 1] = tostring(item.path or "?")
+        end
+        recoveryWarning = "文件操作仅部分完成，已同步可确认的变更；请恢复文件历史后重新载入编辑器。"
+        if #unknown > 0 then
+            recoveryWarning = recoveryWarning .. " 无法确认的路径（保留当前内容）: " .. table.concat(unknown, ", ")
+        end
+    end
+    local function withRecoveryWarning(reason)
+        if reason and recoveryWarning then return reason .. "\n" .. recoveryWarning end
+        return reason or recoveryWarning
+    end
+    local replayVersions = {}
+    if snapshot.recovery then
+        for _, change in ipairs(effects.changes or {}) do
+            local ok, observed = pcall(function() return decode(storage().observe(change.path)) end)
+            if not ok then return false, tostring(observed) end
+            replayVersions[change.path] = observed and observed.version == change.afterVersion
+        end
+    end
+    local function confirmed(change)
+        return (effects.outcome ~= "partial" or change.verified == true)
+            and (not snapshot.recovery or replayVersions[change.path])
+    end
+    local function affected(path)
+        local normalized = canonical(path)
+        for _, item in ipairs(effects.unknownPaths or {}) do
+            if item.path and within(normalized, canonical(item.path):gsub("/+$", "")) then return end
+        end
+        for _, change in ipairs(effects.changes or {}) do
+            local source = change.path
+            if confirmed(change) and source and within(normalized, canonical(source):gsub("/+$", "")) then
+                if change.afterKind == "missing" then
+                    if change.kind == "rename" then
+                        for _, other in ipairs(effects.changes) do
+                            if confirmed(other) and other.kind == "rename" and other.path ~= source
+                                and other.from == change.from and other.to == change.to
+                                and (other.afterKind == "file" or other.afterKind == "dir") then
+                                return canonical(other.path) .. normalized:sub(#canonical(source) + 1), "rename"
+                            end
+                        end
+                    end
+                    return nil, "delete"
+                elseif change.afterKind == "file" or change.afterKind == "dir" then
+                    return path, "write"
+                end
+            end
+        end
+    end
+    local result, reason = true, nil
+    local current = Session.current()
+    if current then
+        local target, kind = affected(current)
+        if kind then
+            -- A->B->A is a new binding: reconcile it using its own cursor and
+            -- baseline, never apply the captured document's cursor to it.
+            local currentSnapshot = snapshot.editor
+            if not Session.isBinding(currentSnapshot) then
+                currentSnapshot = Session.identity(editorText(mLuaEditor))
+                currentSnapshot.text, currentSnapshot.cursor = loadedText, mLuaEditor.getSelectionEnd()
+            end
+            if kind == "delete" then
+                local _, warning = preserveDraft(currentSnapshot)
+                reason = warning
+                _M.enterEmptyState()
+            else
+                result, reason = _M.finishExternalWrite(currentSnapshot, target, true)
+            end
+        end
+    end
+    selectingQuietly = true
+    local ok, err = pcall(function()
+        for _, item in ipairs(snapshot.tabs) do
+            if TabUtil.Table[item.path] == item.tab then
+                local target, kind = affected(item.path)
+                if kind == "rename" and target ~= item.path then
+                    if not TabUtil.Table[target] then TabUtil.add(target, { select = false }) end
+                    local cursor = Session.cursor(item.path)
+                    if cursor and Session.current() ~= target then Session.setCursor(target, cursor) end
+                    Session.remember(target)
+                    TabUtil.remove(item.path)
+                elseif kind == "delete" then
+                    TabUtil.remove(item.path)
+                end
+            end
+        end
+    end)
+    selectingQuietly = false
+    if not ok then return false, withRecoveryWarning(tostring(err)) end
+    local current = Session.current()
+    quietSelect(current and TabUtil.Table[current] and TabUtil.Table[current].obj)
+    return result, withRecoveryWarning(reason)
+end
+
+function _M.reconcileExternal(...)
+    return require("mods.editor.ExternalEdits").reconcile(...)
 end
 
 --- 从 SharedData 应用高亮 / 光标 / 换行 / 空白 / Tab（可重复调用，即时生效）
@@ -400,7 +708,7 @@ function _M.load(path)
             return
         end
     end
-    local text = readFileForEdit(path)
+    local text, version = readFileForEdit(path)
     if text == nil then
         stayOn(previous)
         return
@@ -408,7 +716,7 @@ function _M.load(path)
     if not (TabUtil.Table[path] and TabUtil.Table[path].obj) then
         TabUtil.add(path, { select = false })
     end
-    if not bindFile(path, text) then
+    if not bindFile(path, text, version) then
         stayOn(previous)
         return
     end

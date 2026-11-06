@@ -90,6 +90,42 @@ end
 function _M.getRoot() return root end
 function _M.getProjectDir() return projectDir end
 
+-- Detached storage identity; workers must never consult mutable projectDir.
+function _M.capture(scopePath, agentRoot)
+  local storageRoot = tostring(agentRoot or (tostring(Environment.getExternalStorageDirectory()) .. "/LuaJ/agents"))
+  if storageRoot == "" then storageRoot = tostring(Environment.getExternalStorageDirectory()) .. "/LuaJ/agents" end
+  storageLock.lock()
+  local ok, dir, legacy = pcall(resolveProject, scopePath, storageRoot)
+  storageLock.unlock()
+  if not ok then error(dir) end
+  return { storageDir = dir, legacyStorageDir = legacy, scopeId = scopePath }
+end
+
+-- Fixed-directory replay acknowledgements. No mutable project selection, and
+-- failed writes leave the result eligible for replay on the next resume.
+function _M.isMutationAcknowledged(storageDir, id)
+  return File(storageDir .. "/ui-ack", safeName(id)).isFile()
+end
+
+function _M.acknowledgeMutation(storageDir, id)
+  local directory=storageDir .. "/ui-ack"
+  if not ensureDirectory(directory) then return false end
+  local target=File(directory,safeName(id))
+  if target.isFile() then return true end
+  local temp=File(directory,"." .. safeName(id) .. "." .. tostring(UUID.randomUUID()))
+  local ok=pcall(function()
+    local stream=FileOutputStream(temp,false)
+    local wrote,err=pcall(function()
+      stream.write(1); stream.flush(); stream.getFD().sync()
+    end)
+    pcall(function() stream.close() end)
+    if not wrote then error(err) end
+    if not temp.renameTo(target) and not target.isFile() then error('ack_publish_failed') end
+  end)
+  if temp.exists() then temp.delete() end
+  return ok
+end
+
 --- Reassociate the new path with the existing hashed storage, without moving or
 --- deleting any directory. Both paths keep access; conflicts are never merged.
 function _M.reassociateProject(oldPath, newPath, agentRoot)

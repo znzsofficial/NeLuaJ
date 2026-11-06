@@ -288,7 +288,7 @@ function _M.run(task, lightweight)
     if type(args) ~= "table" then args = {} end
     tc.name = c().normalizeToolName(tc.name, args)
     local accepted, started = false, false
-    local function proceedWithResult(resultStr)
+    local function proceedWithResult(resultStr, toolOk, fileResult)
       stopIfCancelled()
       if state.done or current ~= state or accepted then return end
       accepted = true
@@ -297,6 +297,8 @@ function _M.run(task, lightweight)
         role = "tool",
         tool_call_id = tc.id,
         content = tostring(resultStr or ""),
+        tool_ok = toolOk,
+        file_result = fileResult,
       }
       runToolCalls(toolCalls, index + 1, onAll)
     end

@@ -120,6 +120,33 @@ assert(not pcall(actualBubble.configure, {}))
 assert(actualBubble.createMessageView("assistant", tableSource))
 assert(renderedFallback == tableSource, "table exceptions must preserve the full raw fallback")
 print("PASS native table exceptions fall back to complete Markdown source")
+actualBubble.createToolView("create_file", { path = "/project/note.txt" },
+  "创建文件失败\n路径: /project/note.txt\n原因: EACCES")
+local failedTool = layouts[#layouts]
+assert(failedTool.toolDetail.layoutNode.visibility == 0)
+assert(failedTool.toolDetail.layoutNode.text:find("EACCES", 1, true))
+failedTool.toolHeader.onClick()
+assert(failedTool.toolDetail.visibility == 8)
+failedTool.toolHeader.onClick()
+assert(failedTool.toolDetail.visibility == 0)
+actualBubble.createToolView("create_file", { path = "/project/note.txt" }, "文件已创建: /project/note.txt")
+assert(layouts[#layouts].toolDetail.layoutNode.visibility == 8)
+print("PASS failed tools expose their cause immediately and remain collapsible")
+actualBubble.createToolView("create_file", {}, "contains error in successful file contents", true,
+  { outcome = "committed" })
+assert(layouts[#layouts].toolHeader.layoutNode.text:find("ai_tool_success", 1, true))
+actualBubble.createToolView("create_file", {}, "operation complete", false,
+  { outcome = "rolled_back" })
+assert(layouts[#layouts].toolDetail.layoutNode.visibility == 0)
+assert(layouts[#layouts].toolHeader.layoutNode.text:find("ai_tool_failed", 1, true))
+local flattener = assert(loadfile(assets .. "mods/agent/MessageItemFlattener.lua"))()
+local flattened = flattener.flatten({
+  { role = "assistant", tool_calls = { { id = "transaction", name = "create_file", arguments = "{}" } } },
+  { role = "tool", tool_call_id = "transaction", content = "done", tool_ok = false,
+    file_result = { transactionId = "tx", outcome = "partial" } },
+})
+assert(flattened[1].toolOk == false and flattened[1].fileResult.transactionId == "tx")
+print("PASS structured mutation outcomes survive card flattening without text sniffing")
 -- 验证消息渲染：包括纯文本、Markdown、多字节中文注释与代码块高亮
 actualBubble.renderMessage("assistant", "代码示例：\n```lua\n-- 这是中文注释\nlocal x = 1\nreturn '你好'\n```", nil, { isLastAssistant = true })
 actualBubble.renderMessage("user", "用户输入", nil, { isLastUser = true })

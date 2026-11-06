@@ -343,6 +343,11 @@ function onResume()
   Init.initFunctionTab()
   Init.applyTabletMode()
   EditorUtil.applyEditorPrefs()
+  local mutations = package.loaded["mods.files.FileMutationService"]
+  if mutations and mutations.reconcilePending then
+    local ok, err = pcall(mutations.reconcilePending)
+    if not ok then Actions.snack(tostring(err)) end
+  end
   pcall(function() activity.invalidateOptionsMenu() end)
   if pauseSaveFailed then
     Actions.snack(res.string.save_fail)
@@ -448,6 +453,7 @@ function onCreateOptionsMenu(menu)
     addItem(fileMenu, res.string.save_file, Actions.saveCurrentFile, nil, icon("save"))
   end
   addItem(fileMenu, res.string.compile, Actions.compileCurrentFile, nil, icon("memory"))
+  addItem(fileMenu, res.string.ai_restore_draft, Actions.restoreExternalDraftCurrentFile, nil, icon("undo"))
 
   local codeMenu = menu.addSubMenu(res.string.code .. "…")
   if not tablet then

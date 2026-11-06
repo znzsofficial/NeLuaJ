@@ -15,22 +15,28 @@ import java.nio.file.StandardOpenOption
  */
 object AtomicFile {
     fun replaceText(path: String, content: String): Boolean {
-        if (path.isEmpty()) return false
         return try {
-            val target = Paths.get(path)
-            val parent = target.parent ?: return false
-            Files.createDirectories(parent)
-            val temporary = Files.createTempFile(parent, ".kv-", ".tmp")
-            try {
-                writeSynced(temporary, content)
-                moveReplacing(temporary, target)
-                syncDirectory(parent)
-                true
-            } finally {
-                Files.deleteIfExists(temporary)
-            }
+            replaceBytesOrThrow(path, content.toByteArray(Charsets.UTF_8))
+            true
         } catch (_: Exception) {
             false
+        }
+    }
+
+    /** Throwing variant for callers that must report the actual filesystem failure. */
+    fun replaceBytesOrThrow(path: String, content: ByteArray) {
+        require(path.isNotEmpty()) { "Empty file path" }
+        val target = Paths.get(path).toAbsolutePath()
+        val parent = target.parent ?: throw java.io.IOException("No parent directory: $path")
+        Files.createDirectories(parent)
+        val temporary = Files.createTempFile(parent, ".kv-", ".tmp")
+        try {
+            writeSynced(temporary, content)
+            moveReplacing(temporary, target)
+            syncDirectory(parent)
+        } finally {
+            // Cleanup must not mask the write error or turn a published write into a failure.
+            try { Files.deleteIfExists(temporary) } catch (_: Exception) { }
         }
     }
 
@@ -53,13 +59,13 @@ object AtomicFile {
         }
     }
 
-    private fun writeSynced(path: Path, content: String) {
+    private fun writeSynced(path: Path, content: ByteArray) {
         FileChannel.open(
             path,
             StandardOpenOption.WRITE,
             StandardOpenOption.TRUNCATE_EXISTING
         ).use { channel ->
-            val buffer = ByteBuffer.wrap(content.toByteArray(Charsets.UTF_8))
+            val buffer = ByteBuffer.wrap(content)
             while (buffer.hasRemaining()) {
                 if (channel.write(buffer) < 0) {
                     throw java.io.IOException("short write")

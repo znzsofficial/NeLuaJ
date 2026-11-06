@@ -568,8 +568,8 @@ showModelEditor = function(existingIndex)
   end
   dialogViews.nameInput.setText(existing and existing.name or "")
   dialogViews.modelInput.setText(existing and existing.model or "")
-  dialogViews.contextInput.setText(tostring(existing and existing.contextLength or 30000))
-  dialogViews.maxTokensInput.setText(tostring(existing and existing.maxTokens or 4096))
+  dialogViews.contextInput.setText(tostring(existing and existing.contextLength or 1024576))
+  dialogViews.maxTokensInput.setText(tostring(existing and existing.maxTokens or 65536))
   dialogViews.responsesSwitch.setChecked(existing and existing.responses == true)
   refreshProviderButton()
 end
@@ -595,8 +595,8 @@ showModelManager = function()
         .setTitle(m.name)
         .setMessage(S.ai_provider .. ": " .. providerLabel(provider) .. "\n"
           .. S.ai_model .. ": " .. m.model .. "\n"
-          .. S.ai_context_len .. ": " .. tostring(m.contextLength or 30000) .. "\n"
-          .. S.ai_max_tokens .. ": " .. tostring(m.maxTokens or 4096))
+          .. S.ai_context_len .. ": " .. tostring(m.contextLength or 1024576) .. "\n"
+          .. S.ai_max_tokens .. ": " .. tostring(m.maxTokens or 65536))
         .setPositiveButton(S.ai_edit, function()
           showModelEditor(which + 1)
         end)

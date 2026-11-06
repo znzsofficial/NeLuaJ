@@ -426,38 +426,36 @@ local function redoLastTurn()
   return true
 end
 
-local function applyFileChange(action)
+local function applyFileChange(action, change, undo)
   if AgentTurn.isActive() then return false end
+  if not change then return false end
   local generation = AgentTurn.bumpGeneration()
   showLoading()
-  local okLaunch = pcall(function()
-    xTask(function()
-      local ok, result, err = pcall(action)
-      return { ok = ok and result == true, error = ok and err or result }
-    end, function(result)
+  local okLaunch, launchError = pcall(function()
+    action(function(text, ok, result)
       if generation ~= AgentTurn.generation() then return end
       hideLoading()
-      if type(result) ~= "table" or not result.ok then
-        print(tostring(result and result.error or "文件变更恢复失败"))
+      if not ok then
+        print(tostring(text))
         return
       end
       if MainActivity and MainActivity.RecyclerView then MainActivity.RecyclerView.update() end
       refreshMessageList()
-      print(tostring(result.error or "文件变更已恢复"))
-    end, "io")
+      print(tostring(text))
+    end)
   end)
-  if not okLaunch then hideLoading() end
+  if not okLaunch then hideLoading(); print(tostring(launchError)) end
   return okLaunch
 end
 
 local function undoFileChange()
   if not AgentChat.hasFileUndo() then return false end
-  return applyFileChange(AgentChat.undoFileChange)
+  return applyFileChange(AgentChat.undoFileChange, AgentChat.peekFileUndo(), true)
 end
 
 local function redoFileChange()
   if not AgentChat.hasFileRedo() then return false end
-  return applyFileChange(AgentChat.redoFileChange)
+  return applyFileChange(AgentChat.redoFileChange, AgentChat.peekFileRedo(), false)
 end
 
 local function compressCurrentContext(onDone)
@@ -765,6 +763,21 @@ local function showCommandMenu()
   addSection(S.ai_command_files)
   addAction(S.ai_undo_file, not AgentTurn.isActive() and AgentChat.hasFileUndo(), undoFileChange)
   addAction(S.ai_redo_file, not AgentTurn.isActive() and AgentChat.hasFileRedo(), redoFileChange)
+  local legacyHistory=AgentChat.getLegacyFileHistory and AgentChat.getLegacyFileHistory()
+  if legacyHistory then
+    addAction("旧文件历史（只读）", true, function()
+      local lines={legacyHistory.reason}
+      for _,source in ipairs(legacyHistory.sources or {}) do
+        lines[#lines+1]="\n"..tostring(source.source).."\n校验: "..(source.valid and "结构及文件内容 fingerprint 通过" or tostring(source.validationError or "存在无效记录"))
+        for _,entry in ipairs(source.entries or {}) do
+          lines[#lines+1]=tostring(entry.direction).." · "..tostring(entry.name).." · "..tostring(entry.path)
+            .."\n"..(entry.valid and "只读，尚未导入" or "校验失败")..(entry.scopeMatches and "" or "；属于其他项目 scope")
+        end
+      end
+      MaterialAlertDialogBuilder(activity).setTitle("旧文件历史（只读）")
+        .setMessage(table.concat(lines,"\n")).setPositiveButton(S.ai_close,nil).show()
+    end)
+  end
   addSection(S.ai_command_workspace)
   addAction(S.ai_switch_conv, true, showConvList)
   addAction(S.ai_center_title, true, function()
@@ -1338,7 +1351,7 @@ function _M.show(startDraft)
           elseif vt == 1 then
             cardView = BubbleRenderer.createMessageView("assistant", item.content, item.message, { isLastAssistant = item.isLastAssistant })
           elseif vt == 2 then
-            cardView = BubbleRenderer.createToolView(item.toolName, item.args or {}, item.result)
+            cardView = BubbleRenderer.createToolView(item.toolName, item.args or {}, item.result, item.toolOk, item.fileResult)
           elseif vt == 4 then
             -- 流式动态卡片
             local streamViews = {}

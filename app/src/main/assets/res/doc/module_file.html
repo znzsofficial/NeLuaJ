@@ -21,9 +21,10 @@ local text2 = file.readall("/sdcard/test.lua")
       <p>读取整个文件为字符串。</p>
 
       <h3>file.save(path, content)</h3>
-      <pre><code class="language-lua">file.save("out.txt", "print('hello')")
+      <pre><code class="language-lua">local ok, err = file.save("out.txt", "print('hello')")
+if not ok then print(err) end
 </code></pre>
-      <p>写入文件；必要时创建父目录（视实现而定）。</p>
+      <p>写入文件并按需创建父目录。先写同目录临时文件，再替换目标，避免直接截断原文件。成功返回 true；失败返回 false 和具体错误信息（如权限或存储错误）。</p>
 
       <h3>file.exists(path)</h3>
       <pre><code class="language-lua">if file.exists("init.lua") then
@@ -32,8 +33,18 @@ end
 </code></pre>
 
       <h3>file.type(path)</h3>
-      <pre><code class="language-lua">print(file.type("/sdcard")) -- "dir" 或 "file"
+      <pre><code class="language-lua">print(file.type(this.getLuaPath("main.lua"))) -- "file"，不存在时 nil
 </code></pre>
+      <p>普通文件返回 "file"，目录返回 "dir"，不存在返回 nil。权限错误、非目录父路径以及符号链接等不支持的类型会抛出错误，不会伪装成路径不存在。</p>
+
+      <h3>二进制快照与不覆盖重命名</h3>
+      <pre><code class="language-lua">local encoded, err = file.readbinary(path)
+if encoded then
+  local ok, writeErr = file.savebinary(backupPath, encoded)
+end
+local moved, moveErr = file.renameexclusive(sourcePath, targetPath)
+</code></pre>
+      <p>readbinary 返回原始字节的 Base64 字符串，失败返回 nil 和错误；savebinary 解码后通过临时文件替换写入，失败返回 false 和错误。renameexclusive 拒绝已存在的目标，成功返回 true，失败返回 false 和错误。</p>
 
       <h3>file.info(path)</h3>
       <pre><code class="language-lua">local info = file.info("main.lua")

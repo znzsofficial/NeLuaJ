@@ -199,6 +199,7 @@ dependencies {
     //implementation("net.gotev:speech:1.6.2")
 
     testImplementation(libs.junit)
+    testImplementation("org.json:json:20240303")
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.espresso.core)
 

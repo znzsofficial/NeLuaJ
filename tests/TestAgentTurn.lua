@@ -221,4 +221,64 @@ assert(Session.messages()[4].continuation_state == "stopped")
 pending[2]("late result", true); pending[1]("duplicate", true)
 assert(#Session.messages() == 4)
 print("PASS parallel stop persists collected results, pairs every tool, and rejects late callbacks")
+agent.classifyParallelBatch = function() return nil end
+agent.buildCompressedApiMessages = function() end
+agent.resolveToolPath = function(path) return "/proj/" .. path end
+json.decode = function() return { path = "main.lua" } end
+local prepared, refreshed, executed = 0, 0, 0
+local snapshot = {}
+local executor = assert(loadfile(assets .. "mods/agent/ToolExecutor.lua"))()
+local mutationService = require("mods.files.FileMutationService")
+local locked
+local settings = {
+  json = { encode = function(value) return value end },
+  context = { snapshot = function() return { scopePath = "/proj", directory = "/proj", projectGeneration = 1 } end },
+  storage = function() return "/storage" end,
+  prepare = function(_, args)
+    assert(args.path == "/proj/main.lua")
+    prepared = prepared + 1
+    return snapshot
+  end,
+  finish = function(value)
+    assert(value == snapshot)
+    refreshed = refreshed + 1
+    return true
+  end,
+  backend = {
+  tryAcquire = function(id) if locked then return "" end; locked = id; return id end,
+  release = function() locked = nil end,
+  recover = function() return { recovered = true } end,
+  observe = function(path) return { path = path, kind = "file", text = "original", version = "v1" } end,
+  execute = function(_, _, request)
+    executed = executed + 1
+    assert(prepared == executed)
+    return { transactionId = request.transactionId, scopeId = "/proj", outcome = "committed", changes = {}, warnings = {} }
+  end,
+  },
+}
+mutationService.configure(settings)
+assert(mutationService.recover().recovered)
+executor.configure({})
+agent.executeToolAsync = executor.executeToolAsync
+xTask = function(work, done)
+  local result = work()
+  done(result)
+  done(result)
+  return { cancel = noop }
+end
+reset(nil)
+callbacks.onToolCalls({ { id = "write", name = "create_file", arguments = "{}" } }, "")
+assert(prepared == 1 and refreshed == 1 and executed == 1)
+assert(Session.messages()[3].tool_ok == true and Session.messages()[3].file_result.outcome == "committed")
+settings.prepare = function() error("save conflict") end
+reset(nil)
+callbacks.onToolCalls({ { id = "blocked", name = "apply_patch", arguments = "{}" } }, "")
+assert(executed == 1 and refreshed == 1)
+assert(Session.messages()[3].content:find("save conflict", 1, true))
+settings.prepare = function() return snapshot end
+settings.backend.execute = function() return { outcome = "rejected", error = { message = "write failed" }, changes = {} } end
+reset(nil)
+callbacks.onToolCalls({ { id = "failed", name = "create_file", arguments = "{}" } }, "")
+assert(refreshed == 1, "failed writes must not reload the editor")
+print("PASS writes prepare and refresh once; save conflicts and failed tools never reload")
 print("ALL-PASS")

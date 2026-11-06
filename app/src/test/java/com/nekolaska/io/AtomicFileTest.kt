@@ -9,6 +9,29 @@ import kotlin.io.path.readText
 
 class AtomicFileTest {
     @Test
+    fun failedPublicationPreservesDestinationAndReportsCause() {
+        val root = Files.createTempDirectory("atomic-failure")
+        val target = Files.createDirectory(root.resolve("existing"))
+        val original = target.resolve("keep.txt")
+        Files.writeString(original, "keep")
+        val failure = runCatching {
+            AtomicFile.replaceBytesOrThrow(target.toString(), byteArrayOf(1, 2))
+        }.exceptionOrNull()
+        assertTrue(failure != null)
+        assertTrue(failure.toString().contains("existing"))
+        assertEquals("keep", original.readText())
+        assertEquals(1L, Files.list(root).use { it.count() })
+    }
+
+    @Test
+    fun byteWriterPreservesBinaryContent() {
+        val target = Files.createTempDirectory("atomic-bytes").resolve("data.bin")
+        val bytes = byteArrayOf(0, -1, -128, 65)
+        AtomicFile.replaceBytesOrThrow(target.toString(), bytes)
+        org.junit.Assert.assertArrayEquals(bytes, Files.readAllBytes(target))
+    }
+
+    @Test
     fun replaceTextCreatesParentAndOverwritesInPlace() {
         val root = Files.createTempDirectory("atomic-file")
         val target = root.resolve("nested").resolve("note.json")

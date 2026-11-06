@@ -74,8 +74,8 @@ function _M.getTemperature()
   return math.max(0, math.min(2, v))
 end
 
-local DEFAULT_CONTEXT_LENGTH = 30000
-local DEFAULT_MAX_TOKENS = 4096
+local DEFAULT_CONTEXT_LENGTH = 1024576
+local DEFAULT_MAX_TOKENS = 65536
 
 local function normalizeContextLength(value, fallback)
   local parsed = tonumber(value) or fallback or DEFAULT_CONTEXT_LENGTH
@@ -264,8 +264,8 @@ function _M.loadModels()
     if key ~= "" then
       local model = getLegacyModel()
       local contextLength, maxTokens = normalizeModelLimits(
-        shared("ai_context_length", "30000"),
-        shared("ai_max_tokens", "4096"),
+        shared("ai_context_length", tostring(DEFAULT_CONTEXT_LENGTH)),
+        shared("ai_max_tokens", tostring(DEFAULT_MAX_TOKENS)),
         DEFAULT_CONTEXT_LENGTH,
         DEFAULT_MAX_TOKENS
       )

@@ -2,6 +2,7 @@
 --- 具体文件算法通过 configure 注入，避免执行层依赖 AgentChat 的全局状态。
 local _M = {}
 local ToolRegistry = require("mods.agent.ToolRegistry")
+local FileMutationService = require("mods.files.FileMutationService")
 local config
 local activeJobs = {} -- Only live jobs; callbacks capture their own cancellation state.
 local AgentJobRegistry = nil
@@ -115,6 +116,8 @@ end
 
 function _M.executeTool(name, args)
   name = _M.normalizeToolName(name, args)
+  local definition = ToolRegistry.get(name)
+  if definition and definition.fileMutation then return FileMutationService.execute(name, args) end
   if name:match("^mcp::") or name:match("^mcp__") then
     local route = requireConfig().resolveMcpTool and requireConfig().resolveMcpTool(name)
     local ns, tool = name:sub(6):match("^([^:]+)::(.+)$")
@@ -128,27 +131,30 @@ function _M.executeTool(name, args)
   end
   local platformExecute = requireConfig().platformExecute
   if not platformExecute then return "工具平台执行器未配置: " .. tostring(name), false end
-  local changes = _M.isDestructiveTool(name) and requireConfig().changeSet or nil
   if args and args.__agent_scope and requireConfig().getProjectScope
       and args.__agent_scope ~= requireConfig().getProjectScope() then
     return "项目已切换，文件操作未执行", false
   end
-  local transaction, snapshotErr
-  if changes then transaction, snapshotErr = changes.begin(name, args or {}) end
-  if snapshotErr then return "变更快照失败，操作未执行: " .. tostring(snapshotErr), false end
-  local executeArgs = transaction and transaction.args or (args or {})
+  local executeArgs = args or {}
   -- 平台执行器约定：第二个返回值 ok ∈ {true, false, nil}，nil 表示旧式工具未提供结构化状态，
   -- 此时调用方回退到文本嗅探。
-  local result, ok = platformExecute(name, executeArgs)
-  if changes then
-    local recorded, recordErr = changes.finish(transaction, result, ok)
-    if recorded == false or recordErr then result = tostring(result) .. "\n警告: " .. tostring(recordErr) end
-  end
-  return result, ok
+  local called, result, ok, effects = pcall(platformExecute, name, executeArgs)
+  if not called then result, ok = "工具执行异常: " .. tostring(result), false end
+  return result, ok, effects
 end
 
 function _M.executeToolAsync(name, args, onResult)
   name = _M.normalizeToolName(name, args)
+  local definition = ToolRegistry.get(name)
+  if definition and definition.fileMutation then
+    local handle
+    handle = FileMutationService.submit(name, args, function(text, ok, result)
+      if handle then activeJobs[handle] = nil end
+      if onResult then onResult(text, ok, result) end
+    end)
+    if not handle.result then activeJobs[handle] = {name=name,fileWrite=true} end
+    return handle
+  end
   local job
   local entry = { name = name, cancelled = false, completed = false }
   local function complete()
@@ -163,7 +169,7 @@ function _M.executeToolAsync(name, args, onResult)
   local function register()
     if job and not entry.completed and not entry.cancelled then
       activeJobs[job] = entry
-      if AgentJobRegistry then pcall(function() AgentJobRegistry.register(job, name) end) end
+      if AgentJobRegistry and not entry.fileWrite then pcall(function() AgentJobRegistry.register(job, name) end) end
     end
   end
   if name:match("^mcp::") or name:match("^mcp__") then
@@ -189,21 +195,28 @@ function _M.executeToolAsync(name, args, onResult)
     return job
   end
   if not onResult then return end
-  args = freezeFileArgs(name, args)
+  local frozenOk, frozen = pcall(freezeFileArgs, name, args)
+  if not frozenOk then
+    if complete() then onResult("工具路径解析失败: " .. tostring(frozen), false) end
+    return
+  end
+  args = frozen
   -- 文件、网络和沙盒工具也必须离开 UI 线程；xTask 的完成回调回到主线程。
-  local okLaunch = pcall(function()
+  local okLaunch, launchError = pcall(function()
     job = xTask(
       function()
-        local okCall, result, okFlag = pcall(_M.executeTool, name, args)
-        if okCall then return { ok = true, result = result, toolOk = okFlag } end
+        if entry.cancelled then return { ok = true, result = "文件操作已取消，未执行", toolOk = false } end
+        local okCall, result, okFlag, effects = pcall(_M.executeTool, name, args)
+        if okCall then return { ok = true, result = result, toolOk = okFlag, effects = effects } end
         return { ok = false, result = tostring(result), toolOk = false }
       end,
       function(result)
+        if entry.completed then return end
         if not complete() then return end
 
         if type(result) == "table" then
           if result.ok then
-            onResult(result.result, result.toolOk)
+            onResult(result.result, result.toolOk, result.effects)
           else
             onResult("工具执行异常: " .. tostring(result.result), false)
           end
@@ -214,7 +227,7 @@ function _M.executeToolAsync(name, args, onResult)
       , "io"
     )
   end)
-  if not okLaunch and complete() then onResult("无法启动后台工具任务", false) end
+  if not okLaunch and complete() then onResult("无法启动后台工具任务: " .. tostring(launchError), false) end
   if okLaunch then register() end
   return job
 end
@@ -234,12 +247,13 @@ end
 function _M.cancelJob(job)
   if not job then return false end
   local entry = activeJobs[job]
+  if entry and entry.fileWrite then return FileMutationService.cancel(job) end
   if entry then
     entry.cancelled = true
-    activeJobs[job] = nil
+    if not entry.fileWrite then activeJobs[job] = nil end
   end
   if AgentJobRegistry then pcall(function() AgentJobRegistry.unregister(job) end) end
-  pcall(function() if job.cancel then job.cancel() end end)
+  if not (entry and entry.fileWrite) then pcall(function() if job.cancel then job.cancel() end end) end
   if entry then cancelResources(entry.name) end
   return entry ~= nil
 end
@@ -252,7 +266,11 @@ function _M.cancelPending()
   -- Cancelled xTask jobs need not deliver callbacks, so no tombstones stay here.
   local jobs = activeJobs
   activeJobs = {}
-  for _, entry in pairs(jobs) do entry.cancelled = true end
+  for job, entry in pairs(jobs) do
+    if entry.fileWrite then FileMutationService.cancel(job) end
+    entry.cancelled = true
+    if entry.fileWrite then activeJobs[job] = entry end
+  end
 
   -- 1. Kotlin 原生注册表批量原子取消
   if AgentJobRegistry then
@@ -269,7 +287,7 @@ function _M.cancelPending()
 
   -- Lua fallback also covers environments without the native registry.
   for job, entry in pairs(jobs) do
-    pcall(function() if job.cancel then job.cancel() end end)
+    if not entry.fileWrite then pcall(function() if job.cancel then job.cancel() end end) end
     if entry.name then cancelledNames[entry.name] = true end
     count = count + 1
   end

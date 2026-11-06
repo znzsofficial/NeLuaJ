@@ -4,6 +4,8 @@ local _M = {}
 
 local MCPClient = require("mods.agent.MCPClient")
 local ChangeSet = require("mods.agent.ChangeSet")
+local FileMutationService = require("mods.files.FileMutationService")
+local ProjectContext = require("mods.project.ProjectContext")
 local AgentStorage = require("mods.agent.AgentStorage")
 local ConversationStore = require("mods.agent.ConversationStore")
 local ContextManager = require("mods.agent.ContextManager")
@@ -179,6 +181,7 @@ local function resolvePath(path)
   local base = Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir()
   return base .. "/" .. path
 end
+_M.resolveToolPath = resolvePath
 
 -- 规范化绝对路径：解析 . 和 .. 段，返回去掉冗余分隔符的路径
 local function normalizePath(path)
@@ -346,14 +349,14 @@ registerTool("create_file", function(args)
         .. "\n语法错误:\n" .. syntaxErr
         .. "\n请修复语法后重新调用。", false
     end
-    local ok, result = pcall(function() return file.save(path, content) end)
+    local ok, result, writeError = pcall(function() return file.save(path, content) end)
     if ok and result == true then
       if syntaxChecked then
         return "文件已创建: " .. path .. "\nLua 语法检查通过", true
       end
       return "文件已创建: " .. path, true
     else
-      return "创建文件失败\n路径: " .. path .. "\n原因: " .. tostring(result), false
+      return "创建文件失败\n路径: " .. path .. "\n原因: " .. tostring(writeError or result), false
     end
 
 end)
@@ -869,9 +872,9 @@ registerTool("apply_patch", function(args)
         .. "\n请修正补丁后重试。", false
     end
 
-    local writeOk, writeResult = pcall(function() return file.save(path, newContent) end)
+    local writeOk, writeResult, writeError = pcall(function() return file.save(path, newContent) end)
     if not writeOk or writeResult ~= true then
-      return "补丁写入失败\n文件: " .. path .. "\n原因: " .. tostring(writeResult), false
+      return "补丁写入失败\n文件: " .. path .. "\n原因: " .. tostring(writeError or writeResult), false
     end
     local count = type(countOrErr) == "number" and countOrErr or 1
     local locText = PatchEngine.formatPatchLocations(locations)
@@ -913,9 +916,9 @@ registerTool("replace_in_file", function(args)
         .. "\n语法错误:\n" .. syntaxErr
         .. "\n请修正替换内容后重试。", false
     end
-    local writeOk, writeResult = pcall(function() return file.save(path, newContent) end)
+    local writeOk, writeResult, writeError = pcall(function() return file.save(path, newContent) end)
     if not writeOk or writeResult ~= true then
-      return "替换写入失败\n文件: " .. path .. "\n原因: " .. tostring(writeResult), false
+      return "替换写入失败\n文件: " .. path .. "\n原因: " .. tostring(writeError or writeResult), false
     end
     if syntaxChecked then
       return "已替换 " .. replaced .. " 处: " .. path .. "\nLua 语法检查通过", true
@@ -931,10 +934,15 @@ registerTool("append_file", function(args)
     end
     -- 追加后整体做语法守门：先取出已有内容，与追加内容拼接检查
     local existing = ""
-    pcall(function()
+    local readOk, readError = pcall(function()
+      if not file.exists(path) then return end
       local current = file.readall(path)
-      if current then existing = current end
+      if current == nil then error("无法读取已有文件") end
+      existing = current
     end)
+    if not readOk then
+      return "追加失败\n路径: " .. path .. "\n原因: " .. tostring(readError), false
+    end
     local combined = existing .. tostring(args.content or "")
     local syntaxErr, syntaxChecked = luaSyntaxGuard(path, combined)
     if syntaxErr then
@@ -942,21 +950,14 @@ registerTool("append_file", function(args)
         .. "\n语法错误:\n" .. syntaxErr
         .. "\n请修正追加内容后重试。", false
     end
-    local ok, err = pcall(function()
-      local File = luajava.bindClass("java.io.File")
-      local FileWriter = luajava.bindClass("java.io.FileWriter")
-      local fw = FileWriter(File(path), true)
-      fw.write(tostring(args.content or ""))
-      fw.flush()
-      fw.close()
-    end)
-    if ok then
+    local ok, result, writeError = pcall(function() return file.save(path, combined) end)
+    if ok and result == true then
       if syntaxChecked then
         return "已追加到文件: " .. path .. "\nLua 语法检查通过", true
       end
       return "已追加到文件: " .. path, true
     else
-      return "追加失败\n路径: " .. path .. "\n原因: " .. tostring(err), false
+      return "追加失败\n路径: " .. path .. "\n原因: " .. tostring(writeError or result), false
     end
 
 end)
@@ -993,8 +994,9 @@ registerTool("rename_file", function(args)
       if not f.exists() then
         error("原路径不存在: " .. src)
       end
-      if not f.renameTo(File(dst)) then
-        error("重命名/移动失败（目标已存在或跨存储设备）")
+      local moved, moveErr = file.renameexclusive(src, dst)
+      if moved ~= true then
+        error(moveErr or "重命名/移动失败（目标已存在或跨存储设备）")
       end
     end)
     if ok then
@@ -1073,20 +1075,24 @@ local function changeSetRemove(path)
 end
 
 AgentStorage.configure(
-  Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir(),
+  ProjectContext.snapshot().scopePath,
   Bean and Bean.Path and Bean.Path.agent_root_dir
 )
 
 function _M.syncAgentProjectScope()
-  local path = Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir()
+  local path = ProjectContext.snapshot().scopePath
   AgentStorage.configureCurrent(path, Bean and Bean.Path and Bean.Path.agent_root_dir)
   ConversationStore.invalidate()
   _M.configureSkills()
+  -- Legacy adapter retained for an explicit, validated migration only.
+  local function configureLegacyHistory()
   ChangeSet.configure({
     resolve = resolvePath,
     type = changeSetFileType,
     listFiles = changeSetListFiles,
     read = function(p) local ok, c = pcall(function() return file.readall(p) end); return ok and c or nil end,
+    readBinary = function(p) return file.readbinary(p) end,
+    writeBinary = function(p, c) return file.savebinary(p, c) end,
     write = function(p, c) local ok, result = pcall(function() return file.save(p, c or "") end); return ok and result == true end,
     ensureParent = function(p) pcall(function() local F = luajava.bindClass("java.io.File"); local parent = F(p).getParentFile(); if parent then parent.mkdirs() end end) end,
     loadState = function()
@@ -1120,6 +1126,8 @@ function _M.syncAgentProjectScope()
         or t:find("已重命名/移动:", 1, true) == 1
     end,
   })
+  end
+  FileMutationService.reconcilePending()
 end
 
 -- ─── 判断工具是否需要用户确认 ──
@@ -1490,6 +1498,78 @@ local isSandboxDocPath = function(path)
   return isTrustedReadPath(path)
 end
 
+FileMutationService.configure({
+  context = ProjectContext,
+  isMainThread = function()
+    return luajava.bindClass("android.os.Looper").getMainLooper().isCurrentThread()
+  end,
+  prepareRecovery = function(result)
+    local edits=require("mods.editor.ExternalEdits")
+    if not edits.captureRecovery then return nil, "recovery_capture_unavailable" end
+    return edits.captureRecovery(result)
+  end,
+  loadResults = function(storageDir, scopeId)
+    return json.decode(tostring(luajava.kotlinObject("com.nekolaska.io.FileMutationEngine").listResults(storageDir,scopeId)))
+  end,
+  isAcknowledged = AgentStorage.isMutationAcknowledged,
+  acknowledge = AgentStorage.acknowledgeMutation,
+  resolve = function(path, scope)
+    local absolute = tostring(path):sub(1, 1) == "/" and path or scope.directory .. "/" .. path
+    -- Native observation validates the original parent chain. Canonicalizing here
+    -- would erase symlinks before the transaction engine can reject them.
+    return normalizePath(absolute)
+  end,
+  validate = luaSyntaxGuard,
+  prepare = function(name, args, token) return require("mods.editor.ExternalEdits").prepare(name, args, token) end,
+  finish = function(snapshot, name, args, result) return require("mods.editor.ExternalEdits").finish(snapshot, name, args, result) end,
+  migrateLegacy = function(token, dir, scope)
+    local handle = AgentStorage.capture(scope.scopePath, scope.agentRoot)
+    local F = luajava.bindClass("java.io.File")
+    local sources, seen = {}, {}
+    for _, root in ipairs({handle.storageDir, handle.legacyStorageDir}) do
+      local path = root .. "/changesets.json"
+      if not seen[path] and F(path).isFile() then
+        seen[path] = true
+        if F(path).length() > 4 * 1024 * 1024 then
+          return { imported=false, error={code="LEGACY_LIMIT",message="旧历史超过导入上限，源文件已保留"} }
+        end
+        local raw = file.readall(path)
+        if not raw then return { imported=false,error={code="LEGACY_READ",message="无法读取旧历史: "..path} } end
+        sources[#sources+1] = raw
+      end
+    end
+    local shared = this.getSharedData("ai_changesets", "")
+    if shared ~= "" then sources[#sources+1] = shared end
+    if #sources == 0 then return nil end
+    for _, raw in ipairs(sources) do
+      if raw ~= sources[1] then
+        return { imported=false,error={code="LEGACY_AMBIGUOUS",message="存在多份不同旧历史，保留原件以避免错误合并"} }
+      end
+    end
+    return json.decode(tostring(luajava.kotlinObject("com.nekolaska.io.FileMutationEngine")
+      .importLegacy(token, dir, scope.scopePath, sources[1])))
+  end,
+  legacyHistory = function(scope)
+    local handle = AgentStorage.capture(scope.scopePath, scope.agentRoot)
+    local F = luajava.bindClass("java.io.File")
+    local report={readOnly=true,imported=false,sources={},reason="旧文件原位保留；导入状态由原生验证结果决定"}
+    for _,dir in ipairs({handle.storageDir,handle.legacyStorageDir}) do
+      local path=dir.."/changesets.json"
+      local source=F(path)
+      if source.isFile() then
+        local raw=source.length()<=4*1024*1024 and file.readall(path) or nil
+        report.sources[#report.sources+1]=ChangeSet.inspectLegacy(raw,path,scope.scopePath)
+      end
+    end
+    local shared=this.getSharedData("ai_changesets", "")
+    if shared~="" then report.sources[#report.sources+1]=ChangeSet.inspectLegacy(shared,"shared:ai_changesets",scope.scopePath) end
+    if #report.sources>0 then return report end
+  end,
+})
+-- PathManager only calls syncAgentProjectScope after navigation. Initial load
+-- must schedule recovery as well, before the first chat turn can write files.
+FileMutationService.reconcilePending()
+
 ToolExecutor.configure({
   normalizePath = normalizePath,
   resolvePath = resolvePath,
@@ -1497,7 +1577,7 @@ ToolExecutor.configure({
   isTrustedReadPath = isTrustedReadPath,
   isSandboxDocPath = isSandboxDocPath,
   getProjectScope = function()
-    return normalizePath(Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir())
+    return ProjectContext.snapshot().scopePath
   end,
   getProjectPolicy = function() return _M.getProjectPolicy() end,
   canonicalPath = function(path)
@@ -1506,7 +1586,7 @@ ToolExecutor.configure({
     end)
     return ok and normalizePath(value) or normalizePath(resolvePath(path))
   end,
-  getProjectDir = function() return Bean and Bean.Path and Bean.Path.this_dir or activity.getLuaDir() end,
+  getProjectDir = function() return ProjectContext.snapshot().scopePath end,
   getPathType = changeSetFileType,
   getSharedData = function(key, defaultValue) return this.getSharedData(key, defaultValue) end,
   findMcpServer = function(namespace) return MCPClient.findServer(namespace) end,
@@ -1533,7 +1613,6 @@ ToolExecutor.configure({
     if okBind and AgentFetch then pcall(function() AgentFetch.cancelPending() end) end
   end,
   platformExecute = executeBuiltinTool,
-  changeSet = ChangeSet,
 })
 -- 子代理能力注入（UI 确认钩子由 ChatUI 在面板装配时补充）
 SubagentRunner.configure({
@@ -1561,11 +1640,14 @@ _M.requiresConfirmation = ToolExecutor.requiresConfirmation
 _M.isInProjectDir = ToolExecutor.isInProjectDir
 _M.shouldAutoApprove = ToolExecutor.shouldAutoApprove
 _M.classifyParallelBatch = ToolExecutor.classifyParallelBatch
-_M.undoFileChange = ChangeSet.undo
-_M.redoFileChange = ChangeSet.redo
-_M.hasFileUndo = ChangeSet.hasUndo
-_M.hasFileRedo = ChangeSet.hasRedo
-_M.clearFileChanges = ChangeSet.clear
+_M.undoFileChange = FileMutationService.undo
+_M.redoFileChange = FileMutationService.redo
+_M.peekFileUndo = function() return FileMutationService.peek("undo") end
+_M.peekFileRedo = function() return FileMutationService.peek("redo") end
+_M.hasFileUndo = FileMutationService.hasUndo
+_M.hasFileRedo = FileMutationService.hasRedo
+_M.getLegacyFileHistory = FileMutationService.getLegacyHistory
+_M.clearFileChanges = function() return false, "持久文件历史只能通过验证迁移处理" end
 _M.applyPatch = PatchEngine.applyPatch
 _M.buildApiMessages = ContextManager.buildApiMessages
 _M.buildCompressedApiMessages = ContextManager.buildCompressedApiMessages

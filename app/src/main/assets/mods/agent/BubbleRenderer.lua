@@ -524,8 +524,15 @@ function _M.renderMessage(role, content, stateMessage, opts)
 end
 
 --- 构建工具调用与结果气泡 View
-function _M.createToolView(toolName, args, result)
-  local isError = isToolError(toolName, result)
+function _M.createToolView(toolName, args, result, toolOk, fileResult)
+  local isError
+  if type(toolOk) == "boolean" then
+    isError = not toolOk
+  elseif type(fileResult) == "table" and fileResult.outcome then
+    isError = fileResult.outcome ~= "committed" and fileResult.outcome ~= "unchanged"
+  else
+    isError = isToolError(toolName, result)
+  end
   local icon = "→"
   if toolName:match("create") then icon = "+"
   elseif toolName:match("delete") then icon = "×"
@@ -594,7 +601,9 @@ function _M.createToolView(toolName, args, result)
         or line:find("已替换", 1, true)
         or line:find("已重命名", 1, true)
     end
-    if toolName == "get_env_info" and not isError then
+    if isError then
+      resultPreview = firstLine
+    elseif toolName == "get_env_info" and not isError then
       if isOutcomeLine(firstLine) then
         resultPreview = firstLine
       else
@@ -655,8 +664,8 @@ function _M.createToolView(toolName, args, result)
       {
         MaterialTextView,
         id = "toolHeader",
-        text = summary .. (detail ~= "" and "  ›" or ""),
-        contentDescription = summary .. (detail ~= "" and (". " .. S.ai_tool_tap_expand) or ""),
+        text = summary .. (detail ~= "" and (isError and "  ⌄" or "  ›") or ""),
+        contentDescription = summary .. (detail ~= "" and (". " .. (isError and S.ai_tool_tap_collapse or S.ai_tool_tap_expand)) or ""),
         textSize = "12sp",
         textStyle = "bold",
         textColor = isError and ColorOnErrorContainer or ColorOnSurface,
@@ -687,7 +696,7 @@ function _M.createToolView(toolName, args, result)
         paddingBottom = "10dp",
         lineSpacingMultiplier = 1.3,
         textIsSelectable = true,
-        visibility = GONE,
+        visibility = isError and VISIBLE or GONE,
       },
     },
   }
@@ -697,7 +706,7 @@ function _M.createToolView(toolName, args, result)
   bubble.setLayoutParams(bubbleLp)
 
   if detail ~= "" then
-    local expanded = false
+    local expanded = isError
     bubbleViews.toolHeader.onClick = function()
       expanded = not expanded
       bubbleViews.toolDetail.setVisibility(expanded and VISIBLE or GONE)

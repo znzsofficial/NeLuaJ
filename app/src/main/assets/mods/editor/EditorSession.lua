@@ -2,10 +2,13 @@
 local _M = {}
 
 local MAX_RECENT = 50
+local owner = {}
 local state = {
   current = nil,
   recent = {},
   cursors = {},
+  bindingEpoch = 0,
+  bufferRevision = 0,
 }
 
 function _M.current()
@@ -13,11 +16,35 @@ function _M.current()
 end
 
 function _M.setCurrent(path)
+  local normalized = path ~= "" and path or nil
+  if normalized ~= state.current then
+    state.bindingEpoch = state.bindingEpoch + 1
+    state.bufferRevision, state.text = 0, nil
+  end
   if path == nil or path == "" then
     state.current = nil
   else
     state.current = path
   end
+end
+
+function _M.observeText(text)
+  if state.text ~= text then
+    state.bufferRevision = state.bufferRevision + 1
+    state.text = text
+  end
+  return state.bufferRevision
+end
+
+function _M.identity(text)
+  if text ~= nil then _M.observeText(text) end
+  return { path = state.current, documentId = tostring(owner) .. ":" .. state.bindingEpoch, owner = owner,
+    bindingEpoch = state.bindingEpoch, bufferRevision = state.bufferRevision }
+end
+
+function _M.isBinding(identity)
+  return identity and identity.owner == owner and identity.path == state.current
+    and identity.bindingEpoch == state.bindingEpoch
 end
 
 function _M.isCurrent(path)

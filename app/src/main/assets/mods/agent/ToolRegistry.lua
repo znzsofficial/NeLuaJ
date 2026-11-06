@@ -3,7 +3,7 @@
 local definitions = {
   {
     type = "function",
-    labelKey = "ai_create_file", readOnly = false, destructive = true,
+    labelKey = "ai_create_file", readOnly = false, destructive = true, fileMutation = "write",
     parallelSafe = false, approval = "create_file",
     ["function"] = {
       name = "create_file",
@@ -20,7 +20,7 @@ local definitions = {
   },
   {
     type = "function",
-    labelKey = "ai_create_folder", readOnly = false, destructive = true,
+    labelKey = "ai_create_folder", readOnly = false, destructive = true, fileMutation = "mkdir",
     parallelSafe = false, approval = "project_write",
     ["function"] = {
       name = "create_folder",
@@ -36,7 +36,7 @@ local definitions = {
   },
   {
     type = "function",
-    labelKey = "ai_delete_file", readOnly = false, destructive = true,
+    labelKey = "ai_delete_file", readOnly = false, destructive = true, fileMutation = "delete",
     parallelSafe = false, approval = "project_write",
     ["function"] = {
       name = "delete_file",
@@ -52,7 +52,7 @@ local definitions = {
   },
   {
     type = "function",
-    labelKey = "ai_delete_folder", readOnly = false, destructive = true,
+    labelKey = "ai_delete_folder", readOnly = false, destructive = true, fileMutation = "delete",
     parallelSafe = false, approval = "project_write",
     ["function"] = {
       name = "delete_folder",
@@ -245,7 +245,7 @@ local definitions = {
   },
   {
     type = "function",
-    labelKey = "ai_apply_patch", readOnly = false, destructive = true,
+    labelKey = "ai_apply_patch", readOnly = false, destructive = true, fileMutation = "write",
     parallelSafe = false, approval = "project_write",
     ["function"] = {
       name = "apply_patch",
@@ -262,7 +262,7 @@ local definitions = {
   },
   {
     type = "function",
-    labelKey = "ai_replace_text", readOnly = false, destructive = true,
+    labelKey = "ai_replace_text", readOnly = false, destructive = true, fileMutation = "write",
     parallelSafe = false, approval = "project_write",
     ["function"] = {
       name = "replace_in_file",
@@ -298,7 +298,7 @@ local definitions = {
   },
   {
     type = "function",
-    labelKey = "ai_append_file", readOnly = false, destructive = true,
+    labelKey = "ai_append_file", readOnly = false, destructive = true, fileMutation = "write",
     parallelSafe = false, approval = "project_write",
     ["function"] = {
       name = "append_file",
@@ -315,7 +315,7 @@ local definitions = {
   },
   {
     type = "function",
-    labelKey = "ai_rename_file", readOnly = false, destructive = true,
+    labelKey = "ai_rename_file", readOnly = false, destructive = true, fileMutation = "rename",
     parallelSafe = false, approval = "project_write",
     ["function"] = {
       name = "rename_file",
@@ -409,6 +409,7 @@ for _, definition in ipairs(definitions) do
     readOnly = definition.readOnly, destructive = definition.destructive,
     parallelSafe = definition.parallelSafe, approval = definition.approval,
     trustedDocs = definition.trustedDocs == true,
+    fileMutation = definition.fileMutation,
     schema = { type = definition.type, ["function"] = definition["function"] },
   }
   byName[name] = entry

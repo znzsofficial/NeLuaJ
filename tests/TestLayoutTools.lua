@@ -34,6 +34,7 @@ print("PASS layout tool schemas expose actual supported arguments")
 
 -- Compose the real AgentChat with inert service doubles and capture its platform dispatch.
 local captured = {}
+package.loaded["mods.files.FileMutationService"] = { configure = function() end, reconcilePending = function() end }
 local noop = function() end
 for _, name in ipairs({ "MCPClient", "ChangeSet", "AgentStorage", "ConversationStore", "ContextManager",
     "OpenAIClient", "OpenAIProtocol", "SkillManager", "TodoManager", "PatchEngine", "SubagentRunner", "ModelRegistry" }) do
@@ -76,4 +77,26 @@ local before = #calls
 text, ok = captured.platformExecute("layout_check", {})
 assert(ok == false and #calls == before)
 print("PASS real AgentChat dispatch returns structured status without running layout source")
+-- The same real dispatch must preserve the filesystem's second return value.
+local engine = package.loaded["mods.agent.PatchEngine"]
+engine.applyPatch = function() return "updated", 1 end
+engine.plainReplace = function() return "updated", 1 end
+local writes = 0
+file = {
+  exists = function() return true end,
+  readall = function() return "original" end,
+  save = function()
+    writes = writes + 1
+    return false, "EACCES: permission denied"
+  end,
+}
+for _, name in ipairs({ "create_file", "apply_patch", "replace_in_file", "append_file" }) do
+  text, ok = captured.platformExecute(name, { path = "note.txt", content = "new", old = "old", new = "new", patch = "patch" })
+  assert(ok == false and text:find("EACCES: permission denied", 1, true), name .. " lost the write error")
+end
+assert(writes == 4)
+file.readall = function() error("EIO reading original") end
+text, ok = captured.platformExecute("append_file", { path = "note.txt", content = "new" })
+assert(ok == false and text:find("EIO reading original", 1, true) and writes == 4)
+print("PASS AI writes retain filesystem errors and append refuses unreadable originals")
 print("ALL-PASS")

@@ -73,6 +73,28 @@ function Actions.saveCurrentFile()
   end
 end
 
+function Actions.restoreExternalDraftCurrentFile()
+  if not requireOpenFile() then return end
+  local path = EditorUtil.currentFile()
+  local called, drafts = pcall(EditorUtil.listExternalDrafts, path)
+  if not called then snack(tostring(drafts)); return end
+  if not drafts or #drafts == 0 then snack(res.string.ai_draft_empty); return end
+  local labels = {}
+  for index, draft in ipairs(drafts) do
+    labels[index] = tostring(draft.createdAt or draft.id) .. " · " .. tostring(draft.path or path)
+  end
+  MaterialAlertDialogBuilder(activity)
+    .setTitle(res.string.ai_restore_draft)
+    .setItems(labels, function(_, which)
+      if EditorUtil.currentFile() ~= path then return end
+      local ok, restored, err = pcall(EditorUtil.restoreExternalDraft, drafts[which + 1].id)
+      if ok and restored then snack(res.string.ai_draft_restored)
+      else snack(tostring(ok and err or restored)) end
+    end)
+    .setNegativeButton(android.R.string.cancel, nil)
+    .show()
+end
+
 function Actions.backupCurrentProject()
   if not requireOpenFile() then return end
   if Bean.Project.this_project == "" then

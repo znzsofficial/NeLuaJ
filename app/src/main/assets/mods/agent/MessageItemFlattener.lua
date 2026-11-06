@@ -69,9 +69,9 @@ function _M.flatten(messages, opts)
         while scanIndex <= #messages and messages[scanIndex].role == "tool" do
           local candidate = messages[scanIndex]
           if candidate.tool_call_id and candidate.tool_call_id ~= "" then
-            resultById[candidate.tool_call_id] = { index = scanIndex, content = candidate.content or "" }
+            resultById[candidate.tool_call_id] = { index = scanIndex, content = candidate.content or "", message = candidate }
           else
-            resultWithoutId[#resultWithoutId + 1] = { index = scanIndex, content = candidate.content or "" }
+            resultWithoutId[#resultWithoutId + 1] = { index = scanIndex, content = candidate.content or "", message = candidate }
           end
           scanIndex = scanIndex + 1
         end
@@ -89,6 +89,8 @@ function _M.flatten(messages, opts)
             if matched then missingIndex = missingIndex + 1 end
           end
           local result = matched and matched.content or nil
+          local toolOk, fileResult
+          if matched then toolOk, fileResult = matched.message.tool_ok, matched.message.file_result end
           if matched then consumedTools[matched.index] = true end
 
           cards[#cards + 1] = {
@@ -98,6 +100,8 @@ function _M.flatten(messages, opts)
             toolName = toolName,
             args = args,
             result = result,
+            toolOk = toolOk,
+            fileResult = fileResult,
             messageIndex = messageIndex,
           }
         end
@@ -113,6 +117,8 @@ function _M.flatten(messages, opts)
           toolName = "tool_result",
           args = {},
           result = result,
+          toolOk = msg.tool_ok,
+          fileResult = msg.file_result,
           messageIndex = messageIndex,
         }
       end
