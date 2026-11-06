@@ -13,6 +13,18 @@ plugins {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
+        // Central returns HTTP 403 for NanoHTTPD in the supported build environment.
+        // Route its artifacts and parent POM exclusively; a later fallback does not
+        // help once Gradle has selected Central from the module metadata.
+        exclusiveContent {
+            forRepository {
+                maven("https://maven.aliyun.com/repository/central")
+            }
+            filter {
+                includeGroup("org.nanohttpd")
+                includeModule("org.sonatype.oss", "oss-parent")
+            }
+        }
         google()
         mavenCentral()
         maven("https://jitpack.io")
@@ -25,4 +37,3 @@ dependencyResolutionManagement {
 
 rootProject.name = "NeLuaJ+"
 include(":app")
-

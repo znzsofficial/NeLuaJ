@@ -55,13 +55,10 @@ function _M.open(name, ...)
     print("ActivityUtil: unknown route '" .. tostring(name) .. "'")
     return false
   end
-  local n = select("#", ...)
-  if n <= 0 then
-    activity.newActivity(fullPath)
-  else
-    local args = { ... }
-    activity.newActivity(fullPath, args)
-  end
+  -- Pin the request/path/arguments/document overload for the Lua-Java bridge.
+  -- An explicit empty argument array also keeps no-argument routes on this path.
+  local args = { ... }
+  activity.newActivity(1, fullPath, args, false)
   return true
 end
 

@@ -1,6 +1,7 @@
 local assets = ASSETS or "app/src/main/assets/"
 package.path = assets .. "?.lua;" .. package.path
 local noop = function() end
+package.loaded["mods.mcp.EditorBridge"] = { register = noop, unregister = noop, dispatch = noop }
 _G["import"] = noop
 bindClass = function() return {} end
 res = { string = setmetatable({}, { __index = function(_, k) return k end }) }

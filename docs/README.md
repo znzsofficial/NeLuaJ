@@ -27,6 +27,7 @@
 | [PROJECT_TEMPLATES.md](./PROJECT_TEMPLATES.md) | 独立模板、生成器接口、扩展规则与产物验收 |
 | [AIAgent.md](./AIAgent.md) | Agent 模块、工具注册与批准策略、协议、上下文、会话存储 |
 | [FILE_MUTATIONS.md](./FILE_MUTATIONS.md) | 统一文件修改服务、版本校验、恢复日志、编辑器草稿与可靠性边界 |
+| [MCP_SERVER.md](./MCP_SERVER.md) | 对外 MCP 服务、USB 连接、工程授权、事务工具和设备验收边界 |
 | [LuaLayout.md](./LuaLayout.md) | 布局表加载、属性解析、AI 静态工具与布局助手复用 |
 | [LuaActivity.md](./LuaActivity.md) | 脚本宿主、独立 Globals、生命周期、平台 helper |
 | [LuaJRuntime.md](./LuaJRuntime.md) | Java/Kotlin 桥接、动态加载、UTF-8、IO 与 runtime ABI 约束 |

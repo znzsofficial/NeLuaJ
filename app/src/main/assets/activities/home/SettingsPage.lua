@@ -59,6 +59,7 @@ function _M.refresh()
 end
 
 function _M.dispose()
+  require("mods.mcp.ServerUi").dismiss()
   -- A restored/re-created fragment must inflate fresh controls and wire the new Views.
   built = nil
   wiringApplied = false
@@ -67,7 +68,30 @@ end
 function _M.build()
   if built then return built end
   -- 根布局表（含 ScrollView）直接加载；id 落在本环境全局供接线使用
-  built = loadlayout(res.layout.setting_layout)
+  local source, layout = res.layout.setting_layout, {}
+  for key, value in pairs(source) do layout[key] = value end
+  layout[2] = {}
+  for key, value in pairs(source[2]) do layout[2][key] = value end
+  local MaterialCardView = luajava.bindClass("com.google.android.material.card.MaterialCardView")
+  local attrs = activity.obtainStyledAttributes({ android.R.attr.selectableItemBackground })
+  local ripple = attrs.getResourceId(0, 0)
+  attrs.recycle()
+  -- Extend the existing settings composition without a separate Activity.
+  table.insert(layout[2], 3, {
+    MaterialCardView, layout_width = "match", layout_height = "wrap",
+    layout_marginLeft = "20dp", layout_marginRight = "20dp", layout_marginTop = "16dp",
+    radius = "16dp", CardElevation = 0, strokeWidth = 0,
+    CardBackgroundColor = ColorUtil.getColorSurfaceContainer(),
+    { LinearLayout, orientation = "vertical", layout_width = "match", layout_height = "wrap",
+      minimumHeight = "64dp", padding = "16dp", clickable = true, focusable = true,
+      backgroundResource = ripple,
+      onClick = function() require("mods.mcp.ServerUi").show() end,
+      { MaterialTextView, text = res.string.mcp_title, textSize = "16sp", textColor = ColorUtil.getColorOnSurface() },
+      { MaterialTextView, text = res.string.mcp_summary, textSize = "13sp", layout_marginTop = "4dp",
+        textColor = ColorUtil.getColorOnSurfaceVariant() },
+    },
+  })
+  built = loadlayout(layout)
   if not wiringApplied then
     SettingsWiring.apply()
     wiringApplied = true

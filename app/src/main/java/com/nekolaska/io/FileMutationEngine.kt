@@ -265,6 +265,85 @@ object FileMutationEngine {
         return p
     }
     private fun journalPath(root: Path, transactionId: String) = root.resolve("tx-${hash(transactionId.toByteArray(Charsets.UTF_8))}.json")
+    // Objects are sorted recursively; array order and string bytes remain significant.
+    private fun canonical(value: Any?): String = when (value) {
+        null, JSONObject.NULL -> "null"
+        is JSONObject -> value.keys().asSequence().toList().sorted().joinToString(",", "{", "}") { JSONObject.quote(it) + ":" + canonical(value.get(it)) }
+        is JSONArray -> (0 until value.length()).joinToString(",", "[", "]") { canonical(value.get(it)) }
+        is Number -> java.math.BigDecimal(value.toString()).stripTrailingZeros().toPlainString()
+        is Boolean -> value.toString()
+        else -> JSONObject.quote(value.toString())
+    }
+    private fun externalId(scope: String, request: String) = "external-" + hash(canonical(JSONArray().put(scope).put(request)).toByteArray(Charsets.UTF_8))
+    private fun reservationPath(root: Path, tx: String): Path {
+        if (!Regex("external-[0-9a-f]{64}").matches(tx)) fail("INVALID_REQUEST", "Invalid external transaction ID")
+        return root.resolve("$tx.json")
+    }
+    private fun reservation(root: Path, tx: String, scope: String): JSONObject {
+        val r = read(reservationPath(root, tx))
+        if (r.getString("scopeId") != scope || r.getString("transactionId") != tx || externalId(scope, r.getString("requestId")) != tx) fail("SCOPE_MISMATCH", "Reservation identity mismatch")
+        return r
+    }
+    private fun externalError(e: Exception) = obj("error" to obj("code" to (if (e is Failure) e.code else "IO_ERROR"), "message" to e.message)).toString()
+    private fun persistExternalTerminal(root: Path, tx: String, scope: String, answer: JSONObject) {
+        // These records participate in native replay/query without entering undo history.
+        // Publish the authoritative tombstone before the reservation projection.
+        persist(journalPath(root, tx), obj("transactionId" to tx, "scopeId" to scope,
+            "state" to "REJECTED", "sequence" to nextSequence(root), "steps" to JSONArray(),
+            "tombstone" to true, "result" to answer))
+        hit("external:terminal")
+    }
+
+    /** A reservation without a journal is terminal on retry: preparation never runs twice.
+     * Pending journals remain recoverable using recover; begin never re-publishes them. */
+    @Synchronized fun beginExternal(token: String, storageDir: String, scopeId: String, requestId: String, requestJson: String): String = try {
+        own(token)
+        if (scopeId.isBlank() || requestId.isBlank()) fail("INVALID_REQUEST", "Scope and request ID are required")
+        val digest = hash(canonical(JSONObject(requestJson)).toByteArray(Charsets.UTF_8))
+        val root = storage(storageDir); val tx = externalId(scopeId, requestId); val rp = reservationPath(root, tx)
+        if (Files.exists(rp)) {
+            val r = reservation(root, tx, scopeId)
+            if (r.getString("requestHash") != digest) fail("REQUEST_ID_REUSED", "Request ID was reserved for different content")
+            val jp = journalPath(root, tx)
+            val answer = if (Files.exists(jp)) existing(root, jp, scopeId) else r.optJSONObject("result") ?: result(tx, scopeId, "rejected", "REJECTED", Failure("INTERRUPTED", "Reserved request interrupted before publication; use a new request ID"))
+            // Pending recovery observations must not become permanent terminal answers.
+            if (!Files.exists(jp)) {
+                persistExternalTerminal(root, tx, scopeId, answer)
+                r.put("result", answer); persist(rp, r)
+            }
+            obj("transactionId" to tx, "result" to answer).toString()
+        } else {
+            persist(rp, obj("transactionId" to tx, "scopeId" to scopeId, "requestId" to requestId, "requestHash" to digest, "ownerToken" to token))
+            hit("external:reserved")
+            obj("transactionId" to tx).toString()
+        }
+    } catch (e: Exception) { externalError(e) }
+
+    /** resultJson must contain scopeId and transactionId. Native journal facts always win. */
+    @Synchronized fun finishExternal(token: String, storageDir: String, requestId: String, resultJson: String): String = try {
+        own(token)
+        val supplied = JSONObject(resultJson); val scope = supplied.getString("scopeId")
+        val tx = externalId(scope, requestId); val root = storage(storageDir)
+        if (supplied.getString("transactionId") != tx) fail("SCOPE_MISMATCH", "Result does not belong to reservation")
+        val r = reservation(root, tx, scope); val jp = journalPath(root, tx)
+        val answer = if (Files.exists(jp)) existing(root, jp, scope) else r.optJSONObject("result") ?: run {
+            if (r.getString("ownerToken") != token) fail("INTERRUPTED", "Reservation belongs to an interrupted invocation")
+            if (supplied.optString("commitState") !in listOf("REJECTED", "UNCHANGED") || supplied.optString("outcome") !in listOf("rejected", "unchanged") || supplied.optJSONArray("changes")?.length() != 0 || supplied.optBoolean("recoveryRequired")) fail("INVALID_RESULT", "A result without a journal cannot claim publication")
+            supplied
+        }
+        if (!Files.exists(jp)) persistExternalTerminal(root, tx, scope, answer)
+        r.put("result", answer); persist(reservationPath(root, tx), r)
+        hit("external:finished")
+        answer.toString()
+    } catch (e: Exception) { externalError(e) }
+
+    private fun externalGuard(root: Path, tx: String, scope: String, token: String): JSONObject? {
+        if (!tx.startsWith("external-")) return null
+        val r = reservation(root, tx, scope)
+        r.optJSONObject("result")?.let { return it }
+        if (r.getString("ownerToken") != token) fail("INTERRUPTED", "Retry via beginExternal before executing")
+        return null
+    }
     private fun journals(root: Path): List<Path> = Files.newDirectoryStream(root, "tx-*.json").use { it.toList().sortedBy { p -> read(p).optLong("sequence", 0) } }
     private fun nextSequence(root: Path): Long {
         val p = root.resolve("sequence.json")
@@ -322,6 +401,7 @@ object FileMutationEngine {
             val root = storage(storageDir)
             val jp = journalPath(root, tx)
             if (Files.exists(jp)) return existing(root, jp, scope).toString()
+            externalGuard(root, tx, scope, token)?.let { return it.toString() }
             if (blocked(root, scope)) fail("RECOVERY_REQUIRED", "Recover this scope before another operation")
             val op = request.getJSONObject("operation")
             val source = path(op.getString("path"))
@@ -370,7 +450,10 @@ object FileMutationEngine {
                     if (Files.exists(jp)) {
                         val j = read(jp)
                         if (j.getString("scopeId") == scope) r = j.optJSONObject("result") ?: actualEffects(j, result(tx, scope, "partial", j.getString("state"), e))
-                    } else persist(jp, obj("transactionId" to tx, "scopeId" to scope, "state" to "REJECTED", "steps" to JSONArray(), "result" to r))
+                    } else {
+                        if (tx.startsWith("external-")) reservation(root, tx, scope)
+                        persist(jp, obj("transactionId" to tx, "scopeId" to scope, "state" to "REJECTED", "steps" to JSONArray(), "result" to r))
+                    }
                 } catch (_: Exception) { r.getJSONArray("warnings").put("Result could not be persisted") }
             }
             r.toString()
@@ -619,11 +702,22 @@ object FileMutationEngine {
         return obj("id" to tx, "operation" to j.getJSONObject("operation"), "scopeId" to j.getString("scopeId")).toString()
     }
     @Synchronized fun history(token: String, storageDir: String, scopeId: String, direction: String, expectedId: String): String {
-        val tx = id()
+        return historyWithId(token, storageDir, scopeId, direction, expectedId, id())
+    }
+    @Synchronized fun historyExternal(token: String, storageDir: String, scopeId: String, direction: String, expectedId: String, transactionId: String): String {
+        return historyWithId(token, storageDir, scopeId, direction, expectedId, transactionId, true)
+    }
+    private fun historyWithId(token: String, storageDir: String, scopeId: String, direction: String, expectedId: String, tx: String, external: Boolean = false): String {
         return try {
             own(token)
             require(direction == "undo" || direction == "redo")
             val root = storage(storageDir)
+            if (external) {
+                reservation(root, tx, scopeId)
+                val jp = journalPath(root, tx)
+                if (Files.exists(jp)) return existing(root, jp, scopeId).toString()
+                externalGuard(root, tx, scopeId, token)?.let { return it.toString() }
+            }
             if (blocked(root, scopeId)) fail("RECOVERY_REQUIRED", "Run recovery first")
             val stack = index(root).getJSONArray(direction)
             if (stack.length() == 0 || stack.getString(stack.length() - 1) != expectedId) fail("HISTORY_CONFLICT", "History head changed")
@@ -645,7 +739,10 @@ object FileMutationEngine {
                     val jp = journalPath(storage(storageDir), tx)
                     if (Files.exists(jp)) {
                         val j = read(jp)
-                        r = j.optJSONObject("result") ?: actualEffects(j, result(tx, scopeId, "partial", j.getString("state"), e))
+                        if (j.getString("scopeId") == scopeId) r = j.optJSONObject("result") ?: actualEffects(j, result(tx, scopeId, "partial", j.getString("state"), e))
+                    } else if (external) {
+                        reservation(jp.parent, tx, scopeId)
+                        persist(jp, obj("transactionId" to tx, "scopeId" to scopeId, "state" to "REJECTED", "steps" to JSONArray(), "result" to r))
                     }
                 }
             } catch (_: Exception) { }

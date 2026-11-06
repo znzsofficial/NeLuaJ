@@ -147,6 +147,23 @@ colors.getColorPrimary = function() return 5 end
 package.loaded["mods.utils.ActivityUtil"] = {}
 package.loaded["mods.help.DocCatalog"] = {}
 local wiringCount, inflateCount = 0, 0
+local mcpShown, mcpDismissed, recycled = 0, 0, 0
+package.loaded["mods.mcp.ServerUi"] = {
+  show = function() mcpShown = mcpShown + 1 end,
+  dismiss = function() mcpDismissed = mcpDismissed + 1 end,
+}
+-- Resource layout tables and styled attributes are supplied by the Android host.
+local originalHeader, originalSettings = { "header" }, { "settings" }
+local settingsSource = { "ScrollView", { "LinearLayout", originalHeader, originalSettings } }
+res.layout.setting_layout = settingsSource
+android.R.attr = { selectableItemBackground = 42 }
+activity.obtainStyledAttributes = function(attrs)
+  assert(attrs[1] == 42)
+  return { getResourceId = function(index, fallback)
+    assert(index == 0 and fallback == 0)
+    return 73
+  end, recycle = function() recycled = recycled + 1 end }
+end
 package.loaded["mods.settings.SettingsWiring"] = {
   apply = function() wiringCount = wiringCount + 1 end,
 }
@@ -156,7 +173,7 @@ loadlayout = function(layout, views)
     views.docList = { setLayoutManager = function() end, setAdapter = function() end }
     views.pageHeader = { setId = function() end }
   end
-  return { generation = inflateCount }
+  return { generation = inflateCount, layout = layout }
 end
 local helpPage = assert(loadfile(assets .. "activities/home/HelpPage.lua"))()
 local helpView = helpPage.build()
@@ -166,9 +183,18 @@ assert(helpPage.build() ~= helpView, "re-created Help fragment must get a fresh,
 local settingsPage = assert(loadfile(assets .. "activities/home/SettingsPage.lua"))()
 local settingsView = settingsPage.build()
 assert(settingsPage.build() == settingsView and wiringCount == 1)
+local mcpRow = settingsView.layout[2][3][2]
+assert(mcpRow.clickable and mcpRow.focusable and mcpRow.backgroundResource == 73)
+mcpRow.onClick()
+assert(mcpShown == 1 and recycled == 1)
+assert(settingsView.layout[2][2] == originalHeader and settingsView.layout[2][4] == originalSettings)
+assert(#settingsSource[2] == 3 and settingsSource[2][3] == originalSettings,
+  "MCP composition must not mutate the cached resource layout")
 settingsPage.dispose()
+assert(mcpDismissed == 1, "disposing Settings must dismiss its MCP dialog")
 assert(settingsPage.build() ~= settingsView and wiringCount == 2,
   "re-created Settings fragment must rewire new controls")
+assert(recycled == 2 and #settingsSource[2] == 3, "rebuild must not accumulate MCP rows")
 
 -- Actual Help keeps card/section data but only inflates a constant-size shell.
 this.dpToPx = function(n) return n end

@@ -45,6 +45,122 @@ class FileMutationEngineTest {
     private fun recover() = JSONObject(engine.recover(token, store.toString(), "scope"))
     private fun outcome(r: JSONObject, expected: String) = assertEquals(r.toString(), expected, r.getString("outcome"))
 
+    private fun begin(key: String, json: String = "{\"kind\":\"append\",\"text\":\"x\"}", scope: String = "scope") =
+        JSONObject(engine.beginExternal(token, store.toString(), scope, key, json))
+    private fun restart() {
+        engine.checkpoint = null
+        engine.release(token)
+        token = engine.tryAcquire("restart")
+    }
+    @Test fun externalReservationCrashIsTerminalAndCanonicalIdentityIsScoped() {
+        engine.checkpoint = { if (it == "external:reserved") throw Crash() }
+        try { begin("key", "{\"a\":1,\"b\":{\"x\":true}}") ; fail("Expected crash") } catch (_: Crash) { }
+        restart()
+        val retry = begin("key", "{\"b\":{\"x\":true},\"a\":1.0}")
+        outcome(retry.getJSONObject("result"), "rejected")
+        assertEquals("INTERRUPTED", retry.getJSONObject("result").getJSONObject("error").getString("code"))
+        assertEquals("REQUEST_ID_REUSED", begin("key", "{}").getJSONObject("error").getString("code"))
+        assertNotEquals(retry.getString("transactionId"), begin("key", "{}", "other").getString("transactionId"))
+        val p = dir.resolve("a")
+        outcome(execute(request("write", p, tx = retry.getString("transactionId"))), "rejected")
+        assertFalse(Files.exists(p))
+    }
+    @Test fun externalAppendCrashRetriesNeverAppendTwiceAndSurviveTombstones() {
+        for (point in listOf("committed", "history")) {
+            val p = dir.resolve(point); Files.write(p, "a".toByteArray())
+            val tx = begin(point).getString("transactionId")
+            engine.checkpoint = { if (it == point) throw Crash() }
+            try { execute(request("write", p, bytes = "ax".toByteArray(), tx = tx)); fail("Expected crash") } catch (_: Crash) { }
+            restart()
+            outcome(begin(point).getJSONObject("result"), "committed")
+            // A facade retry would prepare axx, but the transaction identity wins.
+            outcome(execute(request("write", p, bytes = "axx".toByteArray(), tx = tx)), "committed")
+            assertEquals("ax", String(Files.readAllBytes(p)))
+            val fake = JSONObject().put("transactionId", tx).put("scopeId", "scope").put("outcome", "rejected").put("commitState", "REJECTED").put("changes", JSONArray())
+            outcome(JSONObject(engine.finishExternal(token, store.toString(), point, fake.toString())), "committed")
+        }
+        repeat(12) { execute(request("write", dir.resolve("later-$it"))) }
+        outcome(begin("committed").getJSONObject("result"), "committed")
+    }
+    @Test fun externalHistoryCrashDoesNotPopAnotherHead() {
+        for (point in listOf("committed", "history")) {
+            val p = dir.resolve(point)
+            val original = request("write", p); outcome(execute(original), "committed")
+            val tx = begin("undo-$point", "{\"kind\":\"undo\"}").getString("transactionId")
+            engine.checkpoint = { if (it == point) throw Crash() }
+            try { engine.historyExternal(token, store.toString(), "scope", "undo", original.getString("transactionId"), tx); fail("Expected crash") } catch (_: Crash) { }
+            restart()
+            outcome(begin("undo-$point", "{\"kind\":\"undo\"}").getJSONObject("result"), "committed")
+            outcome(JSONObject(engine.historyExternal(token, store.toString(), "scope", "undo", original.getString("transactionId"), tx)), "committed")
+            assertFalse(Files.exists(p))
+            assertEquals(original.getString("transactionId"), JSONObject(engine.peek(store.toString(), "redo")).getString("id"))
+        }
+    }
+    @Test fun externalPreflightResultIsDurableAndCannotClaimCommit() {
+        val tx = begin("preflight").getString("transactionId")
+        val r = JSONObject().put("transactionId", tx).put("scopeId", "scope").put("outcome", "committed").put("commitState", "COMMITTED").put("changes", JSONArray())
+        assertTrue(JSONObject(engine.finishExternal(token, store.toString(), "preflight", r.toString())).has("error"))
+        r.put("outcome", "rejected").put("commitState", "REJECTED").put("candidates", JSONArray().put("candidate"))
+        outcome(JSONObject(engine.finishExternal(token, store.toString(), "preflight", r.toString())), "rejected")
+        restart()
+        assertEquals("candidate", begin("preflight").getJSONObject("result").getJSONArray("candidates").getString(0))
+        val queried = JSONObject(engine.getResult(store.toString(), tx))
+        outcome(queried, "rejected")
+        assertEquals("candidate", queried.getJSONArray("candidates").getString(0))
+        val replay = JSONArray(engine.listResults(store.toString(), "scope"))
+        assertEquals(1, replay.length())
+        assertEquals(tx, replay.getJSONObject(0).getString("transactionId"))
+        assertEquals(0, replay.getJSONObject(0).getJSONArray("changes").length())
+        assertEquals(0, JSONArray(engine.listResults(store.toString(), "other")).length())
+        assertEquals("null", engine.peek(store.toString(), "undo"))
+    }
+    @Test fun interruptedReservationTerminalIsQueryableAfterAnotherRestart() {
+        val tx = begin("abandoned").getString("transactionId")
+        restart()
+        outcome(begin("abandoned").getJSONObject("result"), "rejected")
+        restart()
+        val queried = JSONObject(engine.getResult(store.toString(), tx))
+        outcome(queried, "rejected")
+        assertEquals("INTERRUPTED", queried.getJSONObject("error").getString("code"))
+        assertEquals(0, queried.getJSONArray("changes").length())
+        assertFalse(queried.getJSONObject("history").getBoolean("recorded"))
+        assertEquals(tx, JSONArray(engine.listResults(store.toString(), "scope")).getJSONObject(0).getString("transactionId"))
+        assertEquals("null", engine.peek(store.toString(), "undo"))
+        assertTrue(recover().getBoolean("recovered"))
+        assertEquals(1, JSONArray(engine.listResults(store.toString(), "scope")).length())
+    }
+    @Test fun terminalTombstoneSurvivesCrashBeforeReservationProjection() {
+        val tx = begin("terminal-crash").getString("transactionId")
+        val r = JSONObject().put("transactionId", tx).put("scopeId", "scope").put("outcome", "rejected")
+            .put("commitState", "REJECTED").put("changes", JSONArray()).put("candidates", JSONArray().put("one"))
+        engine.checkpoint = { if (it == "external:terminal") throw Crash() }
+        try { engine.finishExternal(token, store.toString(), "terminal-crash", r.toString()); fail("Expected crash") } catch (_: Crash) { }
+        restart()
+        assertEquals("one", JSONObject(engine.getResult(store.toString(), tx)).getJSONArray("candidates").getString(0))
+        assertEquals("one", begin("terminal-crash").getJSONObject("result").getJSONArray("candidates").getString(0))
+        assertEquals(1, JSONArray(engine.listResults(store.toString(), "scope")).length())
+    }
+    @Test fun externalHistoryRejectsCrossScopeWithoutLeakingCommittedResult() {
+        val p = dir.resolve("scoped")
+        val original = request("write", p); outcome(execute(original), "committed")
+        val tx = begin("undo", "{\"kind\":\"undo\"}").getString("transactionId")
+        outcome(JSONObject(engine.historyExternal(token, store.toString(), "scope", "undo", original.getString("transactionId"), tx)), "committed")
+        val crossed = JSONObject(engine.historyExternal(token, store.toString(), "other", "undo", original.getString("transactionId"), tx))
+        outcome(crossed, "rejected")
+        assertEquals("SCOPE_MISMATCH", crossed.getJSONObject("error").getString("code"))
+    }
+    @Test fun externalPendingPublicationRequiresRecoveryRatherThanReexecution() {
+        val p = dir.resolve("pending"); Files.write(p, "a".toByteArray())
+        val tx = begin("pending").getString("transactionId")
+        engine.checkpoint = { if (it == "published:0") throw Crash() }
+        try { execute(request("write", p, bytes = "ax".toByteArray(), tx = tx)); fail("Expected crash") } catch (_: Crash) { }
+        restart()
+        outcome(begin("pending").getJSONObject("result"), "partial")
+        assertTrue(recover().getBoolean("recovered"))
+        outcome(begin("pending").getJSONObject("result"), "committed")
+        assertEquals("ax", String(Files.readAllBytes(p)))
+    }
+
     @Test fun staleVersionAndExistingTargetNeverPublish() {
         val p = dir.resolve("a"); Files.write(p, byteArrayOf(1))
         val req = request("write", p)

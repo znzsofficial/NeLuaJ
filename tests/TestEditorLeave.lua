@@ -62,6 +62,8 @@ print("PASS actual LeaveGuard success, failure, cancel, stale callbacks and expl
 
 -- MainActivity integration: real menu/Back/lifecycle wiring, Android boundary doubles.
 local noop = function() end
+-- MCP lifecycle is a separate native boundary from the leave/save guard.
+package.loaded["mods.mcp.EditorBridge"] = { register = noop, unregister = noop, dispatch = noop }
 res = { string = setmetatable({}, { __index = function(_, k) return k end }), drawable = function() end }
 android = { R = { string = { cancel = "cancel" }, id = { home = 1 } } }
 GravityCompat = { START = 1 }

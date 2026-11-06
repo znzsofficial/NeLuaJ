@@ -10,6 +10,7 @@ import "mods.utils.ActivityUtil"
 import "mods.utils.EditorUtil"
 local AppInit = require "mods.utils.AppInit"
 local LeaveGuard = require "mods.editor.LeaveGuard"
+local McpEditorBridge = require "mods.mcp.EditorBridge"
 
 local Actions = Init.Actions
 local ColorUtil = this.themeUtil
@@ -335,6 +336,7 @@ function onEditorPrefsChanged()
 end
 
 function onResume()
+  McpEditorBridge.register()
   -- 首页可能在编辑器还活着时删过会话。清掉内存表，下次读写以磁盘索引为准。
   pcall(function()
     require("mods.agent.ConversationStore").invalidate()
@@ -344,7 +346,7 @@ function onResume()
   Init.applyTabletMode()
   EditorUtil.applyEditorPrefs()
   local mutations = package.loaded["mods.files.FileMutationService"]
-  if mutations and mutations.reconcilePending then
+  if package.loaded["mods.agent.AgentChat"] and mutations and mutations.reconcilePending then
     local ok, err = pcall(mutations.reconcilePending)
     if not ok then Actions.snack(tostring(err)) end
   end
@@ -389,6 +391,7 @@ function onConfigurationChanged(config)
 end
 
 function onDestroy()
+  McpEditorBridge.unregister()
   pcall(function()
     require("mods.agent.ChatUI").saveCurrentConversation()
   end)
@@ -397,6 +400,10 @@ function onDestroy()
     local MagnifierManager = require "mods.utils.MagnifierManager"
     MagnifierManager.destroy()
   end)
+end
+
+function onMcpEditorBridge(request)
+  return McpEditorBridge.dispatch(request)
 end
 
 function onOptionsItemSelected(item)

@@ -7,6 +7,11 @@ local function new(options)
   local api, pending, results, ready = {}, {}, {}, {}
   local sequence = 0
   local replayed, legacyReports = {}, {}
+  local function schedule(work,done)
+    if cfg.scheduler then return cfg.scheduler(work,done) end
+    if cfg.fixedScope then local value=work(); return done(value) end
+    return xTask(work,done,'io')
+  end
   local function onMain()
     if not cfg.isMainThread then return true end
     local ok,value=pcall(cfg.isMainThread)
@@ -19,12 +24,16 @@ local function new(options)
     return (cfg.json or json).decode(tostring(value))
   end
   local function call(method, ...) return decode(backend()[method](...)) end
-  local function context() return (cfg.context or require('mods.project.ProjectContext')).snapshot() end
+  local function context()
+    if cfg.fixedScope then return cfg.fixedScope end
+    return (cfg.context or require('mods.project.ProjectContext')).snapshot()
+  end
   local function storage(scope)
+    if cfg.fixedScope then return assert(cfg.storageDir, 'fixed scope requires storageDir') end
     return cfg.storage and cfg.storage(scope) or require('mods.agent.AgentStorage').capture(scope.scopePath, scope.agentRoot).storageDir
   end
   local function failure(h, code, message)
-    return {transactionId=h.id, scopeId=h.scope.scopePath, outcome='rejected', commitState='not_committed', changes={},
+    return {transactionId=h.id, scopeId=h.scope.scopePath, outcome='rejected', commitState=cfg.fixedScope and 'REJECTED' or 'not_committed', changes={},
       history={recorded=false,persisted=false}, warnings={}, error={code=code,message=tostring(message)}}
   end
   local function formatted(r)
@@ -37,8 +46,15 @@ local function new(options)
     return text, ok, r
   end
   local function current(h)
+    if cfg.fixedScope then return cfg.authorized and cfg.authorized(h.scope)==true end
     local c = context()
     return c.scopePath == h.scope.scopePath and c.projectGeneration == h.scope.projectGeneration
+  end
+  local function notificationCurrent(h)
+    -- Request cancellation stops publication, not synchronization of an
+    -- already committed result. Actual scope revocation still defers replay.
+    if cfg.fixedScope and cfg.notificationAuthorized then return cfg.notificationAuthorized(h.scope)==true end
+    return current(h)
   end
   local function notify(h)
     if not h.result then return end
@@ -49,15 +65,18 @@ local function new(options)
         if h.callback then pcall(h.callback,formatted(h.result)) end
       end
     end
+    if h.suppressNotification then deliver(); return end
     local changed=h.result.outcome=='committed' or h.result.outcome=='partial'
-    if changed and not current(h) then
+    -- A headless external host must not acknowledge effects it never showed.
+    if cfg.fixedScope and changed and (not cfg.finish or not notificationCurrent(h)) then deliver(); return end
+    if changed and not notificationCurrent(h) then
       local now=context()
       if now.scopePath~=h.scope.scopePath then deliver(); return end
       h.scope=now; h.snapshot=nil; h.recovery=true
     end
-    if changed and not h.snapshot and cfg.prepare then h.recovery=true end
+    if changed and not h.snapshot and (cfg.prepare or cfg.fixedScope) then h.recovery=true end
     if h.recovery and not h.snapshot then
-      if not current(h) then deliver(); return end
+      if not notificationCurrent(h) then deliver(); return end
       if not cfg.prepareRecovery then deliver(); return end
       local ok,snapshot,err=pcall(cfg.prepareRecovery,h.result)
       if not ok or not snapshot then
@@ -86,7 +105,6 @@ local function new(options)
       if id and h.storageDir then replayed[h.storageDir..'\n'..id]=true end
       if id and h.storageDir and cfg.acknowledge and not h.ackScheduled then
         h.ackScheduled=true
-        local schedule=cfg.scheduler or function(work,done) return xTask(work,done,'io') end
         local launched=pcall(schedule,function() return cfg.acknowledge(h.storageDir,id) end,function(ok)
           if ok~=true then h.ackScheduled=false; pending[h.id]=h end
         end)
@@ -103,6 +121,14 @@ local function new(options)
     end
   end
   local function settle(h, r)
+    if h.externalReserved then
+      local ok,saved=pcall(call,'finishExternal',h.token,h.storageDir,h.args.requestId or h.requestId,(cfg.json or json).encode(r))
+      if ok and type(saved)=='table' and saved.outcome then r=saved
+      else
+        r=failure(h,'recovery_required',saved)
+        r.outcome='partial'; r.commitState='unknown'
+      end
+    end
     h.result = r
     results[h.id] = {result=r,storageDir=h.storageDir}
     if r.transactionId then results[r.transactionId]=results[h.id] end
@@ -111,15 +137,38 @@ local function new(options)
     release(h) -- Never rely on delivery of a UI callback to release the native lock.
     return r
   end
-  function api.configure(o) cfg = o or {} end
+  function api.configure(o)
+    assert(not cfg.fixedScope, 'fixed scope instances cannot be reconfigured')
+    cfg = o or {}
+  end
+  function api.attachEditor(hooks)
+    assert(cfg.fixedScope, 'attachEditor is for fixed scope instances')
+    hooks=hooks or {}
+    cfg.prepare,cfg.prepareRecovery,cfg.finish=hooks.prepare,hooks.prepareRecovery,hooks.finish
+  end
   local function capture(name, args, callback)
     sequence = sequence + 1
     local s = context()
     local id = cfg.id and cfg.id() or (tostring(os.time()) .. '-' .. tostring({}):gsub('table: ', '') .. '-' .. sequence)
     local h = {id=id,scope=s,storageDir=storage(s),name=name,args={},callback=callback}
     for k,v in pairs(args or {}) do h.args[k]=v end
+    if cfg.fixedScope then
+      if type(h.args.requestId)~='string' or h.args.requestId=='' then error('requestId required') end
+      for _,v in pairs(h.args) do
+        if type(v)~='string' and type(v)~='number' and type(v)~='boolean' then error('external arguments must be scalar') end
+      end
+      h.externalRequest={name=name,args={}}
+      for k,v in pairs(h.args) do h.externalRequest.args[k]=v end
+    end
     local function resolve(p)
       if not p or p == '' then error('缺少文件路径') end
+      if cfg.fixedScope then
+        if type(p)~='string' or p:find('[%z\\:]') or p:sub(1,1)=='/' then error('external path must be relative') end
+        for part in p:gmatch('[^/]+') do if part=='.' or part=='..' then error('invalid path component') end end
+        local resolved=assert(cfg.resolve(p,s), 'path resolution failed')
+        if resolved:sub(1,#s.scopePath+1)~=s.scopePath..'/' then error('path outside fixed scope') end
+        return resolved
+      end
       if cfg.resolve then return cfg.resolve(p, s) end
       return p:sub(1,1)=='/' and p or s.directory .. '/' .. p
     end
@@ -134,9 +183,28 @@ local function new(options)
     h.token = backend().tryAcquire(h.id)
     if h.token == nil or tostring(h.token)=='' then h.token=nil; return failure(h,'busy','另一个文件操作仍在完成') end
     if not ready[h.storageDir] then return failure(h,'recovery_required','文件历史尚未恢复，请先执行 recover') end
+    if cfg.fixedScope and not current(h) then return failure(h,'scope_stale','工程授权已失效') end
+    if cfg.fixedScope then
+      local reservation=call('beginExternal',h.token,h.storageDir,h.scope.scopePath,h.args.requestId,(cfg.json or json).encode(h.externalRequest))
+      if reservation.result then
+        pending[h.id]=nil
+        h.id=reservation.result.transactionId or reservation.transactionId or h.id
+        if pending[h.id] or replayed[h.storageDir..'\n'..h.id] then h.suppressNotification=true
+        else pending[h.id]=h end
+        return reservation.result
+      end
+      if reservation.error then return failure(h,reservation.error.code,reservation.error.message) end
+      if not reservation.transactionId then return failure(h,'recovery_required','Invalid external reservation') end
+      pending[h.id]=nil
+      h.id=reservation.transactionId
+      pending[h.id]=h
+      h.requestId=h.args.requestId
+      h.externalReserved=true
+    end
     if h.name == 'undo' or h.name == 'redo' then
       h.head = call('peek',h.storageDir,h.name)
       if not h.head then return failure(h,'empty_history','没有可用的文件历史') end
+      if cfg.fixedScope and h.args.expectedHead~=h.head.id then return failure(h,'history_conflict','expectedHead 与当前历史不一致') end
       local op = h.head.operation
       h.args = {path=op.path,new_path=op.target}
       h.editorName = op.kind == 'rename' and 'rename_file' or 'create_file'
@@ -154,11 +222,18 @@ local function new(options)
     if not entry or not entry.fileMutation then error('非文件变更工具: '..tostring(n)) end
     local kind=entry.fileMutation
     local path=a.path
-    local root=cfg.resolve and cfg.resolve(h.scope.scopePath,h.scope) or h.scope.scopePath
+    local root=not cfg.fixedScope and cfg.resolve and cfg.resolve(h.scope.scopePath,h.scope) or h.scope.scopePath
     if (kind=='delete' or kind=='rename') and (path=='/' or path==root
         or root:sub(1,#path+1)==path..'/') then error('禁止删除或移动项目根目录及其上级目录') end
     local before=call('observe',path)
     if not before or not before.version then error('无法获取文件版本') end
+    if cfg.fixedScope then
+      if n=='create_file' or kind=='mkdir' then
+        if before.kind~='missing' then error({code='already_exists',message='创建目标已经存在'}) end
+      elseif type(a.expectedVersion)~='string' or a.expectedVersion~=before.version then
+        error({code='version_conflict',message='expectedVersion 与当前版本不一致，请重新读取'})
+      end
+    end
     local op={kind=kind,path=path,target=a.new_path}
     local expected={{path=path,version=before.version}}
     if kind=='write' then
@@ -189,6 +264,9 @@ local function new(options)
     elseif kind=='rename' then
       if not a.new_path then error('缺少 new_path 参数') end
       local target=call('observe',a.new_path)
+      if cfg.fixedScope and (type(a.expectedTargetVersion)~='string' or a.expectedTargetVersion~=target.version) then
+        error({code='target_version_conflict',message='expectedTargetVersion 与目标版本不一致'})
+      end
       expected[#expected+1]={path=a.new_path,version=target.version}
       if cfg.validate and before.kind=='file' and a.new_path:lower():sub(-4)=='.lua' then
         if type(before.text)~='string' then error('无法检查目标 Lua 文件语法') end
@@ -206,6 +284,7 @@ local function new(options)
       if not current(h) then return failure(h,'scope_stale','项目已切换，未执行') end
       if h.name=='undo' or h.name=='redo' then
         h.published=true
+        if cfg.fixedScope then return call('historyExternal',h.token,h.storageDir,h.scope.scopePath,h.name,h.head.id,h.id) end
         return call('history',h.token,h.storageDir,h.scope.scopePath,h.name,h.head.id)
       end
       local request=candidate(h)
@@ -215,13 +294,14 @@ local function new(options)
       return call('execute',h.token,h.storageDir,(cfg.json or json).encode(request))
     end)
     if not ok or type(r)~='table' then
-      r=failure(h,h.published and 'recovery_required' or 'invalid_request',r)
+      local detail=r
+      r=failure(h,h.published and 'recovery_required' or (type(detail)=='table' and detail.code or 'invalid_request'),type(detail)=='table' and detail.message or detail)
       if h.published then r.outcome='partial'; r.commitState='unknown'; ready[h.storageDir]=nil end
     end
     return settle(h,r)
   end
   local function start(name,args,callback,async)
-    if not onMain() then
+    if not cfg.fixedScope and not onMain() then
       local h={id='thread-rejected',scope={scopePath=''},name=name,args=args or {}}
       h.result=failure(h,'main_thread_required','文件变更入口必须由主线程发起；后台同步调用已拒绝')
       if callback then pcall(callback,formatted(h.result)) end
@@ -240,7 +320,6 @@ local function new(options)
     if not ok then err=failure(h,'prepare_failed',err) end
     if err then settle(h,err); notify(h); return h end
     if async then
-      local schedule=cfg.scheduler or function(work,done) return xTask(work,done,'io') end
       local launched,launchError=pcall(schedule,function() return worker(h) end,function() notify(h) end)
       if not launched then settle(h,failure(h,'launch_failed',launchError)); notify(h) end
     else worker(h); notify(h) end
@@ -256,6 +335,10 @@ local function new(options)
     h.cancelled=true; return true
   end
   function api.getResult(id,storageDir)
+    if cfg.fixedScope then
+      assert(not storageDir, 'fixed scope results cannot be redirected')
+      if not current({scope=cfg.fixedScope}) then return nil end
+    end
     if results[id] then return results[id].result end
     return call('getResult',storageDir or storage(context()),id)
   end
@@ -274,6 +357,10 @@ local function new(options)
     for _,h in ipairs(batch) do notify(h) end
   end
   function api.recover(capturedScope, capturedStorage)
+    if cfg.fixedScope then
+      assert(not capturedScope and not capturedStorage, 'fixed scope recovery cannot be redirected')
+      if not current({scope=cfg.fixedScope}) then return {recovered=false,error={code='scope_stale'}} end
+    end
     local s=capturedScope or context(); local dir=capturedStorage or storage(s)
     local token=backend().tryAcquire('recover-'..tostring(os.time()))
     if not token or tostring(token)=='' then return {ok=false,error={code='busy'}} end
@@ -340,8 +427,7 @@ local function new(options)
   function api.reconcilePending(callback)
     local scope=context()
     local dir=storage(scope)
-    local schedule=cfg.scheduler or function(work,done) return xTask(work,done,'io') end
-    return schedule(function() return api.recover(scope,dir) end, function(report)
+    return schedule(function() if cfg.fixedScope then return api.recover() end; return api.recover(scope,dir) end, function(report)
       api.drainNotifications()
       if callback then pcall(callback,report) end
     end)

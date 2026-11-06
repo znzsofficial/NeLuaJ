@@ -199,7 +199,7 @@ dependencies {
     //implementation("net.gotev:speech:1.6.2")
 
     testImplementation(libs.junit)
-    testImplementation("org.json:json:20240303")
+    testImplementation(libs.json)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.espresso.core)
 
@@ -247,6 +247,7 @@ dependencies {
 
     //Okhttp
     implementation(libs.okhttp)
+    implementation(libs.nanohttpd)
 
     //lottie
     implementation(libs.lottie)
