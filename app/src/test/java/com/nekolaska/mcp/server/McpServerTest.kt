@@ -162,6 +162,35 @@ class McpServerTest {
         } finally { host.stop() }
     }
 
+    @Test(timeout = 10000) fun timedOutUiCallsDoNotExhaustHttpWorkers() {
+        val queued = java.util.concurrent.CopyOnWriteArrayList<Runnable>()
+        val released = AtomicInteger()
+        val unexpectedUiCalls = AtomicInteger()
+        val blockedUi = object : McpProtocolAdapter.Backend by backend {
+            override fun callWithRequestId(requestId: Any, name: String, args: JSONObject): JSONObject {
+                val task = McpUiCall({ released.incrementAndGet() }) {
+                    unexpectedUiCalls.incrementAndGet()
+                    JSONObject()
+                }
+                queued.add(task) // Main thread is congested: none of these can run yet.
+                return task.await(20) { false }
+            }
+        }
+        val host = McpServerHost(token, blockedUi, 0, maxConnections = 4)
+        host.start()
+        try {
+            repeat(8) {
+                val response = exchange(host, request("tools/call", JSONObject().put("name", "echo")))
+                assertTrue(response.startsWith("HTTP/1.1 200"))
+                assertTrue(JSONObject(response.substringAfter("\r\n\r\n")).getJSONObject("result").getBoolean("isError"))
+            }
+            assertTrue(exchange(host).startsWith("HTTP/1.1 200"))
+            queued.forEach { it.run() } // Late callbacks must be inert.
+            assertEquals(8, released.get())
+            assertEquals(0, unexpectedUiCalls.get())
+        } finally { host.stop() }
+    }
+
     @Test fun connectionLimitHoldsUntilBackendActuallyFinishes() {
         val entered = CountDownLatch(1)
         val release = CountDownLatch(1)

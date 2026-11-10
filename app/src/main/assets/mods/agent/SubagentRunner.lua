@@ -25,7 +25,8 @@ function _M.isRunning()
 end
 
 --- 用户停止/回合作废时由 AgentTurn 调用：立即中止当前子代理并唤醒阻塞等待
-function _M.cancel()
+function _M.cancel(parentTaskId)
+  if parentTaskId ~= nil and (not current or current.parentTaskId ~= parentTaskId) then return end
   if current and not current.done then
     current.cancelled = true
     if current.finish then
@@ -57,6 +58,7 @@ local function notifyProgress(state)
     done = state.done,
   }
   postToMain(function()
+    if state.serial ~= subSerial then return end
     if current and current ~= state then return end
     if state.done and not snapshot.done then return end
     pcall(report, snapshot)
@@ -133,13 +135,16 @@ end
 
 --- 执行子任务。在工具执行线程调用，同步阻塞直至完成或被取消。
 --- 返回 (resultText, ok)；ok=false 表示被停止/失败。
-function _M.run(task, lightweight)
+function _M.run(task, lightweight, taskContext)
   if current then return "已有一个子代理在运行，请等待其完成后再委派", false end
   task = tostring(task or "")
   if task == "" then return "子任务描述为空，未执行", false end
 
   subSerial = subSerial + 1
+  taskContext = type(taskContext) == "table" and taskContext or {}
   local state = { cancelled = false, done = false, result = nil, ok = false, rounds = 0 }
+  state.serial = subSerial
+  state.parentTaskId = taskContext.taskId
   state.task = task
   current = state
   notifyProgress(state)
@@ -160,8 +165,10 @@ function _M.run(task, lightweight)
   end
   local function cancelToolJob(job)
     if not job then return end
-    if c().cancelToolJob then pcall(c().cancelToolJob, job)
-    else cancelHandle(job) end
+    postToMain(function()
+      if c().cancelToolJob then pcall(c().cancelToolJob, job)
+      else cancelHandle(job) end
+    end)
   end
 
   local function finish(result, ok)
@@ -171,12 +178,13 @@ function _M.run(task, lightweight)
     state.ok = ok == true
     state.currentTool = nil
     -- 中止可能仍在后台狂奔的网络请求或工具任务
-    cancelHandle(activeStreamCall)
+    local stream = activeStreamCall
+    postToMain(function() cancelHandle(stream) end)
     cancelToolJob(activeToolJob)
     activeStreamCall, activeToolJob = nil, nil
     if not state.ok and c().cancelToolConfirm then
       postToMain(function()
-        if not current or current == state then pcall(c().cancelToolConfirm) end
+        if state.serial == subSerial and (not current or current == state) then pcall(c().cancelToolConfirm) end
       end)
     end
     notifyProgress(state)
@@ -288,9 +296,24 @@ function _M.run(task, lightweight)
     if type(args) ~= "table" then args = {} end
     tc.name = c().normalizeToolName(tc.name, args)
     local accepted, started = false, false
-    local function proceedWithResult(resultStr, toolOk, fileResult)
+    local function forwardLateFile(resultStr, toolOk, fileResult, taskInfo)
+      if type(fileResult) ~= "table" or type(taskContext.onLateFileResult) ~= "function" then return end
+      postToMain(function()
+        pcall(taskContext.onLateFileResult, resultStr, toolOk, fileResult, taskInfo)
+      end)
+    end
+    local function proceedWithResult(resultStr, toolOk, fileResult, taskInfo)
       stopIfCancelled()
-      if state.done or current ~= state or accepted then return end
+      if state.done then
+        forwardLateFile(resultStr, toolOk, fileResult, taskInfo)
+        return
+      end
+      if current ~= state or accepted then return end
+      if taskInfo and taskInfo.waitState == "timed_out" then
+        finish("子任务等待超时，已请求取消；文件事务结果待确认", false)
+        forwardLateFile(resultStr, toolOk, fileResult, taskInfo)
+        return
+      end
       accepted = true
       activeToolJob = nil
       messages[#messages + 1] = {
@@ -299,6 +322,7 @@ function _M.run(task, lightweight)
         content = tostring(resultStr or ""),
         tool_ok = toolOk,
         file_result = fileResult,
+        task_info = taskInfo,
       }
       runToolCalls(toolCalls, index + 1, onAll)
     end
@@ -308,7 +332,16 @@ function _M.run(task, lightweight)
       started = true
       state.currentTool = tc.name
       notifyProgress(state)
-      local job = c().executeToolAsync(tc.name, args, proceedWithResult)
+      local job = c().executeToolAsync(tc.name, args, proceedWithResult, {
+        scope = taskContext.scope,
+        parentId = taskContext.taskId or taskContext.parentId,
+        toolCallId = tc.id,
+        onWaitEnd = function(info)
+          if state.done or accepted or current ~= state then return end
+          state.taskInfo = info
+          finish("子任务等待超时，已请求取消；文件事务结果待确认", false)
+        end,
+      })
       if state.done or state.cancelled then
         if not state.ok then cancelToolJob(job) end
       elseif not accepted then activeToolJob = job end
@@ -318,7 +351,7 @@ function _M.run(task, lightweight)
       execute()
     elseif c().requiresConfirmation(tc.name, args) or c().isDestructiveTool(tc.name) then
       c().showToolConfirm(tc.name, args, execute, function()
-        proceedWithResult("用户拒绝执行此操作")
+        if not started then proceedWithResult("用户拒绝执行此操作") end
       end)
     else
       execute()
@@ -333,7 +366,7 @@ function _M.run(task, lightweight)
   end
   -- 若等待超时仍未完成，主动收口为超时状态，杜绝死锁与无谓轮询
   if not state.done then
-    finish("子任务执行超时（180秒），已被自动终止", false)
+    finish("子任务等待超时（180秒），已请求取消；文件事务结果待确认", false)
   end
   if current == state then current = nil end
   return capResult(state.result, 4000), state.ok

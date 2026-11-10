@@ -87,7 +87,8 @@ local routed=0
 singleton.execute=function(name,args) routed=routed+1; return 'routed',false,{outcome='rejected'} end
 singleton.submit=function(name,args,callback) routed=routed+1; callback('routed',false,{outcome='rejected'}); return {result={}} end
 local executor=require('mods.agent.ToolExecutor')
-executor.configure({platformExecute=function() error('legacy file handler must never execute') end})
+executor.configure({platformExecute=function() error('legacy file handler must never execute') end,
+  scheduleTimeout=function() return function() end end})
 local text,flag,effects=executor.executeTool('write_file',{path='a'})
 check('sync aliases route through sole mutation service with third result',text=='routed' and flag==false and effects.outcome=='rejected')
 executor.executeToolAsync('append',{path='a'},function(t,success,result)
@@ -190,4 +191,29 @@ check('legacy file fingerprint validated without importing',legacyReport.valid a
 legacyFixture.after[1].content='tampered'
 legacyReport=legacy.inspectLegacy('fixture','changesets.json','/p',legacyCodec)
 check('legacy corrupt snapshot surfaced, not discarded or executable',not legacyReport.valid and #legacyReport.entries==1 and not legacyReport.entries[1].valid)
+-- The production scheduler must not enqueue into an Activity-owned xTask scope.
+local oldJava, oldTask = luajava, xTask
+local processQueue = {}
+xTask = function() error('Activity task must not own file transaction') end
+luajava = {bindClass=function(name)
+  assert(name=='com.nekolaska.io.FileMutationDispatcher')
+  return {submit=function(work,done) processQueue[#processQueue+1]={work=work,done=done} end}
+end}
+local processService=Service.new({backend=backend,json={encode=function(x) return x end},
+  context={snapshot=function() return {scopePath='/p',directory='/p',projectGeneration=epoch} end},
+  storage=function() return '/store/p' end})
+processService.recover()
+local queued=processService.submit('replace_in_file',{path='a',old=' hello ',new='hello'})
+check('default scheduler retains a process job',#processQueue==1 and lock~=nil)
+processQueue[1].work()
+check('fuzzy replacement settles and releases without UI callback',queued.result.outcome=='committed' and not lock)
+local gone=processService.submit('append_file',{path='a',content='!'})
+epoch=epoch+1 -- navigation/destruction before the process worker starts
+processQueue[2].work()
+check('stale queued process worker still settles and releases',gone.result.error.code=='scope_stale' and not lock)
+local cancelledJob=processService.submit('append_file',{path='a',content='!'})
+processService.cancel(cancelledJob)
+processQueue[3].work()
+check('queued cancellation still runs cleanup',cancelledJob.result.error.code=='cancelled' and not lock)
+luajava,xTask=oldJava,oldTask
 print('ALL-PASS TestFileMutationService')

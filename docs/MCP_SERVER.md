@@ -1,5 +1,8 @@
 # NeLuaJ+ 对外 MCP 服务
 
+本文描述外部助手访问手机工程的本地服务。内置助手连接外部 MCP 的客户端能力见
+[AIAgent.md](./AIAgent.md#mcp-客户端内置助手调用外部工具)；聊天任务状态与诊断见 [TOOL_TASKS.md](./TOOL_TASKS.md)。
+
 ## 快速开始
 
 1. 打开 **首页 → 设置 → MCP 连接**。
@@ -93,6 +96,10 @@ adb -s SERIAL forward tcp:8765 tcp:8765
 
 取消 notification 仅阻止发布前执行；进入发布后完成事务与条件补偿，并同步编辑器。连接超时不直接中断发布线程。工具错误使用 `isError` 和 `structuredContent`，partial 不是成功。
 
+编辑器回调每次最多等待 5 秒：尚未执行的回调在超时/取消后不会再执行；已经开始的保存继续持有令牌引用直到退出，避免另一笔写入与它并发。准备阶段超时会拒绝本次修改；提交后的同步超时会保留提交结果并报告待重试的同步警告。并发修改占用同一个 Lua 执行器时立即返回 busy 错误，不排队耗尽 HTTP 工作线程。这里的时限限制编辑器等待，不强行中断已经开始的磁盘提交。
+
+同步失败后丢弃可能已被消费的编辑器快照；通知重播或相同 requestId/参数重试时重新捕获恢复状态，只重试同步、不重复修改文件。
+
 ## 实现与生命周期
 
 - `com/nekolaska/mcp/server/McpServerHost.kt`：NanoHTTPD 2.3.1，loopback、Bearer/Host/Origin 校验、1 MiB 请求体、4 并发连接、30 秒连接 deadline，不使用上传临时文件。
@@ -112,6 +119,13 @@ SDK 选型：官方 Kotlin SDK 的 Ktor JVM 示例没有 Android server 兼容�
 构建依赖：`settings.gradle.kts` 将 `org.nanohttpd` 及其 `org.sonatype.oss:oss-parent` 父 POM 定向到阿里云 Central 镜像，避免 Maven Central 返回 403。其他依赖继续使用原有仓库配置；正常打包无需额外 `-I` 临时脚本。
 
 ## 验证记录与剩余边界
+
+### 本轮桌面回归（2026-11-10）
+
+编辑器等待超时、排队回调失效、运行中 token pin 延迟释放、同步快照重新捕获，以及连续等待超时后 HTTP 容量可用的回归通过。
+本轮 Lua 全套、全部 JVM 单元测试与 Debug 构建通过，未重新进行设备验收。
+
+### 首版设备记录（2026-11-06）
 
 2026-11-06：桌面 JVM、Lua facade 和 Android Debug 构建通过；PJZ110/API 36 上真实 HTTP instrumentation 已验证初始化、工具目录、读取、创建、追加、重复请求不重复追加、版本冲突、删除撤销和历史 head。测试使用应用私有独立目录，没有修改用户工程。
 

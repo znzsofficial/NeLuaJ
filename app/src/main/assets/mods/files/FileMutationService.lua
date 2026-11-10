@@ -10,7 +10,7 @@ local function new(options)
   local function schedule(work,done)
     if cfg.scheduler then return cfg.scheduler(work,done) end
     if cfg.fixedScope then local value=work(); return done(value) end
-    return xTask(work,done,'io')
+    return luajava.bindClass('com.nekolaska.io.FileMutationDispatcher').submit(work,done)
   end
   local function onMain()
     if not cfg.isMainThread then return true end
@@ -65,7 +65,16 @@ local function new(options)
         if h.callback then pcall(h.callback,formatted(h.result)) end
       end
     end
-    if h.suppressNotification then deliver(); return end
+    if h.suppressNotification then
+      -- A deduplicated external retry must drive the original pending sync,
+      -- after releasing its own token, without publishing the file twice.
+      if h.replayPending then
+        notify(h.replayPending)
+        h.result=h.replayPending.result
+        results[h.id]={result=h.result,storageDir=h.storageDir}
+      end
+      deliver(); return
+    end
     local changed=h.result.outcome=='committed' or h.result.outcome=='partial'
     -- A headless external host must not acknowledge effects it never showed.
     if cfg.fixedScope and changed and (not cfg.finish or not notificationCurrent(h)) then deliver(); return end
@@ -92,6 +101,11 @@ local function new(options)
       if changed and finish and h.snapshot then ok, synced, err = pcall(finish, h.snapshot, h.editorName or h.name, h.args, h.result) end
       h.synced = ok and synced ~= false
       if h.result.commitState=='unknown' or h.result.outcome=='partial' then h.synced=false end
+      if cfg.fixedScope and not h.synced then
+        -- Opaque editor snapshots are consumed by finish, even if its caller
+        -- times out. Never retry a possibly consumed snapshot identifier.
+        h.snapshot=nil; h.recovery=true
+      end
       if not h.synced and not h.syncWarning then
         h.syncWarning=true
         h.result.warnings=h.result.warnings or {}
@@ -189,7 +203,8 @@ local function new(options)
       if reservation.result then
         pending[h.id]=nil
         h.id=reservation.result.transactionId or reservation.transactionId or h.id
-        if pending[h.id] or replayed[h.storageDir..'\n'..h.id] then h.suppressNotification=true
+        if pending[h.id] or replayed[h.storageDir..'\n'..h.id] then
+          h.suppressNotification=true; h.replayPending=pending[h.id]
         else pending[h.id]=h end
         return reservation.result
       end

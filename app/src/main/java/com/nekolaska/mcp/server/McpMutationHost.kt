@@ -17,14 +17,14 @@ import org.luaj.lib.jse.CoerceJavaToLua
 import org.luaj.lib.jse.JsePlatform
 import java.io.File
 import java.lang.ref.WeakReference
-import java.util.concurrent.FutureTask
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.locks.ReentrantLock
 
 /** Trusted assets in a dedicated interpreter; UI snapshots never enter this state. */
 class McpMutationHost(context: Context, projectRoot: String, agentRoot: String,
     private val isAuthorized: () -> Boolean) : AutoCloseable {
     private val closed = AtomicBoolean(false)
-    private val luaLock = Any()
+    private val luaLock = ReentrantLock()
     private var currentCancelled: () -> Boolean = { false }
     private val globals = JsePlatform.standardGlobals()
     private val scopePath = File(projectRoot).toPath().normalize().toString()
@@ -99,18 +99,19 @@ class McpMutationHost(context: Context, projectRoot: String, agentRoot: String,
 
     fun execute(name: String, args: JSONObject, cancelled: () -> Boolean): JSONObject {
         check(Looper.myLooper() != Looper.getMainLooper()) { "MCP mutations require a worker thread" }
-        return synchronized(luaLock) {
+        check(luaLock.tryLock()) { "MCP mutation host busy; retry after the current operation completes" }
+        try {
             check(!closed.get()) { "MCP mutation host closed" }
             check(isAuthorized()) { "MCP project authorization revoked" }
             currentCancelled = cancelled
             try {
                 // The facade turns recovery failure into its normal native-result envelope.
                 facade.get("recover").call()
-                JSONObject(facade.get("executeJson").call(LuaValue.valueOf(name), LuaValue.valueOf(args.toString())).checkjstring())
+                return JSONObject(facade.get("executeJson").call(LuaValue.valueOf(name), LuaValue.valueOf(args.toString())).checkjstring())
             } finally {
                 currentCancelled = { false }
             }
-        }
+        } finally { luaLock.unlock() }
     }
 
     override fun close() { closed.set(true) }
@@ -118,7 +119,9 @@ class McpMutationHost(context: Context, projectRoot: String, agentRoot: String,
     private fun ui(action: String, payload: JSONObject): JSONObject {
         if (closed.get() || !isAuthorized()) return JSONObject()
         payload.put("scopePath", scopePath).put("action", action)
-        val task = FutureTask {
+        val cancelled = currentCancelled
+        val pin = payload.optString("token").takeIf { it.isNotEmpty() }?.let(FileMutationEngine::pin)
+        val task = McpUiCall(release = { pin?.close() }) {
             val activity = editor.get()
             if (closed.get() || !isAuthorized() || activity == null || activity.isFinishing || activity.isDestroyed) JSONObject()
             else {
@@ -126,18 +129,18 @@ class McpMutationHost(context: Context, projectRoot: String, agentRoot: String,
                 if (reply == null) JSONObject() else JSONObject(reply.toString())
             }
         }
-        if (Looper.myLooper() == Looper.getMainLooper()) task.run()
-        else check(Handler(Looper.getMainLooper()).post(task)) { "UI dispatcher stopped" }
-        // An interrupted HTTP worker cannot release the native token while a
-        // queued/running UI prepare still uses it. Restore interruption afterwards.
-        var interrupted = false
+        val handler = Handler(Looper.getMainLooper())
         try {
-            while (true) {
-                try { return task.get() }
-                catch (_: InterruptedException) { interrupted = true }
+            check(handler.post(task)) { "UI dispatcher stopped" }
+            return task.await(5000) {
+                closed.get() || !isAuthorized() || (action == "prepare" && cancelled())
             }
+        } catch (error: InterruptedException) {
+            Thread.currentThread().interrupt()
+            throw error
         } finally {
-            if (interrupted) Thread.currentThread().interrupt()
+            task.abandon()
+            handler.removeCallbacks(task)
         }
     }
 

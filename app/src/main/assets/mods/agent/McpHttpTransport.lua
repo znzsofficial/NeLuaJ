@@ -6,7 +6,8 @@ function _M.create(deps)
   local http = deps.http
   local protocol = deps.protocol
 
-  return function(server, method, params, id, extraHeaders)
+  return function(server, method, params, id, extraHeaders, group)
+    if group and group.isCancelled() then return nil, "MCP_CANCELLED" end
     local url = server.url or ""
     if url == "" then return nil, "服务器地址为空" end
     local valid, validationError = deps.validateServer(server)
@@ -50,8 +51,10 @@ function _M.create(deps)
     local body = json.encode(payload)
     if not body or body == "" then return nil, "请求体编码失败" end
     local okCall, res = pcall(function()
+      if group then return http.postJson(url, body, headers, requestId or -1, group) end
       return http.postJson(url, body, headers, requestId or -1)
     end)
+    if group and group.isCancelled() then return nil, "MCP_CANCELLED" end
     if not okCall then return nil, "请求异常: " .. tostring(res) end
     if res == nil then return nil, "无响应" end
     local okSid, sid = pcall(function() return res.header("Mcp-Session-Id") end)

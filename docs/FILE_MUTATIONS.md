@@ -1,5 +1,9 @@
 # File mutation service
 
+This document owns the file commit, recovery and editor synchronization contract.
+For tool task IDs, deadlines and diagnostic APIs see [TOOL_TASKS.md](./TOOL_TASKS.md);
+for the external HTTP endpoint and request-ID retries see [MCP_SERVER.md](./MCP_SERVER.md).
+
 ## Ownership
 
 `mods/files/FileMutationService.lua` is the shared entry for synchronous and asynchronous
@@ -13,6 +17,11 @@ are captured before scheduling; a running publication completes in its original 
 External writers do not participate in the token protocol: Java filesystem APIs do
 not provide atomic hash-compare-and-rename against those writers.
 
+Local asynchronous mutations use the process-owned `FileMutationDispatcher`, not
+Activity `xTask`/`lifecycleScope`. A queued worker must run its cancellation/scope
+checks and settle even if the originating Activity is destroyed before it starts.
+UI callback delivery is not required for releasing transaction ownership.
+
 ## Results and cancellation
 
 Compatibility callers receive `(text, ok, result)`. The third result carries the
@@ -24,6 +33,22 @@ Cancellation before publication prevents the write. Once publication starts, the
 transaction finishes or compensates independently of chat continuation. The worker
 releases the native token before dispatching the UI callback. Results are queryable
 and replayed from durable storage; UI acknowledgments prevent repeated application.
+
+External MCP editor callbacks have a bounded wait. A queued callback is abandoned on
+timeout/cancellation and cannot execute later. An already-running prepare retains a
+native token pin until it exits: releasing the request's ownership cannot permit a
+second writer while that editor save still uses the token. Native publication itself
+is not interrupted. Busy external mutation calls fail immediately instead of waiting
+on the shared Lua interpreter and consuming all HTTP workers.
+
+Failed external editor finishes discard their potentially consumed opaque snapshot.
+Both notification replay and an identical request-ID retry can capture fresh recovery
+state and finish the original pending synchronization without republishing the file.
+
+Fuzzy `replace_in_file` scans non-overlapping matches in the original text only. It
+never searches inserted replacement content, including when the replacement has the
+same whitespace-normalized signature as the search. A count of zero means all original
+matches, not repeated replacement until no match remains.
 
 ## Editor
 
@@ -65,6 +90,11 @@ Lua tests cover entry routing, cancellation, identity, recovery replay, draft ha
 and structured UI status. Native fault injection covers staging/publication failures,
 external changes during compensation, interrupted recovery and history projection,
 corrupt journals, bounded history and legacy migration.
+
+Hang regressions cover unchanged/growing fuzzy replacements, queued process-job
+cancellation without UI delivery, queued and running MCP UI timeouts, interruption,
+and idempotent token pins. Real Activity teardown and main-thread congestion still
+require device acceptance.
 
 Android device acceptance remains necessary: actual shared/external storage providers,
 low space/permission failures, real process death and restart, Activity recreation,

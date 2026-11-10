@@ -634,7 +634,7 @@ local function hasLegacyFunctionHistory(messages)
   return false
 end
 
-local function sanitizeMessagesForOpenAI(messages, retainReasoning)
+local function sanitizeMessagesForOpenAI(messages, retainReasoning, legacyFunctionMode)
   local cleaned = {}
   local pendingToolCalls = {} -- call_id -> { name = "..." }
 
@@ -684,10 +684,20 @@ local function sanitizeMessagesForOpenAI(messages, retainReasoning)
         item.reasoning_content = tostring(msg.reasoning_content)
       end
 
-      -- 如果既无文本也无 tool_calls，不产生空 assistant
-      if (item.content == "" or item.content == nil) and not item.tool_calls then
+      if legacyFunctionMode and type(msg.function_call)=='table' and msg.function_call.name then
+        item.function_call = {name=tostring(msg.function_call.name),
+          arguments=normalizeJsonArguments(msg.function_call.arguments)}
+      end
+
+      -- 如果既无文本也无 tool_calls/function_call，不产生空 assistant
+      if (item.content == "" or item.content == nil) and not item.tool_calls and not item.function_call then
         include = false
       end
+
+    elseif role == "function" and legacyFunctionMode then
+      item.name = tostring(msg.name or "")
+      item.content = tostring(msg.content or "")
+      if item.content == "" then item.content = "{}" end
 
     elseif role == "tool" then
       local callId = msg.tool_call_id
@@ -777,8 +787,8 @@ function _M.buildRequest(cfg, messages, callbacks)
   -- 1. 过滤内部扩展字段（如 request_error、response_origin、continuation_state 等）
   -- 2. 补齐孤立/丢失对应的 tool 消息，将其降级包装为普通用户消息
   -- 3. 避免空文本导致 Gemini 或某些转发中转站硬性抛 400
-  if not useResponses and not legacyFunctionMode then
-    prepared = sanitizeMessagesForOpenAI(prepared, retainReasoning)
+  if not useResponses then
+    prepared = sanitizeMessagesForOpenAI(prepared, retainReasoning, legacyFunctionMode)
     -- 再次确保末尾不以非法 assistant 结尾
     while #prepared > 0 and isPrunableAssistant(prepared[#prepared], continuing) do
       table.remove(prepared, #prepared)

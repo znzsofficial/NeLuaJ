@@ -116,7 +116,7 @@ The Lua runtime keeps the familiar declarative ergonomics — `loadlayout`, `lua
 - **Start here:** [documentation index](./docs/README.md) · [build from source](./docs/BUILDING.md).
 - **Use the IDE / write Lua apps:** [home guide](./app/src/main/assets/res/doc/home_en.html) · [bundled API catalog](./app/src/main/assets/res/doc/agent_docs.md).
 - **Maintain the project:** [maintenance](./docs/MAINTENANCE.md) · [tests](./tests/README.md) · [device acceptance](./docs/HOME_VALIDATION.md).
-- **Implementation:** [home/editor](./docs/HOME.md) · [Agent](./docs/AIAgent.md) · [runtime](./docs/LuaJRuntime.md) · [Activity](./docs/LuaActivity.md) · [layout](./docs/LuaLayout.md) · [builder handoff](./docs/BuilderHandoff.md).
+- **Implementation:** [home/editor](./docs/HOME.md) · [Agent](./docs/AIAgent.md) · [tool tasks](./docs/TOOL_TASKS.md) · [file transactions](./docs/FILE_MUTATIONS.md) · [MCP server](./docs/MCP_SERVER.md) · [runtime](./docs/LuaJRuntime.md) · [Activity](./docs/LuaActivity.md) · [layout](./docs/LuaLayout.md) · [builder handoff](./docs/BuilderHandoff.md).
 - **History:** [historical design index](./docs/README.md#历史设计与记录) — retained for context, not current capability guarantees.
 
 Repository maintenance documents are primarily Chinese; bundled guides include English versions where listed. Open bundled HTML through the app's Help page or a local browser; GitHub may show its source instead of rendering it.

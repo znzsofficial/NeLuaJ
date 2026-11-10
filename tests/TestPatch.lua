@@ -15,6 +15,22 @@ end
 
 -- ── SEARCH/REPLACE ──
 
+-- Fuzzy replace-all must not scan replacement text (including unchanged signatures).
+local fuzzy, fuzzyCount = PE.fuzzyLineReplace('local x = 1', '  local x = 1', 'local x = 1', 0)
+check('fuzzy identical replacement terminates', fuzzy == 'local x = 1' and fuzzyCount == 1)
+fuzzy, fuzzyCount = PE.fuzzyLineReplace('a\na\n', '  a', 'a\na', 0)
+check('fuzzy growing replacement visits original only', fuzzy == 'a\na\na\na\n' and fuzzyCount == 2)
+fuzzy, fuzzyCount = PE.fuzzyLineReplace('a\na\na', ' a ', '  a', 2)
+check('fuzzy limit counts distinct original matches', fuzzy == '  a\n  a\na' and fuzzyCount == 2)
+fuzzy, fuzzyCount = PE.fuzzyLineReplace('a\nb\na\nb', ' a\n b ', '', 0)
+check('fuzzy multiline deletion preserves separating newline', fuzzy == '\n' and fuzzyCount == 2)
+fuzzy, fuzzyCount = PE.fuzzyLineReplace('a\r\nb\r\na\r\nb\r\n', '\n a\n b\n', 'z', 0)
+check('fuzzy padded search and CRLF', fuzzy == 'z\nz\n' and fuzzyCount == 2)
+fuzzy, fuzzyCount = PE.fuzzyLineReplace('a\na\na', ' a\n a ', 'z', 0)
+check('fuzzy original matches do not overlap', fuzzy == 'z\na' and fuzzyCount == 1)
+fuzzy, fuzzyCount = PE.fuzzyLineReplace('a', ' \n ', 'b', 0)
+check('fuzzy blank search terminates without match', fuzzy == nil and fuzzyCount == 0)
+
 -- 1. 精确匹配
 local r, cnt, locs = PE.applyPatch(
   "local a = 1\nlocal b = 2\nprint(a)\n",

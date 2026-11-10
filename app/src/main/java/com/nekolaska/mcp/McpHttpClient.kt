@@ -17,6 +17,39 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
+/** One tool invocation, including discovery/retries. Registration and cancellation
+ * share a monitor so a cancelled invocation can never acquire another resource. */
+class McpRequestGroup {
+    private var cancelled = false
+    private val resources = LinkedHashMap<Any, () -> Unit>()
+
+    @Synchronized fun isCancelled(): Boolean = cancelled
+    fun lock(lock: java.util.concurrent.locks.ReentrantLock): Boolean {
+        while (!isCancelled()) {
+            if (lock.tryLock(25, TimeUnit.MILLISECONDS)) {
+                if (!isCancelled()) return true
+                lock.unlock()
+                return false
+            }
+        }
+        return false
+    }
+    @Synchronized internal fun <T> acquire(action: () -> T): T {
+        if (cancelled) throw IOException("MCP_CANCELLED")
+        return action()
+    }
+    @Synchronized internal fun register(key: Any, cancel: () -> Unit) {
+        if (cancelled) cancel() else resources[key] = cancel
+    }
+    @Synchronized internal fun release(key: Any) { resources.remove(key) }
+    @Synchronized internal fun cancelActions(): List<() -> Unit> {
+        if (cancelled) return emptyList()
+        cancelled = true
+        return resources.values.toList().also { resources.clear() }
+    }
+    fun cancel() { cancelActions().forEach { runCatching { it() } } }
+}
+
 /** Legacy MCP HTTP+SSE transport used only by the Agent MCP integration. */
 class McpSseConnection(
     private val client: OkHttpClient,
@@ -127,13 +160,48 @@ class McpSseConnection(
         return endpoint
     }
 
+    fun awaitEndpoint(timeoutMillis: Long, group: McpRequestGroup): String? {
+        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis)
+        while (!group.isCancelled()) {
+            val remaining = deadline - System.nanoTime()
+            if (remaining <= 0) return null
+            if (endpointReady.await(minOf(remaining, TimeUnit.MILLISECONDS.toNanos(25)), TimeUnit.NANOSECONDS)) {
+                return if (group.isCancelled()) null else endpoint
+            }
+        }
+        return null
+    }
+
     fun prepareResponse(id: String) {
         val queue = responses.getOrPut(id) { ArrayBlockingQueue(1) }
         if (error != null) queue.offer(CLOSED_RESPONSE)
     }
 
     fun cancelResponse(id: String) {
-        responses.remove(id)
+        responses.remove(id)?.let { queue ->
+            queue.clear()
+            queue.offer(CLOSED_RESPONSE)
+        }
+    }
+
+    fun prepareResponse(id: String, group: McpRequestGroup) {
+        group.acquire {
+            prepareResponse(id)
+            group.register(responseKey(id)) { cancelResponse(id) }
+        }
+    }
+
+    private fun responseKey(id: String): Pair<McpSseConnection, String> = this to id
+
+    fun cancelResponse(id: String, group: McpRequestGroup) {
+        cancelResponse(id)
+        group.release(responseKey(id))
+    }
+
+    fun awaitResponse(id: String, timeoutMillis: Long, group: McpRequestGroup): String? = try {
+        if (group.isCancelled()) null else awaitResponse(id, timeoutMillis)
+    } finally {
+        cancelResponse(id, group)
     }
 
     fun awaitResponse(id: String, timeoutMillis: Long): String? {
@@ -192,8 +260,18 @@ class McpHttpClient @JvmOverloads constructor(
         .build()
     private val activeCalls = Collections.newSetFromMap(ConcurrentHashMap<Call, Boolean>())
     private val sseConnections = Collections.newSetFromMap(ConcurrentHashMap<McpSseConnection, Boolean>())
+    private val groups = Collections.newSetFromMap(ConcurrentHashMap<McpRequestGroup, Boolean>())
+    private val lifecycle = Any()
 
-    fun openSse(url: String, headers: Map<String, String>): McpSseConnection {
+    fun newRequestGroup(): McpRequestGroup = synchronized(lifecycle) {
+        McpRequestGroup().also { groups.add(it) }
+    }
+    fun releaseRequestGroup(group: McpRequestGroup) { groups.remove(group) }
+
+    fun openSse(url: String, headers: Map<String, String>, group: McpRequestGroup): McpSseConnection =
+        synchronized(lifecycle) { group.acquire { openSse(url, headers) } }
+
+    fun openSse(url: String, headers: Map<String, String>): McpSseConnection = synchronized(lifecycle) {
         val connection = McpSseConnection(
             client.newBuilder()
                 .callTimeout(0, TimeUnit.MILLISECONDS)
@@ -203,10 +281,11 @@ class McpHttpClient @JvmOverloads constructor(
             headers
         )
         sseConnections.add(connection)
-        return connection
+        connection
     }
 
-    fun postJson(url: String, body: String, headers: Map<String, String>, expectedId: Long): McpHttpResult {
+    @JvmOverloads
+    fun postJson(url: String, body: String, headers: Map<String, String>, expectedId: Long, group: McpRequestGroup? = null): McpHttpResult {
         val request = Request.Builder()
             .url(url)
             .headers(Headers.Builder().apply {
@@ -214,8 +293,13 @@ class McpHttpClient @JvmOverloads constructor(
             }.build())
             .post(body.toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull()))
             .build()
-        val call = client.newCall(request)
-        activeCalls.add(call)
+        fun createCall(): Call = client.newCall(request).also { call ->
+            activeCalls.add(call)
+            group?.register(call) { call.cancel() }
+        }
+        val call = synchronized(lifecycle) {
+            if (group != null) group.acquire { createCall() } else createCall()
+        }
         return try {
             call.execute().use { response ->
                 val responseBody = if (expectedId >= 0 && response.isSuccessful &&
@@ -233,15 +317,25 @@ class McpHttpClient @JvmOverloads constructor(
                 McpHttpResult(response.code, responseBody, response.headers)
             }
         } finally {
+            group?.release(call)
             activeCalls.remove(call)
         }
     }
 
     fun cancelAll() {
-        activeCalls.toList().forEach(Call::cancel)
-        activeCalls.clear()
-        sseConnections.toList().forEach(McpSseConnection::close)
-        sseConnections.clear()
+        // Mark every old group terminal before allowing registration again.
+        // Run cancellation callbacks outside the lifecycle lock (OkHttp may
+        // invoke listeners inline). New invocations belong to the next epoch.
+        val actions = synchronized(lifecycle) {
+            val pending = groups.flatMap { it.cancelActions() }.toMutableList()
+            groups.clear()
+            activeCalls.forEach { call -> pending.add { call.cancel() } }
+            activeCalls.clear()
+            sseConnections.forEach { connection -> pending.add { connection.close() } }
+            sseConnections.clear()
+            pending
+        }
+        actions.forEach { runCatching { it() } }
     }
 
     fun deleteSession(url: String, headers: Map<String, String>) {
@@ -252,8 +346,9 @@ class McpHttpClient @JvmOverloads constructor(
             }.build())
             .delete()
             .build()
-        val call = client.newCall(request)
-        activeCalls.add(call)
+        val call = synchronized(lifecycle) {
+            client.newCall(request).also { activeCalls.add(it) }
+        }
         call.enqueue(object : okhttp3.Callback {
             override fun onFailure(call: Call, e: IOException) {
                 activeCalls.remove(call)

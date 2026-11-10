@@ -126,11 +126,11 @@ function _M.requestStop()
   state.stopRequested = true
   pcall(SubagentRunner.cancel)
   if hooks.cancelToolConfirm then hooks.cancelToolConfirm() end
-  AgentChat.cancelPendingRequest()
-  if AgentChat.cancelPendingTools then AgentChat.cancelPendingTools() end
   local stopTool = state.activeToolStop
   state.activeToolStop = nil
   if stopTool then pcall(stopTool) end
+  AgentChat.cancelPendingRequest()
+  if AgentChat.cancelPendingTools then AgentChat.cancelPendingTools() end
   _M.hideLoading()
 end
 
@@ -155,10 +155,11 @@ end
 
 local executeToolCalls
 
-local function finishStopped(toolCalls, index, args, turnScope)
+local function finishStopped(toolCalls, index, args, turnScope, pendingText, taskInfo)
   -- 严格时空守卫：Fail-Closed 原则，未携带有效当前会话作用域一律禁止落盘
   if not isCurrentScope(turnScope) then return end
   local messages = getMessages()
+  local placeholder
   -- Responses API 要求每个 function_call 都有配对的 function_call_output，
   -- 即使中途停止也要为剩余调用补上结果。
   for remaining = index, #toolCalls do
@@ -169,14 +170,17 @@ local function finishStopped(toolCalls, index, args, turnScope)
       pcall(function() callArgs = json.decode(call.arguments) end)
       if type(callArgs) ~= "table" then callArgs = {} end
     end
+    local content = remaining == index and pendingText or S.ai_stopped
     if hooks.addToolBubble then
-      hooks.addToolBubble(call.name, callArgs, S.ai_stopped)
+      hooks.addToolBubble(call.name, callArgs, content)
     end
     messages[#messages + 1] = {
       role = "tool",
       tool_call_id = call.id,
-      content = S.ai_stopped,
+      content = content,
+      task_info = remaining == index and taskInfo or nil,
     }
+    if remaining == index then placeholder = messages[#messages] end
   end
   local stateMessage = messages[#messages]
   if stateMessage and stateMessage.role == "tool" then
@@ -187,20 +191,36 @@ local function finishStopped(toolCalls, index, args, turnScope)
   pcall(function()
     if MainActivity and MainActivity.RecyclerView then MainActivity.RecyclerView.update() end
   end)
+  return placeholder
 end
 
 -- 并行批次执行：整批只读工具并发调度，结果全部回调后按调用顺序落盘，
--- 产生的历史与串行路径完全一致（配对顺序确定）。只读批次无确认间隙，
--- 无需 activeToolStop；用户停止时所有真实结果照常记录并标记 stopped。
+-- 产生的历史与串行路径完全一致（配对顺序确定）。停止时先结算批次，
+-- 再精确取消尚未完成的本批句柄，避免同步取消回调重新推进回合。
 local function executeToolCallsParallel(calls, toolCalls, results, onAllDone, generation, turnScope)
   local total = #calls
   local pending = total
   local collected = {}
+  local taskInfos = {}
+  local handles, cancelled = {}, {}
+  local stoppingBatch = false
+  local function cancelPending(i)
+    local handle = handles[i]
+    if not collected[i] and not cancelled[i] and type(handle) == "table" and handle.cancel then
+      cancelled[i] = true
+      pcall(handle.cancel)
+    end
+  end
   local settled = false
   local stopBatch
   local function flush(stopping)
     if settled or not isCurrentScope(turnScope) then return end
     settled = true
+    stoppingBatch = stopping
+    if stopping then
+      for i = 1, total do cancelPending(i) end
+    end
+    if not isCurrentScope(turnScope) then return end
     if state.activeToolStop == stopBatch then state.activeToolStop = nil end
     local messages = getMessages()
     for j = 1, total do
@@ -209,9 +229,9 @@ local function executeToolCallsParallel(calls, toolCalls, results, onAllDone, ge
       local toolOk, fileResult
       if entry then toolOk, fileResult = entry.ok, entry.fileResult end
       messages[#messages + 1] = { role = "tool", tool_call_id = calls[j].id, content = content,
-        tool_ok = toolOk, file_result = fileResult }
+        tool_ok = toolOk, file_result = fileResult, task_info = entry and entry.taskInfo or taskInfos[j] }
       results[#results + 1] = { tool_call_id = calls[j].id, content = content,
-        tool_ok = toolOk, file_result = fileResult }
+        tool_ok = toolOk, file_result = fileResult, task_info = entry and entry.taskInfo or taskInfos[j] }
       if entry then
         state.failedToolCalls[entry.key] = entry.ok == false and content:sub(1, 1000) or nil
       end
@@ -232,14 +252,29 @@ local function executeToolCallsParallel(calls, toolCalls, results, onAllDone, ge
     local argsEncoded, encodedArgs = pcall(json.encode, call.args)
     local toolCallKey = call.name .. "\n"
       .. (argsEncoded and tostring(encodedArgs) or tostring(tc.arguments or ""))
-    AgentChat.executeToolAsync(call.name, call.args, function(resultStr, toolOk, fileResult)
+    local handle = AgentChat.executeToolAsync(call.name, call.args, function(resultStr, toolOk, fileResult, taskInfo)
       -- 严格时空守卫：世代或会话作用域已失效时，绝对禁止向活跃会话追加数据
       if settled or collected[i] or (generation and not isCurrent(generation)) or not isCurrentScope(turnScope) then return end
-      collected[i] = { id = call.id, result = resultStr, ok = toolOk, key = toolCallKey, fileResult = fileResult }
+      collected[i] = { id = call.id, result = resultStr, ok = toolOk, key = toolCallKey, fileResult = fileResult, taskInfo = taskInfo }
       pending = pending - 1
+      if taskInfo and taskInfo.waitState == "timed_out" then
+        state.stopRequested = true
+        flush(true)
+        _M.hideLoading()
+        return
+      end
       if state.stopRequested then flush(true)
       elseif pending == 0 then flush(false) end
-    end)
+    end, { scope = turnScope, toolCallId = call.id, onWaitEnd = function(info)
+      if settled or not isCurrentScope(turnScope) or collected[i] then return end
+      taskInfos[i] = info
+      state.stopRequested = true
+      flush(true)
+      _M.hideLoading()
+    end })
+    handles[i] = handle
+    if stoppingBatch then cancelPending(i) end
+    if type(handle) == "table" then taskInfos[i] = taskInfos[i] or { taskId = handle.taskId, scope = turnScope, toolCallId = call.id } end
   end
 end
 
@@ -285,16 +320,88 @@ executeToolCalls = function(toolCalls, index, results, onAllDone, generation)
   _M.setLoadingStatus(S.ai_tool_pending .. " · " .. (hooks.toolDisplayName and hooks.toolDisplayName(tc.name) or tc.name))
   local stopped = false
   local accepted = false
+  local started = false
+  local taskHandle, taskInfo, placeholder
   local stopHandle
   local turnScope = AsyncScope.capture(Session.projectPath(), Session.id(), generation or state.generation)
+  local parentMessage, parentBaseContent
+  local childFacts = {}
+  local function applyChildFacts()
+    if not parentMessage or #childFacts == 0 or not isCurrentScope(turnScope) then return end
+    parentBaseContent = parentBaseContent or tostring(parentMessage.content or "")
+    parentMessage.child_file_results = childFacts
+    local lines = { parentBaseContent, "子任务文件事务最终事实（不代表父任务整体成功）：" }
+    for _, fact in ipairs(childFacts) do
+      lines[#lines + 1] = tostring(fact.file_result.transactionId or "未知事务") .. " · "
+        .. tostring(fact.file_result.outcome or "结果已返回") .. "：" .. tostring(fact.content or "")
+    end
+    parentMessage.content = table.concat(lines, "\n")
+  end
+  local function onLateFileResult(text, ok, fileResult, childInfo, parentInfo)
+    if tc.name ~= "run_subtask" or type(fileResult) ~= "table" or not isCurrentScope(turnScope) then return end
+    local id = fileResult.transactionId or (childInfo and childInfo.transactionId)
+    local entry = { content = text, tool_ok = ok, file_result = fileResult, task_info = childInfo,
+      parent_task_id = parentInfo and parentInfo.taskId }
+    local replaced = false
+    for i, fact in ipairs(childFacts) do
+      local oldId = fact.file_result.transactionId or (fact.task_info and fact.task_info.transactionId)
+      if (id and oldId == id) or (not id and fact.file_result == fileResult) then
+        childFacts[i], replaced = entry, true
+        break
+      end
+    end
+    if not replaced then childFacts[#childFacts + 1] = entry end
+    applyChildFacts()
+    if parentMessage then hooks.saveHistory(); hooks.refreshMessageList() end
+  end
   local function finish()
     if not stopped then
       stopped = true
-      finishStopped(toolCalls, index, args, turnScope)
+      if not taskInfo and type(taskHandle) == "table" then
+        taskInfo = AgentChat.getTaskSnapshot and AgentChat.getTaskSnapshot(taskHandle.taskId)
+          or { taskId = taskHandle.taskId, scope = turnScope, toolCallId = tc.id }
+      end
+      local writing = started and (tc.name == "create_file" or tc.name == "apply_patch"
+        or tc.name == "delete_file" or tc.name == "rename_file" or tc.name == "write_file"
+        or tc.name == "create_folder" or tc.name == "delete_folder"
+        or tc.name == "append_file" or tc.name == "replace_in_file"
+        or (taskInfo and taskInfo.fileMutation))
+      local text = writing and "已请求取消，文件事务结果待确认" or nil
+      if taskInfo and taskInfo.waitState == "timed_out" then
+        text = "等待超时，已请求取消" .. (writing and "，文件事务结果待确认" or "")
+      end
+      placeholder = finishStopped(toolCalls, index, args, turnScope, text, taskInfo)
+      parentMessage = placeholder
+      applyChildFacts()
+      if placeholder and #childFacts > 0 then hooks.saveHistory(); hooks.refreshMessageList() end
     end
   end
 
-  local function proceedWithResult(resultStr, stopAfterResult, toolOk, fileResult)
+  local function proceedWithResult(resultStr, stopAfterResult, toolOk, fileResult, info)
+    if not isCurrentScope(turnScope) then return end
+    -- Cooperative cancellation may synchronously deliver the final file fact
+    -- before requestStop invokes activeToolStop. Create its placeholder first.
+    if state.stopRequested and not stopped and not accepted and fileResult then
+      taskInfo = info or taskInfo
+      finish()
+    end
+    if not stopped and not accepted and info and info.waitState == "timed_out" then
+      taskInfo = info
+      state.stopRequested = true
+      finish()
+      if state.activeToolStop == stopHandle then state.activeToolStop = nil end
+      _M.hideLoading()
+    end
+    if stopped then
+      if placeholder and fileResult and not accepted then
+        accepted = true
+        placeholder.content, placeholder.tool_ok = resultStr, toolOk
+        placeholder.file_result, placeholder.task_info = fileResult, info or taskInfo
+        hooks.saveHistory()
+        hooks.refreshMessageList()
+      end
+      return
+    end
     -- 仅清属于自己的停止句柄：过期回调不得抹掉当前回合的句柄
     if state.activeToolStop == stopHandle then state.activeToolStop = nil end
     if stopped or accepted or state.stopRequested or not isCurrentScope(turnScope) then return end
@@ -306,6 +413,7 @@ executeToolCalls = function(toolCalls, index, results, onAllDone, generation)
       content = resultStr,
       tool_ok = toolOk,
       file_result = fileResult,
+      task_info = info,
     }
     -- Persist each completed tool before proceeding. A later stop must not
     -- lose evidence of already-executed operations from the conversation.
@@ -316,7 +424,10 @@ executeToolCalls = function(toolCalls, index, results, onAllDone, generation)
       content = resultStr,
       tool_ok = toolOk,
       file_result = fileResult,
+      task_info = info,
     }
+    parentMessage = messages[#messages]
+    applyChildFacts()
     -- 任务计划状态在主线程提交：update 在工具线程只做规范化，
     -- 此处与下方 saveHistory 合并为一次落盘（携带 tool 结果与新计划）
     if tc.name == "update_todos" then pcall(TodoManager.commitPending) end
@@ -352,11 +463,20 @@ executeToolCalls = function(toolCalls, index, results, onAllDone, generation)
   end
 
   local function executeCurrentTool()
+    if started or accepted or stopped or state.stopRequested or not isCurrentScope(turnScope) then return end
+    started = true
     stopHandle = finish
     state.activeToolStop = stopHandle
-    AgentChat.executeToolAsync(tc.name, args, function(resultStr, toolOk, fileResult)
-      proceedWithResult(resultStr, nil, toolOk, fileResult)
-    end)
+    taskHandle = AgentChat.executeToolAsync(tc.name, args, function(resultStr, toolOk, fileResult, info)
+      proceedWithResult(resultStr, nil, toolOk, fileResult, info)
+    end, { scope = turnScope, toolCallId = tc.id, onLateFileResult = onLateFileResult, onWaitEnd = function(info)
+      if accepted or stopped or not isCurrentScope(turnScope) then return end
+      taskInfo = info
+      state.stopRequested = true
+      finish()
+      if state.activeToolStop == stopHandle then state.activeToolStop = nil end
+      _M.hideLoading()
+    end })
   end
 
   if argsError then
@@ -383,6 +503,7 @@ executeToolCalls = function(toolCalls, index, results, onAllDone, generation)
       end
       executeCurrentTool()
     end, function()
+      if started or accepted or stopped then return end
       if (generation and not isCurrent(generation)) or state.stopRequested then
         finish()
         return
@@ -429,6 +550,7 @@ function _M.sendRaw(apiMessages, isContinue)
   end
 
   local fullResponse = ""
+  local toolsDispatched = false
   nextStreamId = nextStreamId + 1
   local streamState = { id = nextStreamId, generation = generation, text = "" }
   state.activeStream = streamState
@@ -457,7 +579,8 @@ function _M.sendRaw(apiMessages, isContinue)
       publishStream()
     end,
     onToolCalls = function(toolCalls, text, reasoningContent, responseOutput, responseOrigin)
-      if not isCurrentRequest() or state.stopRequested then return end
+      if toolsDispatched or not isCurrentRequest() or state.stopRequested then return end
+      toolsDispatched = true
       -- 不调用 hideLoading，保持加载状态直到续请求完成
       if text and text ~= "" and text ~= fullResponse then
         fullResponse = text
@@ -552,7 +675,7 @@ function _M.sendRaw(apiMessages, isContinue)
       hooks.refreshMessageList()
     end,
     onError = function(err)
-      if not isCurrentRequest() then return end
+      if toolsDispatched or not isCurrentRequest() then return end
       _M.hideLoading()
       clearStream()
       -- 用户主动停止：保留已生成部分，不显示错误

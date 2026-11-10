@@ -48,6 +48,7 @@ NeLuaJ+ 的内置 AI 助手是面向当前工程的编码 Agent。当前实现�
 | `mods/agent/OpenAIProtocol.lua` | Chat Completions / Responses 请求编码、端点和服务商适配、历史修复、结构化工具调用解析 |
 | `mods/agent/OpenAIClient.lua` | 单次模型请求生命周期、流式回调、自动重试、错误分类和取消 |
 | `mods/agent/ToolExecutor.lua` | 工具名规范化、参数冻结、后台调度、项目作用域检查、并行安全判定、批准策略、MCP 路由和取消 |
+| `mods/agent/TaskRegistry.lua` / `mods/agent/TaskRuntime.lua` | 任务身份、等待/执行状态、期限、父子关联、有界诊断及主线程定时器适配；详见 [TOOL_TASKS.md](./TOOL_TASKS.md) |
 | `mods/agent/MCPProtocol.lua` | MCP 协议版本、JSON-RPC/SSE 解码、工具参数请求头等无状态协议辅助逻辑 |
 | `mods/agent/MCPClient.lua` | MCP 配置、协议协商、会话兼容、工具发现/缓存/调用和异步刷新 |
 | `mods/agent/ChangeSet.lua` | 文件变更前后快照、fingerprint 冲突检测、事务回滚、撤销和恢复 |
@@ -244,7 +245,7 @@ apply_patch, replace_in_file, append_file, rename_file
 
 ## Lua 沙盒
 
-`check_lua_syntax` 和 `run_lua` 通过私有 `:lua_sandbox` 进程执行。超时或取消会终止远程沙盒任务，避免无限循环阻塞应用主进程。
+`check_lua_syntax` 和 `run_lua` 通过私有 `:lua_sandbox` 进程执行，沙盒自身有执行时限。工具层取消只针对所属 handle，不以全局沙盒取消误伤其他任务；取消等待不等于底层已经退出。
 
 沙盒提供基础 Lua、`coroutine`、`string`、`table`、`math`、`utf8`、`bit32`，以及：
 
@@ -277,9 +278,11 @@ json, codec, hash.sha256, inspect, assert_equal, http.request
 - 总超时限制为 1–15 秒；正文限制为 256–50000 字符，默认 12000。
 - URL 中已有的查询参数会原样发送。
 
-## MCP
+## MCP 客户端：内置助手调用外部工具
 
-当前只集成 MCP tools，不集成 resources、prompts、roots、sampling，也不支持 stdio 或启动本地命令。
+本节描述内置助手作为 MCP 客户端。让其他助手连接 NeLuaJ+ 工程的本地服务见
+[MCP_SERVER.md](./MCP_SERVER.md)，两者支持的协议和能力不同。
+客户端当前只集成 MCP tools，不集成 resources、prompts、roots、sampling，也不支持 stdio 或启动本地命令。
 
 - 第一次没有配置时写入 `context7` 和 `deepwiki` 两个公开预设。
 - 首选无状态 Streamable HTTP 协议 `2026-07-28`，先直接探测 `tools/list`。
@@ -292,6 +295,9 @@ json, codec, hash.sha256, inspect, assert_equal, http.request
 - 会话过期、旧 SSE 断开或现代参数头不匹配时会刷新/重新初始化并重试一次。
 - HTTPS 服务器不受 `fetch_url` 的公网 DNS 限制；明文 HTTP 只允许 localhost，URL 不允许内嵌用户名或密码。
 - MCP 工具调用不经确认直接执行（用户配置：不需要任何确认）；工具发现刷新不受确认策略影响。
+- 每次异步工具调用持有独立资源组，覆盖初始化、请求与重试。取消只唤醒所属 SSE 等待者；共享连接仍可供其他调用使用。配置变更或显式全局清理才取消全部连接。
+
+任务句柄、超时、停止后的文件事实及诊断 API 统一见 [TOOL_TASKS.md](./TOOL_TASKS.md)。
 
 ## 本地 Skill
 
@@ -327,8 +333,8 @@ frontmatter 支持 `name`、`description`、`triggers`、`keywords`。匹配使�
 - 会话保存用户/assistant/tool 消息、结构化工具调用和结果、reasoning、Responses 原始 output/origin、continuation state 和请求错误。
 - 新会话默认以首条用户消息去换行后的前 30 个字符命名；首轮问答完成后由辅助模型异步生成简短标题（不超过 16 字、与对话同语言）替换默认名，生成失败时保留默认名。
 - 重开会话时按记录的 `skills` 名单恢复激活技能（`SkillManager.findByName` 重查正文；同名技能内容已变更则为新内容，找不到则不恢复）。后续发送仍按消息重新匹配。
-- 关闭 BottomSheet 不取消任务。流式状态和工具链仍保存在当前 Activity/进程内存中；没有跨 Activity、跨进程或跨重启的持久化任务队列。
-- 停止按钮会取消模型 HTTP、当前后台工具、MCP/网页/沙盒调用和待确认对话框。已完成工具结果保留，未完成的 Responses function call 会补入 `stopped` 工具结果以维持历史配对。
+- 关闭 BottomSheet 不取消任务。流式状态和工具链保存在 Activity/进程内存中，没有通用的跨重启任务续跑队列；文件事务另有进程级调度与持久化恢复，见 [FILE_MUTATIONS.md](./FILE_MUTATIONS.md)。
+- 停止按钮会请求取消模型 HTTP、当前工具句柄及待确认对话框。MCP 使用调用级资源组取消；文件事务协作取消、已开始发布继续收尾；其他同步平台工具是 best-effort，不能将取消等待视作未执行。未完成的 function call 补齐停止占位；当前 scope 内迟到文件事实原位更新，不恢复模型续跑。
 - 切换工程、切换/新建/清空会话会使旧 generation 失效并取消旧任务，过期回调不能修改新上下文。
 - 被停止的部分文本、不完整输出和工具后空响应会标记 continuation state，UI 可继续请求。
 - 请求错误记录在对应用户消息上。401/403 类错误提供打开设置，context/token 类错误提供压缩后重试，其他错误可直接重试或编辑原请求。
@@ -342,14 +348,16 @@ frontmatter 支持 `name`、`description`、`triggers`、`keywords`。匹配使�
 - 执行期间以进度卡实时上报阶段（开始 / 轮次 / 工具 / 完成）；主会话的停止操作会传播取消子代理。
 - 未指定模型时默认使用主模型；可在设置中指定辅助模型供轻量子代理使用。
 - 工具历史使用可移植格式（不依赖 Responses 原生 output），结果有长度上限。
-- 当前一次只运行一个子代理，工具线程通过 CountDownLatch 等待、主线程推进步骤；不是多子代理并发调度器。超时/取消会终结句柄，旧确认与迟到结果失效。
+- 当前一次只运行一个子代理，工具线程通过 CountDownLatch 等待、主线程推进步骤；不是多子代理并发调度器。超时/取消停止子代理续跑；迟到文件事实经 parentId/scope 更新原父工具消息的 child_file_results，不覆盖父任务失败状态，不写入新会话。
 
 ### `update_todos`
 
 - 维护会话级任务计划：条目校验（content 必填、status 归一化为 pending/in_progress/completed）、最多 50 条、单条 content 按 UTF-8 安全截断。
 - 计划持久化到当前会话记录；渲染为进度卡（已完成 n/m），并以紧凑清单注入系统提示词，驱动模型按计划推进。
 
-## 重试与错误规则
+## 模型请求重试与错误规则
+
+以下自动重试针对模型请求，不表示任意文件工具或远端 MCP 写入可以安全重做；工具超时的处理见 [TOOL_TASKS.md](./TOOL_TASKS.md)。
 
 - 默认自动重试 2 次，配置范围 0–5。
 - HTTP 429、HTTP 5xx 和网络/流异常可重试；普通 HTTP 4xx 和用户取消不重试。
@@ -370,9 +378,9 @@ frontmatter 支持 `name`、`description`、`triggers`、`keywords`。匹配使�
 - 沙盒文档前置读取由系统提示词、`run_lua` 描述与执行器共同强制：进程内未通过 `read_file`/`read_files` 读过受信 `res/doc` 根下的 `sandbox_*.html` 前，`run_lua` 需要确认；该标记进程级共享，切换会话不重置。
 - 文件自动批准对不存在的相对目标仍可能要求确认，因为当前工程内判定会检查目标类型。
 - Skill 使用记录持久化在会话里；重开会话时按名单恢复激活技能（找不到同名技能则不恢复），后续发送仍按消息重新匹配。
-- 工具 `xTask` 绑定当前 Activity 生命周期；模型流式状态也只保存在内存中，没有跨 Activity、跨进程或跨重启的任务恢复队列。
+- 普通工具 `xTask` 绑定当前 Activity 生命周期；文件事务使用进程级队列并有持久化事务恢复。统一任务诊断与模型流式状态仍在内存中，没有跨重启的通用工具续跑队列。
 - 自动压缩决策不包含工具 schema token，大量 MCP schema 可能让实际请求比压缩阶段估算更大。
-- MCP 目前只有工具能力，没有资源、提示词或 stdio 支持。
+- 内置 MCP 客户端目前只有工具能力，没有资源、提示词或 stdio 支持；对外 MCP 服务另提供内置文档资源。
 
 ## 验证
 

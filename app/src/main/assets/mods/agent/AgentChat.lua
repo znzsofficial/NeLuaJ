@@ -12,6 +12,7 @@ local ContextManager = require("mods.agent.ContextManager")
 local OpenAIClient = require("mods.agent.OpenAIClient")
 local OpenAIProtocol = require("mods.agent.OpenAIProtocol")
 local ToolExecutor = require("mods.agent.ToolExecutor")
+local TaskRuntime = require("mods.agent.TaskRuntime")
 local ToolRegistry = require("mods.agent.ToolRegistry")
 local SkillManager = require("mods.agent.SkillManager")
 local TodoManager = require("mods.agent.TodoManager")
@@ -1008,7 +1009,7 @@ registerTool("rename_file", function(args)
 end)
 
 registerTool("run_subtask", function(args)
-    return SubagentRunner.run(args.task, args.lightweight == true)
+    return SubagentRunner.run(args.task, args.lightweight == true, args.__task_context)
 
 end)
 
@@ -1571,6 +1572,14 @@ FileMutationService.configure({
 FileMutationService.reconcilePending()
 
 ToolExecutor.configure({
+  clockMillis = TaskRuntime.clockMillis,
+  idFactory = TaskRuntime.idFactory,
+  scheduleTimeout = TaskRuntime.scheduleTimeout,
+  isOwnerThread = TaskRuntime.isOwnerThread,
+  postToOwner = TaskRuntime.postToOwner,
+  onDiagnostic = TaskRuntime.onDiagnostic,
+  defaultTimeoutMs = 120000,
+  cancelSubtask = function(taskId) return SubagentRunner.cancel(taskId) end,
   normalizePath = normalizePath,
   resolvePath = resolvePath,
   resolveReadPath = resolveReadablePath,
@@ -1616,6 +1625,7 @@ ToolExecutor.configure({
 })
 -- 子代理能力注入（UI 确认钩子由 ChatUI 在面板装配时补充）
 SubagentRunner.configure({
+  postToMain = TaskRuntime.postToOwner,
   getBuiltinTools = function() return _M.TOOLS end,
   getSystemPrompt = function() return _M.getSystemPrompt() end,
   sendStream = function(messages, callbacks) return _M.sendStream(messages, callbacks) end,
@@ -1635,6 +1645,8 @@ _M.cancelPendingTools = ToolExecutor.cancelPending
 _M.normalizeToolName = ToolExecutor.normalizeToolName
 _M.executeTool = ToolExecutor.executeTool
 _M.executeToolAsync = ToolExecutor.executeToolAsync
+_M.getTaskSnapshot = ToolExecutor.getTaskSnapshot
+_M.getTaskDiagnostics = ToolExecutor.getTaskDiagnostics
 _M.isDestructiveTool = ToolExecutor.isDestructiveTool
 _M.requiresConfirmation = ToolExecutor.requiresConfirmation
 _M.isInProjectDir = ToolExecutor.isInProjectDir

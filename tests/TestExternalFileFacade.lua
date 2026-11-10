@@ -124,5 +124,36 @@ cancelled=false
 cancelling.attachEditor({prepare=function() error('prepare interrupted') end,finish=cancelConfig.finish})
 local failedHistory=cancelling.execute('undo',{requestId='failed-history-prepare',expectedHead='head'})
 check('history preparation error prevents execution',failedHistory.error.code=='prepare_failed' and writes==beforeHistory and not lock)
+
+-- A running finish consumes its opaque snapshot before the waiting worker times
+-- out. Retrying the same request must capture fresh recovery state, not republish.
+local retryOptions={}
+for k,v in pairs(options) do retryOptions[k]=v end
+retryOptions.isAcknowledged=function() return true end -- Ignore unrelated earlier results.
+local recoveredSnapshots, syncAttempts, consumed = 0, 0, {}
+retryOptions.prepare=function() return 'initial-snapshot' end
+retryOptions.prepareRecovery=function()
+  recoveredSnapshots=recoveredSnapshots+1
+  return 'recovery-'..recoveredSnapshots
+end
+retryOptions.finish=function(snapshot)
+  assert(not lock and not consumed[snapshot], 'must not reuse consumed snapshots or retain request token')
+  consumed[snapshot]=true; syncAttempts=syncAttempts+1
+  if syncAttempts==1 then error('editor wait timed out after finish began') end
+  if syncAttempts==2 then return false,'editor_binding_stale' end
+  return true
+end
+local healing=Facade.new(retryOptions)
+healing.recover()
+local retryArgs={requestId='finish-timeout',path='a',content='!',expectedVersion='v1'}
+local writesBefore, acksBefore=writes,acks
+local timed=healing.execute('append_file',retryArgs)
+check('finish timeout preserves committed result and defers ack',timed.outcome=='committed' and syncAttempts==1 and acks==acksBefore)
+healing.reconcile()
+check('notification retry recaptures consumed opaque snapshot',recoveredSnapshots==1 and syncAttempts==2 and acks==acksBefore)
+local healed=healing.execute('append_file',retryArgs)
+check('same request retries pending sync with fresh recovery snapshot',healed.transactionId==timed.transactionId and syncAttempts==3 and recoveredSnapshots==2 and acks==acksBefore+1)
+healing.execute('append_file',retryArgs)
+check('synced request retry never republishes or resynchronizes',writes==writesBefore+1 and syncAttempts==3 and acks==acksBefore+1)
 check('no chat modules loaded',not package.loaded['mods.project.ProjectContext'] and not package.loaded['mods.agent.AgentStorage'])
 print('ALL-PASS TestExternalFileFacade')

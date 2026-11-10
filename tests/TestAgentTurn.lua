@@ -258,9 +258,9 @@ local settings = {
 }
 mutationService.configure(settings)
 assert(mutationService.recover().recovered)
-executor.configure({})
+executor.configure({ scheduleTimeout = function() return noop end })
 agent.executeToolAsync = executor.executeToolAsync
-xTask = function(work, done)
+settings.scheduler = function(work, done)
   local result = work()
   done(result)
   done(result)
@@ -281,4 +281,175 @@ reset(nil)
 callbacks.onToolCalls({ { id = "failed", name = "create_file", arguments = "{}" } }, "")
 assert(refreshed == 1, "failed writes must not reload the editor")
 print("PASS writes prepare and refresh once; save conflicts and failed tools never reload")
+-- Stop/timeout retain the exact placeholder for late file transaction facts.
+local late, executionOptions, allow, deny
+agent.executeToolAsync = function(_, _, cb, opts)
+  late, executionOptions = cb, opts
+  return { taskId = "task-write", cancel = noop }
+end
+agent.getTaskSnapshot = function(id)
+  return { taskId = id, fileMutation = true, waitState = "cancelled" }
+end
+reset(nil)
+callbacks.onToolCalls({ { id = "late-write", name = "create_file", arguments = "{}" },
+  { id = "not-started", name = "read_file", arguments = "{}" } }, "")
+assert(executionOptions.scope.conversationId == "conv" and executionOptions.toolCallId == "late-write")
+turn.requestStop()
+local stoppedMessage = Session.messages()[3]
+assert(stoppedMessage.content:find("文件事务结果待确认", 1, true))
+assert(stoppedMessage.task_info.taskId == "task-write")
+assert(Session.messages()[4].content == res.string.ai_stopped)
+callbacks.onError("cancelled") -- stale network cancellation must not invalidate the file owner
+local fact = { transactionId = "tx", outcome = "committed" }
+late("committed after stop", true, fact, { taskId = "task-write", transactionId = "tx" })
+assert(#Session.messages() == 4 and Session.messages()[3] == stoppedMessage)
+assert(stoppedMessage.file_result == fact and stoppedMessage.tool_ok == true)
+assert(stoppedMessage.task_info.transactionId == "tx" and not turn.isActive())
+late("duplicate", false, fact)
+assert(stoppedMessage.content == "committed after stop")
+print("PASS stopped file result updates its original placeholder exactly once")
+
+reset(nil)
+callbacks.onToolCalls({ { id = "timeout", name = "create_file", arguments = "{}" },
+  { id = "remaining", name = "read_file", arguments = "{}" } }, "")
+executionOptions.onWaitEnd({ taskId = "task-write", waitState = "timed_out", fileMutation = true })
+assert(not turn.isActive() and #Session.messages() == 4)
+assert(Session.messages()[3].content:find("等待超时", 1, true))
+late("committed", true, fact, { taskId = "task-write" })
+assert(Session.messages()[3].file_result == fact and #Session.messages() == 4)
+print("PASS timeout pairs remaining calls and never resumes the model")
+
+reset(nil)
+callbacks.onToolCalls({ { id = "stale", name = "create_file", arguments = "{}" } }, "")
+turn.requestStop()
+local oldPlaceholder = Session.messages()[3]
+turn.invalidate()
+Session.activate({ id = "another", messages = {} }, "/other")
+late("stale commit", true, fact)
+assert(#Session.messages() == 0 and oldPlaceholder.file_result == nil)
+print("PASS late file facts cannot cross scope or generation")
+
+reset(nil)
+agent.shouldAutoApprove = function() return false end
+agent.requiresConfirmation = function() return true end
+local opts = options(nil)
+opts.showToolConfirm = function(_, _, yes, no) allow, deny = yes, no end
+turn.configure(opts)
+local dispatches = 0
+agent.executeToolAsync = function(_, _, cb) dispatches = dispatches + 1; late = cb end
+callbacks.onToolCalls({ { id = "confirm", name = "create_file", arguments = "{}" } }, "")
+allow(); allow(); deny()
+assert(dispatches == 1 and #Session.messages() == 2)
+late("done", true)
+assert(#Session.messages() == 3)
+print("PASS repeated confirmation cannot execute twice or deny a started write")
+agent.shouldAutoApprove = function() return true end
+reset(nil)
+agent.executeToolAsync = function(_, _, cb, opts)
+  late, executionOptions = cb, opts
+  return { taskId = "race-write", cancel = noop }
+end
+callbacks.onToolCalls({ { id = "race", name = "create_file", arguments = "{}" } }, "")
+-- Cancelling the underlying transaction may complete before onWaitEnd is delivered.
+late("committed at timeout", true, fact, { taskId = "race-write", waitState = "timed_out", fileMutation = true })
+executionOptions.onWaitEnd({ taskId = "race-write", waitState = "timed_out" })
+assert(not turn.isActive() and #Session.messages() == 3 and Session.messages()[3].file_result == fact)
+assert(Session.messages()[3].continuation_state == "stopped")
+print("PASS timeout final callback racing wait-end retains fact without continuation")
+
+reset(nil)
+pending = {}
+agent.classifyParallelBatch = function(calls)
+  local out = {}
+  for i, call in ipairs(calls) do out[i] = { id = call.id, name = call.name, args = {} } end
+  return out
+end
+agent.executeToolAsync = function(_, _, cb, opts)
+  pending[#pending + 1] = { result = cb, options = opts }
+  return { taskId = "parallel-" .. #pending }
+end
+callbacks.onToolCalls({ { id = "pa", name = "read_file", arguments = "{}" },
+  { id = "pb", name = "read_file", arguments = "{}" } }, "")
+assert(pending[1].options.scope.conversationId == "conv" and pending[2].options.toolCallId == "pb")
+pending[1].result("first", true, nil, { taskId = "parallel-1" })
+pending[2].options.onWaitEnd({ taskId = "parallel-2", waitState = "timed_out" })
+assert(not turn.isActive() and #Session.messages() == 4)
+assert(Session.messages()[3].task_info.taskId == "parallel-1")
+assert(Session.messages()[4].task_info.waitState == "timed_out")
+pending[2].result("late", true)
+assert(#Session.messages() == 4)
+print("PASS parallel identity and timeout pair all calls without continuation")
+-- Exact batch cancellation, including timeout before execute returns its handle.
+reset(nil)
+local cancelCounts = {}
+pending = {}
+agent.executeToolAsync = function(_, _, cb, opts)
+  local i = #pending + 1
+  pending[i] = { result = cb, options = opts }
+  return { taskId = "batch-" .. i, cancel = function()
+    cancelCounts[i] = (cancelCounts[i] or 0) + 1
+    cb("cancel reentrant", false)
+  end }
+end
+local batch = { { id = "b1", name = "read_file", arguments = "{}" },
+  { id = "b2", name = "read_file", arguments = "{}" },
+  { id = "b3", name = "read_file", arguments = "{}" } }
+callbacks.onToolCalls(batch, "")
+pending[1].result("done", true)
+pending[2].options.onWaitEnd({ taskId = "batch-2", waitState = "timed_out" })
+pending[2].options.onWaitEnd({ taskId = "batch-2", waitState = "timed_out" })
+assert(cancelCounts[1] == nil and cancelCounts[2] == 1 and cancelCounts[3] == 1)
+assert(#Session.messages() == 5)
+reset(nil)
+pending, cancelCounts = {}, {}
+callbacks.onToolCalls(batch, "")
+local staleTimeout = pending[2].options.onWaitEnd
+Session.activate({ id = "replacement", messages = {} }, "/proj")
+staleTimeout({ taskId = "batch-2", waitState = "timed_out" })
+assert(next(cancelCounts) == nil and #Session.messages() == 0)
+reset(nil)
+local syncCancelled, launches = 0, 0
+agent.executeToolAsync = function(_, _, cb, opts)
+  launches = launches + 1
+  opts.onWaitEnd({ taskId = "sync", waitState = "timed_out" })
+  return { taskId = "sync", cancel = function() syncCancelled = syncCancelled + 1 end }
+end
+callbacks.onToolCalls(batch, "")
+assert(launches == 1 and syncCancelled == 1 and #Session.messages() == 5)
+print("PASS parallel timeout cancels only unfinished batch handles exactly once, including synchronous dispatch")
+
+agent.classifyParallelBatch = function() return nil end
+agent.executeToolAsync = function(_, _, cb, opts)
+  late, executionOptions = cb, opts
+  return { taskId = "parent", cancel = noop }
+end
+reset(nil)
+callbacks.onToolCalls({ { id = "parent-call", name = "run_subtask", arguments = "{}" } }, "")
+late("子任务等待超时，文件事务结果待确认", false, nil, { taskId = "parent" })
+local parent = Session.messages()[3]
+local parentFact = { transactionId = "child-tx", outcome = "committed" }
+executionOptions.onLateFileResult("真实提交", true, parentFact, { taskId = "child" }, { taskId = "parent" })
+executionOptions.onLateFileResult("真实提交（更新）", true, parentFact, { taskId = "child" }, { taskId = "parent" })
+assert(#Session.messages() == 3 and parent == Session.messages()[3] and parent.tool_ok == false)
+assert(parent.file_result == nil and parent.task_info.taskId == "parent")
+assert(#parent.child_file_results == 1 and parent.child_file_results[1].task_info.taskId == "child")
+assert(parent.content:find("真实提交（更新）", 1, true))
+local previousContent = parent.content
+turn.invalidate()
+executionOptions.onLateFileResult("stale", true, { transactionId = "other" }, {}, {})
+assert(parent.content == previousContent and #parent.child_file_results == 1)
+print("PASS late child facts update original completed parent, deduplicate, preserve failure and reject stale scope")
+
+reset(nil)
+callbacks.onToolCalls({ { id = "stopped-parent", name = "run_subtask", arguments = "{}" } }, "")
+-- A child fact may arrive before the parent timeout/stop message exists.
+executionOptions.onLateFileResult("committed early", true, parentFact, { taskId = "child" }, { taskId = "parent" })
+assert(#Session.messages() == 2)
+turn.requestStop()
+parent = Session.messages()[3]
+assert(#parent.child_file_results == 1 and parent.content:find("committed early", 1, true))
+executionOptions.onLateFileResult("committed late", true, parentFact, { taskId = "child" }, { taskId = "parent" })
+assert(#Session.messages() == 3 and parent.file_result == nil and parent.tool_ok ~= true)
+assert(parent.continuation_state == "stopped" and not turn.isActive())
+print("PASS stopped parent retains early and late child facts without duplicate messages or continuation")
 print("ALL-PASS")

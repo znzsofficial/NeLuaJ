@@ -1,0 +1,32 @@
+package.path=(ASSETS or 'app/src/main/assets/')..'?.lua;'..package.path
+local Registry=require('mods.agent.TaskRegistry')
+local tick=10
+local r=Registry.new({clockMillis=function() return tick end,historyLimit=2,diagnosticLimit=2,idFactory=function() return 'fixed' end})
+local id=r.create('read_file',{scope={projectPath='/p',generation=1,secret='no'},args={secret='no'},toolCallId='call'},false)
+local s=r.snapshot(id)
+assert(s.waitState=='waiting' and s.executionState=='queued' and s.scope.secret==nil and s.args==nil)
+s.scope.projectPath='changed'; assert(r.snapshot(id).scope.projectPath=='/p')
+r.running(id); tick=20
+assert(r.endWait(id,'timed_out','SECRET') and not r.endWait(id,'cancelled','user'))
+assert(r.snapshot(id).cancelReason=='timeout' and r.snapshot(id).executionState=='unknown')
+assert(r.settle(id,true) and not r.settle(id,false))
+assert(r.snapshot(id).elapsedMs==10 and r.snapshot(id).waitState=='timed_out')
+local second=r.create('create_file',{},true); r.running(second); r.transaction(second,'tx')
+r.endWait(second,'cancelled','user')
+assert(r.snapshot(second).executionState=='running')
+r.settle(second,true)
+local third=r.create('x',{},false); r.settle(third,false)
+assert(r.snapshot(third).ok==false, 'failed result must retain explicit false')
+assert(id~=second and second~=third and r.snapshot(id)==nil)
+local d=r.diagnostics(); assert(#d==2); d[1].scope.bad=true; assert(not r.snapshot(second).scope.bad)
+local other=Registry.new({idFactory=function() return 'fixed' end})
+assert(other.create('x',{},false)~=third)
+local long=string.rep('identity/',80)
+local full=Registry.new({idFactory=function() return long end})
+local fullId=full.create('x',{scope={projectPath=long,conversationId=long,generation=long},parentId=long,toolCallId=long},true)
+full.transaction(fullId,long)
+local fullInfo=full.snapshot(fullId)
+assert(fullId:sub(1,#long)==long and fullInfo.parentId==long and fullInfo.toolCallId==long
+  and fullInfo.transactionId==long and fullInfo.scope.projectPath==long
+  and fullInfo.scope.conversationId==long and fullInfo.scope.generation==long)
+print('ALL-PASS TaskRegistry unique IDs, states, bounded detached metadata, elapsed, transactions, full identities')

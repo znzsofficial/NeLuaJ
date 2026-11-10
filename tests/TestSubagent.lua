@@ -41,9 +41,9 @@ local function reset(script_)
       return stepDef(messages, callbacks)
     end,
     normalizeToolName = function(name) return name end,
-    executeToolAsync = function(name, args, onResult)
-      executed[#executed + 1] = { name = name, args = args }
-      return fake.onTool(name, args, onResult)
+    executeToolAsync = function(name, args, onResult, options)
+      executed[#executed + 1] = { name = name, args = args, options = options }
+      return fake.onTool(name, args, onResult, options)
     end,
     cancelToolJob = function(job)
       captured.cancelToolCount = (captured.cancelToolCount or 0) + 1
@@ -289,6 +289,69 @@ onAwait = drainMain
 r, ok = SR.run("timeout progress", false)
 drainMain()
 check("timeout progress and cleanup are posted to the main thread", not ok and not wrongThread)
+reset({ stepTool("write-child", "apply_patch") })
+fake.auto.apply_patch = true
+local waitEnd, lateFile
+fake.onTool = function(_, _, cb, options)
+  waitEnd, lateFile = options.onWaitEnd, cb
+  return { taskId = "child-id", cancel = function() end }
+end
+onAwait = function() waitEnd({ taskId = "child-id", waitState = "timed_out" }) end
+local scope = { projectPath = "/proj", conversationId = "conv", generation = 5 }
+r, ok = SR.run("write with identity", false, { taskId = "parent-id", scope = scope })
+local metadata = executed[1].options
+check("child inherits parent scope and identity", metadata.scope == scope
+  and metadata.parentId == "parent-id" and metadata.toolCallId == "write-child")
+check("timeout does not claim file termination", not ok and r:find("文件事务结果待确认", 1, true)
+  and not r:find("自动终止", 1, true))
+lateFile("committed", true, { outcome = "committed" }, { taskId = "child-id" })
+check("late file callback cannot restart child", not SR.isRunning())
+
+reset({ stepTool("thread-child", "read_file") })
+fake.auto.read_file = true
+fake.onTool = function() return { cancel = function() if not inMain then wrongThread = true end end } end
+queue, wrongThread = {}, false
+SR.configure({ postToMain = function(fn) queue[#queue + 1] = fn end })
+onAwait = drainMain
+r, ok = SR.run("worker timeout cancellation", false)
+check("timeout cancellation waits for owner thread", not ok and captured.cancelToolCount == nil)
+drainMain()
+check("child cancellation only on main", captured.cancelToolCount == 1 and not wrongThread)
+
+reset({ function(_, cb) requestCallback = cb end })
+onAwait = function() requestCallback.onDone("won race") end
+r, ok = SR.run("completion at timeout boundary", false)
+check("completion wins before timeout observation", ok and r == "won race" and not SR.isRunning())
+reset({ function(_, cb) requestCallback = cb end })
+onAwait = function()
+  SR.cancel("unrelated-parent")
+  check("parent-filtered cancel ignores another task", SR.isRunning())
+  SR.cancel("owned-parent")
+end
+r, ok = SR.run("parent cancellation", false, { taskId = "owned-parent", scope = scope })
+check("matching parent cancels child loop", not ok and not SR.isRunning())
+requestCallback.onDone("late parent success")
+check("cancelled parent cannot resume child", not SR.isRunning())
+reset({ stepTool("late-file-child", "apply_patch") })
+fake.auto.apply_patch = true
+local childCallback, childOptions, forwarded
+fake.onTool = function(_, _, cb, opts)
+  childCallback, childOptions = cb, opts
+  return { taskId = "late-child", cancel = function() end }
+end
+onAwait = function() childOptions.onWaitEnd({ waitState = "timed_out" }) end
+local context = { taskId = "late-parent", scope = scope, onLateFileResult = function(text, flag, effects, info)
+  forwarded = { text = text, ok = flag, effects = effects, info = info, main = inMain }
+end }
+r, ok = SR.run("late child facts", false, context)
+queue = {}
+SR.configure({ postToMain = function(fn) queue[#queue + 1] = fn end })
+local finalFact = { transactionId = "late-tx", outcome = "committed" }
+childCallback("committed", true, finalFact, { taskId = "late-child" })
+check("late child observer is posted rather than called from worker", forwarded == nil)
+drainMain()
+check("late child observer receives fact on owner without resuming", forwarded and forwarded.main
+  and forwarded.effects == finalFact and forwarded.ok and forwarded.info.taskId == "late-child" and not SR.isRunning())
 luajava = originalBridge
 
 if failures == 0 then print("ALL-PASS") else print("FAILURES: " .. failures) end

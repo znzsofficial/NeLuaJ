@@ -4,6 +4,7 @@ local _M = {}
 local ToolRegistry = require("mods.agent.ToolRegistry")
 local FileMutationService = require("mods.files.FileMutationService")
 local config
+local tasks = require('mods.agent.TaskRegistry').new()
 local activeJobs = {} -- Only live jobs; callbacks capture their own cancellation state.
 local AgentJobRegistry = nil
 pcall(function()
@@ -37,6 +38,7 @@ local aliases = {
 
 function _M.configure(options)
   config = options or {}
+  tasks.configure(config)
 end
 
 local function requireConfig()
@@ -143,162 +145,174 @@ function _M.executeTool(name, args)
   return result, ok, effects
 end
 
-function _M.executeToolAsync(name, args, onResult)
+-- All lifecycle callbacks, cancellation and timer callbacks run on the owner
+-- (Android main) thread. scheduleTimeout must post to that same thread.
+function _M.executeToolAsync(name, args, onResult, options)
+  local ownerConfig=config or {}
+  local function onOwner(fn)
+    if ownerConfig.isOwnerThread and not ownerConfig.isOwnerThread() then
+      assert(ownerConfig.postToOwner,'postToOwner 未配置')
+      ownerConfig.postToOwner(fn)
+    else fn() end
+  end
+  assert(not ownerConfig.isOwnerThread or ownerConfig.isOwnerThread(),'ToolExecutor requires owner thread')
+  options = options or {}
   name = _M.normalizeToolName(name, args)
   local definition = ToolRegistry.get(name)
-  if definition and definition.fileMutation then
-    local handle
-    handle = FileMutationService.submit(name, args, function(text, ok, result)
-      if handle then activeJobs[handle] = nil end
-      if onResult then onResult(text, ok, result) end
-    end)
-    if not handle.result then activeJobs[handle] = {name=name,fileWrite=true} end
-    return handle
-  end
-  local job
-  local entry = { name = name, cancelled = false, completed = false }
-  local function complete()
-    if entry.completed then return false end
-    entry.completed = true
-    if job then
-      activeJobs[job] = nil
-      if AgentJobRegistry then pcall(function() AgentJobRegistry.unregister(job) end) end
+  local file = not not (definition and definition.fileMutation)
+  local id = tasks.create(name, options, file)
+  -- Retain metadata only, so a late child file event can still identify its
+  -- parent after bounded registry history evicts that parent.
+  local parentInfo = name=='run_subtask' and tasks.snapshot(id) or nil
+  local function parentSnapshot()
+    parentInfo=tasks.snapshot(id) or parentInfo
+    local out={}
+    for key,value in pairs(parentInfo or {}) do
+      if type(value)=='table' then
+        out[key]={}; for k,v in pairs(value) do out[key][k]=v end
+      else out[key]=value end
     end
-    return not entry.cancelled
+    return out
   end
-  local function register()
-    if job and not entry.completed and not entry.cancelled then
-      activeJobs[job] = entry
-      if AgentJobRegistry and not entry.fileWrite then pcall(function() AgentJobRegistry.register(job, name) end) end
+  local handle = {taskId=id}
+  local job, timer, timerCleared, completed, stopped, cancelledUnderlying, registered
+  local function clearTimer()
+    timerCleared=true
+    if timer then local cancel=timer; timer=nil; pcall(cancel) end
+  end
+  local function unregister()
+    if registered then
+      registered=false
+      pcall(function() AgentJobRegistry.unregister(job) end)
     end
   end
-  if name:match("^mcp::") or name:match("^mcp__") then
-    local route = requireConfig().resolveMcpTool and requireConfig().resolveMcpTool(name)
-    local ns, tool = name:sub(6):match("^([^:]+)::(.+)$")
-    if route then tool = route.tool end
-    if not tool or (not route and not ns) then
-      if onResult then onResult("MCP 工具名格式错误: " .. name, false) end
-      return
-    end
-    local server = route and route.server or requireConfig().findMcpServer(ns)
-    if not server then
-      if onResult then onResult("找不到 MCP 服务器: " .. ns, false) end
-      return
-    end
-    job = requireConfig().callMcpToolAsync(server, tool, args, function(ok, text)
-      if not complete() then return end
-      if not onResult then return end
-      if ok then onResult(text, true)
-      else onResult("MCP 工具调用失败: " .. tostring(text or "未知错误"), false) end
-    end)
-    register()
-    return job
+  local function cancelUnderlying()
+    if not job or cancelledUnderlying then return end
+    cancelledUnderlying=true
+    unregister()
+    if file then pcall(FileMutationService.cancel,job)
+    else pcall(function() if job.cancel then job.cancel() end end) end
   end
-  if not onResult then return end
-  local frozenOk, frozen = pcall(freezeFileArgs, name, args)
-  if not frozenOk then
-    if complete() then onResult("工具路径解析失败: " .. tostring(frozen), false) end
-    return
+  local function finish(text, ok, effects)
+    if completed then return end
+    completed=true
+    if file and type(effects)=='table' then tasks.transaction(id,effects.transactionId) end
+    clearTimer(); unregister(); activeJobs[handle]=nil
+    tasks.settle(id,ok)
+    if parentInfo then parentSnapshot() end
+    if onResult and (file or not stopped) then pcall(onResult,text,ok,effects,tasks.snapshot(id)) end
   end
-  args = frozen
-  -- 文件、网络和沙盒工具也必须离开 UI 线程；xTask 的完成回调回到主线程。
-  local okLaunch, launchError = pcall(function()
-    job = xTask(
-      function()
-        if entry.cancelled then return { ok = true, result = "文件操作已取消，未执行", toolOk = false } end
-        local okCall, result, okFlag, effects = pcall(_M.executeTool, name, args)
-        if okCall then return { ok = true, result = result, toolOk = okFlag, effects = effects } end
-        return { ok = false, result = tostring(result), toolOk = false }
-      end,
-      function(result)
-        if entry.completed then return end
-        if not complete() then return end
-
-        if type(result) == "table" then
-          if result.ok then
-            onResult(result.result, result.toolOk, result.effects)
-          else
-            onResult("工具执行异常: " .. tostring(result.result), false)
-          end
-        else
-          onResult("后台任务异常: " .. tostring(result), false)
-        end
+  local function stop(state,reason)
+    if completed or stopped then return false end
+    stopped=true
+    tasks.endWait(id,state,reason)
+    clearTimer()
+    local info=tasks.snapshot(id)
+    if parentInfo then parentSnapshot() end
+    if not file then activeJobs[handle]=nil; tasks.retire(id) end
+    -- Mark first: cancel may synchronously invoke the final callback.
+    if name=='run_subtask' and ownerConfig.cancelSubtask then pcall(ownerConfig.cancelSubtask,id) end
+    cancelUnderlying()
+    if state=='timed_out' then
+      if options.onWaitEnd then pcall(options.onWaitEnd,info)
+      elseif not file and onResult then pcall(onResult,'工具等待超时；执行结果未确认',false,nil,info) end
+    end
+    return true
+  end
+  handle.cancel=function(reason)
+    assert(not ownerConfig.isOwnerThread or ownerConfig.isOwnerThread(),'cancel requires owner thread')
+    return stop('cancelled',reason or 'cancelled')
+  end
+  handle.getSnapshot=function() return tasks.snapshot(id) end
+  activeJobs[handle]=true
+  local launched,err=pcall(function()
+    local cfg=requireConfig()
+    local timeout=options.timeoutMs or
+      (name=='run_subtask' and 190000 or name=='build_project' and 300000 or cfg.defaultTimeoutMs or 120000)
+    assert(type(timeout)=='number' and timeout>0,'invalid timeoutMs')
+    assert(type(cfg.scheduleTimeout)=='function','scheduleTimeout 未配置')
+    local cancel=cfg.scheduleTimeout(timeout,function() onOwner(function() stop('timed_out','timeout') end) end)
+    assert(type(cancel)=='function','scheduleTimeout 必须返回 cancelFn')
+    timer=cancel
+    if timerCleared then clearTimer() end
+    if stopped then return end
+    tasks.running(id)
+    if file then
+      job=FileMutationService.submit(name,args,function(text,ok,effects)
+        onOwner(function() finish(text,ok,effects) end)
+      end)
+      if job then tasks.transaction(id,(job.result and job.result.transactionId) or job.id) end
+    elseif name:match('^mcp::') or name:match('^mcp__') then
+      local route=cfg.resolveMcpTool and cfg.resolveMcpTool(name)
+      local ns,tool=name:sub(6):match('^([^:]+)::(.+)$')
+      if route then tool=route.tool end
+      assert(tool and (route or ns),'MCP 工具名格式错误')
+      local server=route and route.server or cfg.findMcpServer(ns)
+      assert(server,'找不到 MCP 服务器')
+      job=cfg.callMcpToolAsync(server,tool,args,function(ok,text)
+        onOwner(function() finish(ok and text or ('MCP 工具调用失败: '..tostring(text or '未知错误')),ok) end)
+      end)
+    else
+      local frozen=freezeFileArgs(name,args)
+      if name=='run_subtask' then
+        frozen.__task_context={taskId=id,scope=parentSnapshot().scope,
+          onLateFileResult=function(text,ok,fileResult,childTaskInfo)
+            onOwner(function()
+              if options.onLateFileResult then
+                pcall(options.onLateFileResult,text,ok,fileResult,childTaskInfo,parentSnapshot())
+              end
+            end)
+          end}
       end
-      , "io"
-    )
+      job=xTask(function()
+        -- No registry/entry reads or writes from the worker.
+        local ok,result,flag,effects=pcall(_M.executeTool,name,frozen)
+        return {ok=ok,result=result,toolOk=flag,effects=effects}
+      end,function(result)
+        onOwner(function()
+          if type(result)~='table' then finish('后台任务异常: '..tostring(result),false)
+          elseif result.ok then finish(result.result,result.toolOk,result.effects)
+          else finish('工具执行异常: '..tostring(result.result),false) end
+        end)
+      end,'io')
+    end
+    if stopped then cancelUnderlying() end
+    if not completed and not stopped then
+      assert(job,'工具启动未返回 handle')
+      if AgentJobRegistry and not file then
+        local ok=pcall(function() AgentJobRegistry.register(job,name) end)
+        registered=ok
+      end
+    end
   end)
-  if not okLaunch and complete() then onResult("无法启动后台工具任务: " .. tostring(launchError), false) end
-  if okLaunch then register() end
-  return job
+  if not launched then finish('无法启动后台工具任务: '..tostring(err),false) end
+  return handle
 end
 
-local function cancelResources(name)
-  local cfg = requireConfig()
-  if (name:match("^mcp::") or name:match("^mcp__")) and cfg.cancelMcpCalls then
-    pcall(cfg.cancelMcpCalls)
-  elseif name == "fetch_url" and cfg.cancelFetch then
-    pcall(cfg.cancelFetch)
-  elseif (name == "run_lua" or name == "check_lua_syntax") and cfg.cancelSandbox then
-    pcall(cfg.cancelSandbox)
-  end
+function _M.getTaskSnapshot(id) return tasks.snapshot(id) end
+function _M.getTaskDiagnostics() return tasks.diagnostics() end
+function _M.cancelJob(handle,reason)
+  if not handle or not activeJobs[handle] then return false end
+  return handle.cancel(reason)
 end
-
--- A subagent timeout cancels one child job, not the main turn's whole batch.
-function _M.cancelJob(job)
-  if not job then return false end
-  local entry = activeJobs[job]
-  if entry and entry.fileWrite then return FileMutationService.cancel(job) end
-  if entry then
-    entry.cancelled = true
-    if not entry.fileWrite then activeJobs[job] = nil end
-  end
-  if AgentJobRegistry then pcall(function() AgentJobRegistry.unregister(job) end) end
-  if not (entry and entry.fileWrite) then pcall(function() if job.cancel then job.cancel() end end) end
-  if entry then cancelResources(entry.name) end
-  return entry ~= nil
-end
-
-function _M.cancelPending()
-  local count = 0
-  local cancelledNames = {}
-
-  -- Detach and mark the whole batch before cancel() can invoke any callback.
-  -- Cancelled xTask jobs need not deliver callbacks, so no tombstones stay here.
-  local jobs = activeJobs
-  activeJobs = {}
-  for job, entry in pairs(jobs) do
-    if entry.fileWrite then FileMutationService.cancel(job) end
-    entry.cancelled = true
-    if entry.fileWrite then activeJobs[job] = entry end
-  end
-
-  -- 1. Kotlin 原生注册表批量原子取消
-  if AgentJobRegistry then
-    pcall(function()
-      local tools = AgentJobRegistry.cancelAll()
-      if tools then
-        for i = 0, tools.size() - 1 do
-          cancelledNames[tools.get(i)] = true
-          count = count + 1
-        end
+local function cancelMatching(scope,reason)
+  local batch={}
+  for handle in pairs(activeJobs) do
+    local match=true
+    if scope then
+      local info=tasks.snapshot(handle.taskId)
+      for _,key in ipairs({'projectPath','conversationId','generation'}) do
+        if scope[key]~=nil and (not info or info.scope[key]~=scope[key]) then match=false end
       end
-    end)
+    end
+    if match then batch[#batch+1]=handle end
   end
-
-  -- Lua fallback also covers environments without the native registry.
-  for job, entry in pairs(jobs) do
-    if not entry.fileWrite then pcall(function() if job.cancel then job.cancel() end end) end
-    if entry.name then cancelledNames[entry.name] = true end
-    count = count + 1
-  end
-
-  -- 3. 关联子模块清理钩子
-  for name, _ in pairs(cancelledNames) do
-    cancelResources(name)
-  end
-
-  return count > 0
+  local count=0
+  for _,handle in ipairs(batch) do if _M.cancelJob(handle,reason) then count=count+1 end end
+  return count
 end
+function _M.cancelScope(scope,reason) return cancelMatching(scope or {},reason or 'scope') end
+function _M.cancelPending() return cancelMatching(nil,'cancelled')>0 end
 
 function _M.isDestructiveTool(name)
   name = _M.normalizeToolName(name)

@@ -29,6 +29,8 @@ object FileMutationEngine {
     private const val MAX_FILES = 2000
     @Volatile private var owner = ""
     private val ownership = Any()
+    private var pins = 0
+    private var releaseRequested = false
     internal var checkpoint: ((String) -> Unit)? = null
     private class Failure(val code: String, message: String) : IOException(message)
     private fun fail(code: String, message: String): Nothing = throw Failure(code, message)
@@ -45,9 +47,35 @@ object FileMutationEngine {
     fun tryAcquire(requestId: String): String = synchronized(ownership) {
         if (owner.isNotEmpty()) return@synchronized ""
         owner = id()
+        pins = 0
+        releaseRequested = false
         owner
     }
-    fun release(token: String) = synchronized(ownership) { if (token.isNotEmpty() && token == owner) owner = "" }
+    fun release(token: String) = synchronized(ownership) {
+        if (token.isNotEmpty() && token == owner) {
+            releaseRequested = true
+            if (pins == 0) owner = ""
+        }
+    }
+
+    /** Keep a timed-out UI prepare's token valid until that callback actually exits.
+     * Closing a pin is idempotent; releasing the transaction never releases its pins.
+     */
+    fun pin(token: String): AutoCloseable = synchronized(ownership) {
+        own(token)
+        check(!releaseRequested) { "Transaction already released" }
+        pins++
+        var closed = false
+        AutoCloseable {
+            synchronized(ownership) {
+                if (!closed) {
+                    closed = true
+                    pins--
+                    if (pins == 0 && releaseRequested) owner = ""
+                }
+            }
+        }
+    }
 
     /** Only the well-known Android shared-storage prefix may be resolved through aliases.
      * Everything below that prefix, including the final component, is checked without following links. */

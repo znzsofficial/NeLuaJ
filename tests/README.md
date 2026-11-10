@@ -22,6 +22,11 @@ Kotlin/Java 层承接运行时、平台传输、沙盒和布局分析等能力�
 `mods/agent/` 并非全部无平台依赖，TextUtil 实际位于 `mods/utils/TextUtil.lua`。
 UI 套件模拟视图/宿主接口，只验证其调用与装配，不验证 Android 渲染、权限或生命周期。
 
+文件操作卡死回归另包含 JVM `McpUiCallTest`（排队/运行中超时、取消、中断）、
+`FileMutationEngineTest`（编辑器令牌 pin 延迟释放与幂等关闭）、`McpServerTest`
+（连续 UI 等待超时后 HTTP 容量可用）。`TestExternalFileFacade` 验证同步快照消费后重捕获、
+同 requestId 重试同步及写入去重。运行 `:app:testDebugUnitTest` 与 Lua 全套；仍需真机验证 Activity 销毁与主线程拥塞。
+
 ## 快速开始
 
 ```powershell
@@ -92,7 +97,7 @@ file = { readall = function(p) local h = io.open(p, "rb"); ... end }
 | 套件 | 被测模块 | 覆盖要点 |
 |---|---|---|
 | TestTodo | `mods/agent/TodoManager.lua` | 计划条目校验、状态归一化、UTF-8 截断、提交/回显 |
-| TestPatch | `mods/agent/PatchEngine.lua` | 三种补丁格式（SEARCH-REPLACE/统一 diff/整文件替换）、多块定位、CRLF、失败提示 |
+| TestPatch | `mods/agent/PatchEngine.lua` | 三种补丁格式（SEARCH-REPLACE/统一 diff/整文件替换）、多块定位、CRLF、失败提示；宽松替换不重复匹配新内容（同签名/增长/删除/限次） |
 | TestRegistry | `mods/agent/ModelRegistry.lua` | 供应商/模型增删改、当前模型指针、辅助模型按身份持久化、旧格式迁移 |
 | TestSubagent | `mods/agent/SubagentRunner.lua` | 子代理执行循环、工具确认/取消、轻量模型路由、进度上报 |
 | TestParallel | `mods/agent/ToolExecutor.lua` | 只读工具白名单并行批、非法/越界/坏 JSON 拦截 |
@@ -104,12 +109,16 @@ file = { readall = function(p) local h = io.open(p, "rb"); ... end }
 | TestMarkdownRendering | `mods/agent/markdown/MarkdownInline.lua`、`mods/agent/markdown/TableComponent.lua` | 行内文本与表格组件的宿主替身验证 |
 | TestAgentUi | `mods/agent/ChatUI.lua`、`mods/agent/ConvUi.lua` | UI 装配、确认/设置对话框、会话切换（非 Android 渲染） |
 | TestMcpNotifications | `mods/agent/MCPProtocol.lua`、`mods/agent/McpHttpTransport.lua`、`mods/agent/McpSseTransport.lua` | 两种传输的通知与请求 ID 语义 |
+| TestMcpClientCancellation | `mods/agent/MCPClient.lua` | 工具调用级资源组、兄弟调用取消隔离、初始化中取消、同步/重入完成去重 |
+| TestTaskRegistry | `mods/agent/TaskRegistry.lua` | 任务身份、等待与执行状态分离、有界脱敏快照、事务关联、明确失败状态 |
+| TestTaskRuntime | `mods/agent/TaskRuntime.lua` | 主线程定时器代理身份、取消、主线程投递和诊断日志字段白名单 |
+| TestTaskProtocolMetadata | `mods/agent/OpenAIProtocol.lua` | legacy/现代混合历史与 Responses 请求中不泄露内部任务元数据 |
 | TestMcpEditorBridge | `mods/mcp/EditorBridge.lua` | 真实桥接模块的宿主替身测试：注册/恢复、快照隔离与有界保留、过期/重复完成拦截、异常响应 |
 | TestOpenAIClientCancellation | `mods/agent/OpenAIClient.lua` | 请求取消、重试和迟到回调 |
 | TestAgentTurn | `mods/agent/AgentTurn.lua`、`mods/agent/Contracts.lua` | 流式快照隔离、无渲染执行、停止与过期回调、AI 写入前保存及成功后仅刷新一次 |
 | TestSessionState | `mods/agent/SessionState.lua` | 会话工作集、快照与撤销/恢复 |
 | TestChangeSet | `mods/agent/ChangeSet.lua`、`mods/agent/ToolExecutor.lua` | 新建/删除/重命名事务、二进制快照、回滚状态与历史持久化失败 |
-| TestFileMutationService | `mods/files/FileMutationService.lua` | 统一入口、固定作用域、版本候选、取消收尾、恢复重播与主线程通知 |
+| TestFileMutationService | `mods/files/FileMutationService.lua` | 统一入口、固定作用域、版本候选、取消收尾、恢复重播与主线程通知；进程级队列路由及无 UI 回调时释放令牌 |
 | TestExternalFileFacade | `mods/files/ExternalFileFacade.lua` | 固定授权工程、客户端版本前置条件、持久请求去重、无 UI 恢复和提交后取消通知 |
 | TestEditorSession | `mods/editor/EditorSession.lua`、`mods/utils/EditorUtil.lua` | 同文件强制刷新、旧缓冲区覆盖拦截、目录重命名/撤销路径映射与删除清空 |
 | TestLayoutTools | `mods/agent/ToolSchemas.lua`、`mods/agent/ToolExecutor.lua`、`mods/agent/AgentChat.lua` | 布局工具 schema、策略和分发；不执行 Android 布局分析器 |

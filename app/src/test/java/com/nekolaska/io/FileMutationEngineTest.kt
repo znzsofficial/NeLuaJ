@@ -52,6 +52,33 @@ class FileMutationEngineTest {
         engine.release(token)
         token = engine.tryAcquire("restart")
     }
+    @Test fun releasedTransactionKeepsRunningEditorPinUntilCallbackExits() {
+        val pin = engine.pin(token)
+        try {
+            engine.release(token)
+            engine.release(token) // Releasing twice must not consume the UI pin.
+            assertEquals("", engine.tryAcquire("other"))
+            val p = dir.resolve("editor.lua")
+            outcome(JSONObject(engine.saveText(token, p.toString(), "late editor save", version(p))), "committed")
+        } finally { pin.close() }
+        token = engine.tryAcquire("after-ui")
+        assertNotEquals("", token)
+        pin.close() // A late duplicate close must not release a new transaction.
+        assertEquals("", engine.tryAcquire("third"))
+    }
+
+    @Test fun multipleEditorPinsReleaseExactlyOnceAndCannotBeAddedAfterRelease() {
+        val first = engine.pin(token)
+        val second = engine.pin(token)
+        try {
+            engine.release(token)
+            assertTrue(runCatching { engine.pin(token) }.isFailure)
+            first.close()
+            assertEquals("", engine.tryAcquire("other"))
+        } finally { first.close(); second.close() }
+        token = engine.tryAcquire("after-pins")
+        assertNotEquals("", token)
+    }
     @Test fun externalReservationCrashIsTerminalAndCanonicalIdentityIsScoped() {
         engine.checkpoint = { if (it == "external:reserved") throw Crash() }
         try { begin("key", "{\"a\":1,\"b\":{\"x\":true}}") ; fail("Expected crash") } catch (_: Crash) { }

@@ -104,7 +104,7 @@ local function computeLineSigs(text, starts)
 end
 
 --- 在 result 中按行签名找 searchLines 的宽松匹配窗口（忽略每行的缩进/空白差异），返回起止行号
-local function fuzzyFindWindow(searchLines, resultSigs, resultCount)
+local function fuzzyFindWindow(searchLines, resultSigs, resultCount, fromLine)
   -- 跳过 search 首尾的空白行（上下文）
   local first, last = 1, #searchLines
   while first <= last and lineSignature(searchLines[first]) == "" do first = first + 1 end
@@ -114,7 +114,7 @@ local function fuzzyFindWindow(searchLines, resultSigs, resultCount)
   local sigs = {}
   for i = first, last do sigs[#sigs + 1] = lineSignature(searchLines[i]) end
 
-  for start = 1, resultCount do
+  for start = fromLine or 1, resultCount do
     local matched = true
     for j = 1, #sigs do
       local ri = start + j - 1
@@ -133,19 +133,24 @@ end
 --- 宽松整行替换：old 的行块在 text 中按行签名匹配后替换为 new（字面量替换失败时的回退）
 function _M.fuzzyLineReplace(text, old, new, maxCount)
   local normalized = text:gsub("\r\n", "\n"):gsub("\r", "\n")
-  local count = 0
+  local starts = computeLineStarts(normalized)
+  local sigs, search = computeLineSigs(normalized, starts), splitLines(old)
+  local count, fromLine, cursor, parts = 0, 1, 1, {}
   while true do
-    local starts = computeLineStarts(normalized)
-    local l1, l2 = fuzzyFindWindow(splitLines(old), computeLineSigs(normalized, starts), #starts)
+    local l1, l2 = fuzzyFindWindow(search, sigs, #starts, fromLine)
     if not l1 then break end
     local a = starts[l1]
     local b = starts[l2 + 1] and (starts[l2 + 1] - 2) or #normalized
-    normalized = normalized:sub(1, a - 1) .. new .. normalized:sub(b + 1)
+    -- Match only the original input: replacements may themselves match old.
+    parts[#parts + 1] = normalized:sub(cursor, a - 1)
+    parts[#parts + 1] = new
+    cursor, fromLine = b + 1, l2 + 1
     count = count + 1
     if maxCount and maxCount > 0 and count >= maxCount then break end
   end
   if count == 0 then return nil, 0 end
-  return normalized, count
+  parts[#parts + 1] = normalized:sub(cursor)
+  return table.concat(parts), count
 end
 
 local function applySearchReplace(original, patch)

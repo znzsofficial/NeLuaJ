@@ -26,6 +26,7 @@
 | [HOME.md](./HOME.md) | 首页、编辑器交接、列表加载、状态恢复、工程改名与数据安全边界 |
 | [PROJECT_TEMPLATES.md](./PROJECT_TEMPLATES.md) | 独立模板、生成器接口、扩展规则与产物验收 |
 | [AIAgent.md](./AIAgent.md) | Agent 模块、工具注册与批准策略、协议、上下文、会话存储 |
+| [TOOL_TASKS.md](./TOOL_TASKS.md) | 工具任务状态、超时取消、父子身份、迟到文件结果及诊断 |
 | [FILE_MUTATIONS.md](./FILE_MUTATIONS.md) | 统一文件修改服务、版本校验、恢复日志、编辑器草稿与可靠性边界 |
 | [MCP_SERVER.md](./MCP_SERVER.md) | 对外 MCP 服务、USB 连接、工程授权、事务工具和设备验收边界 |
 | [LuaLayout.md](./LuaLayout.md) | 布局表加载、属性解析、AI 静态工具与布局助手复用 |

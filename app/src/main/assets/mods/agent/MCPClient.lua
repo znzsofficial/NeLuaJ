@@ -83,6 +83,7 @@ end
 function _M.setServers(list)
   local ok, enc = pcall(json.encode, list or {})
   if ok then
+    _M.cancelPending()
     closeServerStates()
     this.setSharedData(SERVERS_KEY, enc)
     _M._toolsCache = {}
@@ -192,11 +193,15 @@ local transportDeps = {
 rpcRequest = McpHttpTransport.create(transportDeps)
 legacySseRequest = McpSseTransport.create(transportDeps)
 
-function _M.ensureInitialized(server)
+function _M.ensureInitialized(server, group)
+  if group and group.isCancelled() then return nil, "MCP_CANCELLED" end
   local key = serverKey(server)
   if _M._initCache[key] then return true end
-  initLock.lock()
+  if group then
+    if not group.lock(initLock) then return nil, "MCP_CANCELLED" end
+  else initLock.lock() end
   local ok, result, err = pcall(function()
+    if group and group.isCancelled() then return nil, "MCP_CANCELLED" end
     if _M._initCache[key] then return true end
     local state = serverState(key)
     if state.mode == "modern" then
@@ -206,7 +211,8 @@ function _M.ensureInitialized(server)
     end
     local modernErr, legacyProtocol
     if state.mode ~= "legacy" and state.mode ~= "legacy_sse" then
-      local modern, probeErr, advertisedLegacyProtocol = _M.probeModern(server)
+      local modern, probeErr, advertisedLegacyProtocol = _M.probeModern(server, group)
+      if group and group.isCancelled() then return nil, "MCP_CANCELLED" end
       modernErr = probeErr
       legacyProtocol = advertisedLegacyProtocol
       state.modernProbeError = probeErr
@@ -220,25 +226,39 @@ function _M.ensureInitialized(server)
       state.mode = "legacy"
       server.protocolVersion = legacyProtocol or LEGACY_DEFAULT_PROTO
     end
-    local proto, initErr = _M.initialize(server)
+    local proto, initErr = _M.initialize(server, group)
+    if group and group.isCancelled() then return nil, "MCP_CANCELLED" end
     if not proto then
       local state = serverState(key)
       local probeErr = modernErr or state.modernProbeError
       if state.mode == "legacy" and not state.sseAttempted
           and (shouldTryLegacySse(probeErr and probeErr.message) or shouldTryLegacySse(initErr)) then
+        local connection
+        if group then connection = agentMcpHttp.openSse(server.url, legacySseHeaders(server), group)
+        else connection = agentMcpHttp.openSse(server.url, legacySseHeaders(server)) end
         state.sseAttempted = true
-        local connection = agentMcpHttp.openSse(server.url, legacySseHeaders(server))
         state.sseConnection = connection
-        local endpoint = connection.awaitEndpoint(10000)
+        state.mode = "legacy_sse"
+        local endpoint
+        if group then endpoint = connection.awaitEndpoint(10000, group)
+        else endpoint = connection.awaitEndpoint(10000) end
+        if group and group.isCancelled() then
+          -- The stream belongs to the server, not to this invocation. A later
+          -- initializer may reuse its endpoint once it arrives.
+          state.mode = "legacy_sse"
+          return nil, "MCP_CANCELLED"
+        end
         if endpoint and endpoint ~= "" then
           state.mode = "legacy_sse"
           server.protocolVersion = legacyProtocol or LEGACY_DEFAULT_PROTO
-          proto, initErr = _M.initialize(server)
+          proto, initErr = _M.initialize(server, group)
         else
           initErr = tostring(initErr or "") .. "; HTTP+SSE 回退失败: "
             .. tostring(connection.getError() or "未收到 endpoint 事件")
           pcall(function() connection.close() end)
           state.sseConnection = nil
+          state.mode = nil
+          state.sseAttempted = nil
         end
       end
       if not proto then return nil, initErr end
@@ -251,7 +271,7 @@ function _M.ensureInitialized(server)
   return result, err
 end
 
-function _M.probeModern(server)
+function _M.probeModern(server, group)
   local key = serverKey(server)
   local candidates, tried = {}, {}
   local legacyProtocol
@@ -270,7 +290,8 @@ function _M.probeModern(server)
   while index <= #candidates do
     local protocol = candidates[index]
     server.protocolVersion = protocol
-    local res, err = rpcRequest(server, "tools/list", {})
+    local res, err = rpcRequest(server, "tools/list", {}, nil, nil, group)
+    if group and group.isCancelled() then return nil, { message = "MCP_CANCELLED" } end
     if res and not res.error then
       local state = serverState(key)
       state.mode = "modern"
@@ -304,7 +325,8 @@ function _M.probeModern(server)
   return nil, { message = lastErr or "现代 MCP 探测失败", isModern = modern }, legacyProtocol
 end
 
-function _M.initialize(server)
+function _M.initialize(server, group)
+  if group and group.isCancelled() then return nil, "MCP_CANCELLED" end
   local key = serverKey(server)
   -- A fresh initialize request must never carry a stale session from a prior
   -- connection. The negotiated response below will restore a new session ID.
@@ -332,7 +354,8 @@ function _M.initialize(server)
       protocolVersion = requested,
       capabilities = {},
       clientInfo = { name = "NeLuaJ+", version = "1.0" },
-    })
+    }, nil, nil, group)
+    if group and group.isCancelled() then return nil, "MCP_CANCELLED" end
     if res and not res.error then
       proto = tostring(res.result and res.result.protocolVersion or requested)
       break
@@ -348,7 +371,7 @@ function _M.initialize(server)
   local st = serverState(key)
   if st.mode ~= "legacy_sse" then st.mode = "legacy" end
   st.protocolVersion = proto
-  local _, notifyErr = request(server, "notifications/initialized", {}, false)
+  local _, notifyErr = request(server, "notifications/initialized", {}, false, nil, group)
   if notifyErr then return nil, notifyErr end
   if server.sessionId and server.sessionId ~= "" then st.sessionId = server.sessionId end
   return proto, nil
@@ -358,14 +381,15 @@ end
 
 _M._toolsCache = {}
 
-function _M.listTools(server)
+function _M.listTools(server, group)
+  if group and group.isCancelled() then return nil, "MCP_CANCELLED" end
   local key = serverKey(server)
   local cached = _M._toolsCache[key]
   if cached and cached.time and (os.time() - cached.time) < (cached.ttl or 300) then
     return cached.tools
   end
   for attempt = 1, 2 do
-    local okInit, initErr = _M.ensureInitialized(server)
+    local okInit, initErr = _M.ensureInitialized(server, group)
     if not okInit then return nil, initErr end
     local initializedCache = _M._toolsCache[key]
     if initializedCache and initializedCache.time
@@ -377,7 +401,7 @@ function _M.listTools(server)
     local state = _M._serverState[key]
     local validateHeaders = state and isModernProtocol(state.protocolVersion)
     for page = 1, 20 do
-      local res, err = requestForServer(server)(server, "tools/list", hasCursor and { cursor = cursor } or {})
+      local res, err = requestForServer(server)(server, "tools/list", hasCursor and { cursor = cursor } or {}, nil, nil, group)
       if not res then
         local errorText = tostring(err or "")
         if (errorText == "MCP_SESSION_EXPIRED" or errorText:find("旧版 MCP SSE 连接已断开", 1, true))
@@ -416,8 +440,8 @@ function _M.listTools(server)
   return nil, "MCP 会话已过期"
 end
 
-function _M.callTool(server, toolName, args)
-  local okInit, initErr = _M.ensureInitialized(server)
+function _M.callTool(server, toolName, args, group)
+  local okInit, initErr = _M.ensureInitialized(server, group)
   if not okInit then return nil, initErr end
   local params = {
     name = toolName,
@@ -439,26 +463,26 @@ function _M.callTool(server, toolName, args)
   end
   local paramHeaders = headersForTool()
   local request = requestForServer(server)
-  local res, err = request(server, "tools/call", params, nil, paramHeaders)
+  local res, err = request(server, "tools/call", params, nil, paramHeaders, group)
   if err and (err:find("HeaderMismatch", 1, true) or err:find("-32020", 1, true)) then
     -- A modern server may have changed x-mcp-header annotations. Refresh the
     -- schema once, then mirror the newly declared headers on the retry.
     _M._toolsCache[key] = nil
-    local refreshed = _M.listTools(server)
+    local refreshed = _M.listTools(server, group)
     if refreshed then
       paramHeaders = headersForTool()
-      res, err = requestForServer(server)(server, "tools/call", params, nil, paramHeaders)
+      res, err = requestForServer(server)(server, "tools/call", params, nil, paramHeaders, group)
     end
   end
   if err == "MCP_SESSION_EXPIRED" then
-    local retryInit, retryErr = _M.ensureInitialized(server)
+    local retryInit, retryErr = _M.ensureInitialized(server, group)
     if not retryInit then return nil, retryErr end
-    res, err = requestForServer(server)(server, "tools/call", params, nil, paramHeaders)
+    res, err = requestForServer(server)(server, "tools/call", params, nil, paramHeaders, group)
   end
   if err and err:find("旧版 MCP SSE 连接已断开", 1, true) then
-    local retryInit, retryErr = _M.ensureInitialized(server)
+    local retryInit, retryErr = _M.ensureInitialized(server, group)
     if not retryInit then return nil, retryErr end
-    res, err = requestForServer(server)(server, "tools/call", params, nil, paramHeaders)
+    res, err = requestForServer(server)(server, "tools/call", params, nil, paramHeaders, group)
   end
   if not res then return nil, err end
   if res.error then return nil, rpcErrorText(res.error) end
@@ -675,17 +699,37 @@ end
 
 --- 异步调用 MCP 工具；onResult(ok, text)（主线程回调）
 function _M.callToolAsync(server, toolName, args, onResult)
+  local group = agentMcpHttp.newRequestGroup()
   local job
+  local finished = false
+  local handle = {}
+  _M._toolCalls = _M._toolCalls or {}
+  _M._toolCalls[handle] = true
+  local function finish(cancelled)
+    if finished then return false end
+    finished = true
+    job = nil
+    _M._toolCalls[handle] = nil
+    if cancelled then group.cancel() end
+    agentMcpHttp.releaseRequestGroup(group)
+    return true
+  end
+  function handle.cancel()
+    local pending = job
+    if not finish(true) then return end
+    if pending then pcall(function() pending.cancel() end) end
+  end
   local okLaunch = pcall(function()
-    job = xTask(
+    local launched = xTask(
       function()
-        local okInit, initErr = _M.ensureInitialized(server)
-        if not okInit then return { ok = false, text = initErr } end
-        local text, err = _M.callTool(server, toolName, args)
+        if group.isCancelled() then return { ok = false, text = "MCP_CANCELLED" } end
+        local ok, text, err = pcall(_M.callTool, server, toolName, args, group)
+        if not ok then return { ok = false, text = tostring(text) } end
         if text then return { ok = true, text = text } end
         return { ok = false, text = err }
       end,
       function(res)
+        if not finish() then return end
         if onResult then
           if type(res) == "table" then
             pcall(onResult, res.ok == true, res.text)
@@ -696,13 +740,29 @@ function _M.callToolAsync(server, toolName, args, onResult)
       end,
       "io"
     )
+    -- xTask may complete (or be cancelled reentrantly) before returning.
+    if not finished then job = launched
+    elseif group.isCancelled() and launched then pcall(function() launched.cancel() end) end
   end)
-  if not okLaunch and onResult then pcall(onResult, false, "无法启动后台任务") end
-  return job
+  if not okLaunch and finish(true) then
+    if onResult then pcall(onResult, false, "无法启动后台任务") end
+  end
+  return handle
 end
 
 function _M.cancelPending()
+  local handles = {}
+  for handle in pairs(_M._toolCalls or {}) do handles[#handles + 1] = handle end
+  for _, handle in ipairs(handles) do handle.cancel() end
   pcall(function() agentMcpHttp.cancelAll() end)
+  for key, state in pairs(_M._serverState or {}) do
+    if state.sseConnection then
+      state.sseConnection = nil
+      state.mode = nil
+      state.sseAttempted = nil
+      _M._initCache[key] = nil
+    end
+  end
 end
 
 --- 异步测试连接；onResult(ok, msg)（主线程回调）

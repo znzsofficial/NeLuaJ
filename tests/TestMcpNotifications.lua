@@ -13,6 +13,7 @@ json = {
 local protocolVersion = "2025-11-25"
 local responseBody = json.encode({ result = { protocolVersion = protocolVersion } })
 local connection = {
+  getError = function() return nil end,
   isUsable = function() return true end,
   awaitEndpoint = function() return "https://test.invalid/messages" end,
   prepareResponse = function(id) prepared[#prepared + 1] = id end,
